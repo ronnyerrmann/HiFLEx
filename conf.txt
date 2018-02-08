@@ -1,0 +1,229 @@
+## How to used the Scripts
+# new setup: run order_trace.py, ident_arc.py   : find orders, identify arclines
+# every day: run reduction_day.py   : shift orders, determine background, create wavelength solution for the day, create normalised extracted spectrum
+# every spectrum: run extract.py
+
+## Necessary python packages:
+# numpy
+# os
+# sys
+# time
+# copy
+# random
+# tqdm
+# pickle
+# json
+# operator
+# astropy.io
+# astropy.table
+# scipy.optimize
+# matplotlib.pyplot
+# matplotlib.cm
+# matplotlib.colors
+# scipy.interpolate
+# scipy
+# scipy.signal
+## if python2:
+# Tkinter
+# collections
+## if python3:
+# tkinter
+
+#This program was written to work with modules installed in Anaconda 2. Download from
+# https://www.continuum.io/downloads
+# Install Anacondo by running sh <Anacondafile.sh>
+# Install the missing modules by running
+# pip install tqdm
+
+
+## Necessary python files:
+# tkcanvas.py
+# plot_img_spec.py
+# procedures.py
+
+
+# Configuration file for:
+#   create_badpx_mask.py
+#   prepare_file_list.py
+#   reduction_day.py
+#   order_trace.py  (not used anymore after Jan 18)
+#   extract.py      (not used anymore after Jan 18)
+#   ident_arc.py    (not used anymore after Sep 17)
+
+## Format of the parameters:
+#---------------------------
+#   - number of white spaces doesn't matter
+#   - lists need to be given with comma between the values. The brakets [] are optional
+
+
+## General parameters:
+#---------------------
+# GUI: allows userinput for some of the steps
+GUI = False
+
+# Configuration file in which the processing of the raw data fits files is defined
+configfile_fitsfiles = fits_conf.txt
+
+# subframe: gives the size in x (dispersion axis) and y (cross-dispersion axis), and the starting coordinates in x and y in case only a subframe should be used. Needed when reading files
+#           possible formats: can be empty, or
+#                             [4250,2838,0,0], or
+#                             4250,2838,0,0
+subframe        = [4250,2838,0,0]
+subframe        = [3056,3056,0,0]
+
+# To extract the data correctly, the frame should be rotated in the way, that traces (dispersion axis) are along vertical direction with wavelength increasing with increasing pixel number (blue on top). If necessary the image can be flipped after the rotation so that the central wavelength of the orders decreases with increasing pixel number (blue orders on the right of the (rotated) image and the red orders on the left).
+rotate_frame = 270
+rotate_frame = 0
+flip_frame = False
+
+# In the reduced images use only up pixels below or equal max_good_value to determine the badpx map. (At the moment only used by create_badpx_mask.py but will be important for extracting data later)
+#           format: float or integer
+max_good_value  = 63000
+
+# extraction_width_multiplier times the average width of the gaussian fit to the traces of the orders defines how many pixel of either side to extract
+extraction_width_multiplier = 2
+arcextraction_width_multiplier = 3
+# In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom
+wavelength_scale_resolution = 0.01
+
+## Between consecutive observations the positions of the traces might change.
+maxhalfwidth = 25
+maxshift = 15
+update_widths = False
+
+## If the positions of the traces between consecutive observations has changed too much, the orders are searched from scratch using the following parameters
+# bin_search_orders: Search the orders in a binned image. The first value gives the binning along one order (vertical axis, dispersion axis) and the second value the binning perpendicular to the orders (horizontal, cross-dispersion axis). Heavy binning along the dispersion axis is possible, while binning in cross-dispersion needs to be significantly smaller than the minimum separation between orders
+# For qsi camera
+bin_search_orders = 20,5
+bin_search_orders = 20,4
+# bin_adjust_orders: Adjust the center of the orders in a binned image. description as for bin_search_orders. The second value should be 1 to reach best precission
+bin_adjust_orders = 3,1
+# for HARPS data:
+# bin_search_orders = 20,2
+# polynom_order_orders: Order of the polynomial in order to define the form of the traces along the CCD
+polynom_order_orders = 5
+
+
+## To determine the background in a flat only image
+background_width_multiplier = 8
+polynom_bck = 10
+
+## Finding the traces of the arc traces
+# arcshift_side: On which side of the science orders are the corresponding calibration orders located. Possible values are "left" (towards the redder order) or "right" (to the bluer order)
+#       Used by shift_trace
+arcshift_side = left
+# arcshift_range: Range to search for the shift between the flat traces and arc_traces.
+#       Used by shift_trace
+arcshift_range  = [25, 60]
+
+## The following parameters define the search area when finding the new wavelength solution for the night by using an old solution
+# order_offset: Search range to find out by how many orders are the two solutions shifted? Normally the change should be less than 1 Order. The offset will be positive, if bluer orders are added.
+order_offset = [-2,2]
+# px_offset: search range and step size to find out by how much the central pixel of the orders was shifted. Normally the change should be less than 100 pixel.
+px_offset = [-200, 200, 10]
+# px_offset_order: Additional shift per order in case big variations happened.
+px_offset_order = [-2, 2, 2]
+# resultion_offset_pct: Percentage of how much the resolution between the solutions changes. The value is applied in both directions, in total 11 steps will be made. Normally 3 percent should be fine
+resolution_offset_pct = 3
+
+## The following parameter define the adjustments made for the wavelength solution. Thereby the process starts with a rugh wavelength solution and ends with a much better one. 5 steps with 10 iterations each are done
+# polynom_order_traces: order of a polynomial fit for rugh and final solution to fit the wavelength against line position in each order. Normally [2,4] should be fine. a final value of 3 is not enough to reflect the position of the lines on the CCD
+polynom_order_traces = [2,5]
+# polynom_order_intertrace: order for rugh and final solution to fit the parameters of the polynomials between the orders. Normally 2,4 should be fine
+polynom_order_intertraces = 2,5
+# opt_px_range: What fraction around the central pixel of each order should be used to corellate lines in the arc spectrum with the reference spectrum. Normally [0.5, 1.2] is good
+opt_px_range = [0.5, 1.5]
+# diff_pxs: What is the maximum difference between wavelength solution and reference line in order to assigned the lines together. A good value is 4px, can be higher as sigma-clipping is performed to get rid of badly assigned lines.
+diff_pxs = 4
+
+#Not working:    
+
+## Raw data information:
+#-----------------------
+# The folder where the raw data is stored. All file names given in this section need to be given relative to this path, e.g. with leading subfolder if data is stored in a subfolder
+raw_data_path           = /local/home/ncook/data_EXOhSPEC/20180105/
+raw_data_file_endings   = .fit, .fits
+raw_data_file_list      = file_list_raw_data.txt
+raw_data_imtyp_keyword  = IMAGETYP
+raw_data_imtyp_bias     = Bias Frame
+raw_data_imtyp_dark     = Dark Frame
+raw_data_imtyp_flat     = Flat Frame
+raw_data_exptim_keyword = EXPTIME
+raw_data_dateobs_keyword = DATE-OBS
+
+# For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create gives the information which corrections will be applied before the <filetype>_rawfiles are combined.
+#   The following settings are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, <background>, normalisation
+#   For dark calibration darks with the correct exposure time will be used. 
+#       If a fixed dark should be used, than the parameter needs to contain 'dark' and additional text (e.g. 'darkfixed', or if a different exposure time should be used 'dark5.0')
+#   For <background> the calibration needs to contain 'background' but can contain more information. The key needs to be defined
+#        (e.g. if the 'background_image_filename' is used for calibration then the following entry is needed as well 'background_image_filename = background.fits'
+bias_calibs_create_g    = [subframe, badpx_mask]
+dark_calibs_create_g    = [subframe, badpx_mask, bias]
+flat_calibs_create_g    = subframe, badpx_mask, dark, bias, normalise
+# The file types for the calibrations listed above are applied as CCD image
+# The file types for the calibrations listed below are used to find extracted data
+sflat_calibs_create_g   = subframe, badpx_mask, dark, bias
+arc_calibs_create_g     = [subframe, badpx_mask, dark, bias]
+arc_l_calibs_create_g   = [subframe, badpx_mask, dark, bias]
+arc_s_calibs_create_g   = [subframe, badpx_mask, dark, bias]
+flatarc_calibs_create_g = [subframe, badpx_mask, dark, bias, flat]
+extract_calibs_create_g = [subframe, badpx_mask, dark, bias, flat]
+# Standard calibrations to be done, if no other information is given
+standard_calibs_create = []
+
+## Result storage information
+# The folder where the result data is stored
+result_path = .
+
+# master file for the orders of the scientific traces, of the arc traces, and the normalised extracted flat spectrum. Created by reduction_day.py
+master_order_filename           = master_orders.fits
+master_orderarc_filename        = master_ordersarc.fits
+master_arc_solution_filename    = master_wavelength.fits
+master_flat_spec_norm_filename  = master_flat_spec_norm.fits
+
+# master file for identifiying which pixel contain background. Created by reduction_day.py
+background_px_filename      = background_px.fits
+
+# master file for the background correction. Created by reduction_day.py
+background_image_filename   = background.fits
+
+## extracted data
+# path for the extracted data.
+path_extraction             = extracted
+
+# when reading already processed images from the result path, this defines what calibrations should be done. If one file type should be handled different, then <filetype>_calibs_read can be used
+calibs_read = [subframe]
+
+## general filenames which should be the same for a long time.
+# Path and filename to the badpixel mask. Created by create_badpx_mask.py
+badpx_mask_filename = /data/ronny/Reduced/20180105/bad_px_mask.fits
+
+# Path and filename to the file with the previous found positions of the orders and the previous wavelength solution.
+#   If the files don't exist, A solution is created from scratch (file arc_lines_wavelength.txt needs to be created in order to create the wavelength solution).
+#   Created by order_trace.py and read by reduction_day.py
+original_master_order_filename = /data/ronny/Reduced/20180105/master_orders.fits
+original_master_arc_solution_filename = /data/ronny/Reduced/20180126/master_wavelength.fits
+
+# Path and filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. The values can be used as given from the NIST database, e.g. 6550.653 \t 140* \t Ne II 
+arc_lines_catalog = /home/ronny/Scripts/exohspec/reference_lines_UNe.txt
+arc_lines_catalog = /home/ronny/Scripts/exohspec/reference_lines_ThAr.txt
+# The Script runs arc solution in Angstrom. Give the multiplier for the wavelength to get Angstrom, e.g. catalog_file_wavelength_muliplier=10 for the arc_lines_catalog in [nm]
+catalog_file_wavelength_muliplier = 1
+
+use_catalog_lines = NeI, UI, ThI, ArI
+
+## Logging
+logging_path = logging
+logging_traces_binned = orders_binned.fits
+logging_orders_binned = orders_in_master_flat_binned.png
+logging_orders = orders_in_master_flat.png
+logging_find_arc_orders = arcorders_find.png
+logging_arcorders = arcorders_in_master_arc.png
+logging_map_shift_orders = map_shifts.fits
+logging_background = orig_for_background_map.fits
+logging_found_arc_lines = arc_lines_found.txt
+logging_wavelength_solution_form = wavelength_solution_form.png
+logging_arc_line_identification_residuals = arc_line_identification_residuals.png
+logging_arc_line_identification_positions = arc_line_identification_positions.png
+
+
