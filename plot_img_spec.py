@@ -370,35 +370,6 @@ if __name__ == "__main__":
     #rpath = '/data/ronny/Reduced/20170706_test/extracted/'
     #fitsfiles.append(['master_flat_Order_13.fits',0,'s'])			#
     #rpath = 'extracted/'
-    #fitsfiles.append(['FlatArc-0001_4s.npy',0,'sg'])			# 20170720, link to 20170807 
-    #fitsfiles.append(['FlatArc-0002_4s.npy',0,'sg'])			#
-    #fitsfiles.append(['FlatArc-0003_4s.npy',0,'sg'])			#
-    #fitsfiles.append(['FlatArc-0004_4s.npy',0,'sg'])			#
-    #fitsfiles.append(['FlatArc-0005_4s.npy',0,'sg'])			#
-    #fitsfiles.append(['FlatArc-sum_40s.npy',0,'sg'])			# 20170720
-    #fitsfiles.append(['Arc-sum_40s.npy',0,'sg'])			#
-    #fitsfiles.append(['Flatarc-sum_40s.npy',0,'sg'])       # 20170807, link from 20170720
-    #fitsfiles.append(['FlatArc-sum_40s.npy',0,'sg'])        # 20170807
-    #fitsfiles.append(['FlatArc-sum_4s.npy',0,'sg'])         # 20170807, 20170810
-    #fitsfiles.append(['SunArc-3s.npy',0,'sg'])         # 20170810
-    if False:   # see the differences in time series
-        fitsfiles.append(['SunArc-0001_3s.npy',0,'sg'])         # 20170810
-        fitsfiles.append(['SunArc-0031_3s.npy',0,'sg'])         # 20170810
-        fitsfiles.append(['FlatArc-0001_4s.npy',0,'sg'])         # 20170810
-        fitsfiles.append(['FlatArc-0052_4s.npy',0,'sg'])         # 20170810
-    #fitsfiles.append(['FlatArc-0001_4s.npy',0,'sg'])         # 20170817
-    #fitsfiles.append(['Flat_original-0001_4s.npy',0,'sg'])         # 20170817
-    #fitsfiles.append(['Flat_otherpath-0001_4s.npy',0,'sg'])         # 20170817
-    #fitsfiles.append(['0810-SunArc-0031_3s.npy',0,'sg'])         # 20170810
-    #fitsfiles.append(['0810-FlatArc-0051_4s.npy',0,'sg'])         # 20170810
-    #fitsfiles.append(['0810_FlatArc-0050_4s.npy',0,'sg'])         # 20170810, extracted with dark, wavelength solution and normalised flat from 20170817, extraction width was 1.5, as between both o
-    #fitsfiles.append(['FlatArc-0001_180s.npy',0,'sg'])        #20170906
-    #fitsfiles.append(['Flat-0001_4s.npy',0,'sg'])        #20170906
-    #fitsfiles.append(['Flat-0001_3s.npy',0,'sg'])        #20170906
-    #fitsfiles.append(['0907_master_arc_180s.npy',0,'sg'])        #20170907
-    #fitsfiles.append(['0907_master_flat.npy',0,'sg'])        #20170907
-    #fitsfiles.append(['master_arc_180s.npy',0,'sg'])        #20170912
-    #fitsfiles.append(['master_flat.npy',0,'sg'])        #20170912
     #for i in range(1,37):
     #    fitsfiles.append(['SunArc-{0}_10s.npy'.format('%4.4i'%i),0,'sg'])        #20170912
     #fitsfiles.append(['Arc_long.npy',0,'sg'])        #20170913, 20170912
