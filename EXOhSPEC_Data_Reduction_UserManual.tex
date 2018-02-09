@@ -99,7 +99,7 @@ pip install tqdm
 \noindent The following files need to be located in the program folder:
 \begin{description}
 \item[create\_badpx\_mask.py] Script to create a bad pixel mask.
-\item[prepare_file_list.py] Script to automatically assign the fits files into the corresponding calibration steps.
+\item[prepare\_file\_list.py] Script to automatically assign the fits files into the corresponding calibration steps.
 \item[reduction\_day.py] Script which needs to be run on each new set of data. It creates the data, which is necessary in order to extract the scientific spectra.
 %\item[extract.py] Script that extracts the scientific echelle spectra.
 %\item[order\_trace.py] Script that searches for the flat orders in the CCD images.
@@ -232,7 +232,52 @@ After checking the results (see Section~\ref{section:results_pipeline}), one mig
 \subsection{Assigning the observed data and calibration data to the pipeline}
 \label{Section:prepare_files}
 
-The script \verb|prepare_file_list.py| 
+The script \verb|prepare_file_list.py| reads all files in the folder (and subfolders) given in parameter \verb|raw_data_path|. The file name and header information are used to determine the type of file and if it can be used for calibration. The header parameters are thereby defined by the following parameters in the configuration file:
+
+\begin{description}
+  \item[raw\_data\_imtyp\_keyword:] Header keyword if the image type (standard: \\ \mbox{IMAGETYP})
+  \item[raw\_data\_imtyp\_bias:] Value of the for the header keyword \\ raw\_data\_imtyp\_keyword for bias frames (standard: Bias Frame)
+  \item[raw\_data\_imtyp\_dark:] Value of the for raw\_data\_imtyp\_keyword for dark frames (standard: Dark Frame)
+  \item[raw\_data\_imtyp\_flat:] Value of the for raw\_data\_imtyp\_keyword for flat frames (standard: Flat Frame)
+  \item[raw\_data\_exptim\_keyword:] Header keyword for the exposure (standard: \\ \mbox{EXPTIME})
+  \item[raw\_data\_dateobs\_keyword:] Header keyword observing date and time (in UTC). The format needs to be \mbox{YYYY-MM-DDTHH:MM:SS} (e.g. \\ \mbox{2018-02-28T23:34:01})  (standard: \mbox{DATE-OBS}).
+\end{description}
+
+
+The file type and definition of the fibers is done by using the filename. The assignment is done in the order given in Table~\ref{Tab:fiber_definition}. The result of this assignment is stored in a text file, which is shown to the user. The file can be edited (these information won't be overwritten if the script is re-executed). The following information is stored for each file in the raw data path (tab-separated):
+\begin{table}
+ \caption{Assignment of the fibers using the header keywords as given in the parameters of the configuration and filename. The science and calibration fibers are denoted with 'fiber1' and 'fiber2', respectively. Later assignment overwrites earlier ones. The filename is case-insensitive. -- means no change has been done.}
+ \label{Tab:fiber_definition}
+ \begin{tabular}{l l l}
+ \small
+ condition 															& fiber1 & fiber2 \\
+ \hline
+ filename contains \verb|bias|										& bias	& bias \\
+ filename contains \verb|dark|										& dark	& dark \\
+ filename contains \verb|flat| but not \verb|sflat| 				& flat	& flat \\
+ \verb|raw_data_imtyp_keyword| equals \verb|raw_data_imtyp_flat| 	&       & \\
+ \hspace{1cm} and filename dosn't contain \verb|sflat| 				& flat  & flat \\
+ filename contains \verb|arc|						   				& -- 	& wave \\
+ \verb|raw_data_imtyp_keyword| equals \verb|raw_data_imtyp_bias| 	& bias	& bias \\
+ \verb|raw_data_imtyp_keyword| equals \verb|raw_data_imtyp_dark| 	& dark	& dark \\
+ none of the above and the filname doesn't start with \verb|arc|  & science & --   \\
+ \end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item Filename
+  \item Type of light for the science fiber
+  \item Type of light for the calibration fiber
+  \item Exposure time in seconds
+  \item Observation time
+  \item Flag 'e', if the spectrum should be extracted. This can be modified in order to allow different processing of the images before extraction. The following options are possible:
+    \begin{description}
+      \item[e alone:] The processing as given in parameter \verb|extract_calibs_create_g| will be assigned.
+      \item[e \textless obj \textgreater :] The processing as given in parameter \verb|extract<obj>_calibs_create_g| will be assigned. If this parameter doesn't exist, then parameter \verb|extract_calibs_create_g| will be used
+      \item[ec \textless obj \textgreater :] The same as \textbf{e \textless obj \textgreater}, but instead of extracting each file induvidually, all files with \textbf{ec \textless obj \textgreater} will be combined into a file called \verb|master_<obj>.fits| and then this file is extracted.
+      \item One raw file can be used for different extractions if several flags are combined with ',', e.g. \textit{e,ecSunAll,ecSunCentroid}.
+    \end{description}
+\end{itemize}
 
 
 \subsection{Results from the pipeline}

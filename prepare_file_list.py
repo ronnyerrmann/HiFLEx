@@ -39,9 +39,6 @@ if __name__ == "__main__":
                         im_head = fits.getheader(params['raw_data_path'] + filename)
                         # Identify the image type and find out what the fibers show
                         fiber1, fiber2 = 'none', 'none'
-                        if params['raw_data_imtyp_keyword'] in im_head.keys():
-                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flat'] and not filename.lower().find('sflat') >= 0:      # replace because when reading the conf file spaces are placed
-                                fiber1, fiber2 = 'flat', 'flat'
                         if filename.lower().find('bias') >= 0:
                             fiber1, fiber2 = 'bias', 'bias'
                         if filename.lower().find('dark') >= 0:
@@ -50,6 +47,9 @@ if __name__ == "__main__":
                             fiber1, fiber2 = 'flat', 'flat'
                         if filename.lower().find('sflat') >= 0:
                             fiber1= 'sflat'
+                        if params['raw_data_imtyp_keyword'] in im_head.keys():
+                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flat'] and not filename.lower().find('sflat') >= 0:      # replace because when reading the conf file spaces are placed
+                                fiber1, fiber2 = 'flat', 'flat'
                         if filename.lower().find('arc') >= 0:
                             fiber2 = 'wave'
                         if params['raw_data_imtyp_keyword'] in im_head.keys():
@@ -57,7 +57,7 @@ if __name__ == "__main__":
                                 fiber1, fiber2 = 'bias', 'bias'
                             if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_dark']:
                                 fiber1, fiber2 = 'dark', 'dark'
-                        if (filename.lower().find('/arc') == -1) and (filename.lower().find('arc') > 0) and (filename.lower().find('flat') == -1) and (filename.lower().find('sflat') == -1) and (filename.lower().find('dark') == -1) and (filename.lower().find('bias') == -1):
+                        if (filename.lower().find('/arc') == -1) and not (filename.lower().find('arc') == 0) and fiber1 not in ['flat', 'sflat', 'dark','bias']:
                             fiber1 = 'science'
                         # Get the exposure time
                         exptime = -1
@@ -92,13 +92,16 @@ if __name__ == "__main__":
     file.write('###   - Type of fiber 2 (calibration fiber)\n')
     file.write('###   - Exposure time in seconds (from the header, if the information is not in the header, then from the filename)\n')
     file.write('###   - Observation time in Unix timestamp (from header)\n')
-    file.write('###   - Flag "e", if the spectra of this file should be extraced. By standard only the science data is extracted\n')
+    file.write('###   - Flag "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n###         Combination of images before the extraction is possible, please refer to the manual for more information\n')
     file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
     file.write('### -> When finished with the editing, save the file and close the editor \n\n')
     for entry in file_list:
         file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], entry[4], entry[5] ))
     file.close()
-    os.system('gedit {0}'.format(params['raw_data_file_list']))
+    rtn = os.system('gedit {0}'.format(params['raw_data_file_list']))
+    if rtn <> 0:
+        print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
+        raw_input('To continue please press Enter\t\t')
     time.sleep(1)
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
     file_list = convert_readfile(file_list, [str, str, str, float, float], delimiter='\t', replaces=['\n',' '])
