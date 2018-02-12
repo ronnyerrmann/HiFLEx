@@ -83,11 +83,10 @@ max_good_value  = 63000
 # extraction_width_multiplier times the average width of the gaussian fit to the traces of the orders defines how many pixel of either side to extract
 extraction_width_multiplier = 2
 arcextraction_width_multiplier = 3
-# In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom
+# In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom (not implemented)
 wavelength_scale_resolution = 0.01
 
 ## Between consecutive observations the positions of the traces might change.
-maxhalfwidth = 25
 maxshift = 15
 update_widths = False
 

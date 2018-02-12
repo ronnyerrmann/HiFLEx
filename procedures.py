@@ -180,7 +180,7 @@ def textfileargs(params, textfile=None):
             logger(emsg + emsg2 + ' must be an integer')
             
     # deal with floats
-    floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier', 'resolution_offset_pct', 'diff_pxs', 'maxhalfwidth', 'maxshift', 'background_width_multiplier', 'wavelength_scale_resolution']
+    floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier', 'resolution_offset_pct', 'diff_pxs', 'maxshift', 'background_width_multiplier', 'wavelength_scale_resolution']
     for entry in floats:
         if entry not in params.keys():
             emsg2 = 'Parameter "{0}" '.format(entry)
@@ -1642,12 +1642,12 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
         good_px_mask.append(ogood_px_mask)
     return np.array(spec), np.array(good_px_mask)
 
-def shift_orders(im, params, pfits, xlows, xhighs, oldwidths, in_shift = 0):
+def shift_orders(im, params, sci_tr_poly, xlows, xhighs, oldwidths, in_shift = 0):
     """
     Determines the shift in spacial direction between the current flat {im} and an available solution. This is done by fitting the center again
     :param im: 2d numpy array with the flat lines
-    :param params: Dictionary with all the parameters. 'maxhalfwidth' and 'maxshift' are required
-    :param pfits: list, length same as number of orders, polynomial values
+    :param params: Dictionary with all the parameters. 'maxshift' is required
+    :param sci_tr_poly: list, length same as number of orders, polynomial values
                       (output of np.polyval)
                       i.e. p where:
                       p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
@@ -1656,7 +1656,7 @@ def shift_orders(im, params, pfits, xlows, xhighs, oldwidths, in_shift = 0):
     :param xhighs: list, length same as number of orders, the highest x pixel
                    (wavelength direction) used in each order
     :param oldwidths: 2d list, length same as number of orders, each entry contains left border, right border, and Gaussian width of the lines, estimated for the previous solution
-    :param in_shift: offset to the positions giving in pfits
+    :param in_shift: offset to the positions giving in sci_tr_poly
     :return shift+in_shift: absolute shift
     :return twidths: widths of the orders, one line per order, containing the average size to the left, right, and the gaussian width
     :return shift_map: 2d image with number of pixels in wavelength direction and number of orders in y. It's 0 where no shift could be determined
@@ -1665,14 +1665,14 @@ def shift_orders(im, params, pfits, xlows, xhighs, oldwidths, in_shift = 0):
     steps = 10
     shifts, twidths, positions = [], [], []
     problem_order = []
-    shift_map = np.zeros((im.shape[0],len(pfits)))
+    shift_map = np.zeros((im.shape[0],len(sci_tr_poly)))
     logger('Step: searching for shifts of the orders') 
-    for i in tqdm(range(len(pfits))):       # For each order
+    for i in tqdm(range(len(sci_tr_poly))):       # For each order
         xarr = range(int(xlows[i]),int(xhighs[i]),steps)
-        yarr = np.polyval(pfits[i], xarr)+in_shift          #apply input shift
+        yarr = np.polyval(sci_tr_poly[i], xarr)+in_shift          #apply input shift
         widths = []
         for j,oldcenter in enumerate(yarr):        #each pixel
-            center, width, leftmin,rightmin = find_center(im[xarr[j],:], int(round(oldcenter)), xarr[j], params['maxhalfwidth']+2*params['maxshift'], significance=3.0)
+            center, width, leftmin,rightmin = find_center(im[xarr[j],:], int(round(oldcenter)), xarr[j], 2*params['maxshift'], significance=3.0)
             #if width <> 0:
             #    print 'i,j,center, width, leftmin,rightmin',i,j,center, width, leftmin,rightmin
             if width <> 0 and abs(center-oldcenter) < params['maxshift']:
@@ -1692,12 +1692,12 @@ def shift_orders(im, params, pfits, xlows, xhighs, oldwidths, in_shift = 0):
     else:
         shift = 0
     printarrayformat = ['%1.1i', '%4.2f', '%4.2f']
-    printarray = np.array([ range(len(pfits)), np.array(oldwidths)[:,2], np.array(twidths)[:,2] ]).T
+    printarray = np.array([ range(len(sci_tr_poly)), np.array(oldwidths)[:,2], np.array(twidths)[:,2] ]).T
     problem_text = ''
     if problem_order <> []:
         problem_text = ' The shift in the following orders could not be measured: {0}'.format(problem_order)
-        if len(problem_order) > 0.5*len(pfits):
-            problem_text += '. No shift could be measured for {0} out of {1} orders.'.format(len(problem_order), len(pfits))
+        if len(problem_order) > 0.5*len(sci_tr_poly):
+            problem_text += '. No shift could be measured for {0} out of {1} orders.'.format(len(problem_order), len(sci_tr_poly))
             shift_error = -1
     logger('Info: The shift of the traces was determinded to {0} +- {2}, including the inputshift of {1}.{3}'.format(round(shift+in_shift,2), in_shift, round(shift_error,2), problem_text ))
     logger('Info: The gaussian width of the orders changed: order\told\tnew', printarrayformat=printarrayformat, printarray=printarray)

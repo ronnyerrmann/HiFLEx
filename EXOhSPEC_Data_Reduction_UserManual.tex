@@ -9,11 +9,11 @@
 \newcommand\tab[1][1cm]{\hspace*{#1}}
 
 \hypersetup{
-    pdfauthor={Neil Cook, Ronny Errmann},
-    pdfcreator={Neil Cook, Ronny Errmann},
+    pdfauthor={Ronny Errmann, Neil Cook},
+    pdfcreator={Ronny Errmann, Neil Cook},
     pdftitle={EXOhSPEC Data Reduction User Manual},
-    pdfsubject={Subject of thesis here},
-    pdfkeywords={thesis keywords here},
+    pdfsubject={EXOhSPEC Data Reduction User Manual},
+    pdfkeywords={EXOhSPEC, Data Reduction, User Manual},
     colorlinks=true,         % false: boxed links; true: colored links
     linkcolor=blue,          % color of internal links (change box color with linkbordercolor)
     citecolor=Maroon,        % color of links to bibliography
@@ -30,9 +30,9 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 
-\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: V0.0.1}
-\date{January, 2018}
-\author{Neil Cook, Ronny Errmann\\ Physics, Astronomy and Maths, University of Hertfordshire}
+\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: V0.0.2}
+\date{February, 2018}
+\author{Ronny Errmann, Neil Cook\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
 
@@ -53,7 +53,7 @@
 
 % -------------------------------------------------------------------------------------------
 
-This program is designed to take a fits image file (i.e. a CCD image) and extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another). 
+This program is designed to take a fits image file (i.e. a CCD image) and run data reduction steps, extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another), apply the wavelength correction, and perform further calibration step. 
 
 % -------------------------------------------------------------------------------------------
 
@@ -98,15 +98,15 @@ pip install tqdm
 
 \noindent The following files need to be located in the program folder:
 \begin{description}
-\item[create\_badpx\_mask.py] Script to create a bad pixel mask.
 \item[prepare\_file\_list.py] Script to automatically assign the fits files into the corresponding calibration steps.
-\item[reduction\_day.py] Script which needs to be run on each new set of data. It creates the data, which is necessary in order to extract the scientific spectra.
+\item[reduction\_day.py] Script which needs to be run on each new set of data. It creates the data, which is necessary in order to extract the scientific spectra. Afterwards it extracts the Echelle spectra of the science images.
 %\item[extract.py] Script that extracts the scientific echelle spectra.
 %\item[order\_trace.py] Script that searches for the flat orders in the CCD images.
 \item[procedures.py] Contains all the procedures for the data analysis.
 \item[tkcanvas.py] Contains the plotting routines to create the user interfaces (UI).
 \item[plot\_img\_spec.py] This script controls plotting of CCD images, graphs, and the extracted spectra.
 \item[remove\_orders.py] This needs to be run in order to find an initial wavelength solution (will be included in reduction\_day.py later).
+\item[create\_badpx\_mask.py] Script to create a bad pixel mask.
 %\item[ident\_arc.py] This needs to be run in order to find an initial wavelength solution (will be included in reduction\_day.py later).
 \end{description}
 
@@ -120,10 +120,10 @@ When running the scripts for the first time, python will create a new file calle
 
 \begin{enumerate}
   \item The script has some hard coded values in the *.py files (normally at the beginning of a procedure). These values can be changed for testing, but usually do not need any changes.
-  \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|, given in the python script). The parameters in the configuration file need adjustment on a regular basis (see Section~\ref{section:steps_new_data_set}).
-  \item Furthermore, the pipeline reads the file given in parameter \verb|onfigfile_fitsfiles|, which is automatically created by the pipeline.
-  \item The parameters which are set in the configuration file can be overwritten with a command line input when a python script is started (e.g. \verb|python bla.py argument1=valuex argument2=valuey|).
-  \item Some parameters can be overwritten during the run time of the script by user input.
+  \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|, given at the beginning of the python scripts). Some of the parameters in the configuration file need adjustment on a regular basis (see Section~\ref{section:steps_new_data_set}).
+  \item Furthermore, the pipeline reads the configuration file given in parameter \verb|onfigfile_fitsfiles|, which is automatically created by the pipeline when running \verb|prepare_file_list.py|.
+  \item The parameters which are set in the configuration file(s) can be overwritten with a command line input when a python script is started (e.g. \verb|python bla.py argument1=valueX argument2=valueY|).
+  \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
 \end{enumerate}
 
 \subsubsection*{Finding further information}
@@ -131,7 +131,7 @@ When running the scripts for the first time, python will create a new file calle
 \begin{itemize}
   \item The pipeline logs the execution of procedures and necessary information in a logfile (standard: \verb|logfile|). This information is also printed into the terminal window.
   \item All adjustable parameters are logged at the beginning and at the end of the execution of a python script into a logfile (standard: \verb|logfile_params|).
-  \item Images with the results of some steps can be found in a subfolder (standard: \verb|logging|). Some of these images are shown in Figures~\ref{figure_orders_in_master_flat}, \ref{figure_arcorders_in_master_arc}, \ref{figure_arc_line_identification_positions}, or \ref{figure_arc_line_identification_residuals}.
+  \item Images with the results of some steps can be found in a logging subfolder (standard: \verb|logging|). Some of these images are shown in Figures~\ref{figure_orders_in_master_flat} to \ref{figure_arc_line_identification_residuals}.
   \item Each parameter is explained in detail in the configuration file.
   \item The input and output parameters of the individual procedures are explained in the file \verb|procedures.py|.
 \end{itemize}
@@ -173,7 +173,10 @@ In the pipeline always the individual frames are corrected before frames are com
 
 \newpage
 \section{Running the code on a new set of data (e.g. a new night)}
-\label{Section:running_the_code}
+
+
+\subsection{Steps performed by the pipeline}
+\label{Section:pipeline_steps_general}
 
 \noindent The following steps will be performed on a new set of data:
 \begin{itemize}
@@ -193,17 +196,29 @@ In the pipeline always the individual frames are corrected before frames are com
   \item[4.] Finding the traces of the calibration orders ($\rightarrow$~Fig.~\ref{figure_arcorders_in_master_arc}).
   \item[5.] Create the wavelength solution for the night ($\rightarrow$~Fig.~\ref{figure_arc_line_identification_positions} and \ref{figure_arc_line_identification_residuals}). This is based on the solution of the previous data set, which is adjusted according to the given parameters.
   \item[6.] Extract the flat and normalise it.
+  \item[7.] Extract the science spectra. This includes the following steps for each image:
+  \begin{itemize}
+    \item[a)] Data reduction of the CCD frame (if set up).
+    \item[b)] Finding the shift between this frame and the \textbf{sflat} file.
+    \item[c)] Extraction of the orders for the science fiber
+    \item[d)] Extraction of the orders for the calibration fiber
+    \item[e)] Finding the shift between the emission lines in the calibration spectra and the lines used for the wavelength solution, and calculating the wavelength for each pixel in the extracted spectrum.
+    \item[f)] Creating the flat corrected spectrum.
+    \item[g)] Creating the spectrum with normalised continuum.
+    \item[h)] Perform some general measurements which are stored in the header.
+    \item[i)] Write the file with all extracted data into the folder given in the parameter \verb|path_extraction| (standard: \verb|extracted|).
+  \end{itemize}
 \end{itemize}
 
-\noindent If the result file of any of the above steps already exist in the folder in which the code is run, then the existing file is read instead of performing the step again.
+\noindent If the result file of any of the above steps already exist in the folder in which the code is run, then the existing file is read instead of performing the step again in order to safe computational time. If a step needs to run again, the according result file needs to be deleted.
 
 \subsection{Necessary CCD images}
 To get the best results, the following data should be taken:
 \begin{itemize}
   \item \textit{true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{flat} for automatic processing.
-  \item Flat (3x, white light source through the science fiber), called \textbf{sflat}. The calibration fiber should be dark for this data.
-  \item Arc (5x, calibration lamp through the calibration fiber, alternating a short and a long exposure time). The filename should be \textbf{arc} and the science fiber should be dark for this data.
-  \item FlatArc (11x, white light source and calibration lamp), called \textbf{flatarc}
+  \item Flat (3x, white light source through the science fiber), with the filename containing \textbf{sflat}. The calibration fiber should be dark for this data.
+  \item Arc (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 60\,s) exposure time). The filename should start with \textbf{arc} and the science fiber should be dark for this data.
+  \item FlatArc (11x, white light source and calibration lamp), the filename should be \textbf{flatarc}.
   \item Bias (11x) and/or Darks (11x, for the exposure time of the true Flat and FlatArc)
 \end{itemize}
 
@@ -219,15 +234,43 @@ To get the best results, the following data should be taken:
     \item[raw\_data\_path] : Folder to the raw data.
     %\item*\_rawfiles] : Replace any filenames, which are different in the current observation
     %\item[*\_calibs\_create] : Change the calibration steps, which are applied to the raw files before combining them. A list of possible calibrations are given in Section~\ref{section:extraction}.
-    \item[original\_master\_order\_filename] : Path to the traces of the science orders from the previous day. This file will be the base for finding the traces in the current night ([Step 2] as described in Section~\ref{Section:running_the_code}). Leave empty if the science orders should be searched without taking the previous solution into account (e.g. after the setup of the spectrograph has changed).
+    \item[original\_master\_order\_filename] : Path to the traces of the science orders from the previous day. This file will be the base for finding the traces in the current night ([Step 2] as described in Section~\ref{Section:pipeline_steps_general}). Leave empty if the science orders should be searched without taking the previous solution into account (e.g. after the setup of the spectrograph has changed).
     \item[original\_master\_arc\_solution\_filename] : Path to the previous wavelength solution. This solution will be used as base for the wavelength solution in the current night. In case of a new setup see Section~\ref{section:create_new_wave_solution}.
+    \item[\textless type\textgreater\_calibs\_create\_g] : Change the calibrations, which are applied to the CCD images before further processing or extraction for the different file types (e.g. bias, dark, flat, sflat, arc, arc\_l, arc\_s, flatarc, extract). A list of possible calibration options is given in Section~\ref{Section:parameters_CCD_proc} below.
     %In case of a new setup, it can be set to \verb|manual_solution.fits| (or any filename that doesn't exist). The script will then create a new solution from the information given in the file \verb|arc_lines_wavelength.txt|. For a description of the format of this file, check Section~\ref{section:create_new_wave_solution}.
   \end{description}
-  \item Run the python script: \verb|python <path to scripts>/prepare_file_list.py|. See Section~\ref{Section:prepare_files} for more information
-  \item Run the python script: \verb|python <path to scripts>/reduction_day.py|
+  \item Run the python script: \\ \verb|python <path to scripts>/prepare_file_list.py| . \\ See Section~\ref{Section:prepare_files} below for more information.
+  \item Run the python script: \\ \verb|python <path to scripts>/reduction_day.py| .
 \end{enumerate}
 
-After checking the results (see Section~\ref{section:results_pipeline}), one might want to remove wrongly identified orders. This can be done in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the necessary steps of \verb|reduction_day.py| will run again.
+\noindent After checking the results (see Section~\ref{section:results_pipeline}), one might want to remove wrongly identified orders. This can be done in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the necessary steps of \verb|reduction_day.py| will run again.
+
+\subsection{Possible parameters for the CCD processing}
+\label{Section:parameters_CCD_proc}
+\noindent The list below shows all standard CCD calibration options available in the pipeline. The corrections are done on a pixel-by-pixel basis. The steps will be executed in the same order as given here.
+\begin{description}
+  \item[subframe] : The subframe as given in the parameter \verb|subframe| will be applied, only a section of the CCD will be used.
+  \item[badpx\_mask] : Apply the bad pixel mask, given in parameter \verb|badpx_mask_filename|. If the file doesn't exist, all pixels are assumed to be good.
+  \item[bias] : Apply a master bias, which will be created from the files given in the parameter \verb|bias_rawfiles| by using the settings given in the parameter \verb|bias_calibs_create|. These two parameters are created automatically by the script \verb|prepare_file_list.py| if bias frames exist in the raw data path.
+  \item[dark] : Apply a master dark. A dark with the same exposure time as read from the fits header will be applied. The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
+  \item[flat] : Apply a master flat. The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
+  \item[background] : Applies background correction using the filename given in the parameter \verb|background_image_filename|.The background image will be scaled by the exposure time of the scientific image, before its subtracted from the scientific image.
+\end{description}
+
+\noindent The following parameters change the way, several CCD images are combined:
+\begin{description}
+  \item[normalise] : Before combining the files the images are normalised by their median flux.
+  \item[combine\_sum] : Images are summed up instead of median-combining them.
+  %\item[] : 
+\end{description}
+
+\noindent The calibration options can be altered, as long as they contain the unique string in the option name. For example an option \verb|subframe_1| can be used, in this case the parameter \verb|subframe_1| needs to be defined in one of the calibration files. If a different bias, dark, or flat should be used, the following parameters need to be included in one of the configuration files (for the example of \textit{darkfixed}):
+\begin{itemize}\setlength\itemsep{0em}
+  \item \verb|darkfixed_rawfiles|
+  \item \verb|darkfixed_calibs_create|
+  \item \verb|master_darkfixed_filename|.
+\end{itemize}
+
 
 \subsection{Assigning the observed data and calibration data to the pipeline}
 \label{Section:prepare_files}
@@ -235,18 +278,18 @@ After checking the results (see Section~\ref{section:results_pipeline}), one mig
 The script \verb|prepare_file_list.py| reads all files in the folder (and subfolders) given in parameter \verb|raw_data_path|. The file name and header information are used to determine the type of file and if it can be used for calibration. The header parameters are thereby defined by the following parameters in the configuration file:
 
 \begin{description}
-  \item[raw\_data\_imtyp\_keyword:] Header keyword if the image type (standard: \\ \mbox{IMAGETYP})
-  \item[raw\_data\_imtyp\_bias:] Value of the for the header keyword \\ raw\_data\_imtyp\_keyword for bias frames (standard: Bias Frame)
-  \item[raw\_data\_imtyp\_dark:] Value of the for raw\_data\_imtyp\_keyword for dark frames (standard: Dark Frame)
-  \item[raw\_data\_imtyp\_flat:] Value of the for raw\_data\_imtyp\_keyword for flat frames (standard: Flat Frame)
-  \item[raw\_data\_exptim\_keyword:] Header keyword for the exposure (standard: \\ \mbox{EXPTIME})
+  \item[raw\_data\_imtyp\_keyword:] Header keyword if the image type (standard: \\ \mbox{IMAGETYP}),
+  \item[raw\_data\_imtyp\_bias:] Value of the for the header keyword \\ raw\_data\_imtyp\_keyword for bias frames (standard: Bias Frame),
+  \item[raw\_data\_imtyp\_dark:] Value of the for raw\_data\_imtyp\_keyword for dark frames (standard: Dark Frame),
+  \item[raw\_data\_imtyp\_flat:] Value of the for raw\_data\_imtyp\_keyword for flat frames (standard: Flat Frame),
+  \item[raw\_data\_exptim\_keyword:] Header keyword for the exposure (standard: \\ \mbox{EXPTIME}),
   \item[raw\_data\_dateobs\_keyword:] Header keyword observing date and time (in UTC). The format needs to be \mbox{YYYY-MM-DDTHH:MM:SS} (e.g. \\ \mbox{2018-02-28T23:34:01})  (standard: \mbox{DATE-OBS}).
 \end{description}
 
 
-The file type and definition of the fibers is done by using the filename. The assignment is done in the order given in Table~\ref{Tab:fiber_definition}. The result of this assignment is stored in a text file, which is shown to the user. The file can be edited (these information won't be overwritten if the script is re-executed). The following information is stored for each file in the raw data path (tab-separated):
+\noindent The file type and definition of the fibers is done by using the filename and header information. The assignment is done in the order given in Table~\ref{Tab:fiber_definition}. The result of this assignment is stored in a text file, which is shown to the user. The file can be edited (these information won't be overwritten if the script is re-executed). The following information is stored for each file in the raw data path (tab-separated):
 \begin{table}
- \caption{Assignment of the fibers using the header keywords as given in the parameters of the configuration and filename. The science and calibration fibers are denoted with 'fiber1' and 'fiber2', respectively. Later assignment overwrites earlier ones. The filename is case-insensitive. -- means no change has been done.}
+ \caption{Assignment of the fibers using the header keywords as given in the parameters of the configuration and filename. The science and calibration fibers are denoted with 'fiber1' and 'fiber2', respectively. Later assignment overwrites earlier ones. The filename is case-insensitive. '--' means no change has been done.}
  \label{Tab:fiber_definition}
  \begin{tabular}{l l l}
  \small
@@ -264,7 +307,7 @@ The file type and definition of the fibers is done by using the filename. The as
  \end{tabular}
 \end{table}
 
-\begin{itemize}
+\begin{itemize}\setlength\itemsep{0em}
   \item Filename
   \item Type of light for the science fiber
   \item Type of light for the calibration fiber
@@ -273,50 +316,71 @@ The file type and definition of the fibers is done by using the filename. The as
   \item Flag 'e', if the spectrum should be extracted. This can be modified in order to allow different processing of the images before extraction. The following options are possible:
     \begin{description}
       \item[e alone:] The processing as given in parameter \verb|extract_calibs_create_g| will be assigned.
-      \item[e \textless obj \textgreater :] The processing as given in parameter \verb|extract<obj>_calibs_create_g| will be assigned. If this parameter doesn't exist, then parameter \verb|extract_calibs_create_g| will be used
+      \item[e \textless obj \textgreater :] The processing as given in parameter \\ \verb|extract<obj>_calibs_create_g| will be assigned. If this parameter doesn't exist, then parameter \verb|extract_calibs_create_g| will be used.
       \item[ec \textless obj \textgreater :] The same as \textbf{e \textless obj \textgreater}, but instead of extracting each file induvidually, all files with \textbf{ec \textless obj \textgreater} will be combined into a file called \verb|master_<obj>.fits| and then this file is extracted.
       \item One raw file can be used for different extractions if several flags are combined with ',', e.g. \textit{e,ecSunAll,ecSunCentroid}.
     \end{description}
 \end{itemize}
 
+\subsection{Format of the extracted files}
+\label{section:extraction_data_format}
+The final fits file contains the original header and some additional information, for example the calibration steps which were applied and some information about the flux collected in the different orders. The data in the file is stored in a 3D array in the form: data type, order, and pixel. The data types are similar to the ones created by the CERES pipeline and are the following:
+\begin{enumerate}
+  \setcounter{enumi}{-1}
+  \item 2D array with the wavelength for each order and pixel.
+  \item Extracted spectrum without any modification.
+  \item (Measurement of the error the extracted spectrum)
+  \item Flat corrected spectrum, calculated by dividing the extracted spectrum and the normalised flat spectrum.
+  \item (Error the flat corrected spectrum)
+  \item Continuum normalised spectrum. The continuum is derived by fitting a polynomial to the flat corrected spectrum, using only areas of the spectrum where no lines are located. 
+  \item Signal to noise ratio in the continuum, calculated from the residuals between continuum fit and measured continuum and the flux in the continuum.
+  \item Mask with good areas of the spectrum. The following values are used:
+  \begin{itemize}
+    \item[1] good
+    \item[0] no data available
+    \item[0.1] saturated pixel in the extracted spectrum
+    \item[0.2] bad pixel in the extracted spectrum
+  \end{itemize}
+  \item Spectrum of the calibration fiber, e.g. of the emission line lamp.
+\end{enumerate}
 
 \subsection{Results from the pipeline}
 \label{section:results_pipeline}
 
-\noindent \textbf{Step 1:} The reduced and combined CCD images will be stored in the folder where the pipeline was run, if the parameter \verb|master_<type>_filename| exists. Thereby \verb|<type>| defines the image type, e.g. bias, sflat, or arc\_l.
+\noindent \textbf{Step 1:} The reduced and combined CCD images will be stored in the folder where the pipeline was run. The file name is \verb|master_<type>.fits|, where \verb|<type>| defines the different image types, e.g. bias, sflat, or arc\_l.
 
-\noindent \textbf{Step 2:} The trace of each scientific order is stored in the file given in parameter \verb|master_order_filename| (standard: \verb|master_orders.fits|). This file contains one line for each order, normally starting with the reddest order, which is located on the left side of the CCD image. Each line contains the following information:
-\begin{itemize}
-  \item Number of the order
-  \item Parameters of a polynomial fit to the trace, e.g. 6 values if the trace is fitted with a polynom of order 6
-  \item The lowest and highest pixel in dispersion axis, for which the trace can still be identified.
+\vspace{0.5em}\noindent \textbf{Step 2:} The trace of each scientific order is stored in the file given in parameter \verb|master_order_filename| (standard: \verb|master_orders.fits|). This file contains one line for each order, normally starting with the reddest order, which is located on the left side of the CCD image. Each line contains the following information:
+\begin{itemize}\setlength\itemsep{0em}
+  \item Number of the order.
+  \item Parameters of a polynomial fit to the trace (given in parameter \verb|polynom_order_orders|), e.g. 5 values if the trace is fitted with a polynom of order 5.
+  \item The lowest and highest pixel in dispersion axis, for which the trace can be identified.
   \item The last three entries of each line define the width of the trace: the width from the center to the left, the width from the center to the right, and the Gaussian width.
 \end{itemize}
- 
+The identification of the traces can be checked easily in the file given in parameter \verb|logging_orders| (standard: \verb|orders_in_master_flat.png|). This file is located in the folder given in the parameter \verb|logging_path| (standard: \verb|logging|). An example is show in Fig.~\ref{figure_orders_in_master_flat}.
 
 \begin{figure} 
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/orders_in_master_flat}
   \end{center} 
-  \caption{Reduced CCD image of a white light flat (log10 gray scale) with the marked traces of the identified scientific orders (red). The extraction width is given in dashed lines.
+  \caption{Reduced CCD image of a white light flat (log10 gray scale) with the marked traces of the identified scientific orders (red). The extraction width (determined from the Gaussian width of the order multiplied with the value in parameter \textbf{extraction\_width\_multiplier}) is given in dashed lines.
     \label{figure_orders_in_master_flat}}
 \end{figure}
 
-\noindent \textbf{Step 3:} The background map, 2d image is stored in the file given in parameter \verb|background_image_filename| (standard: \verb|background.fits|). Additionally a mask which provides the pixel which are used to create the background map is stored in the file given in parameter \verb|background_px_filename| (standard: \verb|background_px.fits|).
 
-\noindent \textbf{Step 4:} The traces of the orders of the calibration fiber are stored in the file given in parameter \verb|master_orderarc_filename| (standard: \verb|master_ordersarc.fits|). The format of the file is the same as for the scientific orders. The traces of the calibration orders are only shifted from the scientific orders while the curvature of the traces is kept the same.
+\vspace{0.5em}\noindent \textbf{Step 3:} The background map, 2d image is stored in the file given in parameter \verb|background_image_filename| (standard: \verb|background.fits|). Additionally a mask which provides the pixel which are used to create the background map is stored in the file given in parameter \verb|background_px_filename| (standard: \verb|background_px.fits|).
+
+\vspace{0.5em}\noindent \textbf{Step 4:} The traces of the orders of the calibration fiber are stored in the file given in parameter \verb|master_orderarc_filename| (standard: \verb|master_ordersarc.fits|). This file contains the same information as the result of \textbf{Step 2}, only that the lowest order of the parameters of polynomial fit is shifted (the curvature of the traces is kept the same). The result can be checked easily in the file given in parameter \verb|logging_arcorders| (standard: \verb|arcorders_in_master_arc.png|). An example is show in Fig.~\ref{figure_arcorders_in_master_arc}.
 
 \begin{figure} 
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/arcorders_in_master_arc}
   \end{center} 
-  \caption{Reduced CCD image of a ThAr exposure (log10 gray scale) with the marked traces of the identified calibration orders (red). The extraction width is given in dashed lines.
+  \caption{Reduced CCD image of a ThAr exposure (log10 gray scale) with the marked traces of the identified calibration orders (red). The extraction width is given in dashed lines. The extraction width (determined from the Gaussian width of the order multiplied with the value in parameter \textbf{arcextraction\_width\_multiplier}) is given in dashed lines.
     \label{figure_arcorders_in_master_arc}}
 \end{figure}
 
 
-
-\noindent \textbf{Step 5:} The wavelength solution is stored in the file given in parameter \verb|master_arc_solution_filename| (standard: \verb|master_arc_solution.fits|). The parameters for each order are stored in one line. For each order the following values are stored:
+\vspace{0.5em}\noindent \textbf{Step 5:} The wavelength solution is stored in the file given in parameter \verb|master_arc_solution_filename| (standard: \verb|master_arc_solution.fits|). The parameters for each order are stored in one line. For each order the following values are stored:
 \begin{itemize}
   \item Real order, as derived from the grating equation.
   \item Central pixel of the order.
@@ -335,20 +399,20 @@ polynom fit with 4 orders along the traces and 4 orders perpendicular to the ord
 was used. With this solution, the offset to real orders is 72. With this offset, the
 standard deviation of the residuals between the central wavelengths and the grating
 equation is 0.1295 Angstrom. Using the original solution gives an offset of 72.
-order	cenwave	minwave	maxwave	ranwave	Ang/px	name	number	gausswi	gausswi	min_	max_	range_reflines
-								dth_avg	dth_std	refline	efline	_whole_order
+ord cenwav minwav maxwav ranwav Ang/px name numb gausswi gausswi min_   max_   range_reflin
+                                                 dth_avg dth_std reflin reflin _whole_order
 
-0	7978.6	7894.7	8054.2	159.5	0.038	Ar I  	2	1.78	0.58	7916.4	7948.2	98.1
-0	7978.6	7894.7	8054.2	159.5	0.038	Th I  	2	2.04	1.15	7937.7	8014.5	98.1
+0   7978.6 7894.7 8054.2 159.5   0.038 Ar I    2    1.78    0.58 7916.4 7948.2  98.1
+0   7978.6 7894.7 8054.2 159.5   0.038 Th I    2    2.04    1.15 7937.7 8014.5  98.1
 ...
-27	5800.1	5769.1	5854.3	85.2	0.027	Ar I  	2	3.06	0.15	5802.1	5834.3	44.6
-27	5800.1	5769.1	5854.3	85.2	0.027	Th I  	6	2.31	0.41	5789.6	5832.4	44.6
--1	-1.0	-1.0	-1.0	-1.0	-1.000	Ar I  	148	2.07	0.61	5802.1	7948.2	2146.1
--1	-1.0	-1.0	-1.0	-1.0	-1.000	Th I  	376	2.04	0.66	5789.6	8014.5	2224.9
+27  5800.1 5769.1 5854.3 85.2    0.027 Ar I    2    3.06    0.15 5802.1 5834.3  44.6
+27  5800.1 5769.1 5854.3 85.2    0.027 Th I    6    2.31    0.41 5789.6 5832.4  44.6
+-1    -1.0   -1.0   -1.0 -1.0   -1.000 Ar I  148    2.07    0.61 5802.1 7948.2  2146.1
+-1    -1.0   -1.0   -1.0 -1.0   -1.000 Th I  376    2.04    0.66 5789.6 8014.5  2224.9
 \end{lstlisting} 
 Thereby the table contains the following information:
 \begin{description}
-  \item[order] Order of the trace, starting with 0 for the reddest order ($\tilde{m}$). To get the real order the offset $m_0$ is given in the text before (here: 72). The offset is determined using two different ways. First the data is compared to the grating equation $\lambda \propto m_0 + \tilde{m}$. In Practical this was done by searching for the smallest slope in the formula $y = (m_0 + \tilde{m})\lambda_c$, were $\lambda_c$ is central wavelength of each order. The second value for the real order offset is determined from the shift towards the previous wavelength solution. Both values for the offset should be the same. Only the first value is saved in the file.
+  \item[order] Order of the trace, starting with 0 for the reddest order ($\tilde{m}$). To get the real order the offset $m_0$ is given in the text before (here: 72). The offset is determined using two different ways. First the data is compared to the grating equation $\lambda \propto m_0 + \tilde{m}$. In Practical this was done by searching for the smallest slope in the formula $y = (m_0 + \tilde{m})\lambda_c$, were $\lambda_c$ is central wavelength of each order. The second value for the real order offset is determined from the shift towards the previous wavelength solution. Both values for the offset should be the same. Only the first value is saved in the file for the wavelength solution.
   \item[cenwave] Central wavelength of the order, determines the zero point of the wavelength solution.
   \item[minwave, maxwave, ranwave] Minimum and maximum wavelength, and wavelength range which is covered by the trace of this order.
   \item[Ang/px] Resolution in $\frac{\AA}{\mathrm{px}}$ at the central wavelength.
@@ -377,7 +441,7 @@ The last lines give the information for all orders. Columns, for which no useful
     \label{figure_arc_line_identification_residuals}}
 \end{figure}
 
-\noindent \textbf{Step 6:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \verb|master_flat_spec_norm.fits|). The extraction and data format is described in Section~\ref{section:extraction}
+\vspace{0.5em}\noindent \textbf{Step 6:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \verb|master_flat_spec_norm.fits|). The extraction and data format is described in Section~\ref{section:extraction_data_format}
 
 \subsection{Creating a new wavelength solution}
 \label{section:create_new_wave_solution}
@@ -395,69 +459,6 @@ The correlated data needs to be saved into file \verb|arc_lines_wavelength.txt| 
 Afterwards the script can run again and will use this data to create a new wavelength solution.
 
 % -------------------------------------------------------------------------------------------
-
-
-\newpage
-\section{The Extraction of science data}
-\label{section:extraction}
-
-
-% -------------------------------------------------------------------------------------------
-
-Once the preparation steps have been run for a new set of data (see Section \ref{Section:running_the_code}) the scientific data can be extracted. This is done with the python script \verb|extract.py|.
-
-Before running the script the name of the files which should be extracted needs to be given. afterwards the script can be run using
-\begin{lstlisting}[style=base]
-python <path to script>/extract.py
-\end{lstlisting}
-
-The script will load all necessary files (created by the step above, see Section~\ref{Section:running_the_code}) and afterwards perform the following steps:
-\begin{enumerate}
-  \item Apply the corrections to the CCD image as given in parameter \verb|calibs|. The following options are possible:
-  \begin{description}
-    \item[subframe] Use only an area of the CCD image.
-    \item[badpx\_mask] Apply the bad pixel mask, given in parameter \verb|badpx_mask_filename|.
-    \item[bias] Apply a master bias, which will be created from the files given in the parameter \verb|bias_rawfiles| by using the settings given in the parameter \verb|bias_calibs_create|.
-    \item[dark] Apply a master dark, which will be created from the files given in the parameter \verb|dark?.?_rawfiles| by using the settings given in the parameter \verb|dark?.?_calibs_create|. The \verb|?.?| stands for the exposure time of the science observation as found in its header. Alternatively, to force the use of a specific dark, the entry needs to consists of 'dark' with at least one additional character.
-    \item[flat] Apply a master flat, which will be created from the files given in the parameter \verb|flat_rawfiles| by using the settings given in the parameter \verb|flat_calibs_create|.
-    \item[background*] (standard: \verb|background_image_filename|) Applies background correction using the filename given in the parameter \verb|background*|. The background image will be scaled by the exposure time of the scientific image, before its subtracted from the scientific image.
-  \end{description}
-  \item Find the shift to the file containing the traces. Due to thermal movement the CCD might can move in respect to the instrument.
-  \item Extract the science fiber spectrum (and error).
-  \item Extract the calibration fiber spectrum.
-  \item Find the shift to the wavelength solution. The identified lines from the reference catalogue are searched and fitted in the calibration fiber spectrum. Then the shift is calculated between the original and fitted position.
-  \item Calculate the wavelength for each order and pixel by solving the shifted wavelength solution.
-  \item Create the flat normalised spectrum (and error).
-  \item Create the continuum corrected spectrum.
-  \item Perform some general measurements which are stored in the header.
-  \item Writing the file with all extracted data into the folder given in the parameter \verb|path_extraction| (standard: \verb|extracted|).
-\end{enumerate}
-
-\subsection{Format of the extracted files}
-
-The final fits file contains the original header and some additional information, for example the calibration steps which were applied and some information about the flux collected in the different orders. The data in the file is stored in a 3D array in the form: data type, order, and pixel. The data types are similar to the ones created by the CERES pipeline and are the following:
-\begin{enumerate}
-  \setcounter{enumi}{-1}
-  \item 2D array with the wavelength for each order and pixel.
-  \item Extracted spectrum without any modification.
-  \item (Measurement of the error the extracted spectrum)
-  \item Flat corrected spectrum, calculated by dividing the extracted spectrum and the normalised flat spectrum.
-  \item (Error the flat corrected spectrum)
-  \item Continuum normalised spectrum. The continuum is derived by fitting a polynomial to the flat corrected spectrum, using only areas of the spectrum where no lines are located. 
-  \item Signal to noise ratio in the continuum, calculated from the residuals between continuum fit and measured continuum and the flux in the continuum.
-  \item Mask with good areas of the spectrum. The following values are used:
-  \begin{itemize}
-    \item[1] good
-    \item[0] no data available
-    \item[0.1] saturated pixel in the extracted spectrum
-    \item[0.2] bad pixel in the extracted spectrum
-  \end{itemize}
-  \item Spectrum of the calibration fiber, e.g. of the emission line lamp.
-\end{enumerate}
-
-
-% -------------------------------------------------------------------------------------------
-
 
 \newpage
 \section{Post-extraction analysis}
