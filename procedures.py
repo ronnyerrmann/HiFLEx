@@ -380,8 +380,8 @@ def read_file_calibration(params, filename, level=0):
             logtxt, headtxt = ['flat correction applied with normalised flat'], ['redu{0}d'.format(level), 'Flat']
         elif entry.lower().find('background') > -1:
             if entry not in calimages:
-                 calimages[entry] = read_background(params, params[entry])
-            warn_images_not_same([im, calimages[entry]], [filename,entry])
+                 calimages[entry] = read_background(params, params[entry+'filename'])
+            warn_images_not_same([im, calimages[entry]], [filename,params[entry+'filename']])
             im = im - calimages[entry]*exptime
             logger('Info: {1}: background correction applied: {0}'.format(params[entry], level))
             im_head['redu{0}e'.format(level)] = 'Background: {0}'.format(params[entry])
@@ -994,7 +994,6 @@ def polynomial_fit_2d_norm(xx, yy, zz, xord, yord, w=[]):
         # Normalise so that the smallest weight has a value of 1
         #w = ((w/min(w))**2 * 10).astype(int)       # Normalise so that the smallest weight has a value of 10, but this increaese the array so massively
         w = ((w/min(w))).astype(int)
-        #print min(w),max(w), sum(w)
         for i in range(w.shape[0])[::-1]:
             A = np.concatenate( (A, A[[i],:].repeat(w[i]-1,axis=0)) , axis=0)
             zz = np.concatenate( (zz, zz[[i]].repeat(w[i]-1,axis=0)) , axis=0)
@@ -1132,7 +1131,7 @@ def centroid_order(x,y,center,width, significance=3, bugfix=False):
         #print popt
     except:
         # print 'curve fit failed'
-        return [0,0,0,0]
+        return np.array([0,0,0,0])
     stdfit = np.std(oneD_gauss(x,popt)-y, ddof=1)
     stdlin = np.std(y, ddof=1)
     #print 'stdfit,stdlin', stdfit,stdlin,stdlin/stdfit < significance, popt[0]/stdfit < significance, popt
@@ -1140,7 +1139,7 @@ def centroid_order(x,y,center,width, significance=3, bugfix=False):
         if bugfix:
             print 'Gauss not significant', p0,bounds
             plot_img_spec.plot_spectra(np.array([x,x]),np.array([y,oneD_gauss(x,popt)]),['data','fit'], ['savepaths'], True, [0.06,0.92,0.95,0.06, 1.0,1.01], 'No significant fit, stdlin={0}, stdGauss={1}, height={2}, needed significance={3}'.format(stdlin,stdfit,popt[0],significance))
-        return  [0,0,0,0]
+        return  np.array([0,0,0,0])
     return popt
 
 def find_center(imslice, oldcenter, x, maxFWHM, significance=3.0, bugfix=False):
@@ -1266,7 +1265,7 @@ def find_trace_orders(params, im):
     maxshift = 0.15*binx                    # Only 0.15px shift per pixel along one order
     ims = im.shape
     cen_px = ims[0]*binx/2
-    breakvalue = np.percentile(im,20)       # The brightes pixel of one order needs to be brighter than this value
+    breakvalue = np.percentile(im,40)       # The brightes pixel of one order needs to be brighter than this value, otherwise it won't be identified
     im_orig = copy.copy(im)
     im_traces = np.zeros(ims)               # Masks the orders in order to avoid overlapping traces
     traces = []
@@ -1771,7 +1770,7 @@ def find_shift_images(im, im_ref, sci_tr_poly, cal_tr_poly):
 def arc_shift(params, im_arc, pfits, xlows, xhighs, widths):
     """
     Determines the difference between the science orders and arc orders in cross-dispersion direction
-    :param params: Dictionary with all the paramerters. arcshift_range, arcshift_side, and arcextraction_width_multiplier will be used
+    :param params: Dictionary with all the paramerters. arcshift_range (is made positive when reading the configuration), arcshift_side, and arcextraction_width_multiplier will be used
     :param im_arc: 2d image in which the arc orders are iluminated
     :param pfits: list, length same as number of orders, polynomial values
                       (output of np.polyval)
@@ -1787,14 +1786,15 @@ def arc_shift(params, im_arc, pfits, xlows, xhighs, widths):
     sigma = 3
     orders = np.arange(len(pfits))
     cen_pos, cen_pos_diff = [], []
+    arcshift_range = params['arcshift_range']
     if len(pfits) >= 10:
         for pf in pfits:
             cen_pos.append(np.polyval(pf, im_arc.shape[0]/2))       # The central pixel of each order
         cen_pos = np.array(cen_pos)
         cen_pos_diff = np.abs(cen_pos[1:] - cen_pos[:-1])           # The difference between the central pixels
-        params['arcshift_range'] = [int(np.median(widths[:,2])*2), int(np.max([np.median(cen_pos_diff[:5]), np.median(cen_pos_diff[-5:])]) - np.median(widths[:,2])*2 + 1) ]  # Test everything between the 3 times Gauss width and next Order-3*width
+        arcshift_range = [int(np.median(widths[:,2])*2), int(np.max([np.median(cen_pos_diff[:5]), np.median(cen_pos_diff[-5:])]) - np.median(widths[:,2])*2 + 1) ]  # Test everything between the 3 times Gauss width and next Order-3*width
         cen_pos_diff = np.insert(cen_pos_diff, 0, cen_pos_diff[0])                      # create the same length array
-    arcshifts = np.arange(min(params['arcshift_side']*np.array(params['arcshift_range'])),max(params['arcshift_side']*np.array(params['arcshift_range']))+1)
+    arcshifts = np.arange(min(params['arcshift_side']*np.array(arcshift_range)),max(params['arcshift_side']*np.array(arcshift_range))+1)
     fluxes = []
     print 'Searching for the shift of the arc traces, compared to the science traces:'
     for shift in tqdm(arcshifts):
@@ -1828,16 +1828,25 @@ def arc_shift(params, im_arc, pfits, xlows, xhighs, widths):
             goodpos = ( (np.abs(arcshifts) > widths[order,2]*2) & (np.abs(arcshifts) < cen_pos_diff[order]-widths[order,2]*2) )
             x, y = arcshifts[goodpos], fluxes[goodpos,order]
             if len(x) < 5:                      # not enough values, use standard settings
-                goodpos = ( (np.abs(arcshifts) > min(params['arcshift_range'])) & (np.abs(arcshifts) < max(params['arcshift_range'])) )
+                goodpos = ( (np.abs(arcshifts) > min(arcshift_range)) & (np.abs(arcshifts) < max(arcshift_range)) )
                 x, y = arcshifts[goodpos], fluxes[goodpos,order]
         else:
             x, y = arcshifts, fluxes[:,order]
-        popt = centroid_order(x,y,np.mean(x),max(x)-min(x))    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
-        gauss.append(popt)      #shift=popt[1]
-        if popt[0] == 0 and popt[1] == 0 and popt[2] == 0:
-            goodvalues.append(False)
-        else:
+        popts = []
+        for centeroffset in range(0,int(len(x)/2-widths[order,2]),3):                # Test for different positions of the line
+            for sign in [-1,+1]:
+                popt = centroid_order(x, y, np.mean(x)+sign*centeroffset, min(15,max(x)-min(x)) )    #input: x,y,center, width; result: a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+                if np.all(popt <> [0,0,0,0]):
+                    diff = np.sum(np.abs(oneD_gauss(x,popt) - y))
+                    popts.append([diff, list(popt)])
+                    break
+        if len(popts) <> 0:
             goodvalues.append(True)
+            popts = sorted(popts, key=operator.itemgetter(0))               # Minimum deviation from the fit
+            gauss.append(popts[0][1])      #shift=popt[1]
+        else:
+            goodvalues.append(False)
+            gauss.append([0,0,0,0])
         label_datapoins.append('extracted flux in order {0}'.format('%2.2i'%order))
         label_gauss.append('fitted gauss in order {0}'.format('%2.2i'%order))
         label_centroids.append('final center in order {0}'.format('%2.2i'%order))
@@ -3126,7 +3135,13 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                 x = arc_lines_wavelength[:,1]-cen_px[0]
                 y = 1.0/(arc_lines_wavelength[:,0]+order_offset)
                 # Weight: height of the arc line + log10(intensity of the reference line) + 1/width of the arc line
-                weight = arc_lines_wavelength[:, 4]/np.median(arc_lines_wavelength[:,4])+arc_lines_wavelength[:,5]/np.median(arc_lines_wavelength[:,5])+arc_lines_wavelength[:,6]/np.median(arc_lines_wavelength[:,6])
+                medians = [np.median(arc_lines_wavelength[:,4]), np.median(arc_lines_wavelength[:,5]), np.median(arc_lines_wavelength[:,6])]
+                for i in range(len(medians)):
+                    if medians[i] == 0:
+                        medians[i] = np.mean(arc_lines_wavelength[:,i+4])
+                    if medians[i] == 0:
+                        medians[i] = 1
+                weight = arc_lines_wavelength[:, 4]/medians[0]+arc_lines_wavelength[:,5]/medians[1]+arc_lines_wavelength[:,6]/medians[2]
                 poly2d_params = polynomial_fit_2d_norm(x, y, arc_lines_wavelength[:,2], polynom_order_trace, polynom_order_intertrace, w=weight)
                 x = arc_lines_px[:,1]-cen_px[0]
                 y = 1.0/(arc_lines_px[:,0]+order_offset)
@@ -3184,7 +3199,14 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     # Redo the 2d polynomial fit (it should also re-create the arc_lines_wavelength table, but most times the difference is 0)
     x = arc_lines_wavelength[:,1]-cen_px[0]
     y = 1.0/(arc_lines_wavelength[:,0]+order_offset)
-    weight = arc_lines_wavelength[:, 4]/np.median(arc_lines_wavelength[:,4])+arc_lines_wavelength[:,5]/np.median(arc_lines_wavelength[:,5])+arc_lines_wavelength[:,6]/np.median(arc_lines_wavelength[:,6])
+    
+    medians = [np.median(arc_lines_wavelength[:,4]), np.median(arc_lines_wavelength[:,5]), np.median(arc_lines_wavelength[:,6])]
+    for i in range(len(medians)):
+        if medians[i] == 0:
+            medians[i] = np.mean(arc_lines_wavelength[:,i+4])
+        if medians[i] == 0:
+            medians[i] = 1
+    weight = arc_lines_wavelength[:, 4]/medians[0]+arc_lines_wavelength[:,5]/medians[1]+arc_lines_wavelength[:,6]/medians[2]
     poly2d_params = polynomial_fit_2d_norm(x, y, arc_lines_wavelength[:,2], polynom_order_trace, polynom_order_intertrace, w=weight)
     
     # Log the results
@@ -3285,7 +3307,7 @@ def statistics_arc_reference_lines(data, positions, reference_names, wavelength_
 def read_fit_wavelength_solution(params, filename, im):
     """
     Reads the file with pixel - wavelength corellation and fits a 2d array against it to create a rough wavelength solution
-    :params filename: string to a textfile with the following data: order (starting at 0, real order, pixel, wavelength. If one of the information is missing, this line will be skipped.
+    :params filename: string to a textfile with the following data: order (starting at 0), real order, pixel, wavelength. If one of the information is missing, this line will be skipped.
     """
     arc_lines_wavelength = []
     file = open(filename, 'r')
@@ -3301,6 +3323,8 @@ def read_fit_wavelength_solution(params, filename, im):
                 print 'Problems to convert to int/float:', line
                 a=1
     file.close()
+    if len(arc_lines_wavelength) == 0:
+        logger('Error: No useful information was found in {0}. Please make sure the entries in the file contain of the tab-separated values: order (starting at 0), real order, pixel, wavelength'.format(filename))
     arc_lines_wavelength = np.array(arc_lines_wavelength)
     if 0.0 in arc_lines_wavelength[:,1]:
         logger('Error: The second coloumn (real order) in file {1} was not set correctly as it contains a zero. Please use the real order (from grating equation)'.format(filename))
@@ -3684,230 +3708,6 @@ def linearise_wavelength_spec(params, wavelength_solution, spectra):
     
     return wavelenght_solution_lin, spectra_lin
 
-def adjust_wavelength_solution2(params, spectrum, arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, reference_catalog, reference_names, xlows, xhighs, show_res=False):
-    """
-    :return wavelength_solution_arclines: list with one entry for each order. Each order contains the wavelengths of the identified reference lines, sorted by the arc_lines_px (brightest to faintest)
-    """
-    ignoreorders = [] #[0,1,2,3,4,5,6,7,8]
-    iter_break = 10
-    steps = 4
-    sigma = 3.5
-    specs = spectrum.shape
-    orders = np.arange(specs[0])
-    if len(arc_lines_px) <= 10:
-        logger('Warn: no arc lines available -> creating a pseudo solution (1 step per px)')
-        wavelength_solution, wavelength_solution_arclines = [], []
-        for order in orders:
-            wavelength_solution.append([order, 0, 1, 0 ])
-            wavelength_solution_arclines.append([])     #The wavelength of the reference lines
-        return np.array(wavelength_solution), wavelength_solution_arclines
-    max_diff = wavelength_solution_ori[-1][-2] * params['px_offset'][2]  # Assign lines only to resolution * px_offset
-    orderdiffs = range(min(params['order_offset'][0:2]),max(params['order_offset'][0:2])+1)
-    pxdiffs = range(min(params['px_offset'][0:2]),max(params['px_offset'][0:2])+1,params['px_offset'][2])
-    pxdiffords = range(min(params['px_offset_order'][0:2]),max(params['px_offset_order'][0:2])+1,params['px_offset_order'][2])
-    resolution_offset = params['resolution_offset_pct']/100.
-    res_steps = 11
-    resdiffs = np.linspace(1-resolution_offset, 1+resolution_offset, res_steps)
-    best_matching = []
-    print 'Compare old wavelength solution with current arc lines'
-    for orderdiff in tqdm(orderdiffs):
-        for pxdiff in pxdiffs:
-            for pxdifford in pxdiffords:
-                for resdiff in resdiffs:
-                    matching_lines = []
-                    # Caluculate the wavelength of all arclines with the current settings
-                    arc_lines_wavelength = []
-                    for order_arcline in range(int(min(arc_lines_px[:,0])),int(max(arc_lines_px[:,0])+1)):
-                        if order_arcline+orderdiff < 0 or order_arcline+orderdiff > len(wavelength_solution_ori)-1 or order_arcline in ignoreorders:
-                            # No solution is available for this shifted order
-                            continue
-                        wls = list(wavelength_solution_ori[order_arcline+orderdiff][:-2])     # These are the higher orders, which could cause problems if the shift is -700 px
-                        #wls = wavelength_solution_ori[order_arcline+orderdiff][:2]     # this produces worse results
-                        wls.append(wavelength_solution_ori[order_arcline+orderdiff][-2]*resdiff)
-                        wls.append(wavelength_solution_ori[order_arcline+orderdiff][-1])
-                        arc_lines_order_px = arc_lines_px[arc_lines_px[:,0] == order_arcline,1]    #array with px position for this order
-                        arc_lines_order_wl = np.polyval(wls[2:], arc_lines_order_px-wls[1]+pxdiff+pxdifford*order_arcline)
-                        # Get the offset to the closest lines
-                        for arc_line_wave in arc_lines_order_wl:
-                            diff_catalog = reference_catalog[:,0] - arc_line_wave
-                            diff_catalog = diff_catalog[(abs(diff_catalog) <= max_diff)]
-                            for entry in diff_catalog:
-                                matching_lines.append([order_arcline, arc_line_wave, entry])
-                    if matching_lines == []:
-                        continue
-                    matching_lines = np.array(matching_lines)
-                    #print matching_lines.shape, orderdiff, pxdiff, resdiff, np.median(matching_lines[:,2]), np.std(matching_lines[:,2], ddof=1)
-                    best_matching.append([orderdiff, pxdiff, pxdifford, resdiff, len(matching_lines), np.std(matching_lines[:,2], ddof=1)])
-    if best_matching == []:
-        if len(wavelength_solution_ori) == specs[0]:
-            logger('Warn: No matching configuration of the lines in the arc with the old wavelength solution found. Therefore the old solution will be used')
-            return np.array(wavelength_solution_ori), wavelength_solution_arclines_ori
-        else:
-            logger('Warn: No matching configuration of the lines in the arc with the old wavelength solution found. Additionally the number of orders in the original solution and this setting does not match -> creating a pseudo solution (1 step per px)')
-            wavelength_solution, wavelength_solution_arclines = [], []
-            for order in orders:
-                wavelength_solution.append([order, 0, 1, 0 ])
-                wavelength_solution_arclines.append([])     #The wavelength of the reference lines
-            return np.array(wavelength_solution), wavelength_solution_arclines
-    best_matching = np.array(best_matching)
-    best_matching = best_matching[np.argsort(best_matching[:,4], axis=0),:]     #sort by number of identified arclines -> best at the end
-    #print best_matching[-10:,:]
-    best_matching = best_matching[best_matching.shape[0]*3/4:,:]     #only 25% of the best values
-    best_matching = best_matching[np.argsort(best_matching[:,5], axis=0),:]     #sort by standard deviation of the shift of the arc lines -> best at the front
-    #print best_matching[:10]
-    # Use this solution to identify lines and fit polynomials in each order
-    orderdiff, pxdiff, pxdifford, resdiff = int(best_matching[0,0]), int(best_matching[0,1]), best_matching[0,2], best_matching[0,3]
-    logger('Info: To match the most lines in the arc with the old wavelength solution, a shift of {0} orders, a multiplier to the resolution of {1}, a shift of {2} px, and a shift of {3} px per order needs to be applied. {4} lines were identified. The deviation is {5} Angstrom.'.format(orderdiff, resdiff, pxdiff, pxdifford, int(best_matching[0,4]), round(best_matching[0,5],4) ))
-    ## assign lines in the arcline with lines from the reference catalog
-    arc_lines_wavelength = []       #order, central pixel of the arc line, wavelength of the assigned reference line, diff between both solutions, height of the arc line, intensity of the reference line, 1/width of the arc line
-    for order_arcline in range(int(min(arc_lines_px[:,0])),int(max(arc_lines_px[:,0])+1)):
-        if order_arcline+orderdiff < 0 or order_arcline+orderdiff > len(wavelength_solution_ori)-1 or order_arcline in ignoreorders:
-            # No solution is available for this shifted order
-            continue
-        wls = list(wavelength_solution_ori[order_arcline+orderdiff][:-2])     # These are the higher orders, which could cause problems if the shift is -700 px
-        #wls = wavelength_solution_ori[order_arcline+orderdiff][:2]
-        wls.append(wavelength_solution_ori[order_arcline+orderdiff][-2]*resdiff)
-        wls.append(wavelength_solution_ori[order_arcline+orderdiff][-1])
-        arc_lines_order_px = arc_lines_px[arc_lines_px[:,0] == order_arcline,:]    #[:,1] is px position, [:,2] is width of lines, [:,3] is height of the line
-        arc_lines_order_wl = np.polyval(wls[2:], arc_lines_order_px[:,1]-wls[1]+pxdiff+pxdifford*order_arcline)
-        for i, arc_line_wave in enumerate(arc_lines_order_wl):
-            diff_catalog = reference_catalog[:,0] - arc_line_wave
-            good_values = (abs(diff_catalog) <= max_diff)
-            for entry in reference_catalog[good_values,:]:
-                arc_lines_wavelength.append([order_arcline, arc_lines_order_px[i,1], entry[0],0, arc_lines_order_px[i,3], entry[1], arc_lines_order_px[i,2]])
-    ## Fit polynoms in and between orders
-    cen_px_curv, cen_px_offset = 0, 0                           # remains to check which central pixel fits the whole solution best
-    order_offset = wavelength_solution_ori[0][0]+orderdiff      # checked that it is "+orderdiff"
-    opt_px_range = (1 - np.linspace(params['opt_px_range'][0], params['opt_px_range'][1], steps)) * specs[1]/2
-    polynom_order_traces = (np.linspace(params['polynom_order_traces'][0], params['polynom_order_traces'][1], steps)).astype(int)
-    polynom_order_intertraces = params['polynom_order_intertraces']
-    if len(polynom_order_intertraces) == 1:
-        polynom_order_intertraces.append(params['polynom_order_intertraces'])
-    polynom_order_intertraces = (np.linspace(polynom_order_intertraces[0], polynom_order_intertraces[1], steps)).astype(int)
-    max_diff_pxs = np.linspace(params['px_offset'][2], params['diff_pxs'], steps)
-    cen_px = specs[1]/2 + cen_px_curv*orders + cen_px_offset    # remains to check which central pixel fits the whole solution best
-    arc_lines_wavelength = np.array(arc_lines_wavelength)
-    old_arc_lines_wavelength = arc_lines_wavelength
-    for step in range(steps):
-        max_diff_px = max_diff_pxs[step]
-        px_range = opt_px_range[step]
-        polynom_order_trace = polynom_order_traces[step]
-        polynom_order_intertrace = polynom_order_intertraces[step]
-        #print step,max_diff_px,px_range,polynom_order_trace
-        for iteration in range(iter_break):
-                x = arc_lines_wavelength[:,1]-cen_px[0]
-                y = 1.0/(arc_lines_wavelength[:,0]+order_offset)
-                # Weight: height of the arc line + log10(intensity of the reference line) + 1/width of the arc line
-                weight = arc_lines_wavelength[:, 4]/np.median(arc_lines_wavelength[:,4])+arc_lines_wavelength[:,5]/np.median(arc_lines_wavelength[:,5])+arc_lines_wavelength[:,6]/np.median(arc_lines_wavelength[:,6])
-                poly2d_params = polynomial_fit_2d_norm(x, y, arc_lines_wavelength[:,2], polynom_order_trace, polynom_order_intertrace, w=weight)
-                x = arc_lines_px[:,1]-cen_px[0]
-                y = 1.0/(arc_lines_px[:,0]+order_offset)
-                arc_line_wave = polynomial_value_2d(x, y, polynom_order_trace, polynom_order_intertrace, poly2d_params)
-                arc_line_res = np.abs(polynomial_value_2d(x+1, y, polynom_order_trace, polynom_order_intertrace, poly2d_params) - polynomial_value_2d(x-1, y, polynom_order_trace, polynom_order_intertrace, poly2d_params))/2
-                arc_lines_wavelength = []
-                for i in range(arc_line_wave.shape[0]):
-                    if arc_lines_px[i,1] < px_range or arc_lines_px[i,1] > specs[1]-px_range or arc_lines_px[i,0] in ignoreorders:
-                        # Do not use lines in the outer parts of the spectrum at the beginning
-                        continue
-                        # Wavelength difference to the catalog lines
-                    diff_catalog = reference_catalog[:,0] - arc_line_wave[i]
-                    #print min(abs(diff_catalog)),arc_line_res[i]
-                    if min(abs(diff_catalog)) <= max_diff_px*arc_line_res[i]:   #calculate the approximate wavelength difference for max_diff_px
-                        # Best matching line
-                        pos_min = np.argmin(abs(diff_catalog))
-                        catalog_line = reference_catalog[pos_min,:]
-                        weight1, weight2, weight3 = arc_lines_px[i,3], np.log10(catalog_line[1]), 1/arc_lines_px[i,2]     #height of the arc line, log10(intensity of the reference line), 1/width of the arc line
-                        arc_lines_wavelength.append([arc_lines_px[i,0], arc_lines_px[i,1], catalog_line[0], diff_catalog[pos_min], weight1, weight2, weight3, pos_min, arc_lines_px[i,2] ])
-                arc_lines_wavelength = np.array(arc_lines_wavelength)   
-                # arc_lines_wavelength: order, px in spectrum, wavelength in reference catalog, difference in wavelength between wavelength solution and reference line, 3x weights, index in refence catalog, width of the line
-                goodvalues, p = sigma_clip(np.arange(arc_lines_wavelength.shape[0]), arc_lines_wavelength[:,3], 0, sigma, sigma, repeats=20)    # poly_order=0 to sigma clip around the average
-                arc_lines_wavelength = arc_lines_wavelength[goodvalues,:]
-    
-                #print max_diff_px, arc_lines_wavelength.shape[0],old_arc_lines_wavelength.shape[0],arc_lines_wavelength.shape[0] == old_arc_lines_wavelength.shape[0],np.mean(arc_lines_wavelength[:,3]), np.mean(old_arc_lines_wavelength[:]),np.mean(arc_lines_wavelength[:,3]) == np.mean(old_arc_lines_wavelength[:]), np.min(arc_lines_wavelength[:,3]), np.max(arc_lines_wavelength[:,3])
-                if arc_lines_wavelength.shape[0] == old_arc_lines_wavelength.shape[0]:
-                    if np.mean(arc_lines_wavelength[:,3]) == np.mean(old_arc_lines_wavelength[:]):
-                        print 'break', iteration
-                        break
-                old_arc_lines_wavelength = copy.copy(arc_lines_wavelength[:,3])
-                
-                #print arc_lines_wavelength.shape, poly2d_params
-                """ # Only for printing the progress
-                x,y,l=[],[],[]
-                for order in orders:
-                    x.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),1])
-                    y.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),3])
-                    l.append('{0}'.format(order))
-                if iteration == 100:
-                    plot_img_spec.plot_points(x,y,l,'path',show=True, x_title='Pixel', y_title='Residual')          """
-    
-    # Get the real order numbers using the grating equation: wavelength propotional to 1/(real_order) -> y(order)=(order_offset_new+order)*central_wavelength should have the smallest slope
-    order_offset_old = int(order_offset)
-    slope_real_order = []
-    cenwave = polynomial_value_2d(orders*0, 1.0/(orders+order_offset), polynom_order_trace, polynom_order_intertrace, poly2d_params)    #old order_offset
-    for order_offset in range(-200,201):
-        y = (order_offset+orders)*cenwave   #(order_offset+order)*central_wavelength
-        p = np.polyfit(orders, y, 1)
-        slope_real_order.append([abs(p[0]), order_offset, len(orders) ])
-    slope_real_order = sorted(slope_real_order)
-    order_offset = slope_real_order[0][1]
-    if 0.0 in order_offset+orders:            # Definitively the wrong order offset
-        order_offset = order_offset_old
-    p_real_cent = np.polyfit(1.0/(order_offset+orders), cenwave, 1)
-    diff_real_cent = cenwave-np.polyval(p_real_cent, 1.0/(order_offset+orders))
-    diff_real_cent = np.std(diff_real_cent, ddof=1)
-    # Redo the 2d polynomial fit (it should also re-create the arc_lines_wavelength table, but most times the difference is 0)
-    x = arc_lines_wavelength[:,1]-cen_px[0]
-    y = 1.0/(arc_lines_wavelength[:,0]+order_offset)
-    weight = arc_lines_wavelength[:, 4]/np.median(arc_lines_wavelength[:,4])+arc_lines_wavelength[:,5]/np.median(arc_lines_wavelength[:,5])+arc_lines_wavelength[:,6]/np.median(arc_lines_wavelength[:,6])
-    poly2d_params = polynomial_fit_2d_norm(x, y, arc_lines_wavelength[:,2], polynom_order_trace, polynom_order_intertrace, w=weight)
-    
-    # Log the results
-    avg_diff_fit = np.mean(np.abs(arc_lines_wavelength[:,3]))
-    std_diff_fit = np.std(np.abs(arc_lines_wavelength[:,3]), ddof=1)
-    logger('Info: used {0} lines. The average deviation of the fit is {1} +/- {2} Angstrom (abs of the residuals). A 2d polynom fit with {3} orders in dispersion direction (along the traces) and {4} orders in cross-dispersion direction was used. With this solution, the offset to real orders is {5}. With this offset, the standard deviation of the residuals between the central wavelengths and the grating equation is {6} Angstrom. Using the original solution gives an offset of {7}.'.format(arc_lines_wavelength.shape[0], round(avg_diff_fit,4), round(std_diff_fit,4), polynom_order_trace, polynom_order_intertrace, order_offset, round(diff_real_cent,4), order_offset_old ))
-    if std_diff_fit > 10 or std_diff_fit < 1E-10:
-        logger('Error: The wavelength solution seems wrong. Please check the parameters "order_offset", "px_offset", and "px_offset_order". It might be useful to compare the file with the emission lines ({0}) in the current folder and the folder folder with the previous wavelength solution (see parameter "original_master_arc_solution_filename")'.format(params['master_arc_l_filename']))
-    
-    # Create a wavelength solution
-    wavelength_solution = [polynom_order_trace, polynom_order_intertrace, cen_px[0], order_offset]
-    wavelength_solution = np.append(wavelength_solution, poly2d_params, axis=0)
-    logger('Wavelenght solution in 2d (for pixel and order at the same time) is [No of orders1, No of orders2, central pixel, offset to real order, parameters of the 2d polynomial(px^0*m^0, px^1*m^0, px^0*m^1, px^2*m^0, px^1*m^1, px^0*m^2, ....)]: \n{0}'.format(wavelength_solution), show=False)
-    
-    x,y,l=[],[],[]
-    max_number_reflines = 0             # will be needed later in order to save the data correctly into a fits file
-    for order in orders:
-        x.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),1])    # Pixel
-        y.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),3])    # Residuals
-        l.append('{0}'.format(order))
-        max_number_reflines = max(max_number_reflines, len(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),2]))
-    t = 'Residuals of the identificated arc lines: identified {0} lines for a 2d polynom fit with {1} and {2} orders'.format(arc_lines_wavelength.shape[0], polynom_order_trace, polynom_order_intertrace)
-    plot_img_spec.plot_points(x,y,l,[params['logging_arc_line_identification_residuals']],show=False, title=t, x_title='Pixel', y_title='Residual')
-
-    # Transform the wavelength solution into the old wavelength solution
-    wavelength_solution, wavelength_solution_arclines = [], []
-    xarr = np.arange(0,specs[1], 0.1)
-    for order in orders:
-        yarr = polynomial_value_2d(xarr-cen_px[0], 1.0/(order+order_offset), polynom_order_trace, polynom_order_intertrace, poly2d_params)
-        polyfit = np.polyfit(xarr-cen_px[0], yarr, polynom_order_trace)      #lambda from px
-        solution = [order_offset+order, cen_px[0] ]
-        solution = np.append(solution, polyfit, axis=0)
-        wavelength_solution.append(solution)
-        reflines = list(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),2])     # Wavelength
-        for i in range(max_number_reflines - len(reflines)):                            # Fill up with zeros in order to create an array
-            reflines.append(0)
-        wavelength_solution_arclines.append(reflines)     #The wavelength of the reference lines
-        
-        #print order,polynomial_value_2d(0, 1.0/(order+order_offset), polynom_order_trace, polynom_order_intertrace, poly2d_params), solution
-        #diff_fit = yarr-np.polyval(polyfit, xarr-cen_px[0])        #<1e-10
-        #print [len(diff_fit), np.std(diff_fit, ddof=1),min(diff_fit),max(diff_fit)]
-    wavelength_solution = np.array(wavelength_solution)
-    statistics_arc_reference_lines(arc_lines_wavelength, [0,-2,-1,2], reference_names, wavelength_solution, xlows, xhighs)
-    
-    # See the results
-    if show_res:
-        correlate_px_wave_result_UI(spectrum, arc_lines_wavelength, reference_catalog, arc_lines_px, reference_names, wavelength_solution, adjust=[0.07,0.93,0.94,0.06, 1.0,1.01])
-    
-    return wavelength_solution, wavelength_solution_arclines
 
 
 

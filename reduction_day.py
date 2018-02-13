@@ -67,8 +67,8 @@ if __name__ == "__main__":
             plot_traces_over_image(im_sflat, params['logging_orders'], sci_tr_poly, xlows, xhighs, widths)
             
     # Create the background map, if it doesn't exist
-    if os.path.isfile(params['background_image_filename']) == True:
-        logger('Info: Background map already exists: {0}'.format(params['result_path']+params['background_image_filename']))
+    if os.path.isfile(params['background_filename']) == True:
+        logger('Info: Background map already exists: {0}'.format(params['result_path']+params['background_filename']))
     else:
         # create the background map
         if params['GUI'] == True:
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         save_im_fits(params, im_bck_px*im_sflat, im_sflat_head, params['logging_background'])
         # Create the fitted background map
         im_bck = bck_fit(im_sflat, im_bck_px, params['polynom_bck'], params['GUI'])
-        save_im_fits(params, im_bck, im_sflat_head, params['background_image_filename'])
+        save_im_fits(params, im_bck, im_sflat_head, params['background_filename'])
         
     # Create the file for the arc orders, if it doesn't exist
     if os.path.isfile(params['master_orderarc_filename']) == True:
@@ -133,7 +133,7 @@ if __name__ == "__main__":
         im_name = im_name.replace('.fit','')
         save_multispec([arc_s_spec, arc_s_spec, arc_s_spec, arc_s_spec], params['path_extraction']+im_name, im_arcshead)
         arc_lines_px = identify_lines(params, arc_l_spec, arc_s_spec, good_px_mask_l, new_format=True)
-        if os.path.isfile(params['original_master_arc_solution_filename']) == False:
+        if os.path.isfile(params['original_master_arc_solution_filename']) == False:                                                        # Create a new solution
             if os.path.isfile('arc_lines_wavelength.txt') == False:
                 logger('Error: Files for creating the wavelength solution do not exist: {0}, {1}. Please check parameter {2} or create {1}.'.format(params['original_master_arc_solution_filename'], 'arc_lines_wavelength.txt', 'original_master_arc_solution_filename'))
             wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_arc_l)                        # For HARPS or a new wavelength solution

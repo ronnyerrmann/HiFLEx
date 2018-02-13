@@ -141,13 +141,15 @@ if __name__ == "__main__":
             param = 'flatarc'
         if entry[1] == 'sflat' and entry[2] == sflat_fib2:          # Fiber1 and Fiber2
             param = 'sflat'
+        parcal = param
+        
         if entry[1] == 'none' and entry[2] == 'wave':               # Fiber1 and Fiber2
+            parcal = 'arc'
             if entry[3] == arc_l_exp:
                 param = 'arc_l'
             elif entry[3] == arc_s_exp:
                 param = 'arc_s'
         textparam = param
-        parcal = param
         if entry[1] == 'dark' and entry[2] == 'dark':               # Fiber1 and Fiber2
             param = 'dark{0}'.format(entry[3])                      # Exposure time
             textparam = param.replace('.','p')+'s'
