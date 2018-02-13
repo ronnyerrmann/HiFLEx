@@ -37,24 +37,28 @@ subframe        = [3056,3056,0,0]
 rotate_frame = 0
 flip_frame = False
 
-# In the reduced images use only up pixels below or equal max_good_value to determine the badpx map. (At the moment only used by create_badpx_mask.py but will be important for extracting data later)
+# In the reduced images mark pixels above max_good_value as saturated
 #           format: float or integer
 max_good_value  = 63000
 
-# extraction_width_multiplier times the average width of the gaussian fit to the traces of the orders defines how many pixel of either side to extract
+# extraction_width_multiplier times the average width of the gaussian fit to the traces of the orders defines how many pixel of either side to extract.
+#           format: float or integer
 extraction_width_multiplier = 2
 arcextraction_width_multiplier = 3
 # In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom (not implemented)
 wavelength_scale_resolution = 0.01
 
-## Between consecutive observations the positions of the traces might change.
+## Between observations of different nights the positions of the traces along cross-dispersion axis might change. The pipeline will determine the shift
+# maxshift gives the maximum allowed shift between the current sflat and original_master_order_filename.
+#           format: float or integer
 maxshift = 15
+# Also the width of the traces might change. As the measurements are only done on a subsample of the data, the user needs to decide if the new, less precise widths should be used.
 update_widths = False
 
-## If the positions of the traces between consecutive observations has changed too much, the orders are searched from scratch using the following parameters
+## If the positions of the traces between consecutive observations has changed too much, the orders are searched from scratch and then adjusted.
 # bin_search_orders: Search the orders in a binned image. The first value gives the binning along one order (vertical axis, dispersion axis)
 #                    and the second value the binning perpendicular to the orders (horizontal, cross-dispersion axis). 
-#                   Heavy binning along the dispersion axis is possible in this step, while binning in cross-dispersion needs to be significantly smaller than the minimum separation between orders.
+#                    Heavy binning along the dispersion axis is possible in this step, while binning in cross-dispersion needs to be significantly smaller than the minimum separation between orders.
 # for qsi:          bin_search_orders = 20,5
 # for HARPS:        bin_search_orders = 20,2
 bin_search_orders = 20,4
@@ -139,10 +143,10 @@ master_arc_solution_filename    = master_wavelength.fits
 master_flat_spec_norm_filename  = master_flat_spec_norm.fits
 
 # master file for identifiying which pixel contain background. Created by reduction_day.py
-background_px_filename      = background_px.fits
+background_px_filename          = background_px.fits
 
 # master file for the background correction. Created by reduction_day.py
-background_filename         = background.fits
+background_filename             = background.fits
 
 ## extracted data
 # path for the extracted data.
@@ -162,9 +166,9 @@ original_master_order_filename = /data/ronny/Reduced/20180105/master_orders.fits
 original_master_arc_solution_filename = /data/ronny/Reduced/20180126/master_wavelength.fits
 
 # Path and filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. The values can be used as given from the NIST database, e.g. 6550.653 \t 140* \t Ne II 
-arc_lines_catalog = /home/ronny/Scripts/exohspec/reference_lines_UNe.txt
-arc_lines_catalog = /home/ronny/Scripts/exohspec/reference_lines_ThAr.txt
-# The Script runs arc solution in Angstrom. Give the multiplier for the wavelength to get Angstrom, e.g. catalog_file_wavelength_muliplier=10 for the arc_lines_catalog in [nm]
+reference_catalog = /home/ronny/Scripts/exohspec/reference_lines_UNe.txt
+reference_catalog = /home/ronny/Scripts/exohspec/reference_lines_ThAr.txt
+# The Script runs arc solution in Angstrom. Give the multiplier for the wavelength to get Angstrom, e.g. catalog_file_wavelength_muliplier=10 for the reference_catalog in [nm]
 catalog_file_wavelength_muliplier = 1
 
 use_catalog_lines = NeI, UI, ThI, ArI

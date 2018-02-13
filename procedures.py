@@ -535,7 +535,7 @@ def save_im_fits(params, im, im_head, filename):
     """
     im = rotate_flip_frame(im, params, invert=True)
     #im = get_minimum_data_type(im, allow_unsigned=False)   #That doen't make the fits files smaller for uint16, int16, or float32. Additionally, plotting a file with uint16 or int16 with ds9 or gaia doesn't show the data correctly
-    fits.writeto(filename, im, im_head, clobber=True)
+    fits.writeto(filename, im, im_head, overwrite=True)
     logger('Info: image saved: {0}'.format(filename))
 
 def read_fits_width(filename):
