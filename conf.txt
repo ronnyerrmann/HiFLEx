@@ -31,7 +31,11 @@ configfile_fitsfiles = fits_conf.txt
 subframe        = [4250,2838,0,0]
 subframe        = [3056,3056,0,0]
 
-# To extract the data correctly, the frame should be rotated in the way, that traces (dispersion axis) are along vertical direction with wavelength increasing with increasing pixel number (blue on top). If necessary the image can be flipped after the rotation so that the central wavelength of the orders decreases with increasing pixel number (blue orders on the right of the (rotated) image and the red orders on the left).
+# To extract the data correctly, the frame should be rotated in the way, that traces (dispersion axis) are along vertical direction
+#           with wavelength increasing with increasing pixel number (blue on top). 
+#           If necessary the image can be flipped after the rotation so that the central wavelength of the orders decreases with increasing 
+#           pixel number (blue orders on the right of the (rotated) image and the red orders on the left).
+#               format: multiple of 90
 # for qsi:          rotate_frame = 270
 # for HARPS:        rotate_frame = 180
 rotate_frame = 0
@@ -68,16 +72,15 @@ bin_adjust_orders = 3,1
 polynom_order_orders = 5
 
 
-## To determine the background in a flat only image
+## To determine the background in an image in which only the science fiber is ilumnited with a continuum source
+# background_width_multiplier defines the area which is excluded for determining the background. It has the same settings as 
 background_width_multiplier = 8
 polynom_bck = 10
 
-## Finding the traces of the arc traces
+## Finding the traces of the calibration fiber 
 # arcshift_side: On which side of the science orders are the corresponding calibration orders located. Possible values are "left" (towards the redder order) or "right" (to the bluer order)
-#       Used by shift_trace
 arcshift_side = left
 # arcshift_range: Range to search for the shift between the flat traces and arc_traces. This value is determinded by the the script, only in case the process fails the parameter is used.
-#       Used by shift_trace
 arcshift_range  = [25, 60]
 
 ## The following parameters define the search area when finding the new wavelength solution for the night by using an old solution

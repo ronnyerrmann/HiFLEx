@@ -478,15 +478,15 @@ When setting up a new camera or a new account paths and parameters need to be ad
   \item[rotate\_frame, flip\_frame] : The CCD image needs to be aligned in a way that the cross-dispersion axis is along vertical direction and the dispersion axis is along the horizontal direction, AND that the wavelength in dispersion direction is increasing with higher pixel number by providing the necessary angle for \verb|rotate_frame|. If necessary the image can be flipped (\verb|flip_frame = True|) after the rotation so that the wavelength in cross-dispersion direction decreases with increasing pixel number (blue orders on the right and the red orders on the left).
   \item[extraction\_width\_multiplier, arcextraction\_width\_multiplier] : The spectrum will be extracted by summing up the data between the center of a trace and \verb|extraction_width_multiplier| times the Gaussian width of the order to either side of center. The covered area can be checked in the logged images given in the parameters \verb|logging_orders| and \verb|logging_arcorders|. In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
   \item[bin\_search\_orders] : In order to speed up the search for the traces, heavy binning should be applied. However, the value for the cross-dispersion axis should to chosen in a way, that neighbouring orders are still separated. This can be checked in the images \verb|flat_binned.fits|.
+  \item[arcshift\_side] : Position of the calibration traces compared to the science traces. Can be 'left' or 'right'
+  \item[] : 
+  \item[] : 
+  \item[] : 
+  \item[] : 
+  \item[] : 
+  \item[] : 
+  \item[] : 
   \item[Todo] : 
-  \item[] : 
-  \item[] : 
-  \item[] : 
-  \item[] : 
-  \item[] : 
-  \item[] : 
-  \item[] : 
-  \item[] : 
   
 \end{description}
 
