@@ -85,9 +85,9 @@ arcshift_range  = [25, 60]
 
 ## The following parameters define the search area when finding the new wavelength solution for the night by using an old solution
 # order_offset: Search range to find out by how many orders are the two solutions shifted? Normally the change should be less than 1 Order. The offset will be positive, if bluer orders are added.
-order_offset = [-2,2]
+order_offset = [-1,1]
 # px_offset: search range and step size to find out by how much the central pixel of the orders was shifted. Normally the change should be less than 100 pixel.
-px_offset = [-400, 400, 20]
+px_offset = [-200, 200, 20]
 # px_offset_order: Additional shift per order in case big variations happened.
 px_offset_order = [-1, 1, 1]
 # resultion_offset_pct: Percentage of how much the resolution between the solutions changes. The value is applied in both directions, in total 11 steps will be made. Normally 3 percent should be fine
@@ -103,8 +103,6 @@ opt_px_range = [0.5, 1.2]
 # diff_pxs: What is the maximum difference between wavelength solution and reference line in order to assigned the lines together. A good value is 4px, can be higher as sigma-clipping is performed to get rid of badly assigned lines.
 diff_pxs = 4
 
-#Not working:    
-
 ## Raw data information:
 #-----------------------
 # The folder where the raw data is stored. All file names given in this section need to be given relative to this path, e.g. with leading subfolder if data is stored in a subfolder
@@ -115,8 +113,16 @@ raw_data_imtyp_keyword  = IMAGETYP
 raw_data_imtyp_bias     = Bias Frame
 raw_data_imtyp_dark     = Dark Frame
 raw_data_imtyp_flat     = Flat Frame
+raw_data_imtyp_flat     = NA
+raw_data_imtyp_arc      = NA
 raw_data_exptim_keyword = EXPTIME
 raw_data_dateobs_keyword = DATE-OBS
+# HARPS:
+raw_data_imtyp_keyword  = OBJECT
+raw_data_imtyp_bias     = BIAS,BIAS
+raw_data_imtyp_sflat    = LAMP,DARK,TUN
+raw_data_imtyp_arc      = WAVE,WAVE,THAR2
+
 
 # For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create gives the information which corrections will be applied before the <filetype>_rawfiles are combined.
 # The <filetype>_calibs_create_g define thereby the general values, which will be assinged by prepare_file_list.py to <filetype>_calibs_create

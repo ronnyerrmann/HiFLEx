@@ -127,7 +127,7 @@ When running the scripts for the first time, python will create a new file calle
 \begin{enumerate}
   \item The script has some hard coded values in the *.py files (normally at the beginning of a procedure). These values can be changed for testing, but usually do not need any changes.
   \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|, given at the beginning of the python scripts). Some of the parameters in the configuration file need adjustment on a regular basis (see Section~\ref{section:steps_new_data_set}).
-  \item Furthermore, the pipeline reads the configuration file given in parameter \verb|onfigfile_fitsfiles|, which is automatically created by the pipeline when running \verb|prepare_file_list.py|.
+  \item Furthermore, the pipeline reads the configuration file given in parameter \verb|configfile_fitsfiles|, which is automatically created by the pipeline when running \verb|prepare_file_list.py|.
   \item The parameters which are set in the configuration file(s) can be overwritten with a command line input when a python script is started (e.g. \verb|python bla.py argument1=valueX argument2=valueY|).
   \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
 \end{enumerate}
@@ -478,23 +478,18 @@ When setting up a new camera or a new account paths and parameters need to be ad
   \item[rotate\_frame, flip\_frame] : The CCD image needs to be aligned in a way that the cross-dispersion axis is along vertical direction and the dispersion axis is along the horizontal direction, AND that the wavelength in dispersion direction is increasing with higher pixel number by providing the necessary angle for \verb|rotate_frame|. If necessary the image can be flipped (\verb|flip_frame = True|) after the rotation so that the wavelength in cross-dispersion direction decreases with increasing pixel number (blue orders on the right and the red orders on the left).
   \item[extraction\_width\_multiplier, arcextraction\_width\_multiplier] : The spectrum will be extracted by summing up the data between the center of a trace and \verb|extraction_width_multiplier| times the Gaussian width of the order to either side of center. The covered area can be checked in the logged images given in the parameters \verb|logging_orders| and \verb|logging_arcorders|. In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
   \item[bin\_search\_orders] : In order to speed up the search for the traces, heavy binning should be applied. However, the value for the cross-dispersion axis should to chosen in a way, that neighbouring orders are still separated. This can be checked in the images \verb|flat_binned.fits|.
-  \item[arcshift\_side] : Position of the calibration traces compared to the science traces. Can be 'left' or 'right'
-  \item[] : 
-  \item[] : 
-  \item[] : 
-  \item[] : 
-  \item[] : 
-  \item[] : 
-  \item[] : 
-  \item[Todo] : 
-  
+  \item[arcshift\_side] : Position of the calibration traces compared to the science traces. Can be 'left', 'right', or 'center'. The later option implies, that only one fiber exists.
+  \item[raw\_data\_imtyp\_keyword, raw\_data\_imtyp\_*] : Put the correct information for the image type header key here. 
+  \item[raw\_data\_exptim\_keyword, raw\_data\_dateobs\_keyword] : Use the right header keywords for the exposure time and the observation date.
+  \item[standard\_calibs\_create] : Define the standard CCD processing, if necessary (see Section~\ref{Section:parameters_CCD_proc} for options).
+%  \item[] : 
 \end{description}
 
+\noindent Further settings are described in Section~\ref{section:steps_new_data_set}.
 
 \subsection{Create a bad pixel mask}
+\noindent The bad pixel masked used by the pipeline is fits file which consists of a 2 dimensional image consisting of '1' for good data and '0' for bad pixels. It can be created by the script \verb|create_badpx_mask.py|, but this is script is really work in progress at the moment.
 
-
-Todo
 % -------------------------------------------------------------------------------------------
 
 \newpage
@@ -559,7 +554,7 @@ cat *.tar | tar -xvf - -i
 
 \subsection{Preparing for data extraction}
 
-The following replacements are necessary in the conf.txt file:
+The following replacements are necessary in the conf.txt file. This includes the parameters created by \verb|prepare_file_list.py|.
 \begin{itemize}\setlength\itemsep{0em}
   \small
   \item \verb|subframe                = [4096,2048,0,50]|
@@ -593,7 +588,7 @@ The following replacements are necessary in the conf.txt file:
   \item \verb|use_catalog_lines = NeI, UI, ThI, ArI, ?, NoID, ArII, ThII|
 \end{itemize}
 
-Afterwards, all scripts can run as described above.
+Afterwards, \verb|reduction_day.py| can run as described above.
 
 
 

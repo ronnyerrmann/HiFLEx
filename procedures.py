@@ -219,9 +219,11 @@ def textfileargs(params, textfile=None):
         params[svar] = -1
     elif params[svar].lower() in ['right','r']:
         params[svar] = 1
+    elif params[svar].lower() in ['center','c']:
+        params[svar] = 0
     else:
         emsg2 = 'Parameter "{0}" (value of "{1}")'.format(svar, params[svar])
-        logger(emsg + emsg2 + ' must contain: left, l, right, or r')
+        logger(emsg + emsg2 + ' must be one of the following: left, l, right, r, center, c')
     
     # deal with lists of raw data filenames -> add path
     filenlists = []
@@ -445,7 +447,8 @@ def create_image_general(params, imtype, level=0):
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].replace('normalisation', 'normalise')
         im, med_fluxes, std_fluxes = [], [], []
         head_variation = [[params['raw_data_exptim_keyword']], [params['raw_data_dateobs_keyword']], ['JD-HELIO']]
-        
+        if '{0}_rawfiles'.format(imtype) not in params.keys():
+            logger('Error: The list of raw files for image type {0} is not defined in the configuration. Please check the configuration files.'.format(imtype))
         if len(params['{0}_rawfiles'.format(imtype)]) > 145:                    # make more general, divide expected memory usage by 0.44, as test have shown that im.nbytes/memory will be about 0.45, when ram is fully used
             logger('Warn: The ammount of pictures will cause swapping')                                              # will cause swapping eventually
             prec = np.float16
@@ -1478,7 +1481,7 @@ def adjust_trace_orders(params, im, pfits, xlows, xhighs):
         widths.append(width)
         avg_shifts.append(np.mean(shifts))
     """traces = np.array(traces)"""
-    logger('Info: traces of the {0} orders adjusted. The average shift of the individual orders was between {1} and {2} pixel'.format(len(polyfits), round(min(avg_shifts)), round(max(avg_shifts)) ))
+    logger('Info: traces of the {0} orders adjusted. The average shift of the individual orders was between {1} and {2} pixel between the searching of the traces and this solution'.format(len(polyfits), round(min(avg_shifts),1), round(max(avg_shifts),1) ))
     if len(polyfits) == 0:
         logger('Error: no traces of orders found. Please check the binned image: Is the orientation and the binning right? Are the orders covering at least half of the CCD (in dispersion correction)')
     """polyfits, xlows, xhighs, widths = np.array(traces[:,0]), np.array(traces[:,2].astype(int)), np.array(traces[:,3].astype(int)), np.array(traces[:,4])"""
@@ -1781,8 +1784,10 @@ def arc_shift(params, im_arc, pfits, xlows, xhighs, widths):
     :param xhighs: list, length same as number of orders, the highest x pixel
                    (wavelength direction) used in each order
     :param widths: 2d list, length same as number of orders, each entry contains left border, right border, and Gaussian width of the lines, as estimated in the master flat
-    :return: 1d array with the shift for each order
+    :return shifts: 1d array with the shift for each order
     """
+    if params['arcshift_side'] == 0:
+        return np.array(xlows)*0        # All shifts are 0
     sigma = 3
     orders = np.arange(len(pfits))
     cen_pos, cen_pos_diff = [], []

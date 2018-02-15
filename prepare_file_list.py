@@ -57,8 +57,14 @@ if __name__ == "__main__":
                                 fiber1, fiber2 = 'bias', 'bias'
                             if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_dark']:
                                 fiber1, fiber2 = 'dark', 'dark'
-                        if (filename.lower().find('/arc') == -1) and not (filename.lower().find('arc') == 0) and fiber1 not in ['flat', 'sflat', 'dark','bias']:
+                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_sflat']:
+                                fiber1, fiber2 = 'sflat', 'dark'
+                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_arc']:
+                                fiber1, fiber2 = 'wave', 'wave'
+                        if (filename.lower().find('/arc') == -1) and not (filename.lower().find('arc') == 0) and fiber1 not in ['flat', 'sflat', 'dark', 'bias', 'wave']:
                             fiber1 = 'science'
+                            if filename.lower().find('hars') <> -1:
+                                fiber2 = 'wave'
                         # Get the exposure time
                         exptime = -1
                         if params['raw_data_exptim_keyword'] in im_head.keys():
@@ -74,8 +80,19 @@ if __name__ == "__main__":
                         dateobs = 0
                         if params['raw_data_dateobs_keyword'] in im_head.keys():
                             dateobs = im_head[params['raw_data_dateobs_keyword']]
-                            dateobs = datetime.datetime.strptime(dateobs, '%Y-%m-%dT%H:%M:%S')
-                            dateobs = time.mktime(dateobs.timetuple())             #Time in seconds
+                            found_time = False
+                            for timestring in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S']:
+                                try:
+                                    dateobs = datetime.datetime.strptime(dateobs, timestring)
+                                    found_time = True
+                                except:
+                                    found_time = False
+                                if found_time:
+                                    break
+                            if found_time:        
+                                dateobs = time.mktime(dateobs.timetuple())             #Time in seconds
+                            else:
+                                dateobs = 0
                         
                         extract = ''
                         if fiber1 == 'science':
@@ -111,12 +128,16 @@ if __name__ == "__main__":
     arc_l_exp, arc_s_exp = 0, 1E10
     sflat_fib2 = 'wave'
     flatarc_fib2 = 'none'
-    exist_bias, exist_flat = False, False
+    exist_bias, exist_flat, exp_darks, exist_flatarc = False, False, [], False
     for entry in file_list:
-        if entry[1] == 'sflat' and entry[2] == 'none':              # use entry[2] == 'wave' for sflat only if entry[2] == 'none' not available
+        if entry[1] == 'sflat' and entry[2] == 'none' and flatarc_fib2 <> 'dark':              # use entry[2] == 'wave' for sflat only if entry[2] == 'none' not available
             sflat_fib2 = 'none'
-        if entry[1] == 'flat' and entry[2] == 'wave':               # use entry[2] == 'none' for arcflat only if entry[2] == 'none' not available
+        if entry[1] == 'sflat' and entry[2] == 'dark':              # use entry[2] == 'dark' for sflat only if entry[2] == 'none' not available
+            sflat_fib2 = 'dark'
+        if entry[1] == 'sflat' and entry[2] == 'wave':               # use entry[2] == 'none' for arcflat only if entry[2] == 'wave' not available
             flatarc_fib2 = 'wave'
+        if entry[1] == 'sflat' and entry[2] == 'dark' and flatarc_fib2 <> 'wave':   # use entry[2] == 'dark' for arcflat only if entry[2] == 'wave' not available
+            flatarc_fib2 = 'dark'
         if entry[1] == 'none' and entry[2] == 'wave':
             arc_l_exp = max(entry[3], arc_l_exp)
             arc_s_exp = min(entry[3], arc_s_exp)
@@ -124,6 +145,9 @@ if __name__ == "__main__":
             exist_bias = True
         if entry[1] == 'flat' and entry[2] == 'flat':
             exist_flat = True
+        if entry[1] == 'dark' and entry[2] == 'dark':
+            if entry[3] not in exp_darks:
+                exp_darks.append(entry[3])
     
     # Create the configuartion file
     conf_data = dict()
@@ -137,7 +161,7 @@ if __name__ == "__main__":
             if entry[1] == par and entry[2] == par:                 # Fiber1 and Fiber2
                 param = par
                 break
-        if entry[1] == 'flat' and entry[2] == flatarc_fib2:         # Fiber1 and Fiber2
+        if entry[1] == 'sflat' and entry[2] == flatarc_fib2:         # Fiber1 and Fiber2    , might be overwritten by sflat -> later copy sflat into flatarc
             param = 'flatarc'
         if entry[1] == 'sflat' and entry[2] == sflat_fib2:          # Fiber1 and Fiber2
             param = 'sflat'
@@ -168,8 +192,10 @@ if __name__ == "__main__":
                     logger('Warn: Missing entry in the configuration file. Neigther "{0}_calibs_create_g" nor "standard_calibs_create" is given. Please update the configuration file.'.format(parcal))
                 text = ''
                 for param_entry in temp_param:
-                    if (param_entry == 'bias' and exist_bias == False) or (param_entry == 'flat' and exist_flat == False):          # If the calibration data is not available, then don't do the calibration
-                        warn_text = 'Warn: The parameter {0}_calibs_create_g in the configuration file requires {1} correction, but this calibration data is not available'.format(parcal,param_entry)
+                    if (param_entry == 'bias' and exist_bias == False) or (param_entry == 'flat' and exist_flat == False) or (param_entry == 'dark' and entry[3] not in exp_darks):          # If the calibration data is not available, then don't do the calibration
+                        warn_text = 'Warn: The parameter {0}_calibs_create_g in the configuration file requires {1} correction, but this calibration data is not available.'.format(parcal,param_entry)
+                        if param_entry == 'dark':
+                            warn_text += ' Please assign dark of a different exposure time in {0}.'.format(params['configfile_fitsfiles'])
                         if warn_text not in warn:
                             warn.append(warn_text)
                         continue
@@ -179,13 +205,18 @@ if __name__ == "__main__":
                 conf_data[param+'_calibs_create'] = text
             else:
                 conf_data[param+'_rawfiles'] += ',' + entry[0]
+    if 'sflat_rawfiles' in conf_data.keys() and not  'flatarc_rawfiles' in conf_data.keys():
+        conf_data['flatarc_rawfiles'] = conf_data['sflat_rawfiles']
+        conf_data['master_flatarc_filename'] = conf_data['master_sflat_filename'].replace('sflat','flatarc')
+        conf_data['flatarc_calibs_create'] = conf_data['sflat_calibs_create']
+
     if 'arc_l_rawfiles' in conf_data.keys():
         conf_data['arc_rawfiles'] = conf_data['arc_l_rawfiles']
-        conf_data['master_arc_filename'] = conf_data['master_arc_l_filename']
+        conf_data['master_arc_filename'] = conf_data['master_arc_l_filename'].replace('arc_l','arc')
         conf_data['arc_calibs_create'] = conf_data['arc_l_calibs_create']
         if 'arc_s_rawfiles' not in conf_data.keys():
             conf_data['arc_s_rawfiles'] = conf_data['arc_l_rawfiles']
-            conf_data['master_arc_s_filename'] = conf_data['master_arc_l_filename']
+            conf_data['master_arc_s_filename'] = conf_data['master_arc_l_filename'].replace('arc_l','arc_s')
             conf_data['arc_s_calibs_create'] = conf_data['arc_l_calibs_create']
     # Define extraction
     for entry in file_list:
@@ -216,8 +247,10 @@ if __name__ == "__main__":
                     logger('Warn: Missing entry in the configuration file. Neigther "{0}" nor "{1} nor {2}" is given. Please update the configuration file.'.format(calibs[0], calibs[2], calibs[4]))
                 text = ''
                 for param_entry in temp_param:
-                    if (param_entry == 'bias' and exist_bias == False) or (param_entry == 'flat' and exist_flat == False):          # If the calibration data is not available, then don't do the calibration
+                    if (param_entry == 'bias' and exist_bias == False) or (param_entry == 'flat' and exist_flat == False) or (param_entry == 'dark' and entry[3] not in exp_darks):          # If the calibration data is not available, then don't do the calibration
                         warn_text = 'Warn: The parameter {0} in the configuration file requires {1} correction, but this calibration data is not available'.format(calib,param_entry)
+                        if param_entry == 'dark':
+                            warn_text += ' Please assign dark of a different exposure time in {0}.'.format(params['configfile_fitsfiles'])
                         if warn_text not in warn:
                             warn.append(warn_text)
                         continue
