@@ -541,7 +541,8 @@ os.system('mkdir -p red_chip')
 for entry in os.popen('ls -1 *.fits').readlines():
     im = fits.getdata(entry[:-1],2)
     im_head = fits.getheader(entry[:-1],2)
-    fits.writeto('red_chip/'+entry[:-1], im, im_head, clobber=True)
+    im_head0 = fits.getheader(entry[:-1],0)
+    fits.writeto('red_chip/'+entry[:-1], im, im_head0, overwrite=True)
 EOT
 python extract_red_chip.py
 \end{lstlisting}
@@ -554,7 +555,7 @@ cat *.tar | tar -xvf - -i
 
 \subsection{Preparing for data extraction}
 
-The following replacements are necessary in the conf.txt file. This includes the parameters created by \verb|prepare_file_list.py|.
+\noindent The following replacements are necessary in the conf.txt file:
 \begin{itemize}\setlength\itemsep{0em}
   \small
   \item \verb|subframe                = [4096,2048,0,50]|
@@ -562,33 +563,21 @@ The following replacements are necessary in the conf.txt file. This includes the
   \item \verb|bin_search_orders       = 20,2|
   %\item \verb|arcshift_range    = [-12, -20]| (red chip),\\ \verb|arcshift_range  = [-12, -20]| (blue chip)
   \item \verb|arcshift_side           = left|
-  \item \verb|bias_calibs_create      = [subframe]|
-  \item \verb|bias_rawfiles           = HARPS.2015-07-30T19:57:17.883.fits|\\ (Header: \verb|OBJECT  = 'BIAS,BIAS'|)
-  \item \verb|master_bias_filename    = master_bias.fits|
-  \item \verb|sflat_calibs_create     = subframe, bias|
-  \item \verb|sflat_rawfiles          = HARPS.2015-07-30T19:58:10.417.fits|\\ (Header: \verb|OBJECT  = 'LAMP,DARK,TUN'|)
-  \item \verb|master_sflat_filename   = master_sflat.fits|
-  \item \verb|arc_calibs_create = subframe, bias|
-  \item \verb|arc_rawfiles = HARPS.2015-07-30T23:33:11.406.fits|\\ (Header: \verb|OBJECT  = 'WAVE,WAVE,THAR2'|)
-  \item \verb|master_arc_filename     = master_arc.fits|
-  \item \verb|arc_l_calibs_create     = subframe, bias|
-  \item \verb|arc_l_rawfiles = HARPS.2015-07-30T23:33:11.406.fits, HARPS.2015-07-30T23:51:34.374.fits|\\ (Header: \verb|OBJECT  = 'WAVE,WAVE,THAR2'|)
-  \item \verb|master_arc_l_filename   = master_arc_long.fits|
-  \item \verb|arc_s_calibs_create     = subframe, bias|
-  \item \verb|arc_s_rawfiles = HARPS.2015-07-30T23:51:34.374.fits|\\ (Header: \verb|OBJECT  = 'WAVE,WAVE,THAR2'|)
-  \item \verb|master_arc_s_filename   = master_arc_short.fits|
-  \item \verb|flatarc_calibs_create   = subframe, bias|
-  \item \verb|flatarc_rawfiles = HARPS.2015-07-30T20:00:05.103.fits, HARPS.2015-07-30T20:00:44.455.fits, ...|\\ (Header: \verb|OBJECT  = 'LAMP,LAMP,TUN'|) %HARPS.2015-07-30T20:01:23.528.fits, HARPS.2015-07-30T20:02:02.441.fits, HARPS.2015-07-30T20:02:41.743.fits
-  \item \verb|master_flatarc_filename = master_flatarc.fits|
-  \item \verb|extract_calibs_create   = subframe, bias|
-  \item \verb|extract_rawfiles = HARPS.2015-07-30T23:33:11.406.fits, HARPS.2015-07-31T00:32:07.455.fits, ...|%,HARPS.2015-07-31T01:26:16.488.fits,HARPS.2015-07-31T02:36:13.509.fits, HARPS.2015-07-31T03:32:07.449.fits,HARPS.2015-07-31T04:26:34.823.fits, HARPS.2015-07-31T05:27:10.451.fits,HARPS.2015-07-31T06:35:12.888.fits, HARPS.2015-07-31T07:33:42.098.fits,HARPS.2015-07-31T08:28:49.446.fits, HARPS.2015-07-31T09:09:22.460.fits
-
+  \item \verb|raw_data_imtyp_keyword  = OBJECT|
+  \item \verb|raw_data_imtyp_bias     = BIAS,BIAS|
+  \item \verb|raw_data_imtyp_sflat    = LAMP,DARK,TUN|
+  \item \verb|raw_data_imtyp_arc      = WAVE,WAVE,THAR2|
+  \item \verb|bias_calibs_create_g    = subframe|
+  \item \verb|sflat_calibs_create_g   = subframe, bias|
+  \item \verb|arc_calibs_create_g     = subframe, bias|
+  \item \verb|flatarc_calibs_create_g = subframe, bias|
+  \item \verb|extract_calibs_create_g = subframe, bias|
   \item \verb|original_master_arc_solution_filename = master_arc_solution_manual.fits|. The file \verb|arc_lines_wavelength.txt| needs to be created (Section~\ref{section:create_new_wave_solution}).
   \item \verb|arc_lines_catalog = <path>reference_lines_ThAr-HARPS_Ceres.txt|
   \item \verb|use_catalog_lines = NeI, UI, ThI, ArI, ?, NoID, ArII, ThII|
 \end{itemize}
 
-Afterwards, \verb|reduction_day.py| can run as described above.
+\noindent Afterwards, \verb|prepare_file_list.py| and \verb|reduction_day.py| can be run as described above.
 
 
 

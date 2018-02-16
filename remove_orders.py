@@ -39,15 +39,15 @@ if __name__ == "__main__":
     polyfits, xlows, xhighs, widths = polyfits[fmask], xlows[fmask], xhighs[fmask], widths[fmask]
     # Move original data into a sub-folder and save the data
     os.system('mv {0} {1}/'.format(params['master_order_filename'], params['folder_original_orders']))
-    os.system('mv {0} {1}/'.format(params['logging_orders'], params['folder_original_orders']))
-    save_fits_width(polyfits, xlows, xhighs, widths, params['master_order_filename'])
-    plot_traces_over_image(im_flat, params['logging_orders'], polyfits, xlows, xhighs, widths)
     
     logger('Info: New file with the orders has been written. Now all data depending on this will be moved to the folder {0} and reduction_day.py will be run'.format(params['folder_original_orders']))
-    for entry in ['background_image_filename', 'master_orderarc_filename', 'master_arc_solution_filename', 'master_flat_spec_norm_filename', 'logging_path', 'path_extraction']:
+    for entry in ['background_filename', 'master_orderarc_filename', 'master_arc_solution_filename', 'master_flat_spec_norm_filename', 'logging_path', 'path_extraction']:
         #'logging_background', 'logging_arcorders', 'logging_arc_line_identification_positions', 'logging_arc_line_identification_residuals']:
         if os.path.isfile(params[entry]) == True:
             os.system('mv {0} {1}/'.format(params[entry], params['folder_original_orders']))
+    
+    save_fits_width(polyfits, xlows, xhighs, widths, params['master_order_filename'])
+    plot_traces_over_image(im_flat, params['logging_orders'], polyfits, xlows, xhighs, widths)
     
     os.system('python {0}/reduction_day.py'.format(os.path.dirname(sys.argv[0])) )
      

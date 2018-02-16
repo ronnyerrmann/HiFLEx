@@ -23,12 +23,11 @@ if __name__ == "__main__":
     log_params(params)
     
     # create the median combined files
-    im_sflat, im_sflat_head = create_image_general(params, 'sflat')
-    """zx """
-    im_arc, im_archead = create_image_general(params, 'arc')
-    im_arc_l, im_arclhead = create_image_general(params, 'arc_l')
-    im_arc_s, im_arcshead = create_image_general(params, 'arc_s')
-    im_flatarc, im_flatarchead = create_image_general(params, 'flatarc')
+    im_sflat, im_sflat_head = create_image_general(params, 'sflat')         # -> cont1
+    im_arc, im_archead = create_image_general(params, 'arc')                # -> trace2
+    im_arc_l, im_arclhead = create_image_general(params, 'arc_l')           # -> cal2_l
+    im_arc_s, im_arcshead = create_image_general(params, 'arc_s')           # -> cal2_s
+    im_flatarc, im_flatarchead = create_image_general(params, 'flatarc')    # -> cont1cal2
     
     reference_catalog, reference_names = read_reference_catalog(params['reference_catalog'], params['catalog_file_wavelength_muliplier'], params['use_catalog_lines'])
     

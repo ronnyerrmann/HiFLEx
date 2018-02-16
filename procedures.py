@@ -145,7 +145,10 @@ def textfileargs(params, textfile=None):
         temp = params[entry]
         for i in ['[', ' ', ']']:
             temp = temp.replace(i,'')
-        temp = temp .split(',')
+        if len(temp) == 0:
+            temp = []
+        else:
+            temp = temp .split(',')
         params[entry] = temp
     
     # deal with lists of integers
@@ -252,7 +255,7 @@ def textfileargs(params, textfile=None):
     
     # deal with full filenames -> nothing to do
     filenames = ['badpx_mask_filename', 'original_master_order_filename']
-        
+    
     return params
 
 def convert_readfile(input_list, textformat, delimiter='\t', replaces=[]):
@@ -374,12 +377,12 @@ def read_file_calibration(params, filename, level=0):
             warn_images_not_same([im, calimages[entry]], [filename,entry])
             im = im - calimages[entry]
             logtxt, headtxt = ['dark correction applied'], ['redu{0}c'.format(level), 'Dark']
-        elif entry.lower().find('flat') > -1:
+        elif entry.lower().find('rflat') > -1:
             if entry not in calimages:
                  create_image_general(params, entry, level=level+1)
             warn_images_not_same([im, calimages[entry]], [filename,entry])
             im = im / (calimages[entry] / np.median(calimages[entry]) )
-            logtxt, headtxt = ['flat correction applied with normalised flat'], ['redu{0}d'.format(level), 'Flat']
+            logtxt, headtxt = ['flat correction applied with normalised flat (rflat)'], ['redu{0}d'.format(level), 'Flat']
         elif entry.lower().find('background') > -1:
             if entry not in calimages:
                  calimages[entry] = read_background(params, params[entry+'filename'])
@@ -2306,15 +2309,26 @@ def plot_wavelength_solution_image(im, fname, pfits, xlows, xhighs, wavelength_s
     """
     logger('Step: logging results to {0}'.format(fname))
     # Prepare the refernece catalog to show only limit number of lines
-    reference_catalog = np.array(sorted(reference_catalog_full, key=operator.itemgetter(1), reverse=True ))
-    reference_catalog = reference_catalog[:min(len(reference_catalog),len(pfits)*70) , :]            # only use about 70 lines per order
+    wavelength_solution_arclines_flattened = [item for sublist in wavelength_solution_arclines for item in sublist]
+    min_wav = np.polyval(wavelength_solution[-1,2:], np.polyval(pfits[-1], xlows[-1])-wavelength_solution[-1,1])        # minimum wavelength on the chip
+    max_wav = np.polyval(wavelength_solution[0,2:], np.polyval(pfits[0], xhighs[0])-wavelength_solution[0,1])           # maximum wavelength on the chip
+    d_wav = 0.05*(max_wav - min_wav) 
+    good_values = np.where((reference_catalog_full[:,0] >= min_wav -d_wav) & (reference_catalog_full[:,0] <= max_wav+d_wav) )[0]     # lines in the right wavelength regime
+    reference_catalog_full = reference_catalog_full[good_values,:]                                                      # lines in the right wavelength regime
+    reference_catalog_sorted = np.array(sorted(reference_catalog_full, key=operator.itemgetter(1), reverse=True ))      # Sort the reference catalogue by brightness of lines
+    reference_catalog_not_ident = []                                                                                    # Will store only the lines not identified
+    for entry in reference_catalog_sorted:
+        if entry[0] not in wavelength_solution_arclines_flattened:
+            reference_catalog_not_ident.append(entry)                                                                   # non-identified line
+    reference_catalog_not_ident = np.array(reference_catalog_not_ident)
+    reference_catalog = reference_catalog_not_ident[:min(len(reference_catalog_not_ident),len(pfits)*70) , :]           # only use about 70 lines per order
     
     # Plot the date
     im = scale_image_plot(im,'log10')
     ims = im.shape
     fig, frame = plt.subplots(1, 1)
     colorbar = True  
-    title = 'Plot of the identified and used reference lines (red) and a subset of the available reference lines (green, using the brightes {0} out of {1} lines) to the image (log10 of image)'.format(len(reference_catalog), len(reference_catalog_full))
+    title = 'Plot of the identified and used reference lines (red, {2} lines) and a subset of the omited reference lines (green, showing the brightes {0} out of {1} lines) to the image (log10 of image)'.format(len(reference_catalog), len(reference_catalog_not_ident), len(wavelength_solution_arclines_flattened))
     plot_img_spec.plot_image(im, [], pctile=1, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=colorbar)
     axes = plt.gca()
     ymin, ymax = axes.get_ylim()

@@ -113,15 +113,15 @@ raw_data_imtyp_keyword  = IMAGETYP
 raw_data_imtyp_bias     = Bias Frame
 raw_data_imtyp_dark     = Dark Frame
 raw_data_imtyp_flat     = Flat Frame
-raw_data_imtyp_flat     = NA
+raw_data_imtyp_sflat    = NA
 raw_data_imtyp_arc      = NA
 raw_data_exptim_keyword = EXPTIME
 raw_data_dateobs_keyword = DATE-OBS
 # HARPS:
-raw_data_imtyp_keyword  = OBJECT
-raw_data_imtyp_bias     = BIAS,BIAS
-raw_data_imtyp_sflat    = LAMP,DARK,TUN
-raw_data_imtyp_arc      = WAVE,WAVE,THAR2
+# raw_data_imtyp_keyword  = OBJECT
+# raw_data_imtyp_bias     = BIAS,BIAS
+# raw_data_imtyp_sflat    = LAMP,DARK,TUN
+# raw_data_imtyp_arc      = WAVE,WAVE,THAR2
 
 
 # For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create gives the information which corrections will be applied before the <filetype>_rawfiles are combined.
@@ -131,13 +131,13 @@ raw_data_imtyp_arc      = WAVE,WAVE,THAR2
 #   For background the key 'background_filename' needs to be defined
 bias_calibs_create_g    = [subframe, badpx_mask]
 dark_calibs_create_g    = [subframe, badpx_mask, bias]
-flat_calibs_create_g    = subframe, badpx_mask, dark, bias, normalise
+rflat_calibs_create_g   = subframe, badpx_mask, dark, bias, normalise
 # The file types for the calibrations listed above are applied as CCD image
 # The file types for the calibrations listed below are used to find extracted data
 sflat_calibs_create_g   = subframe, badpx_mask, dark, bias
 arc_calibs_create_g     = [subframe, badpx_mask, dark, bias]
-flatarc_calibs_create_g = [subframe, badpx_mask, dark, bias, flat]
-extract_calibs_create_g = [subframe, badpx_mask, dark, bias, flat]
+flatarc_calibs_create_g = [subframe, badpx_mask, dark, bias, rflat]
+extract_calibs_create_g = [subframe, badpx_mask, dark, bias, rflat]
 # Standard calibrations to be done, if no other information is given
 standard_calibs_create = []
 
