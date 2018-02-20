@@ -47,7 +47,7 @@ if __name__ == "__main__":
         else:
             shift_error = -1
         if shift_error > 1 or shift_error == -1 or abs(shift) > params['maxshift']:
-            logger('Warn: The deviation of the shift of the orders seems too big or no previous solution was available, therefore running order_trace.py to find the real position of the orders')
+            logger('Warn: The deviation of the shift of the orders seems too big or no previous solution was available, therefore searching for the position of the orders from scratch:')
             #os.sytem('mv {0} {1}'.format())#master_flat_filename already set in conf
             #ret = os.system('python {1}/order_trace.py original_master_order_filename={0}'.format(params['master_order_filename'], os.path.dirname(sys.argv[0])))
             #if ret > 0:
@@ -112,11 +112,17 @@ if __name__ == "__main__":
         save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_orderarc_filename'])
         plot_traces_over_image(im_arc, params['logging_arcorders'], cal_tr_poly, axlows, axhighs, awidths)
     
+    # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
+    if cal_tr_poly.shape[0] <> sci_tr_poly.shape[0]:
+        logger('Error: The number of traces for the science fiber and for the calibration fiber do not match. Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_orderarc_filename'], params['master_order_filename']))
+    
     # Create the wavelength solution for the night
     if os.path.isfile(params['master_arc_solution_filename']) == True:
         logger('Info: wavelength solution already exists: {0}'.format(params['master_arc_solution_filename']))
         wavelength_solution, wavelength_solution_arclines = read_arc_fits(params['master_arc_solution_filename'])
-        wavelength_solution = np.array(wavelength_solution)
+    elif params['original_master_arc_solution_filename'].lower() == 'pseudo':
+        logger('Warning: Using a pseudo solution for the wavelength (1 step per px)')
+        wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(sci_tr_poly.shape[0])
     else:
         arc_l_spec, good_px_mask_l = extract_orders(params, im_arc_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
         arc_s_spec, good_px_mask_s = extract_orders(params, im_arc_s, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
@@ -149,9 +155,14 @@ if __name__ == "__main__":
         plot_wavelength_solution_form(params['logging_wavelength_solution_form'], axlows, axhighs, wavelength_solution)
         plot_wavelength_solution_image(im_arc_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
     
+    # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
+    if wavelength_solution.shape[0] <> sci_tr_poly.shape[0]:
+        logger('Error: The number of traces for extraction and for the wavelength calibration do not match. Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_order_filename'], params['master_arc_solution_filename']))
+        
     # Extract the flat spectrum and normalise it
     if os.path.isfile(params['master_flat_spec_norm_filename']) == True:
         logger('Info: Normalised flat already exists: {0}, {1}'.format(params['master_flat_spec_norm_filename'], params['master_flat_spec_norm_filename']))
+        # The file is read later on purpose
     else:
         logger('Step: Create the normalised flat for the night')
         shift = find_shift_images(im_flatarc, im_sflat, sci_tr_poly, cal_tr_poly)

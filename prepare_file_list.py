@@ -18,14 +18,15 @@ params = textfileargs(params, CONFIGFILE)
 
 def create_parameters(conf_data, warn, param, textparam, parcals, exist_bias, exist_rflat, exp_darks):
         calibs = []
-        for parcal in parcals:
+        for parcal in parcals:                                  # A list of calib_create can be given in case one wasn't defined by the user
             calibs.append(parcal+'_calibs_create_g')
         calibs.append('standard_calibs_create')
         calibs.append('')
         if param <> '':
             if param+'_rawfiles' not in conf_data.keys():
                 conf_data[param+'_rawfiles'] = entry[0]             # Filename
-                conf_data['master_'+param+'_filename'] = 'master_'+textparam+'.fits'
+                if param.find('extract') == -1 or param.find('extract_combine') == 0:               # normal extraction files don't need a master, only the combined ones
+                    conf_data['master_'+param+'_filename'] = 'master_'+textparam+'.fits'
                 
                 for calib in calibs:
                     if calib in params.keys():
@@ -176,7 +177,7 @@ if __name__ == "__main__":
             flatarc_fib2 = 'wave'
         if entry[1] == 'sflat' and entry[2] == 'dark' and flatarc_fib2 <> 'wave':   # use entry[2] == 'dark' for flatarc only if entry[2] == 'wave' not available
             flatarc_fib2 = 'dark'
-        if entry[1] == 'none' and entry[2] == 'wave':
+        if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave') and entry[2] == 'wave':
             arc_l_exp = max(entry[3], arc_l_exp)
             arc_s_exp = min(entry[3], arc_s_exp)
         if entry[1] == 'bias' and entry[2] == 'bias':
@@ -207,7 +208,7 @@ if __name__ == "__main__":
             if entry[3] == arc_l_exp:
                 conf_data, warn = create_parameters(conf_data, warn, 'arc_l', 'arc_l', [parcal], exist_bias, exist_rflat, exp_darks)
                 conf_data, warn = create_parameters(conf_data, warn, 'arc', 'arc', [parcal], exist_bias, exist_rflat, exp_darks)
-            elif entry[3] == arc_s_exp:
+            elif entry[3] == arc_s_exp:                             # In case only one exposure time -> arc_l is copied in arc_s
                 conf_data, warn = create_parameters(conf_data, warn, 'arc_s', 'arc_s', [parcal], exist_bias, exist_rflat, exp_darks)
         if entry[1] == 'dark' and entry[2] == 'dark':               # Fiber1 and Fiber2
             param = 'dark{0}'.format(entry[3])                      # Exposure time
@@ -229,7 +230,10 @@ if __name__ == "__main__":
             else:
                 param = 'extract'+extraction[1:]
                 conf_data, warn = create_parameters(conf_data, warn, param, param, [param, 'extract'], exist_bias, exist_rflat, exp_darks)
-
+    if 'arc_l_rawfiles' in conf_data.keys() and 'arc_s_rawfiles' not in conf_data.keys():
+        conf_data['arc_s_rawfiles'] = conf_data['arc_l_rawfiles']
+        conf_data['master_arc_s_filename'] = conf_data['master_arc_l_filename'].replace('arc_l','arc_s')
+        conf_data['arc_s_calibs_create'] = conf_data['arc_l_calibs_create']
     for entry in warn:
         logger(entry)
     # Save the results in a conf_data.txt file

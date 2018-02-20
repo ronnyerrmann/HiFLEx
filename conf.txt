@@ -73,12 +73,13 @@ polynom_order_orders = 5
 
 
 ## To determine the background in an image in which only the science fiber is ilumnited with a continuum source
-# background_width_multiplier defines the area which is excluded for determining the background. It has the same settings as 
+# background_width_multiplier defines the area which is excluded for determining the background. It has the same settings as extraction_width_multiplier
 background_width_multiplier = 8
 polynom_bck = 10
 
 ## Finding the traces of the calibration fiber 
-# arcshift_side: On which side of the science orders are the corresponding calibration orders located. Possible values are "left" (towards the redder order) or "right" (to the bluer order)
+# arcshift_side: On which side of the science orders are the corresponding calibration orders located. Possible values are 
+#               "left" (towards the redder order), "right" (to the bluer order), or "center" (same position as the science orders
 arcshift_side = left
 # arcshift_range: Range to search for the shift between the flat traces and arc_traces. This value is determinded by the the script, only in case the process fails the parameter is used.
 arcshift_range  = [25, 60]
@@ -183,16 +184,17 @@ catalog_file_wavelength_muliplier = 1
 use_catalog_lines = NeI, UI, ThI, ArI
 
 ## Logging
-logging_path = logging
-logging_traces_binned = orders_binned.fits
-logging_orders_binned = orders_in_master_flat_binned.png
-logging_orders = orders_in_master_flat.png
-logging_find_arc_orders = arcorders_find.png
-logging_arcorders = arcorders_in_master_arc.png
-logging_map_shift_orders = map_shifts.fits
-logging_background = orig_for_background_map.fits
-logging_found_arc_lines = arc_lines_found.txt
-logging_wavelength_solution_form = wavelength_solution_form.png
+logging_path                        = logging
+logging_sflat_binned                = sflat_binned.fits
+logging_traces_binned               = orders_binned.fits
+logging_orders_binned               = orders_in_master_flat_binned.png
+logging_orders                      = orders_in_master_flat.png
+logging_find_arc_orders             = arcorders_find.png
+logging_arcorders                   = arcorders_in_master_arc.png
+logging_map_shift_orders            = map_shifts.fits
+logging_background                  = orig_for_background_map.fits
+logging_found_arc_lines             = arc_lines_found.txt
+logging_wavelength_solution_form    = wavelength_solution_form.png
 logging_arc_line_identification_residuals = arc_line_identification_residuals.png
 logging_arc_line_identification_positions = arc_line_identification_positions.png
 
