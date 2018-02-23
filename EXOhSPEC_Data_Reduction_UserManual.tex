@@ -30,7 +30,7 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 
-\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: V0.1.0}
+\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: V0.2.0}
 \date{February, 2018}
 \author{Ronny Errmann, Neil Cook\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
@@ -264,6 +264,7 @@ To get the best results, the following data should be taken:
   \item[dark] : Apply a master dark. A dark with the same exposure time as read from the fits header will be applied. The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
   \item[flat] : Apply a master flat. The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
   \item[background] : Applies background correction using the filename given in the parameter \verb|background_filename|.The background image will be scaled by the exposure time of the scientific image, before its subtracted from the scientific image.
+  \item[localbackground] : Applies background correction by fitting a 2d polynomalial against the current reduced image, excluding the area of the science and calibration traces. The fit is then removed from the image.
 \end{description}
 
 \noindent The following parameters change the way, several CCD images are combined:
@@ -500,15 +501,32 @@ When setting up a new camera or a new account paths and parameters need to be ad
 
 \subsection{Plotting the data}
 
-To plot the results the python program \verb|plot_img_spec.py| can be used. This script read the files given in the file \verb|plot_files.lst| and will plot at the beginning all data. Further limitations of the plotted data can be done using the UI. For a plot in wavelength axis the first text box need to contain a \textbf{'w'}. For plotting only data from a subsection of files, the first text boxes 'Exclude orders/frames' and 'Exclude' need to be used. For plotting only a subsection of data types the second text boxes with 'Exclude orders/frames' and 'Exclude' are used to define this. For plotting only some orders, the last text boxes are used (see an example in Fig.~\ref{figure_plotting_results_example}).
+To plot the results the python program \verb|plot_img_spec.py| can be used. This script read the files given in the file \verb|plot_files.lst| and will plot at the beginning all data. Further limitations of the plotted data can be done using the UI. For a plot in different axis the first text box can be used. See the list below for options. For plotting only data from a subsection of files, the first text boxes 'Which file' and 'Exclude' need to be used. For plotting only a subsection of data types the second text boxes with 'Which data' and 'Exclude' are used to define this. For plotting only some orders, the last text boxes are used (see an example in Fig.~\ref{figure_plotting_results_example1} and \ref{figure_plotting_results_example2}).
 
 \begin{figure} 
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/screenshot_plot_img_spec}
   \end{center} 
   \caption{An example of how to plot the extracted data. Shown are the solar spectra of entry 0 and 14 in the plot\_files.lst file. The graph shows the continuum normalised flux (data type 5), plotted over the wavelength (w). Only orders 14 and 16 are shown.
-    \label{figure_plotting_results_example}}
+    \label{figure_plotting_results_example1}}
 \end{figure}
+
+\begin{figure} 
+  \begin{center}
+    \includegraphics[width=\textwidth]{./figures/screenshot_plot_img_spec_lomb_scargle_fft}
+  \end{center} 
+  \caption{Another example of how to plot the extracted data. Shown is the Lomb-Scargle Periodogram for the white light spectra of entry 5 to 7, 20, 24, and 44 in the plot\_files.lst file. The extracted spectra (data type 1) of order 2, 12, and 29 and their corresponding wavelength solution was used as basis for the calculations.
+    \label{figure_plotting_results_example2}}
+\end{figure}
+
+The following options for axis plotting exist:
+\begin{description}\setlength\itemsep{0em}
+  \item [] (empty): The flux is plotted against the pixel along the CCD in dispersion direction.
+  \item [w] : The flux is plotted against the wavelength (stored in data type 0).
+  \item [f] : The Fourier transformation is plotted against the period (in pixel). 
+  \item [l] : The Lomb-Scargle-Periodogram is plotted against the period (in pixel).
+  \item [wl] : The Lomb-Scargle-Periodogram is plotted against the period (in wavelength). If you look for periodic signals in the spectrum, this is what you very probably should use. 
+\end{description}
 
 
 \subsection{Finding the radial velocity }
@@ -520,6 +538,7 @@ python <path to script>/find_rv.py | tee RV_logfile
 \end{lstlisting}
 
 
+\newpage
 
 \section{Extracting HARPS data}
 
@@ -581,7 +600,7 @@ cat *.tar | tar -xvf - -i
 
 
 
-
+\newpage
 
 \appendix
 

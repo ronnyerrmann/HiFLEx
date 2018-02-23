@@ -72,10 +72,12 @@ bin_adjust_orders = 3,1
 polynom_order_orders = 5
 
 
-## To determine the background in an image in which only the science fiber is ilumnited with a continuum source
-# background_width_multiplier defines the area which is excluded for determining the background. It has the same settings as extraction_width_multiplier
-background_width_multiplier = 8
-polynom_bck = 10
+## To determine the background
+# background_width_multiplier defines the area which is excluded for determining the background. It has the same settings as extraction_width_multiplier.
+# The first value is for the science and the second for the calibration traces
+background_width_multiplier = [3, 1]
+# polynom_bck defines the orders for a 2d polynomial that is fitted to the background. The first value is for dispersion and the second for cross-dispersion direction.
+polynom_bck = [4, 4]
 
 ## Finding the traces of the calibration fiber 
 # arcshift_side: On which side of the science orders are the corresponding calibration orders located. Possible values are 

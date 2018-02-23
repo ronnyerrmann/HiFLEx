@@ -216,23 +216,59 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
             for data_entry in tqdm(param['name_data_{0}'.format(iml-1-1)]):
                 data_label = data_entry.replace('data_','')
                 data = param[data_entry]
-                if wavelength_plot == 'w':
+                if wavelength_plot == 'w' or wavelength_plot == 'wl' or wavelength_plot == 'lw':
                     data_entry_w = data_entry.rsplit('_',2)
-                    data_entry_w = data_entry_w[0]+'_0_'+data_entry_w[2]
+                    data_entry_w = data_entry_w[0]+'_0_'+data_entry_w[2]        # Select the wavelength in the data file
                     if data_entry_w not in param.keys():
                         text = data_entry_w.split('_')
                         param[data_entry_w] = im[int(text[1]), int(text[2]), int(text[3]) ]     # This won't work, if it's not 3 indexes
                     x_axis = param[data_entry_w]
                 else:
-                    x_axis = np.arange(len(data))
+                    x_axis = np.arange(len(data)).astype(float)
+                x_axis = x_axis[~np.isnan(data)]
+                data = data[~np.isnan(data)]
+                """ Create a test signal
+                A = 27. # amplitude
+                period = 31 # in x_axis uits
+                omega = 2. * np.pi / period # radians per second
+                phi = 0.5 * np.pi # radians
+                # Create the full signal
+                data = A * np.sin(omega * x_axis + phi)"""
+
+                if wavelength_plot == 'f':    # make a fft
+                    x_axis = np.fft.fftfreq(len(data))
+                    data = np.abs(np.fft.fft(data))         # px -> 1/px (dT -> f = 1/dT)
+                    good_values = range(1,len(data)/2)      # 0 contains the sum of the data, and n/2+1 the negative frequencies
+                    data = data * 2 / data.shape[0]
+                    data, x_axis = data[good_values], 1/x_axis[good_values]
+                elif wavelength_plot == 'l' or wavelength_plot == 'wl' or wavelength_plot == 'lw':       # http://joseph-long.com/writing/recovering-signals-from-unevenly-sampled-data/
+                    nout = 5000 # number of frequency-space points at which to calculate the signal strength (output)
+                    # the posible Periods in px scale: 2 to 10% length of the data; in wave-scale: diff between 2 closest to 10% diff between furthest away:
+                    period_range = np.array([ 2*np.nanmin(np.abs(x_axis[1:] - x_axis[:-1])), 0.5*(np.nanmax(x_axis)-np.nanmin(x_axis)) ])
+                    #periods = np.linspace(min(period_range), max(period_range), nout)
+                    #freqs = 1.0 / periods
+                    freqs = np.linspace(min(1/period_range), max(1/period_range), nout)
+                    periods = 1.0 / freqs
+                    angular_freqs = 2 * np.pi * freqs
+                    pgram = scipy.signal.lombscargle(x_axis, data, angular_freqs)
+                    normalized_pgram = np.sqrt(4 * (pgram / data.shape[0]))
+                    x_axis = periods
+                    data = normalized_pgram
+
                 frame.plot(x_axis, data, label=data_label)
                 #print sum(data[70:3000]-min(data[70:3000])), sum(data[1550:3000]-min(data[1550:3000]))
                 plot_ranges[0] = min(plot_ranges[0], min(x_axis))
                 plot_ranges[1] = max(plot_ranges[1], max(x_axis))
-                plot_ranges[2] = min(plot_ranges[2], min(data[~np.isnan(data)]))
-                plot_ranges[3] = max(plot_ranges[3], max(data[~np.isnan(data)]))
+                plot_ranges[2] = min(plot_ranges[2], min(data))
+                plot_ranges[3] = max(plot_ranges[3], max(data))
         if wavelength_plot == 'w':
             xlabel_text = 'wavelength [Angstrom]'
+        elif wavelength_plot == 'f':
+            xlabel_text = 'period [px]'
+        elif wavelength_plot == 'l':
+            xlabel_text = 'period [px]'
+        elif wavelength_plot == 'wl' or wavelength_plot == 'lw':
+            xlabel_text = 'period [Angstrom]'
         else:
             xlabel_text = 'x [px]'
         if x_range <> (0.0, 1.0) and y_range <> (0.0, 1.0) and old_xlabel_text==xlabel_text and reset_plot=='':
@@ -281,8 +317,8 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
         return True, xs
     # define widgets
     widgets = dict()
-    widgets['wavelength_plot'] = dict(label='wavelength\non x-axis',
-                                comment='w for wavelength' ,
+    widgets['wavelength_plot'] = dict(label='Wavelength, FFT,\nLomb-Scargle',
+                                comment='w/f/l/wl' ,
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start='', valid_function=None,
                                 width=5)
@@ -301,17 +337,17 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
             starta = (('{0}'.format(settings['plot_sub_{0}'.format(i)])).replace('[','')).replace(']','')
         if 'exclude_{0}'.format(i) in settings.keys():
             startb = '{0}'.format(settings['exclude_{0}'.format(i)])
-        widgets['plot_sub_{0}'.format(i)] = dict(label=text[0], comment=text[1],
+        widgets['plot_sub_{0}'.format(i)] = dict(label=text[0], comment=None, #text[1],
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start=starta, valid_function=vfunc,
                                 width=10)
         widgets['exclude_{0}'.format(i)] = dict(label='Exclude',
-                                comment='True for exclude' ,
+                                comment=None, #'True for exclude' ,
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start=startb, valid_function=vfunc_bool,
                                 width=5)
     widgets['reset_plot'] = dict(label='reset plot',
-                                comment='anything to reset' ,
+                                comment=None, #'anything to reset' ,
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start='', valid_function=None,
                                 width=5)
