@@ -111,7 +111,7 @@ tar -xzvf v*.tar.gz
 \item[procedures.py] Contains all the procedures for the data analysis.
 \item[tkcanvas.py] Contains the plotting routines to create the user interfaces (UI).
 \item[plot\_img\_spec.py] This script controls plotting of CCD images, graphs, and the extracted spectra.
-\item[remove\_orders.py] This needs to be run in order to find an initial wavelength solution (will be included in reduction\_day.py later).
+\item[remove\_orders.py] If the automatic process identified wrong orders, then this script allows the user to remove them using a GUI.
 \item[create\_badpx\_mask.py] Script to create a bad pixel mask.
 %\item[ident\_arc.py] This needs to be run in order to find an initial wavelength solution (will be included in reduction\_day.py later).
 \end{description}
@@ -137,7 +137,7 @@ When running the scripts for the first time, python will create a new file calle
 \begin{itemize}
   \item The pipeline logs the execution of procedures and necessary information in a logfile (standard: \verb|logfile|). This information is also printed into the terminal window.
   \item All adjustable parameters are logged at the beginning and at the end of the execution of a python script into a logfile (standard: \verb|logfile_params|).
-  \item Images with the results of some steps can be found in a logging subfolder (standard: \verb|logging|). Some of these images are shown in Figures~\ref{figure_orders_in_master_flat} to \ref{figure_arc_line_identification_residuals}.
+  \item Images with the results of some steps can be found in a logging subfolder (standard: \verb|logging|). Some of these images are shown in Figures~\ref{figure_apertures_in_master_flat} to \ref{figure_arc_line_identification_residuals}.
   \item Each parameter is explained in detail in the configuration file.
   \item The input and output parameters of the individual procedures are explained in the file \verb|procedures.py|.
 \end{itemize}
@@ -191,26 +191,26 @@ In the pipeline always the individual frames are corrected before frames are com
 \begin{itemize}
   \item[1.] Creating the following reduced and combined files:
   \begin{description}
-    \item[sflat] File in which the science traces can be determined (standard: 5x white light flats, best without arc lamp). This file is also used in order to create a map of the background flux
+    \item[sflat] File in which the science traces can be determined (standard: 5x white light flats, best without arc lamp). This file is also used to create a map of the background flux.
     \item[arc] File in which the wavelength calibration traces can be determined (standard: 5x ThAr alone (future development: white light flats)).
     \item[arc\_l]: Long arc exposure to create a good wavelength solution over the whole chip (standard: 5x 60\,s ThAr).
     \item[arc\_s]: Short exposure in order to find the center of the saturated lines in arc\_l (standard: 5x 10\,s ThAr taken between the arc\_l images).
     \item[flatarc]: File which contains the flat in the science fiber and the arc in calibration fiber (standard: 5x files with the white light flats in science fiber and ThAr in the calibration fiber).
   \end{description}
-  \item[2.] Determining the shift of the science traces compared to the previous solution (e.g. previous day). If the instrument was not touched, the shift should be small and constant ($\rightarrow$~Fig.~\ref{figure_orders_in_master_flat}). If the file for the previous solution does not exist, or if a big deviation to the previous solution has been found, then another step will be executed:
+  \item[2.] Determining the shift of the science traces compared to the previous solution (e.g. previous day). If the instrument was not touched, the shift should be small and constant ($\rightarrow$~Fig.~\ref{figure_apertures_in_master_flat}). If the file for the previous solution does not exist, or if a big deviation to the previous solution has been found, then another step will be executed:
   \begin{itemize}
     \item[2a.] Finding the traces of all science orders.
   \end{itemize}
   \item[3.] Creating a map of the leaking light between the science orders (background map).
-  \item[4.] Finding the traces of the calibration orders ($\rightarrow$~Fig.~\ref{figure_arcorders_in_master_arc}).
+  \item[4.] Finding the traces of the calibration orders ($\rightarrow$~Fig.~\ref{figure_arcapertures_in_master_arc}).
   \item[5.] Create the wavelength solution for the night ($\rightarrow$~Fig.~\ref{figure_arc_line_identification_positions} and \ref{figure_arc_line_identification_residuals}). This is based on the solution of the previous data set, which is adjusted according to the given parameters.
   \item[6.] Extract the flat and normalise it.
   \item[7.] Extract the science spectra. This includes the following steps for each image:
   \begin{itemize}
     \item[a)] Data reduction of the CCD frame (if set up).
     \item[b)] Finding the shift between this frame and the \textbf{sflat} file.
-    \item[c)] Extraction of the orders for the science fiber
-    \item[d)] Extraction of the orders for the calibration fiber
+    \item[c)] Extraction of the apertures for the science fiber
+    \item[d)] Extraction of the apertures for the calibration fiber
     \item[e)] Finding the shift between the emission lines in the calibration spectra and the lines used for the wavelength solution, and calculating the wavelength for each pixel in the extracted spectrum.
     \item[f)] Creating the flat corrected spectrum.
     \item[g)] Creating the spectrum with normalised continuum.
@@ -252,7 +252,7 @@ To get the best results, the following data should be taken:
   \item Run the python script: \\ \verb|python <path to scripts>/reduction_day.py| .
 \end{enumerate}
 
-\noindent After checking the results (see Section~\ref{section:results_pipeline}), one might want to remove wrongly identified orders. This can be done in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the necessary steps of \verb|reduction_day.py| will run again.
+\noindent After checking the results (see Section~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. This can be done in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the necessary steps of \verb|reduction_day.py| will run again.
 
 \subsection{Possible parameters for the CCD processing}
 \label{Section:parameters_CCD_proc}
@@ -334,10 +334,10 @@ The script \verb|prepare_file_list.py| reads all files in the folder (and subfol
 
 \subsection{Format of the extracted files}
 \label{section:extraction_data_format}
-The final fits file contains the original header and some additional information, for example the calibration steps which were applied and some information about the flux collected in the different orders. The data in the file is stored in a 3D array in the form: data type, order, and pixel. The data types are similar to the ones created by the CERES pipeline and are the following:
+The final fits file contains the original header and some additional information, for example the calibration steps which were applied and some information about the flux collected in the different apertures. The data in the file is stored in a 3D array in the form: data type, aperture, and pixel. The data types are similar to the ones created by the CERES pipeline and are the following:
 \begin{enumerate}
   \setcounter{enumi}{-1}
-  \item 2D array with the wavelength for each order and pixel.
+  \item 2D array with the wavelength for each aperture and pixel.
   \item Extracted spectrum without any modification.
   \item (Measurement of the error the extracted spectrum)
   \item Flat corrected spectrum, calculated by dividing the extracted spectrum and the normalised flat spectrum.
@@ -361,32 +361,31 @@ The final fits file contains the original header and some additional information
 
 \vspace{0.5em}\noindent \textbf{Step 2:} The trace of each scientific order is stored in the file given in parameter \verb|master_order_filename| (standard: \verb|master_orders.fits|). This file contains one line for each order, normally starting with the reddest order, which is located on the left side of the CCD image. Each line contains the following information:
 \begin{itemize}\setlength\itemsep{0em}
-  \item Number of the order.
-  \item Parameters of a polynomial fit to the trace (given in parameter \verb|polynom_order_orders|), e.g. 5 values if the trace is fitted with a polynom of order 5.
+  \item Number of the aperture (starting at 0).
+  \item Parameters of a polynomial fit to the trace (given in parameter \verb|polynom_order_apertures|), e.g. 5 values if the trace is fitted with a polynom of order 5.
   \item The lowest and highest pixel in dispersion axis, for which the trace can be identified.
   \item The last three entries of each line define the width of the trace: the width from the center to the left, the width from the center to the right, and the Gaussian width.
 \end{itemize}
-The identification of the traces can be checked easily in the file given in parameter \verb|logging_orders| (standard: \verb|orders_in_master_flat.png|). This file is located in the folder given in the parameter \verb|logging_path| (standard: \verb|logging|). An example is show in Fig.~\ref{figure_orders_in_master_flat}.
+The identification of the traces can be checked easily in the file given in parameter \verb|logging_orders| (standard: \verb|orders_in_master_flat.png|). This file is located in the folder given in the parameter \verb|logging_path| (standard: \verb|logging|). An example is show in Fig.~\ref{figure_apertures_in_master_flat}.
 
 \begin{figure} 
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/orders_in_master_flat}
   \end{center} 
-  \caption{Reduced CCD image of a white light flat (log10 gray scale) with the marked traces of the identified scientific orders (red). The extraction width (determined from the Gaussian width of the order multiplied with the value in parameter \textbf{extraction\_width\_multiplier}) is given in dashed lines.
-    \label{figure_orders_in_master_flat}}
+  \caption{Reduced CCD image of a white light flat (log10 gray scale) with the marked traces of the identified scientific orders/apertures (red). The extraction width (determined from the Gaussian width of the order multiplied with the value in parameter \textbf{extraction\_width\_multiplier}) is given in dashed lines.
+    \label{figure_apertures_in_master_flat}}
 \end{figure}
-
 
 \vspace{0.5em}\noindent \textbf{Step 3:} The background map, 2d image is stored in the file given in parameter \verb|background_image_filename| (standard: \verb|background.fits|). Additionally a mask which provides the pixel which are used to create the background map is stored in the file given in parameter \verb|background_px_filename| (standard: \verb|background_px.fits|).
 
-\vspace{0.5em}\noindent \textbf{Step 4:} The traces of the orders of the calibration fiber are stored in the file given in parameter \verb|master_orderarc_filename| (standard: \verb|master_ordersarc.fits|). This file contains the same information as the result of \textbf{Step 2}, only that the lowest order of the parameters of polynomial fit is shifted (the curvature of the traces is kept the same). The result can be checked easily in the file given in parameter \verb|logging_arcorders| (standard: \verb|arcorders_in_master_arc.png|). An example is show in Fig.~\ref{figure_arcorders_in_master_arc}.
+\vspace{0.5em}\noindent \textbf{Step 4:} The traces of the apertures of the calibration fiber are stored in the file given in parameter \verb|master_orderarc_filename| (standard: \verb|master_ordersarc.fits|). This file contains the same information as the result of \textbf{Step 2}, only that the lowest order of the parameters of polynomial fit is shifted (the curvature of the traces is kept the same). The result can be checked easily in the file given in parameter \verb|logging_arcorders| (standard: \verb|arcorders_in_master_arc.png|). An example is show in Fig.~\ref{figure_arcapertures_in_master_arc}.
 
 \begin{figure} 
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/arcorders_in_master_arc}
   \end{center} 
-  \caption{Reduced CCD image of a ThAr exposure (log10 gray scale) with the marked traces of the identified calibration orders (red). The extraction width is given in dashed lines. The extraction width (determined from the Gaussian width of the order multiplied with the value in parameter \textbf{arcextraction\_width\_multiplier}) is given in dashed lines.
-    \label{figure_arcorders_in_master_arc}}
+  \caption{Reduced CCD image of a ThAr exposure (log10 gray scale) with the marked traces of the identified calibration orders/apertures (red). The extraction width is given in dashed lines. The extraction width (determined from the Gaussian width of the order multiplied with the value in parameter \textbf{arcextraction\_width\_multiplier}) is given in dashed lines.
+    \label{figure_arapertures_in_master_arc}}
 \end{figure}
 
 
@@ -404,42 +403,48 @@ Info: To match the most lines in the arc with the old wavelength solution, a shi
 of -2 orders, a multiplier to the resolution of 0.994, a shift of -10 px, and a
 shift of 0.0 px per order needs to be applied. 1046 lines were identified. The
 deviation is 0.1197 Angstrom.
-Info: used 524 lines. The standard deviation of the fit is 0.0054 Angstrom. A 2d
-polynom fit with 4 orders along the traces and 4 orders perpendicular to the orders
-was used. With this solution, the offset to real orders is 72. With this offset, the
-standard deviation of the residuals between the central wavelengths and the grating
-equation is 0.1295 Angstrom. Using the original solution gives an offset of 72.
-ord cenwav minwav maxwav ranwav Ang/px name numb gausswi gausswi min_   max_   range_reflin
-                                                 dth_avg dth_std reflin reflin _whole_order
+Info: used 1054 lines. The standard deviation of the residuals between the lines and the fit is 0.0344 Angstrom (the average of the abs of the residuals is 0.0223 Angstrom). This converts into a resoution R = 183169. The Gaussian width of the emssion lines results in an R = 46223 +- 12192. The 2-pixel resolution (around the identified lines) is R = 72840 +- 4107.
+Info: A 2d polynom fit with 5 orders in dispersion direction (along the traces) and 5 orders in cross-dispersion direction was used. With this solution, the offset between aperture and real orders is 75. With this offset, the standard deviation of the residuals between the central wavelengths and the grating equation is 0.042 Angstrom (abs of average is 0.0336 Angstrom). Using the original solution gives an offset of 75.
 
-0   7978.6 7894.7 8054.2 159.5   0.038 Ar I    2    1.78    0.58 7916.4 7948.2  98.1
-0   7978.6 7894.7 8054.2 159.5   0.038 Th I    2    2.04    1.15 7937.7 8014.5  98.1
+ap cenwav minwav maxwav range Ang/  name numb gausswi gausswi min_   max_   range_reflin
+                               px             dth_avg dth_std reflin reflin _whole_order
+
+0  7978.6 7894.7 8054.2 159.5 0.038 Ar I    2    1.78    0.58 7916.4 7948.2  98.1
+0  7978.6 7894.7 8054.2 159.5 0.038 Th I    2    2.04    1.15 7937.7 8014.5  98.1
 ...
-27  5800.1 5769.1 5854.3 85.2    0.027 Ar I    2    3.06    0.15 5802.1 5834.3  44.6
-27  5800.1 5769.1 5854.3 85.2    0.027 Th I    6    2.31    0.41 5789.6 5832.4  44.6
--1    -1.0   -1.0   -1.0 -1.0   -1.000 Ar I  148    2.07    0.61 5802.1 7948.2  2146.1
--1    -1.0   -1.0   -1.0 -1.0   -1.000 Th I  376    2.04    0.66 5789.6 8014.5  2224.9
+27 5800.1 5769.1 5854.3 85.2  0.027 Ar I    2    3.06    0.15 5802.1 5834.3  44.6
+27 5800.1 5769.1 5854.3 85.2  0.027 Th I    6    2.31    0.41 5789.6 5832.4  44.6
+-1   -1.0   -1.0   -1.0 -1.0  1.000 Ar I  148    2.07    0.61 5802.1 7948.2  2146.1
+-1   -1.0   -1.0   -1.0 -1.0  1.000 Th I  376    2.04    0.66 5789.6 8014.5  2224.9
 \end{lstlisting} 
 Thereby the table contains the following information:
 \begin{description}
-  \item[order] Order of the trace, starting with 0 for the reddest order ($\tilde{m}$). To get the real order the offset $m_0$ is given in the text before (here: 72). The offset is determined using two different ways. First the data is compared to the grating equation $\lambda \propto m_0 + \tilde{m}$. In Practical this was done by searching for the smallest slope in the formula $y = (m_0 + \tilde{m})\lambda_c$, were $\lambda_c$ is central wavelength of each order. The second value for the real order offset is determined from the shift towards the previous wavelength solution. Both values for the offset should be the same. Only the first value is saved in the file for the wavelength solution.
+  \item[apert] Aperture of the trace, starting with 0 for the reddest aperture ($\tilde{m}$). To get the real order the offset $m_0$ is given in the text before (here: 72). The offset is determined using two different ways. First the data is compared to the grating equation $\lambda \propto m_0 + \tilde{m}$. In Practical this was done by searching for the smallest slope in the formula $y = (m_0 + \tilde{m})\lambda_c$, were $\lambda_c$ is central wavelength of each order. The second value for the real order offset is determined from the shift towards the previous wavelength solution. Both values for the offset should be the same. Only the first value is saved in the file for the wavelength solution.
   \item[cenwave] Central wavelength of the order, determines the zero point of the wavelength solution.
   \item[minwave, maxwave, ranwave] Minimum and maximum wavelength, and wavelength range which is covered by the trace of this order.
   \item[Ang/px] Resolution in $\frac{\AA}{\mathrm{px}}$ at the central wavelength.
   \item[name] Type of the reference line. If different types of reference lines were found in the order then a output for each available type is created.
   \item[number] Number of reference line for this type and order.
   \item[gausswidth\_avg, gausswidth\_std] Average and standard deviation of the Gaussian width of the emission lines
-  \item[min\_refline, max\_refline] Minumum and maximum wavelength of the reference lines of this type and order
+  \item[min\_refline, max\_refline] Minimum and maximum wavelength of the reference lines of this type and order
   \item[range\_reflines\_whole\_order] Wavelength range which was covered by reference lines for this order (independent of type of the line)
 \end{description}
-The last lines give the information for all orders. Columns, for which no useful information can be derived show the value \verb|-1|.
+The last lines give the information for all apertures. Columns, for which no useful information can be derived show the value \verb|-1|.
 
 \begin{figure} 
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/arc_line_identification_positions}
   \end{center} 
-  \caption{Reduced CCD image of a ThAr exposure (log10 gray scale) with the identified lines from the reference catalogue (red). The remaining lines of the reference catalogue, which weren't used for fitting the solution are shown in green. Only this set of data was used to create the wavelength solution.
+  \caption{Reduced CCD image of a ThAr exposure (log10 gray scale) with the identified lines from the reference catalogue (red). Only this set of data was used to create the wavelength solution. The remaining lines of the reference catalogue, which weren't used for fitting the solution are shown in green. The data on an order by order basis is shown in Figure~\ref{figure_arc_line_identification_spectrum}.
     \label{figure_arc_line_identification_positions}}
+\end{figure}
+
+\begin{figure} 
+  \begin{center}
+    \includegraphics[width=\textwidth]{./figures/screenshot_spectral-atlas}
+  \end{center} 
+  \caption{One page (aperture 13, order 88)real  of the spectral atlas (file created from parameter \textbf{logging\_arc\_line\_identification\_spectrum}) created from the wavelength solution. Blue shows the emission lines in the long and orange the emission lines in the short exposure. The identified lines are marked in red, with the length of the marker being proportional to the intensity of the line as given in the \textbf{reference\_catalog} (length is reset for each order). Green shows a subset of the non-identified lines from the \textbf{reference\_catalog}, this means the green markers should normally be shorter than the red ones. Problems with an overcrowded \textbf{reference\_catalog} is visible at a few places (e.g. 6466\,\AA).
+    \label{figure_arc_line_identification_spectrum}}
 \end{figure}
 
 
@@ -447,12 +452,14 @@ The last lines give the information for all orders. Columns, for which no useful
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/arc_line_identification_residuals}
   \end{center} 
-  \caption{Residuals between the identified cataloge lines and the wavelength solution. Colorcoded are the different orders.
+  \caption{Residuals between the identified catalogue lines and the wavelength solution. Colorcoded are the different apertures.
     \label{figure_arc_line_identification_residuals}}
 \end{figure}
 
 \vspace{0.5em}\noindent \textbf{Step 6:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \verb|master_flat_spec_norm.fits|). The extraction and data format is described in Section~\ref{section:extraction_data_format}
 
+
+\newpage
 \section{Seting up the pipeline}
 
 \subsection{Creating a new wavelength solution}
@@ -461,11 +468,11 @@ If no previous wavelength solution exist, then wavelengths and pixel need to cor
 
 The correlated data needs to be saved into file \verb|arc_lines_wavelength.txt| with the following tab-separated entries:
 \begin{itemize}
-  \item Order (starting at 0)
-  \item Real order (bigger than 0, usually between 60 and 120)
+  \item Aperture (starting at 0)
+  \item Real order (bigger than 0, usually between 40 and 120)
   \item Pixel
   \item Wavelength
-  \item Type of the line (e.g. ThI, NeII).
+  \item (Type of the line (e.g. ThI, NeII) ).
 \end{itemize}
 
 Afterwards the script can run again and will use this data to create a new wavelength solution.
@@ -478,7 +485,7 @@ When setting up a new camera or a new account paths and parameters need to be ad
   \item[reference\_catalog] : Change the path to the catalogue of the reference lines. The file contains one entry per line, each entry consists of tab-separated wavelength, line strength, and element. line strength can be empty.
   \item[rotate\_frame, flip\_frame] : The CCD image needs to be aligned in a way that the cross-dispersion axis is along vertical direction and the dispersion axis is along the horizontal direction, AND that the wavelength in dispersion direction is increasing with higher pixel number by providing the necessary angle for \verb|rotate_frame|. If necessary the image can be flipped (\verb|flip_frame = True|) after the rotation so that the wavelength in cross-dispersion direction decreases with increasing pixel number (blue orders on the right and the red orders on the left).
   \item[extraction\_width\_multiplier, arcextraction\_width\_multiplier] : The spectrum will be extracted by summing up the data between the center of a trace and \verb|extraction_width_multiplier| times the Gaussian width of the order to either side of center. The covered area can be checked in the logged images given in the parameters \verb|logging_orders| and \verb|logging_arcorders|. In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
-  \item[bin\_search\_orders] : In order to speed up the search for the traces, heavy binning should be applied. However, the value for the cross-dispersion axis should to chosen in a way, that neighbouring orders are still separated. This can be checked in the images \verb|flat_binned.fits|.
+  \item[bin\_search\_apertures] : In order to speed up the search for the traces, heavy binning should be applied. However, the value for the cross-dispersion axis should to chosen in a way, that neighbouring orders are still separated. This can be checked in the images \verb|flat_binned.fits|.
   \item[arcshift\_side] : Position of the calibration traces compared to the science traces. Can be 'left', 'right', or 'center'. The later option implies, that only one fiber exists.
   \item[raw\_data\_imtyp\_keyword, raw\_data\_imtyp\_*] : Put the correct information for the image type header key here. 
   \item[raw\_data\_exptim\_keyword, raw\_data\_dateobs\_keyword] : Use the right header keywords for the exposure time and the observation date.
@@ -501,13 +508,13 @@ When setting up a new camera or a new account paths and parameters need to be ad
 
 \subsection{Plotting the data}
 
-To plot the results the python program \verb|plot_img_spec.py| can be used. This script read the files given in the file \verb|plot_files.lst| and will plot at the beginning all data. Further limitations of the plotted data can be done using the UI. For a plot in different axis the first text box can be used. See the list below for options. For plotting only data from a subsection of files, the first text boxes 'Which file' and 'Exclude' need to be used. For plotting only a subsection of data types the second text boxes with 'Which data' and 'Exclude' are used to define this. For plotting only some orders, the last text boxes are used (see an example in Fig.~\ref{figure_plotting_results_example1} and \ref{figure_plotting_results_example2}).
+To plot the results the python program \verb|plot_img_spec.py| can be used. This script read the files given in the file \verb|plot_files.lst| and will plot at the beginning all data. Further limitations of the plotted data can be done using the UI. For a plot in different axis the first text box can be used. See the list below for options. For plotting only data from a subsection of files, the first text boxes 'Which file' and 'Exclude' need to be used. For plotting only a subsection of data types the second text boxes with 'Which data' and 'Exclude' are used to define this. For plotting only some apertures, the last text boxes are used (see an example in Fig.~\ref{figure_plotting_results_example1} and \ref{figure_plotting_results_example2}).
 
 \begin{figure} 
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/screenshot_plot_img_spec}
   \end{center} 
-  \caption{An example of how to plot the extracted data. Shown are the solar spectra of entry 0 and 14 in the plot\_files.lst file. The graph shows the continuum normalised flux (data type 5), plotted over the wavelength (w). Only orders 14 and 16 are shown.
+  \caption{An example of how to plot the extracted data. Shown are the solar spectra of entry 0 and 14 in the plot\_files.lst file. The graph shows the continuum normalised flux (data type 5), plotted over the wavelength (w). Only apertures 14 and 16 are shown.
     \label{figure_plotting_results_example1}}
 \end{figure}
 
@@ -515,7 +522,7 @@ To plot the results the python program \verb|plot_img_spec.py| can be used. This
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/screenshot_plot_img_spec_lomb_scargle_fft}
   \end{center} 
-  \caption{Another example of how to plot the extracted data. Shown is the Lomb-Scargle Periodogram for the white light spectra of entry 5 to 7, 20, 24, and 44 in the plot\_files.lst file. The extracted spectra (data type 1) of order 2, 12, and 29 and their corresponding wavelength solution was used as basis for the calculations.
+  \caption{Another example of how to plot the extracted data. Shown is the Lomb-Scargle Periodogram for the white light spectra of entry 5 to 7, 20, 24, and 44 in the plot\_files.lst file. The extracted spectra (data type 1) of apertures 2, 12, and 29 and their corresponding wavelength solution was used as basis for the calculations.
     \label{figure_plotting_results_example2}}
 \end{figure}
 
@@ -540,9 +547,11 @@ python <path to script>/find_rv.py | tee RV_logfile
 
 \newpage
 
-\section{Extracting HARPS data}
+\section{Extracting data from other spectrographs}
 
-\subsection{Getting the data}
+\subsection{Extracting HARPS data}
+
+\subsubsection{Getting the data}
 Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. For example data select night '2015 07 30' and check only 'HARPS/LaSilla'.
 
 The reduced data can be found at: \url{http://archive.eso.org/wdb/wdb/eso/repro/form}. For example data select night '30 07 2015'.
@@ -572,14 +581,14 @@ The reduced data (*.tar) can be extracted using
 cat *.tar | tar -xvf - -i
 \end{lstlisting}
 
-\subsection{Preparing for data extraction}
+\subsubsection{Preparing for data extraction}
 
 \noindent The following replacements are necessary in the conf.txt file:
 \begin{itemize}\setlength\itemsep{0em}
   \small
   \item \verb|subframe                = [4096,2048,0,50]|
   \item \verb|rotate_frame            = 180|
-  \item \verb|bin_search_orders       = 20,2|
+  \item \verb|bin_search_apertures    = 20,2|
   %\item \verb|arcshift_range    = [-12, -20]| (red chip),\\ \verb|arcshift_range  = [-12, -20]| (blue chip)
   \item \verb|arcshift_side           = left|
   \item \verb|raw_data_imtyp_keyword  = OBJECT|
@@ -598,7 +607,44 @@ cat *.tar | tar -xvf - -i
 
 \noindent Afterwards, \verb|prepare_file_list.py| and \verb|reduction_day.py| can be run as described above.
 
+\subsection{Extracting MRES data}
 
+This is experimental and the pipeline is not designed (yet) to take into account different ThAr calibration images, which are taken before or after a science observation. The raw data files need to be assigned manually to the different data types as \verb|prepare_file_list.py| isn't set up (yet).
+
+\noindent The following replacements/insertions are necessary in the conf.txt file:
+\begin{itemize}\setlength\itemsep{0em}
+\small
+  \item \verb|subframe                 = [1250,512,350,0]|
+  \item \verb|rotate_frame             = 270|
+  \item \verb|arcextraction_width_multiplier = 2|
+  \item \verb|maxshift                 = 5|
+  \item \verb|bin_search_apertures     = 5,1|
+  \item \verb|bin_adjust_apertures     = 2,1|
+  \item \verb|arcshift_side            = center|
+  \item \verb|raw_data_imtyp_bias      = NA|
+  \item \verb|raw_data_imtyp_dark      = NA|
+  \item \verb|raw_data_imtyp_flat      = NA|
+  \item \verb|raw_data_exptim_keyword  = EXPOSURE|
+  \item \verb|raw_data_dateobs_keyword = DATE|
+  \item \verb|arc_l_rawfiles           = <arcs long exposure>|
+  \item \verb|arc_rawfiles             = <arc long exposure>|
+  \item \verb|arc_s_rawfiles           = <arcs short exposure>|
+  \item \verb|extract_rawfiles         = <file to extract>|
+  \item \verb|flatarc_rawfiles         = <continuum spectrum>|
+  \item \verb|sflat_rawfiles           = <continuum spectrum>||
+  \item \verb|arc_calibs_create        = subframe, <...>|
+  \item \verb|arc_l_calibs_create      = subframe, <...>|
+  \item \verb|arc_s_calibs_create      = subframe, <...>|
+  \item \verb|extract_calibs_create    = subframe, <...>|
+  \item \verb|flatarc_calibs_create    = subframe, <...>|
+  \item \verb|sflat_calibs_create      = subframe, <...>|
+  \item \verb|master_arc_filename      = master_arc.fits|
+  \item \verb|master_arc_l_filename    = master_arc_l.fits|
+  \item \verb|master_arc_s_filename    = master_arc_s.fits|
+  \item \verb|master_flatarc_filename  = master_flatarc.fits|
+  \item \verb|master_sflat_filename    = master_sflat.fits|
+  \item \verb|extracted_bitpix         = -32|
+\end{itemize}
 
 \newpage
 

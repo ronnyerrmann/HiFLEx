@@ -71,14 +71,17 @@ if __name__ == "__main__":
     else:
         # create the background map
         if params['GUI'] == True:
-            im_bck_px, params = bck_px_UI(params, im_sflat, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'], params['GUI'])
+            bck_px, params = bck_px_UI(params, im_sflat, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0], params['GUI'])
         else:
-            im_bck_px = bck_px(im_sflat, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'])
-        save_im_fits(params, im_bck_px, im_sflat_head, params['background_px_filename'])
-        save_im_fits(params, im_bck_px*im_sflat, im_sflat_head, params['logging_background'])
+            bck_px = find_bck_px(im_sflat, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0])
+        bad_values = ( im_sflat*bck_px > np.percentile(im_sflat[bck_px==1],95) )
+        bck_px[bad_values] = 0
+        save_im_fits(params, bck_px, im_sflat_head, params['background_px_filename'])
+        save_im_fits(params, bck_px*im_sflat, im_sflat_head, params['logging_background'])
         # Create the fitted background map
-        im_bck = bck_fit(im_sflat, im_bck_px, params['polynom_bck'], params['GUI'])
-        save_im_fits(params, im_bck, im_sflat_head, params['background_filename'])
+        #im_bck = find_bck_fit(im_sflat, im_bck_px, params['polynom_bck'], params['GUI'])       #Old
+        bck_im = fit_2d_image(im_sflat, params['polynom_bck'][1], params['polynom_bck'][0], w=bck_px)
+        save_im_fits(params, bck_im, im_sflat_head, params['background_filename'])
         
     # Create the file for the arc orders, if it doesn't exist
     if os.path.isfile(params['master_orderarc_filename']) == True:
@@ -153,8 +156,9 @@ if __name__ == "__main__":
         wavelength_solution, wavelength_solution_arclines = adjust_wavelength_solution(params, np.array(arc_l_spec), arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, reference_catalog, reference_names, xlows, xhighs, params['GUI'])
         save_arc_fits(wavelength_solution, wavelength_solution_arclines, params['master_arc_solution_filename'])
         plot_wavelength_solution_form(params['logging_wavelength_solution_form'], axlows, axhighs, wavelength_solution)
+        plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names)
         plot_wavelength_solution_image(im_arc_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
-    
+            
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if wavelength_solution.shape[0] <> sci_tr_poly.shape[0]:
         logger('Error: The number of traces for extraction and for the wavelength calibration do not match. Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_order_filename'], params['master_arc_solution_filename']))
@@ -176,6 +180,10 @@ if __name__ == "__main__":
     
     log_params(params)
     logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the loging directory {0}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?\n'.format(params['logging_path']))
+    
+    update_calibration_memory('sci_trace',[sci_tr_poly, xlows, xhighs, widths])
+    update_calibration_memory('cal_trace',[cal_tr_poly, axlows, axhighs, awidths])
+    update_calibration_memory('wave_sol',[wavelength_solution, wavelength_solution_arclines])
     
     extractions = []
     for entry in params.keys():

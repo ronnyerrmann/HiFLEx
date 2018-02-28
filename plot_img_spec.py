@@ -112,10 +112,10 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     minx, miny, maxx, maxy = 1e10, 1e10, -1e10, -1e10
     for i in range(len(data_x)):
         if data_x[i] <> []:
-            minx = min(minx, np.min(data_x[i]) )
-            miny = min(miny, np.min(data_y[i]) )
-            maxx = max(maxx, np.max(data_x[i]) )
-            maxy = max(maxy, np.max(data_y[i]) )
+            minx = min(minx, np.nanmin(data_x[i]) )
+            miny = min(miny, np.nanmin(data_y[i]) )
+            maxx = max(maxx, np.nanmax(data_x[i]) )
+            maxy = max(maxy, np.nanmax(data_y[i]) )
     #miny,maxy = -0.3,0.3
     #minx,maxx = 0,4250
     dx = max(1,maxx - minx)*0.01
@@ -125,7 +125,7 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     for i in range(len(data_x)):
         if len(labels) > 0:
             label = labels[i]
-        if len(data_x[i]) - len(data_y[i]) == 1:        # Histogram
+        if len(data_x[i]) - len(data_y[i]) == 1:        # Histogram (one data point less in y
             width = (( 1 - i/len(data_x) ) * 0.7 + 0.1) * (data_x[i][1] - data_x[i][0])
             center = (data_x[i][:-1] + data_x[i][1:]) / 2
             plt.bar(center, data_y[i], align='center', width=width, label=label)
@@ -331,7 +331,7 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
             text = [ 'Which data', 'list']
             starta, startb = '1', ''
         if (iml-1) - i - 1 == 0:
-            text = [ 'Which order', 'list']
+            text = [ 'Which aperture', 'list']
         
         if 'plot_sub_{0}'.format(i) in settings.keys():
             starta = (('{0}'.format(settings['plot_sub_{0}'.format(i)])).replace('[','')).replace(']','')

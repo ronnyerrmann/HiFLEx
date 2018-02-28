@@ -18,7 +18,7 @@
 
 ## General parameters:
 #---------------------
-# GUI: allows userinput for some of the steps
+# GUI: allows userinput for some of the steps (experimental)
 GUI = False
 
 # Configuration file in which the processing of the raw data fits files is defined
@@ -60,16 +60,16 @@ maxshift = 15
 update_widths = False
 
 ## If the positions of the traces between consecutive observations has changed too much, the orders are searched from scratch and then adjusted.
-# bin_search_orders: Search the orders in a binned image. The first value gives the binning along one order (vertical axis, dispersion axis)
+# bin_search_apertures: Search the apertures of the orders in a binned image. The first value gives the binning along one order (vertical axis, dispersion axis)
 #                    and the second value the binning perpendicular to the orders (horizontal, cross-dispersion axis). 
 #                    Heavy binning along the dispersion axis is possible in this step, while binning in cross-dispersion needs to be significantly smaller than the minimum separation between orders.
-# for qsi:          bin_search_orders = 20,5
-# for HARPS:        bin_search_orders = 20,2
-bin_search_orders = 20,4
-# bin_adjust_orders: Adjust the center of the orders in a binned image. description as for bin_search_orders. The second value should be 1 to reach best precission
-bin_adjust_orders = 3,1
-# polynom_order_orders: Order of the polynomial in order to define the form of the traces along the CCD
-polynom_order_orders = 5
+# for qsi:          bin_search_apertures = 20,5
+# for HARPS:        bin_search_apertures = 20,2
+bin_search_apertures = 20,4
+# bin_adjust_apertures: Adjust the center of the apertures in a less binned image. Description as for bin_search_apertures. The second value should be 1 to reach best precission
+bin_adjust_apertures = 3,1
+# polynom_order_apertures: Order of the polynomial to define the form of the traces along the CCD
+polynom_order_apertures = 5
 
 
 ## To determine the background
@@ -163,6 +163,8 @@ background_filename             = background.fits
 ## extracted data
 # path for the extracted data.
 path_extraction             = extracted
+# BITPIX of the extracted fits-file (-32 -> -32, everything else -> -64)
+extracted_bitpix            = -64
 
 # when reading already processed images from the result path, this defines what calibrations should be done. If one file type should be handled different, then <filetype>_calibs_read can be used
 calibs_read = [subframe]
@@ -198,6 +200,7 @@ logging_background                  = orig_for_background_map.fits
 logging_found_arc_lines             = arc_lines_found.txt
 logging_wavelength_solution_form    = wavelength_solution_form.png
 logging_arc_line_identification_residuals = arc_line_identification_residuals.png
+logging_arc_line_identification_spectrum  = arc_line_identification_spectrum.pdf
 logging_arc_line_identification_positions = arc_line_identification_positions.png
 
 
