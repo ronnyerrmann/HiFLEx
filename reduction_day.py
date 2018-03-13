@@ -27,19 +27,19 @@ if __name__ == "__main__":
     im_arc, im_archead = create_image_general(params, 'arc')                # -> trace2
     im_arc_l, im_arclhead = create_image_general(params, 'arc_l')           # -> cal2_l
     im_arc_s, im_arcshead = create_image_general(params, 'arc_s')           # -> cal2_s
-    im_flatarc, im_flatarchead = create_image_general(params, 'flatarc')    # -> cont1cal2
+    #im_flatarc, im_flatarchead = create_image_general(params, 'flatarc')    # -> a later step to know the orders for localbackground -> cont1cal2
     
     reference_catalog, reference_names = read_reference_catalog(params['reference_catalog'], params['catalog_file_wavelength_muliplier'], params['use_catalog_lines'])
     
     # Create or read the file with the orders for this night
-    if os.path.isfile(params['master_order_filename']) == True:
-        logger('Info: Using exiting trace solution: {0}'.format(params['master_order_filename']))
-        sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['master_order_filename'])        
-        # plot_traces_over_image(im_sflat, params['logging_orders'], sci_tr_poly, xlows, xhighs, widths)        # Should already exist
+    if os.path.isfile(params['master_traces_filename']) == True:
+        logger('Info: Using exiting trace solution: {0}'.format(params['master_traces_filename']))
+        sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['master_traces_filename'])        
+        # plot_traces_over_image(im_sflat, params['logging_traces_im'], sci_tr_poly, xlows, xhighs, widths)        # Should already exist
     else:
         # load the original solution
-        if os.path.isfile(params['original_master_order_filename']) == True:
-            sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['original_master_order_filename'])
+        if os.path.isfile(params['original_master_traces_filename']) == True:
+            sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['original_master_traces_filename'])
             # find the shift between the original solution and the current flat
             shift, widths_new, shift_map, shift_error = shift_orders(im_sflat, params, sci_tr_poly, xlows, xhighs, widths, params['in_shift'])
             # save the map of the shifts
@@ -48,12 +48,7 @@ if __name__ == "__main__":
             shift_error = -1
         if shift_error > 1 or shift_error == -1 or abs(shift) > params['maxshift']:
             logger('Warn: The deviation of the shift of the orders seems too big or no previous solution was available, therefore searching for the position of the orders from scratch:')
-            #os.sytem('mv {0} {1}'.format())#master_flat_filename already set in conf
-            #ret = os.system('python {1}/order_trace.py original_master_order_filename={0}'.format(params['master_order_filename'], os.path.dirname(sys.argv[0])))
-            #if ret > 0:
-            #    exit(1)
             sci_tr_poly, xlows, xhighs, widths = trace_orders(params, im_sflat, im_sflat_head)
-            #sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['master_order_filename'])
         else:
             if params['update_widths'] == True:
                 widths = widths_new
@@ -62,8 +57,8 @@ if __name__ == "__main__":
             for pfit in sci_tr_poly:
                pfit[-1] += shift
             # save parameters of the polynoms into a fitsfile (from Neil)
-            save_fits_width(sci_tr_poly, xlows, xhighs, widths, params['master_order_filename'])
-            plot_traces_over_image(im_sflat, params['logging_orders'], sci_tr_poly, xlows, xhighs, widths)
+            save_fits_width(sci_tr_poly, xlows, xhighs, widths, params['master_traces_filename'])
+            plot_traces_over_image(im_sflat, params['logging_traces_im'], sci_tr_poly, xlows, xhighs, widths)
             
     # Create the background map, if it doesn't exist
     if os.path.isfile(params['background_filename']) == True:
@@ -77,16 +72,16 @@ if __name__ == "__main__":
         bad_values = ( im_sflat*bck_px > np.percentile(im_sflat[bck_px==1],95) )
         bck_px[bad_values] = 0
         save_im_fits(params, bck_px, im_sflat_head, params['background_px_filename'])
-        save_im_fits(params, bck_px*im_sflat, im_sflat_head, params['logging_background'])
+        save_im_fits(params, bck_px*im_sflat, im_sflat_head, params['logging_orig_for_background'])
         # Create the fitted background map
         #im_bck = find_bck_fit(im_sflat, im_bck_px, params['polynom_bck'], params['GUI'])       #Old
         bck_im = fit_2d_image(im_sflat, params['polynom_bck'][1], params['polynom_bck'][0], w=bck_px)
         save_im_fits(params, bck_im, im_sflat_head, params['background_filename'])
         
     # Create the file for the arc orders, if it doesn't exist
-    if os.path.isfile(params['master_orderarc_filename']) == True:
-        logger('Info: Arc trace solution already exists: {0}'.format(params['master_orderarc_filename']))
-        cal_tr_poly, axlows, axhighs, awidths = read_fits_width(params['master_orderarc_filename'])
+    if os.path.isfile(params['master_tracesarc_filename']) == True:
+        logger('Info: Arc trace solution already exists: {0}'.format(params['master_tracesarc_filename']))
+        cal_tr_poly, axlows, axhighs, awidths = read_fits_width(params['master_tracesarc_filename'])
     else:
         # use im_arc for automatic solution
         shifts = arc_shift(params, im_arc, sci_tr_poly, xlows, xhighs, widths)
@@ -112,18 +107,18 @@ if __name__ == "__main__":
         axlows = xlows
         axhighs = xhighs
         # save parameters of the polynoms into a fitsfile (from Neil)
-        save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_orderarc_filename'])
-        plot_traces_over_image(im_arc, params['logging_arcorders'], cal_tr_poly, axlows, axhighs, awidths)
+        save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_tracesarc_filename'])
+        plot_traces_over_image(im_arc, params['logging_arctraces_im'], cal_tr_poly, axlows, axhighs, awidths)
     
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if cal_tr_poly.shape[0] <> sci_tr_poly.shape[0]:
-        logger('Error: The number of traces for the science fiber and for the calibration fiber do not match. Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_orderarc_filename'], params['master_order_filename']))
+        logger('Error: The number of traces for the science fiber and for the calibration fiber do not match. Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_tracesarc_filename'], params['master_traces_filename']))
     
     # Create the wavelength solution for the night
-    if os.path.isfile(params['master_arc_solution_filename']) == True:
-        logger('Info: wavelength solution already exists: {0}'.format(params['master_arc_solution_filename']))
-        wavelength_solution, wavelength_solution_arclines = read_arc_fits(params['master_arc_solution_filename'])
-    elif params['original_master_arc_solution_filename'].lower() == 'pseudo':
+    if os.path.isfile(params['master_wavelensolution_filename']) == True:
+        logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution_filename']))
+        wavelength_solution, wavelength_solution_arclines = read_arc_fits(params['master_wavelensolution_filename'])
+    elif params['original_master_wavelensolution_filename'].lower() == 'pseudo':
         logger('Warning: Using a pseudo solution for the wavelength (1 step per px)')
         wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(sci_tr_poly.shape[0])
     else:
@@ -141,28 +136,34 @@ if __name__ == "__main__":
         im_name = im_name.replace('.fit','')
         save_multispec([arc_s_spec, arc_s_spec, arc_s_spec, arc_s_spec], params['path_extraction']+im_name, im_arcshead)
         arc_lines_px = identify_lines(params, arc_l_spec, arc_s_spec, good_px_mask_l, new_format=True)
-        if os.path.isfile(params['original_master_arc_solution_filename']) == False:                                                        # Create a new solution
+        if os.path.isfile(params['original_master_wavelensolution_filename']) == False:                                                        # Create a new solution
             if os.path.isfile('arc_lines_wavelength.txt') == False:
-                logger('Error: Files for creating the wavelength solution do not exist: {0}, {1}. Please check parameter {2} or create {1}.'.format(params['original_master_arc_solution_filename'], 'arc_lines_wavelength.txt', 'original_master_arc_solution_filename'))
+                logger('Error: Files for creating the wavelength solution do not exist: {0}, {1}. Please check parameter {2} or create {1}.'.format(params['original_master_wavelensolution_filename'], 'arc_lines_wavelength.txt', 'original_master_wavelensolution_filename'))
             wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_arc_l)                        # For HARPS or a new wavelength solution
-            save_arc_fits(wavelength_solution, wavelength_solution_arclines, params['original_master_arc_solution_filename'])                   # For HARPS or a new wavelength solution
+            save_arc_fits(wavelength_solution, wavelength_solution_arclines, params['original_master_wavelensolution_filename'])                   # For HARPS or a new wavelength solution
             params['order_offset'] = [0,0]
             params['px_offset'] = [-20,20,10]
             params['px_offset_order'] = [-1,1,1]
-        wavelength_solution_ori, wavelength_solution_arclines_ori = read_arc_fits(params['original_master_arc_solution_filename'])
+        wavelength_solution_ori, wavelength_solution_arclines_ori = read_arc_fits(params['original_master_wavelensolution_filename'])
         #wavelength_solution_ori = np.array(wavelength_solution_ori[::-1])      # if blue and red orders are swapped
         #wavelength_solution_ori[:,0] = np.abs(wavelength_solution_ori[:,0])    # if blue and red orders are swapped
         # Find the new wavelength solution
         wavelength_solution, wavelength_solution_arclines = adjust_wavelength_solution(params, np.array(arc_l_spec), arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, reference_catalog, reference_names, xlows, xhighs, params['GUI'])
-        save_arc_fits(wavelength_solution, wavelength_solution_arclines, params['master_arc_solution_filename'])
+        save_arc_fits(wavelength_solution, wavelength_solution_arclines, params['master_wavelensolution_filename'])
         plot_wavelength_solution_form(params['logging_wavelength_solution_form'], axlows, axhighs, wavelength_solution)
         plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names)
         plot_wavelength_solution_image(im_arc_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
             
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if wavelength_solution.shape[0] <> sci_tr_poly.shape[0]:
-        logger('Error: The number of traces for extraction and for the wavelength calibration do not match. Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_order_filename'], params['master_arc_solution_filename']))
+        logger('Error: The number of traces for extraction and for the wavelength calibration do not match. Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_traces_filename'], params['master_wavelensolution_filename']))
         
+    update_calibration_memory('sci_trace',[sci_tr_poly, xlows, xhighs, widths])         # APertures might be shifted before extraction -> this would also affect the localbackground
+    update_calibration_memory('cal_trace',[cal_tr_poly, axlows, axhighs, awidths])
+    update_calibration_memory('wave_sol',[wavelength_solution, wavelength_solution_arclines])
+    
+    im_flatarc, im_flatarchead = create_image_general(params, 'flatarc')    # -> cont1cal2
+    
     # Extract the flat spectrum and normalise it
     if os.path.isfile(params['master_flat_spec_norm_filename']) == True:
         logger('Info: Normalised flat already exists: {0}, {1}'.format(params['master_flat_spec_norm_filename'], params['master_flat_spec_norm_filename']))
@@ -180,10 +181,6 @@ if __name__ == "__main__":
     
     log_params(params)
     logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the loging directory {0}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?\n'.format(params['logging_path']))
-    
-    update_calibration_memory('sci_trace',[sci_tr_poly, xlows, xhighs, widths])
-    update_calibration_memory('cal_trace',[cal_tr_poly, axlows, axhighs, awidths])
-    update_calibration_memory('wave_sol',[wavelength_solution, wavelength_solution_arclines])
     
     extractions = []
     for entry in params.keys():

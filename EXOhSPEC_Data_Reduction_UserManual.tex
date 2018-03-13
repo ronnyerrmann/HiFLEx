@@ -87,9 +87,9 @@ After making the change and opening a new terminal python should point to the fi
 
 \subsubsection{Additional modules}
 
-\noindent Once Anaconda is installed one other module is needed (tqdm). If Anaconda is installed correctly then pip can be used to install this module
+\noindent Once Anaconda is installed tow other modules are needed (tqdm, gatspy). If Anaconda is installed correctly then pip can be used to install this module
 \begin{lstlisting}[style=base]
-pip install tqdm
+pip install tqdm gatspy
 \end{lstlisting}
 
 
@@ -215,7 +215,7 @@ In the pipeline always the individual frames are corrected before frames are com
     \item[f)] Creating the flat corrected spectrum.
     \item[g)] Creating the spectrum with normalised continuum.
     \item[h)] Perform some general measurements which are stored in the header.
-    \item[i)] Write the file with all extracted data into the folder given in the parameter \verb|path_extraction| (standard: \verb|extracted|).
+    \item[i)] Write the file with all extracted data into the folder given in the parameter \verb|path_extraction| (standard: \textit{extracted}).
   \end{itemize}
 \end{itemize}
 
@@ -243,7 +243,7 @@ To get the best results, the following data should be taken:
     \item[raw\_data\_path] : Folder to the raw data.
     %\item*\_rawfiles] : Replace any filenames, which are different in the current observation
     %\item[*\_calibs\_create] : Change the calibration steps, which are applied to the raw files before combining them. A list of possible calibrations are given in Section~\ref{section:extraction}.
-    \item[original\_master\_order\_filename] : Path to the traces of the science orders from the previous day. This file will be the base for finding the traces in the current night ([Step 2] as described in Section~\ref{Section:pipeline_steps_general}). Leave empty if the science orders should be searched without taking the previous solution into account (e.g. after the setup of the spectrograph has changed).
+    \item[original\_master\_traces\_filename] : Path to the traces of the science orders from the previous day. This file will be the base for finding the traces in the current night ([Step 2] as described in Section~\ref{Section:pipeline_steps_general}). Leave empty if the science orders should be searched without taking the previous solution into account (e.g. after the setup of the spectrograph has changed).
     \item[original\_master\_arc\_solution\_filename] : Path to the previous wavelength solution. This solution will be used as base for the wavelength solution in the current night. In case of a new setup see Section~\ref{section:create_new_wave_solution}. In case no wavelength solution is required, set it to \verb|pseudo|.
     \item[\textless type\textgreater\_calibs\_create\_g] : Change the calibrations, which are applied to the CCD images before further processing or extraction for the different file types (e.g. bias, dark, flat, sflat, arc, flatarc, extract). A list of possible calibration options is given in Section~\ref{Section:parameters_CCD_proc} below.
     %In case of a new setup, it can be set to \verb|manual_solution.fits| (or any filename that doesn't exist). The script will then create a new solution from the information given in the file \verb|arc_lines_wavelength.txt|. For a description of the format of this file, check Section~\ref{section:create_new_wave_solution}.
@@ -359,14 +359,14 @@ The final fits file contains the original header and some additional information
 
 \noindent \textbf{Step 1:} The reduced and combined CCD images will be stored in the folder where the pipeline was run. The file name is \verb|master_<type>.fits|, where \verb|<type>| defines the different image types, e.g. bias, sflat, or arc\_l.
 
-\vspace{0.5em}\noindent \textbf{Step 2:} The trace of each scientific order is stored in the file given in parameter \verb|master_order_filename| (standard: \verb|master_orders.fits|). This file contains one line for each order, normally starting with the reddest order, which is located on the left side of the CCD image. Each line contains the following information:
+\vspace{0.5em}\noindent \textbf{Step 2:} The trace of each scientific order is stored in the file given in parameter \verb|master_traces_filename| (standard: \textit{master\_traces.fits}). This file contains one line for each order, normally starting with the reddest order, which is located on the left side of the CCD image. Each line contains the following information:
 \begin{itemize}\setlength\itemsep{0em}
   \item Number of the aperture (starting at 0).
-  \item Parameters of a polynomial fit to the trace (given in parameter \verb|polynom_order_apertures|), e.g. 5 values if the trace is fitted with a polynom of order 5.
+  \item Parameters of a polynomial fit to the trace (given in parameter \verb|polynom_traces_apertures|), e.g. 5 values if the trace is fitted with a polynom of order 5.
   \item The lowest and highest pixel in dispersion axis, for which the trace can be identified.
   \item The last three entries of each line define the width of the trace: the width from the center to the left, the width from the center to the right, and the Gaussian width.
 \end{itemize}
-The identification of the traces can be checked easily in the file given in parameter \verb|logging_orders| (standard: \verb|orders_in_master_flat.png|). This file is located in the folder given in the parameter \verb|logging_path| (standard: \verb|logging|). An example is show in Fig.~\ref{figure_apertures_in_master_flat}.
+The identification of the traces can be checked easily in the file given in parameter \verb|logging_traces_im| (standard: \textit{traces\_in\_master\_flat.png}). This file is located in the folder given in the parameter \verb|logging_path| (standard: \textit{logging}). An example is show in Fig.~\ref{figure_apertures_in_master_flat}.
 
 \begin{figure} 
   \begin{center}
@@ -376,9 +376,9 @@ The identification of the traces can be checked easily in the file given in para
     \label{figure_apertures_in_master_flat}}
 \end{figure}
 
-\vspace{0.5em}\noindent \textbf{Step 3:} The background map, 2d image is stored in the file given in parameter \verb|background_image_filename| (standard: \verb|background.fits|). Additionally a mask which provides the pixel which are used to create the background map is stored in the file given in parameter \verb|background_px_filename| (standard: \verb|background_px.fits|).
+\vspace{0.5em}\noindent \textbf{Step 3:} The background map, 2d image is stored in the file given in parameter \verb|background_filename| (standard: \textit{background.fits}). Additionally a mask which provides the pixel which are used to create the background map is stored in the file given in parameter \verb|background_px_filename| (standard: \textit{background\_px.fits}).
 
-\vspace{0.5em}\noindent \textbf{Step 4:} The traces of the apertures of the calibration fiber are stored in the file given in parameter \verb|master_orderarc_filename| (standard: \verb|master_ordersarc.fits|). This file contains the same information as the result of \textbf{Step 2}, only that the lowest order of the parameters of polynomial fit is shifted (the curvature of the traces is kept the same). The result can be checked easily in the file given in parameter \verb|logging_arcorders| (standard: \verb|arcorders_in_master_arc.png|). An example is show in Fig.~\ref{figure_arcapertures_in_master_arc}.
+\vspace{0.5em}\noindent \textbf{Step 4:} The traces of the apertures of the calibration fiber are stored in the file given in parameter \verb|master_tracesarc_filename| (standard: \textit{master\_tracesarc.fits}). This file contains the same information as the result of \textbf{Step 2}, only that the lowest order of the parameters of polynomial fit is shifted (the curvature of the traces is kept the same). The result can be checked easily in the file given in parameter \verb|logging_arctraces_im| (standard: \textit{arctraces\_in\_master\_arc.png}). An example is show in Fig.~\ref{figure_arcapertures_in_master_arc}.
 
 \begin{figure} 
   \begin{center}
@@ -389,7 +389,7 @@ The identification of the traces can be checked easily in the file given in para
 \end{figure}
 
 
-\vspace{0.5em}\noindent \textbf{Step 5:} The wavelength solution is stored in the file given in parameter \verb|master_arc_solution_filename| (standard: \verb|master_arc_solution.fits|). The parameters for each order are stored in one line. For each order the following values are stored:
+\vspace{0.5em}\noindent \textbf{Step 5:} The wavelength solution is stored in the file given in parameter \verb|master_wavelensolution_filename| (standard: \textit{master\_wavelength.fits}). The parameters for each order are stored in one line. For each order the following values are stored:
 \begin{itemize}
   \item Real order, as derived from the grating equation.
   \item Central pixel of the order.
@@ -456,7 +456,7 @@ The last lines give the information for all apertures. Columns, for which no use
     \label{figure_arc_line_identification_residuals}}
 \end{figure}
 
-\vspace{0.5em}\noindent \textbf{Step 6:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \verb|master_flat_spec_norm.fits|). The extraction and data format is described in Section~\ref{section:extraction_data_format}
+\vspace{0.5em}\noindent \textbf{Step 6:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \textit{master\_flat\_spec\_norm.fits}). The extraction and data format is described in Section~\ref{section:extraction_data_format}
 
 
 \newpage
@@ -484,7 +484,7 @@ When setting up a new camera or a new account paths and parameters need to be ad
   \item[badpx\_mask\_filename] : Insert path to the bad-pixel mask. Use 'NA', if no bad-pixel mask is needed.
   \item[reference\_catalog] : Change the path to the catalogue of the reference lines. The file contains one entry per line, each entry consists of tab-separated wavelength, line strength, and element. line strength can be empty.
   \item[rotate\_frame, flip\_frame] : The CCD image needs to be aligned in a way that the cross-dispersion axis is along vertical direction and the dispersion axis is along the horizontal direction, AND that the wavelength in dispersion direction is increasing with higher pixel number by providing the necessary angle for \verb|rotate_frame|. If necessary the image can be flipped (\verb|flip_frame = True|) after the rotation so that the wavelength in cross-dispersion direction decreases with increasing pixel number (blue orders on the right and the red orders on the left).
-  \item[extraction\_width\_multiplier, arcextraction\_width\_multiplier] : The spectrum will be extracted by summing up the data between the center of a trace and \verb|extraction_width_multiplier| times the Gaussian width of the order to either side of center. The covered area can be checked in the logged images given in the parameters \verb|logging_orders| and \verb|logging_arcorders|. In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
+  \item[extraction\_width\_multiplier, arcextraction\_width\_multiplier] : The spectrum will be extracted by summing up the data between the center of a trace and \verb|extraction_width_multiplier| times the Gaussian width of the order to either side of center. The covered area can be checked in the logged images given in the parameters \verb|logging_traces_im| and \verb|logging_arctraces_im|. In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
   \item[bin\_search\_apertures] : In order to speed up the search for the traces, heavy binning should be applied. However, the value for the cross-dispersion axis should to chosen in a way, that neighbouring orders are still separated. This can be checked in the images \verb|flat_binned.fits|.
   \item[arcshift\_side] : Position of the calibration traces compared to the science traces. Can be 'left', 'right', or 'center'. The later option implies, that only one fiber exists.
   \item[raw\_data\_imtyp\_keyword, raw\_data\_imtyp\_*] : Put the correct information for the image type header key here. 
@@ -552,11 +552,9 @@ python <path to script>/find_rv.py | tee RV_logfile
 \subsection{Extracting HARPS data}
 
 \subsubsection{Getting the data}
-Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. For example data select night '2015 07 30' and check only 'HARPS/LaSilla'.
-
-The reduced data can be found at: \url{http://archive.eso.org/wdb/wdb/eso/repro/form}. For example data select night '30 07 2015'.
-
-The raw data (*fits.Z) can be extracted with
+% Ceres observations with HARPS: http://www.eso.org/public/archives/releases/sciencepapers/eso1609/eso1609a.pdf
+% HD 10180: G1V star with 7 planets: http://adsabs.harvard.edu/abs/2011A%26A...528A.112L
+Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of Ceres or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*fits.Z) can be extracted with:
 \begin{lstlisting}[style=base]
 gunzip *
 cat <<EOT > extract_red_chip.py
@@ -576,11 +574,6 @@ python extract_red_chip.py
 \end{lstlisting}
 
 
-The reduced data (*.tar) can be extracted using
-\begin{lstlisting}[style=base]
-cat *.tar | tar -xvf - -i
-\end{lstlisting}
-
 \subsubsection{Preparing for data extraction}
 
 \noindent The following replacements are necessary in the conf.txt file:
@@ -591,21 +584,80 @@ cat *.tar | tar -xvf - -i
   \item \verb|bin_search_apertures    = 20,2|
   %\item \verb|arcshift_range    = [-12, -20]| (red chip),\\ \verb|arcshift_range  = [-12, -20]| (blue chip)
   \item \verb|arcshift_side           = left|
+  \item \verb|original_master_arc_solution_filename = master_arc_solution_manual.fits|. The file \verb|arc_lines_wavelength.txt| needs to be created (Section~\ref{section:create_new_wave_solution}).
+  \item \verb|arc_lines_catalog = <path>reference_lines_ThAr-HARPS_Ceres.txt|
+  \item \verb|use_catalog_lines = ThI, ArI, ?, NoID, ArII, ThII|
   \item \verb|raw_data_imtyp_keyword  = OBJECT|
   \item \verb|raw_data_imtyp_bias     = BIAS,BIAS|
   \item \verb|raw_data_imtyp_sflat    = LAMP,DARK,TUN|
+  \item \verb|raw_data_imtyp_flatarc  = LAMP,LAMP,TUN|
   \item \verb|raw_data_imtyp_arc      = WAVE,WAVE,THAR2|
   \item \verb|bias_calibs_create_g    = subframe|
   \item \verb|sflat_calibs_create_g   = subframe, bias|
   \item \verb|arc_calibs_create_g     = subframe, bias|
   \item \verb|flatarc_calibs_create_g = subframe, bias|
   \item \verb|extract_calibs_create_g = subframe, bias|
-  \item \verb|original_master_arc_solution_filename = master_arc_solution_manual.fits|. The file \verb|arc_lines_wavelength.txt| needs to be created (Section~\ref{section:create_new_wave_solution}).
-  \item \verb|arc_lines_catalog = <path>reference_lines_ThAr-HARPS_Ceres.txt|
-  \item \verb|use_catalog_lines = NeI, UI, ThI, ArI, ?, NoID, ArII, ThII|
+  \item \verb|polynom_order_traces    = [2,3]|
+  \item \verb|polynom_order_intertraces = 2,3|
 \end{itemize}
 
 \noindent Afterwards, \verb|prepare_file_list.py| and \verb|reduction_day.py| can be run as described above.
+
+\subsubsection{HARPS data reduced by the ESO Phase 3 pipeline}
+% wrong: http://archive.eso.org/wdb/wdb/eso/repro/form
+The reduced data can be found at: \url{http://archive.eso.org/wdb/wdb/adp/phase3_spectral/form}. Select 'ESO-3.6' and 'HARPS'. For example data use Date Obs '2015-07-30..2015-08-01' or the Run/Program ID from the results of the query for the raw data (make sure to use the ID of the science, not the calibration data). The download the data. The reduced data (*.tar) can be extracted using
+\begin{lstlisting}[style=base]
+cat *.tar | tar -xvf - -i
+\end{lstlisting}
+
+The data is reduced in the following way\footnote{\url{http://www.eso.org/rm/api/v1/public/releaseDescriptions/72}}:
+\begin{itemize}\setlength\itemsep{0em}
+  \item bias subtraction via overscan region
+  \item dark subtraction via values stored in a database
+  \item order extraction into 'e2ds' files
+  \item flat fielding (flat/blaze function is used as flat)
+  \item wavelength calibration
+  \item order matching into 1D files 's1d'
+  \item cross correlation for RV -> 'ccf' and 'bis' files
+  \item correction for instrumental drift using the calibration fiber
+\end{itemize}
+
+The following files are available:
+\begin{description}
+  \item[ADP.*.fits (primary file)] Table with wavelength, flux (, and error) in 0.01\,\AA\ steps. The files are in random order, check DATE-OBS to sort them.
+  \item[HARPS.*\_bis\_\textless sptype\textgreater\_A.fits] Bisector from cross correlation with the \textless sptype\textgreater\ mask.
+  \item[HARPS.*\_ccf\_\textless sptype\textgreater\_A.fits] Cross correlation function matrix for mask for \textless sptype\textgreater.
+  \item[HARPS.*\_ccf\_\textless sptype\textgreater\_A.tbl]  Cross correlation function summary table (ASCII) with extracted radial velocity per each order.
+  \item[HARPS.*\_e2ds\_\textless fibre\textgreater.fits] 2D extracted spectrum with wavelength solution in the header.
+  \item[HARPS.*\_INT\_GUIDE.fits] Image from the integrated guiding camera (star centred on the fiber).
+  \item[HARPS.*\_s1d\_\textless fibre\textgreater.fits] 1D extracted full spectrum, wavelength calibrated, in the solar system barycentric frame.
+\end{description}
+
+The wavelength solution in the \verb|e2ds| files is stored in the header\footnote{See page 22 in \url{https://www.eso.org/sci/facilities/lasilla/instruments/harps/doc/DRS.pdf}}. The order numbering starts at 0 (bluest order) and the pixel numbering \textbf{probably} starts at 0, too (bluest pixel). The \verb|e2ds| files can be converted to the EXOhSPEC format by using the script \verb|reduced_harps_to_exohspec.py|.
+
+\paragraph{Results}
+The extracted calibration spectrum and the science spectrum are very similar. Emission and absorption lines are at the same wavelength. The extracted flux is about 10-12\% lower and the noise slightly higher.
+
+Few problems occur when comparing the data of reduced with this pipeline and the data from the ESO Phase 3 pipeline:
+\begin{enumerate}\setlength\itemsep{0em}
+  \item The bias correction can't be performed, as usually only one bias frame is available.
+  \item Overscan correction is not implemented in the pipeline.
+  \item No cosmic ray removal is applied.
+  \item Different flat fielding.
+  \item Traces have a fixed width, therefore the S/N of the extracted data might decrease slightly.
+  \item Only one CCD is processed at a time, which might decrease the precision of the wavelength solution.
+  \item The wavelength shift between science and calibration fiber is not determined (yet).
+\end{enumerate}
+
+\subsubsection{Analysing the reduced HARPS data with TERRA}
+For more information about TERRA please refer to the literature\footnote{\url{https://ui.adsabs.harvard.edu/\#abs/2012ApJS..200...15A/abstract}}. The following files are used by TERRA:
+\begin{description}
+  \item[HARPS.*\_bis\_\textless sptype\textgreater\_A.fits] Bisector from cross correlation with the \textless sptype\textgreater\ mask.
+  \item[HARPS.*\_ccf\_\textless sptype\textgreater\_A.fits] Cross correlation function matrix for mask for \textless sptype\textgreater.
+  \item[HARPS.*\_e2ds\_\textless fibre\textgreater.fits] 2D extracted spectrum with wavelength solution in the header.
+\end{description}
+
+\textit{Todo: more}
 
 \subsection{Extracting MRES data}
 

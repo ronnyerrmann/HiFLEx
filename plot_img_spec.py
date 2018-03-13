@@ -9,6 +9,7 @@ import matplotlib.colors as colors
 import os
 import sys
 from astropy.table import Table
+from gatspy.periodic import LombScargleFast
 from procedures import *
 import tkcanvas as tkc
 if sys.version_info[0] < 3:
@@ -113,9 +114,10 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     for i in range(len(data_x)):
         if data_x[i] <> []:
             minx = min(minx, np.nanmin(data_x[i]) )
-            miny = min(miny, np.nanmin(data_y[i]) )
             maxx = max(maxx, np.nanmax(data_x[i]) )
-            maxy = max(maxy, np.nanmax(data_y[i]) )
+            if len( data_y[i][ ~np.isnan(data_y[i]) ] ) > 0:       # only search min/max, if non-nan data exists
+                miny = min(miny, np.nanmin(data_y[i]) )
+                maxy = max(maxy, np.nanmax(data_y[i]) )
     #miny,maxy = -0.3,0.3
     #minx,maxx = 0,4250
     dx = max(1,maxx - minx)*0.01
@@ -242,19 +244,25 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                     data = data * 2 / data.shape[0]
                     data, x_axis = data[good_values], 1/x_axis[good_values]
                 elif wavelength_plot == 'l' or wavelength_plot == 'wl' or wavelength_plot == 'lw':       # http://joseph-long.com/writing/recovering-signals-from-unevenly-sampled-data/
-                    nout = 5000 # number of frequency-space points at which to calculate the signal strength (output)
+                    nout = 4*len(data) # number of frequency-space points at which to calculate the signal strength (output)
                     # the posible Periods in px scale: 2 to 10% length of the data; in wave-scale: diff between 2 closest to 10% diff between furthest away:
                     period_range = np.array([ 2*np.nanmin(np.abs(x_axis[1:] - x_axis[:-1])), 0.5*(np.nanmax(x_axis)-np.nanmin(x_axis)) ])
-                    #periods = np.linspace(min(period_range), max(period_range), nout)
-                    #freqs = 1.0 / periods
-                    freqs = np.linspace(min(1/period_range), max(1/period_range), nout)
+                    freq_range = 1/period_range
+                    """model = LombScargleFast().fit(x_axis, data-np.nanmedian(data))
+                    df = (max(freq_range) - min(freq_range)) / nout
+                    freqs = min(freq_range) + df * np.arange(nout)
+                    periods = 1/freqs
+                    power = model.score_frequency_grid(min(freq_range), df, nout)
+                    #periods, power = model.periodogram_auto(nyquist_factor=0.5)
+                    data = power"""
+                    freqs = np.linspace(min(freq_range), max(freq_range), nout)
                     periods = 1.0 / freqs
                     angular_freqs = 2 * np.pi * freqs
                     pgram = scipy.signal.lombscargle(x_axis, data, angular_freqs)
                     normalized_pgram = np.sqrt(4 * (pgram / data.shape[0]))
-                    x_axis = periods
                     data = normalized_pgram
-
+                    x_axis = periods
+                    
                 frame.plot(x_axis, data, label=data_label)
                 #print sum(data[70:3000]-min(data[70:3000])), sum(data[1550:3000]-min(data[1550:3000]))
                 plot_ranges[0] = min(plot_ranges[0], min(x_axis))
@@ -479,7 +487,7 @@ if __name__ == "__main__":
             nr_orders = data_sg[i].shape[1]
             if nr_orders < max_orders:
                 data_sg[i] = np.insert(data_sg[i], range(nr_orders,max_orders),np.zeros(data_sg[i].shape[2]), axis=1)
-        print 'Data read ({0} MB), plotting data now'.format(round(data_sg.itemsize/1024./1024))
+        print 'Data read ({0} MB), plotting data now'.format(round(data_sg.itemsize/1024./1024,1))
         plot_spectra_UI(np.array(data_sg), title=titel_sg[2:])
             
 #no of orders, 3 different values, px

@@ -98,11 +98,13 @@ if __name__ == "__main__":
                                 fiber1, fiber2 = 'dark', 'dark'
                             if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_sflat']:
                                 fiber1, fiber2 = 'sflat', 'dark'
+                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flatarc']:
+                                fiber1, fiber2 = 'sflat', 'wave'        # for HARPS it is sflat, sflat
                             if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_arc']:
                                 fiber1, fiber2 = 'wave', 'wave'
                         if (filename.lower().find('/arc') == -1) and not (filename.lower().find('arc') == 0) and fiber1 not in ['rflat', 'sflat', 'dark', 'bias', 'wave']:
                             fiber1 = 'science'
-                            if filename.lower().find('hars') <> -1:
+                            if filename.lower().find('harps') <> -1:
                                 fiber2 = 'wave'
                         # Get the exposure time
                         exptime = -1

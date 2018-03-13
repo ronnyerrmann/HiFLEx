@@ -13,46 +13,47 @@ CONFIGFILE = 'conf.txt'
 # Start of code
 # deal with arguments from a text file
 params = textfileargs(params, CONFIGFILE)
-params['folder_original_orders'] = 'original_orders'
+params['folder_original_traces'] = 'original_traces'
 
 if __name__ == "__main__":
-    logger('Info: Starting removing orders')
+    logger('Info: Starting removing traces')
     log_params(params)
     
-    if not os.path.exists(params['folder_original_orders']):
+    if not os.path.exists(params['folder_original_traces']):
         try:
-            os.makedirs(params['folder_original_orders'])
+            os.makedirs(params['folder_original_traces'])
         except:
-            logger('Error: Cant create directory {0}'.format(params['folder_original_orders']))
+            logger('Error: Cant create directory {0}'.format(params['folder_original_traces']))
             exit(1)
     
     im_flat, im_head = create_image_general(params, 'sflat')
     
-    # Remove orders in the GUI
+    # Remove traces in the GUI
     
-    polyfits, xlows, xhighs, widths = read_fits_width(params['master_order_filename'])
-    fmask = run_remove_orders(np.log10(im_flat), polyfits, xlows, xhighs, userinput=True)
+    polyfits, xlows, xhighs, widths = read_fits_width(params['master_traces_filename'])
+    fmask = run_remove_orders_UI(np.log10(im_flat), polyfits, xlows, xhighs, userinput=True)
     if len(polyfits) == len(polyfits[fmask]):
-        logger('Info: No change made, therefore finished removing orders')
+        logger('Info: No change made, therefore finished removing traces')
         exit(0)
     
     polyfits, xlows, xhighs, widths = polyfits[fmask], xlows[fmask], xhighs[fmask], widths[fmask]
-    # Move original data into a sub-folder and save the data
-    os.system('mv {0} {1}/'.format(params['master_order_filename'], params['folder_original_orders']))
     
-    logger('Info: New file with the orders has been written. Now all data depending on this will be moved to the folder {0} and reduction_day.py will be run'.format(params['folder_original_orders']))
-    for entry in ['background_filename', 'master_orderarc_filename', 'master_arc_solution_filename', 'master_flat_spec_norm_filename', 'logging_path', 'path_extraction']:
-        #'logging_background', 'logging_arcorders', 'logging_arc_line_identification_positions', 'logging_arc_line_identification_residuals']:
+    # Move original data into a sub-folder
+    os.system('mv {0} {1}/'.format(params['master_traces_filename'], params['folder_original_traces']))
+    
+    for entry in ['background_filename', 'master_tracesarc_filename', 'master_wavelensolution_filename', 'master_flat_spec_norm_filename', 'logging_path', 'path_extraction']:
         if os.path.isfile(params[entry]) == True:
-            os.system('mv {0} {1}/'.format(params[entry], params['folder_original_orders']))
+            os.system('mv {0} {1}/'.format(params[entry], params['folder_original_traces']))
     
-    save_fits_width(polyfits, xlows, xhighs, widths, params['master_order_filename'])
-    plot_traces_over_image(im_flat, params['logging_orders'], polyfits, xlows, xhighs, widths)
+    # Save the new file and restart the reduction
+    logger('Info: New file with the traces was created. All data depending on this will be moved to the folder {0}, the traces will be written and reduction_day.py will be run'.format(params['folder_original_traces']))
+    save_fits_width(polyfits, xlows, xhighs, widths, params['master_traces_filename'])
+    plot_traces_over_image(im_flat, params['logging_traces_im'], polyfits, xlows, xhighs, widths)
     
     os.system('python {0}/reduction_day.py'.format(os.path.dirname(sys.argv[0])) )
      
     log_params(params)
-    logger('Info: Finished removing orders and updating all the files for the day. \n')
+    logger('Info: Finished removing traces and updating all the files for the day. \n')
     
     
     
