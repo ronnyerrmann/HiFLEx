@@ -30,7 +30,7 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 
-\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: V0.2.0}
+\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: V0.2.1}
 \date{February, 2018}
 \author{Ronny Errmann, Neil Cook\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
@@ -222,12 +222,12 @@ In the pipeline always the individual frames are corrected before frames are com
 \noindent If the result file of any of the above steps already exist in the folder in which the code is run, then the existing file is read instead of performing the step again in order to safe computational time. If a step needs to run again, the according result file needs to be deleted.
 
 \subsection{Necessary CCD images}
-To get the best results, the following data should be taken:
+To get the best results, the following data should be taken (all filenames are case-insensitive):
 \begin{itemize}
-  \item \textit{true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{flat} for automatic processing.
-  \item Flat (3x, white light source through the science fiber), with the filename containing \textbf{sflat}. The calibration fiber should be dark for this data.
-  \item Arc (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 60\,s) exposure time). The filename should start with \textbf{arc} and the science fiber should be dark for this data.
-  \item FlatArc (11x, white light source and calibration lamp), the filename should be \textbf{flatarc}.
+  \item \textit{true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{rflat} for automatic processing.
+  \item Flat (3x, white light source through the science fiber), with the filename containing \textbf{sflat} or \textbf{whli}. The calibration fiber should be dark for this data.
+  \item Arc (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 60\,s) exposure time). The filename should start with \textbf{arc}, \textbf{ThAr}, or \textbf{UNe} and the science fiber should be dark for this data.
+  \item FlatArc (11x, white light source and calibration lamp), the filename should be \textbf{flatarc}, \textbf{sflatThAr}, \textbf{whli-UNe}, or similar.
   \item Bias (11x) and/or Darks (11x, for the exposure time of the true Flat and FlatArc)
 \end{itemize}
 
@@ -333,6 +333,9 @@ The script \verb|prepare_file_list.py| reads all files in the folder (and subfol
 \end{itemize}
 
 \subsection{Format of the extracted files}
+Different types of extracted files are created. They are described in the following subsections.
+
+\subsubsection{raw-data filename}
 \label{section:extraction_data_format}
 The final fits file contains the original header and some additional information, for example the calibration steps which were applied and some information about the flux collected in the different apertures. The data in the file is stored in a 3D array in the form: data type, aperture, and pixel. The data types are similar to the ones created by the CERES pipeline and are the following:
 \begin{enumerate}
@@ -353,6 +356,13 @@ The final fits file contains the original header and some additional information
   \end{itemize}
   \item Spectrum of the calibration fiber, e.g. of the emission line lamp.
 \end{enumerate}
+
+\subsubsection{raw-data filename + \_harps\_e2ds}
+This file contains the extracted spectrum without any modification in the same form as the \textit{e2ds} files created by the HARPS pipeline. The wavelength solution is stored in the header.
+
+\subsubsection{raw-data filename + \_lin}
+
+\subsubsection{raw-data filename + \_lin\_cont}
 
 \subsection{Results from the pipeline}
 \label{section:results_pipeline}

@@ -196,7 +196,7 @@ if __name__ == "__main__":
                     im_name = im_name[-1].rsplit('.',1)         # remove the file ending
                     im_name = im_name[0]
                     if os.path.isfile(params['path_extraction']+im_name+'.fits'):
-                        logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}'.format(im_name, params['path_extraction']))
+                        logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
                     else:
                         print extraction, im_name_full, im_name
                         params['calibs'] = params[extraction+'_calibs_create']

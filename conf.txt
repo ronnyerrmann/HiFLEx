@@ -53,7 +53,7 @@ flip_frame = False
 #           format: float or integer
 extraction_width_multiplier = 2
 arcextraction_width_multiplier = 3
-# In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom (not implemented)
+# In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom
 wavelength_scale_resolution = 0.01
 
 ## Between observations of different nights the positions of the traces along cross-dispersion axis might change. The pipeline will determine the shift
@@ -124,7 +124,7 @@ badpx_mask_filename = /data/ronny/Reduced/20180105/bad_px_mask.fits
 # Path and filename to the file with the previous found positions of the orders and the previous wavelength solution.
 #   If the files don't exist, A solution is created from scratch (file arc_lines_wavelength.txt needs to be created in order to create the wavelength solution).
 #   Created by order_trace.py and read by reduction_day.py
-original_master_traces_filename = /data/ronny/Reduced/20180306/master_orders.fits
+original_master_traces_filename = /data/ronny/Reduced/20180306/master_traces.fits
 original_master_wavelensolution_filename = /data/ronny/Reduced/20180306/master_wavelength.fits
 
 # Path and filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. The values can be used as given from the NIST database, e.g. 6550.653 \t 140* \t Ne II 

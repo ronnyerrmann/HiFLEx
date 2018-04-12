@@ -115,9 +115,10 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
         if data_x[i] <> []:
             minx = min(minx, np.nanmin(data_x[i]) )
             maxx = max(maxx, np.nanmax(data_x[i]) )
-            if len( data_y[i][ ~np.isnan(data_y[i]) ] ) > 0:       # only search min/max, if non-nan data exists
-                miny = min(miny, np.nanmin(data_y[i]) )
-                maxy = max(maxy, np.nanmax(data_y[i]) )
+            data_yi = np.array(data_y[i])           # Necessary, because data_y[i][ ~np.isnan(data_y[i]) ] fails
+            if len( data_yi[ ~np.isnan(data_yi) ] ) > 0:       # only search min/max, if non-nan data exists
+                miny = min(miny, np.nanmin(data_yi) )
+                maxy = max(maxy, np.nanmax(data_yi) )
     #miny,maxy = -0.3,0.3
     #minx,maxx = 0,4250
     dx = max(1,maxx - minx)*0.01
@@ -219,11 +220,19 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                 data_label = data_entry.replace('data_','')
                 data = param[data_entry]
                 if wavelength_plot == 'w' or wavelength_plot == 'wl' or wavelength_plot == 'lw':
-                    data_entry_w = data_entry.rsplit('_',2)
-                    data_entry_w = data_entry_w[0]+'_0_'+data_entry_w[2]        # Select the wavelength in the data file
+                    data_entry_w = data_entry.rsplit('_',iml-2)                     # iml-2 should be 2 for nomal images
+                    if iml == 4:                                      # for normal images
+                        data_entry_w = data_entry_w[0]+'_0_'+data_entry_w[2]        # Select the wavelength in the data file
+                    elif iml ==3:                                                           # for images with linearised wavelength
+                        data_entry_w = data_entry_w[0]+'_0'
+                    else:
+                        print('not implemented')
                     if data_entry_w not in param.keys():
                         text = data_entry_w.split('_')
-                        param[data_entry_w] = im[int(text[1]), int(text[2]), int(text[3]) ]     # This won't work, if it's not 3 indexes
+                        if iml == 4:
+                            param[data_entry_w] = im[int(text[1]), int(text[2]), int(text[3]) ]
+                        elif iml ==3:
+                            param[data_entry_w] = im[int(text[1]), int(text[2]) ]
                     x_axis = param[data_entry_w]
                 else:
                     x_axis = np.arange(len(data)).astype(float)
@@ -263,12 +272,13 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                     data = normalized_pgram
                     x_axis = periods
                     
-                frame.plot(x_axis, data, label=data_label)
-                #print sum(data[70:3000]-min(data[70:3000])), sum(data[1550:3000]-min(data[1550:3000]))
-                plot_ranges[0] = min(plot_ranges[0], min(x_axis))
-                plot_ranges[1] = max(plot_ranges[1], max(x_axis))
-                plot_ranges[2] = min(plot_ranges[2], min(data))
-                plot_ranges[3] = max(plot_ranges[3], max(data))
+                if len(x_axis) > 0:
+                    frame.plot(x_axis, data, label=data_label)
+                    #print sum(data[70:3000]-min(data[70:3000])), sum(data[1550:3000]-min(data[1550:3000]))
+                    plot_ranges[0] = min(plot_ranges[0], min(x_axis))
+                    plot_ranges[1] = max(plot_ranges[1], max(x_axis))
+                    plot_ranges[2] = min(plot_ranges[2], min(data))
+                    plot_ranges[3] = max(plot_ranges[3], max(data))
         if wavelength_plot == 'w':
             xlabel_text = 'wavelength [Angstrom]'
         elif wavelength_plot == 'f':
@@ -437,14 +447,10 @@ if __name__ == "__main__":
         else:
             im = np.array(fits.getdata(rpath+fitsfile[0],0))
         ims = im.shape
-        if fitsfile[2] == 'i':
-            if len(ims) == 3:
+        #print ims
+        if fitsfile[2] == 'i':              # For images
+            if len(ims) == 3:               # select the right image, if more than one is in the data
                 im = im[:,:,fitsfile[1]]
-            #ims2 = im.shape
-            #if len(ims) == 2:
-            #    if ims2[0] > ims2[1]:		#transpose the image
-            #        im = np.transpose(im)
-        if fitsfile[2] == 'i':
             plot_image(im, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], str(fitsfile))
         elif fitsfile[2] == 's':
             if len(ims) == 3:
@@ -471,12 +477,38 @@ if __name__ == "__main__":
                 labels = ''
             plot_spectra(imx,imy,labels, ['savepaths'], True, [0.06,0.92,0.95,0.06, 1.0,1.01], str(fitsfile))
         elif fitsfile[2] == 'sg':
-            ims = np.insert(ims, 0, 1)
+            ims = np.insert(ims, 0, 1)          # Reshape to make the insert easier
             im.shape = ims
             if len(data_sg) == 0:
                 data_sg = im
             else:
+                datas = data_sg.shape
+                while len(ims) < len(datas):        # Different number of data-subsets
+                    im = im[..., np.newaxis].reshape(np.insert(ims, 2, 1))      # add a new axis, first at the end, and then move to second place by reshaping
+                    ims = im.shape
+                while len(datas) < len(ims):        # Different number of data-subsets
+                    data_sg = data_sg[..., np.newaxis].reshape(np.insert(datas, 2, 1))      # add a new axis, first at the end, and then move to second place by reshaping
+                    print('Added a new dimension at the third place')
+                    datas = data_sg.shape
+                #print 2,datas, ims
+                for i in range(1, len(ims)):                # Diffent sizes of the array
+                    if ims[i] < datas[i]:
+                        ims = list(ims)
+                        ims[i] = datas[i] - ims[i]
+                        temp = np.empty(ims)
+                        temp.fill(np.nan)
+                        im = np.append(im, temp, axis=i)
+                    elif datas[i] < ims[i]:
+                        datas = list(datas)
+                        datas[i] = ims[i] - datas[i]
+                        temp = np.empty(datas)
+                        temp.fill(np.nan)
+                        data_sg = np.append(data_sg, temp, axis=i)
+                    ims = im.shape
+                    datas = data_sg.shape
+                
                 data_sg = np.append(data_sg, im, axis=0)
+                print data_sg.shape
             titel_sg += ',\n{0}'.format(fitsfile[0])
         #print data_sg.shape, data_sg.dtype, data_sg.itemsize, data_sg.nbytes, sys.getsizeof(data_sg), data_sg.nbytes   # size about the size of the fits file
     if data_sg <> []:
@@ -487,7 +519,7 @@ if __name__ == "__main__":
             nr_orders = data_sg[i].shape[1]
             if nr_orders < max_orders:
                 data_sg[i] = np.insert(data_sg[i], range(nr_orders,max_orders),np.zeros(data_sg[i].shape[2]), axis=1)
-        print 'Data read ({0} MB), plotting data now'.format(round(data_sg.itemsize/1024./1024,1))
+        print 'Data read ({0} MB), plotting data now'.format(round(data_sg.nbytes/1024./1024,1))
         plot_spectra_UI(np.array(data_sg), title=titel_sg[2:])
             
 #no of orders, 3 different values, px

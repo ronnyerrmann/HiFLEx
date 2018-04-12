@@ -79,7 +79,7 @@ if __name__ == "__main__":
                             fiber1, fiber2 = 'bias', 'bias'
                         if filename.lower().find('dark') >= 0:
                             fiber1, fiber2 = 'dark', 'dark'
-                        if filename.lower().find('flat') >= 0:
+                        if filename.lower().find('flat') >= 0 or filename.lower().find('whli') >= 0:
                             fiber1= 'sflat'
                         if filename.lower().find('rflat') >= 0:
                             fiber1, fiber2 = 'rflat', 'rflat'
@@ -89,7 +89,7 @@ if __name__ == "__main__":
                                     fiber1, fiber2 = 'rflat', 'rflat'
                                 else:
                                     fiber1, fiber2 = 'sflat', 'sflat'
-                        if filename.lower().find('arc') >= 0:
+                        if filename.lower().find('arc') >= 0 or filename.lower().find('thar') >= 0 or filename.lower().find('une') >= 0:
                             fiber2 = 'wave'
                         if params['raw_data_imtyp_keyword'] in im_head.keys():
                             if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_bias']:
@@ -102,7 +102,7 @@ if __name__ == "__main__":
                                 fiber1, fiber2 = 'sflat', 'wave'        # for HARPS it is sflat, sflat
                             if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_arc']:
                                 fiber1, fiber2 = 'wave', 'wave'
-                        if (filename.lower().find('/arc') == -1) and not (filename.lower().find('arc') == 0) and fiber1 not in ['rflat', 'sflat', 'dark', 'bias', 'wave']:
+                        if (filename.lower().find('/arc') == -1 and filename.lower().find('/thar') == -1 and filename.lower().find('/une') == -1) and not (filename.lower().find('arc') == 0 or filename.lower().find('thar') == 0 or filename.lower().find('une') == 0) and fiber1 not in ['rflat', 'sflat', 'dark', 'bias', 'wave']:
                             fiber1 = 'science'
                             if filename.lower().find('harps') <> -1:
                                 fiber2 = 'wave'
@@ -156,10 +156,12 @@ if __name__ == "__main__":
     for entry in file_list:
         file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], entry[4], entry[5] ))
     file.close()
-    rtn = os.system('gedit {0}'.format(params['raw_data_file_list']))
-    if rtn <> 0:
-        print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
-        raw_input('To continue please press Enter\t\t')
+    if 'nocheck' not in sys.argv:
+        start = time.time()
+        rtn = os.system('gedit {0}'.format(params['raw_data_file_list']))
+        if rtn <> 0 or time.time()-start < 10:
+            print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
+            raw_input('To continue please press Enter\t\t')
     time.sleep(1)
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
     file_list = convert_readfile(file_list, [str, str, str, float, float], delimiter='\t', replaces=['\n',' '])
@@ -167,6 +169,7 @@ if __name__ == "__main__":
     file_list = sorted(file_list, key=operator.itemgetter(1,2,3,0))
     # Check what data is available
     arc_l_exp, arc_s_exp = 0, 1E10
+    arc_fib1 = ''
     sflat_fib2 = 'wave'
     flatarc_fib2 = 'none'
     exist_bias, exist_rflat, exp_darks, exist_flatarc = False, False, [], False
@@ -189,6 +192,12 @@ if __name__ == "__main__":
         if entry[1] == 'dark' and entry[2] == 'dark':
             if entry[3] not in exp_darks:
                 exp_darks.append(entry[3])
+    if arc_l_exp == 0 and arc_s_exp == 1E10:         # no single arcs taken, use sflat and arc
+        arc_fib1 = 'sflat'
+        for entry in file_list:                     # re-run to find exposure times
+            if (entry[1] == arc_fib1) and entry[2] == 'wave':
+                arc_l_exp = max(entry[3], arc_l_exp)
+                arc_s_exp = min(entry[3], arc_s_exp)
     
     # Create the configuartion file
     conf_data = dict()
@@ -205,7 +214,7 @@ if __name__ == "__main__":
             conf_data, warn = create_parameters(conf_data, warn, 'flatarc', 'flatarc', ['flatarc'], exist_bias, exist_rflat, exp_darks)
         if entry[1] == 'sflat' and entry[2] == sflat_fib2:          # Fiber1 and Fiber2
             conf_data, warn = create_parameters(conf_data, warn, 'sflat', 'sflat', ['sflat'], exist_bias, exist_rflat, exp_darks)
-        if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave') and entry[2] == 'wave':               # Fiber1 and Fiber2
+        if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave' or entry[1] == arc_fib1) and entry[2] == 'wave':               # Fiber1 and Fiber2
             parcal = 'arc'
             if entry[3] == arc_l_exp:
                 conf_data, warn = create_parameters(conf_data, warn, 'arc_l', 'arc_l', [parcal], exist_bias, exist_rflat, exp_darks)
