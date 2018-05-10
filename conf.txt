@@ -36,7 +36,7 @@ configfile_fitsfiles = fits_conf.txt
 # for QSI:              subframe        = [4250,2838,0,0]
 # for davids ccd:       subframe        = [3056,3056,0,0]
 # for HARPS:            subframe        = [4096,2048,0,50]
-subframe        = [4250,2838,0,0]
+ subframe        = [2500,3056,56,0]
 
 # To extract the data correctly, the frame should be rotated in the way, that traces (dispersion axis) are along vertical direction
 #           with wavelength increasing with increasing pixel number (blue on top). 
@@ -44,10 +44,10 @@ subframe        = [4250,2838,0,0]
 #           pixel number (blue orders on the right of the (rotated) image and the red orders on the left).
 #               format: multiple of 90
 # for qsi:          rotate_frame = 270
-# for davids ccd:   rotate_frame = 0
+# for davids ccd:   rotate_frame = 180; flip_frame = True
 # for HARPS:        rotate_frame = 180
-rotate_frame = 270
-flip_frame = False
+rotate_frame = 0
+flip_frame = True
 
 # extraction_width_multiplier times the average width of the gaussian fit to the traces of the orders defines how many pixel of either side to extract.
 #           format: float or integer
@@ -70,7 +70,7 @@ update_widths = False
 # for qsi:          bin_search_apertures = 20,5
 # for davids ccd:   bin_search_apertures = 20,4
 # for HARPS:        bin_search_apertures = 20,2
-bin_search_apertures = 20,5
+bin_search_apertures = 20,4
 # bin_adjust_apertures: Adjust the center of the apertures in a less binned image. Description as for bin_search_apertures. The second value should be 1 to reach best precission
 bin_adjust_apertures = 3,1
 # polynom_order_apertures: Order of the polynomial to define the form of the traces along the CCD
@@ -93,8 +93,8 @@ arcshift_side = right
 arcshift_range  = [25, 60]
 
 ## The following parameters define the search area when finding the new wavelength solution for the night by using an old solution
-# order_offset: Search range to find out by how many orders are the two solutions shifted? Normally the change should be less than 1 Order. The offset will be positive, if bluer orders are added.
-order_offset = [-1,1]
+# order_offset: Search range to find out by how many orders are the two solutions shifted? Normally the change should be less than 1 Order. The offset will be negative, if redder orders are added.
+order_offset = [-10,1]
 # px_offset: search range and step size to find out by how much the central pixel of the orders was shifted. Normally the change should be less than 100 pixel.
 px_offset = [-200, 200, 20]
 # px_offset_order: Additional shift per order in case big variations happened.
@@ -124,8 +124,8 @@ badpx_mask_filename = /data/ronny/Reduced/20180105/bad_px_mask.fits
 # Path and filename to the file with the previous found positions of the orders and the previous wavelength solution.
 #   If the files don't exist, A solution is created from scratch (file arc_lines_wavelength.txt needs to be created in order to create the wavelength solution).
 #   Created by order_trace.py and read by reduction_day.py
-original_master_traces_filename = /data/ronny/Reduced/20180306/master_traces.fits
-original_master_wavelensolution_filename = /data/ronny/Reduced/20180306/master_wavelength.fits
+original_master_traces_filename = /data/ronny/Reduced/2018NA/master_traces.fits
+original_master_wavelensolution_filename = /data/ronny/Reduced/20180220/master_wavelength.fits
 
 # Path and filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. The values can be used as given from the NIST database, e.g. 6550.653 \t 140* \t Ne II 
 reference_catalog = /home/ronny/Scripts/exohspec/reference_lines_UNe.txt
@@ -223,6 +223,7 @@ logging_arctraces_im                = arctraces_in_master_arc.png
 logging_map_shift_orders            = map_shifts.fits
 logging_orig_for_background         = orig_for_background_map.fits
 logging_found_arc_lines             = arc_lines_found.txt
+logging_identified_arc_lines        = arc_lines_identified.txt
 logging_wavelength_solution_form    = wavelength_solution_form.png
 logging_arc_line_identification_residuals = arc_line_identification_residuals.png
 logging_arc_line_identification_spectrum  = arc_line_identification_spectrum.pdf

@@ -109,6 +109,7 @@ tar -xzvf v*.tar.gz
 %\item[extract.py] Script that extracts the scientific echelle spectra.
 %\item[order\_trace.py] Script that searches for the flat orders in the CCD images.
 \item[procedures.py] Contains all the procedures for the data analysis.
+%%%\item[find\_rv.py] Script that performs the radial velocity analysis.
 \item[tkcanvas.py] Contains the plotting routines to create the user interfaces (UI).
 \item[plot\_img\_spec.py] This script controls plotting of CCD images, graphs, and the extracted spectra.
 \item[remove\_orders.py] If the automatic process identified wrong orders, then this script allows the user to remove them using a GUI.
@@ -116,13 +117,13 @@ tar -xzvf v*.tar.gz
 %\item[ident\_arc.py] This needs to be run in order to find an initial wavelength solution (will be included in reduction\_day.py later).
 \end{description}
 
-When running the scripts for the first time, python will create a new file called \verb|<filename>.pyc| for some of the files. No harm will be done in removing or keeping the files.
+When running the scripts for the first time, python will create a new file called \verb|<filename>.pyc| for some of the files (compiled script). No harm will be done in removing or keeping the files.
 
 
 \subsection{General information about the way the pipeline works}
 
 %\noindent 
-\subsubsection*{Handling parameters}
+\subsubsection{Handling parameters}
 
 \begin{enumerate}
   \item The script has some hard coded values in the *.py files (normally at the beginning of a procedure). These values can be changed for testing, but usually do not need any changes.
@@ -132,7 +133,7 @@ When running the scripts for the first time, python will create a new file calle
   \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
 \end{enumerate}
 
-\subsubsection*{Finding further information}
+\subsubsection{Finding further information}
 
 \begin{itemize}
   \item The pipeline logs the execution of procedures and necessary information in a logfile (standard: \verb|logfile|). This information is also printed into the terminal window.
@@ -193,8 +194,8 @@ In the pipeline always the individual frames are corrected before frames are com
   \begin{description}
     \item[sflat] File in which the science traces can be determined (standard: 5x white light flats, best without arc lamp). This file is also used to create a map of the background flux.
     \item[arc] File in which the wavelength calibration traces can be determined (standard: 5x ThAr alone (future development: white light flats)).
-    \item[arc\_l]: Long arc exposure to create a good wavelength solution over the whole chip (standard: 5x 60\,s ThAr).
-    \item[arc\_s]: Short exposure in order to find the center of the saturated lines in arc\_l (standard: 5x 10\,s ThAr taken between the arc\_l images).
+    \item[arc\_l]: Long arc exposure to create a good wavelength solution over the whole chip (standard: 5x 100\,s ThAr or UNe).
+    \item[arc\_s]: Short exposure in order to find the center of the saturated lines in arc\_l (standard: 5x 10\,s ThAr or UNe taken between the arc\_l images).
     \item[flatarc]: File which contains the flat in the science fiber and the arc in calibration fiber (standard: 5x files with the white light flats in science fiber and ThAr in the calibration fiber).
   \end{description}
   \item[2.] Determining the shift of the science traces compared to the previous solution (e.g. previous day). If the instrument was not touched, the shift should be small and constant ($\rightarrow$~Fig.~\ref{figure_apertures_in_master_flat}). If the file for the previous solution does not exist, or if a big deviation to the previous solution has been found, then another step will be executed:
@@ -361,8 +362,11 @@ The final fits file contains the original header and some additional information
 This file contains the extracted spectrum without any modification in the same form as the \textit{e2ds} files created by the HARPS pipeline. The wavelength solution is stored in the header.
 
 \subsubsection{raw-data filename + \_lin}
+\label{Section:linearised_spectrum}
+The extracted spectrum is linearised using a wavelength step as given in parameter \verb|wavelength_scale_resolution|. The wavelength spectrum is interpolated by using the weighted mean of the neighbouring data points with the wavelength difference as weights.
 
 \subsubsection{raw-data filename + \_lin\_cont}
+This file contains data in the same form as described in Section~\ref{Section:linearised_spectrum}, only that the continuum corrected data was linearised.
 
 \subsection{Results from the pipeline}
 \label{section:results_pipeline}
@@ -612,6 +616,25 @@ python extract_red_chip.py
 \end{itemize}
 
 \noindent Afterwards, \verb|prepare_file_list.py| and \verb|reduction_day.py| can be run as described above.
+
+\subsubsection{HARPS data reduced by the CERES pipeline}
+To compare the results from the EXOhSPEC pipeline, it can also be compared with the results from the CERES pipeline (\url{https://ui.adsabs.harvard.edu/#abs/2017PASP..129c4002B/abstract}, \url{https://github.com/rabrahm/ceres}). The extraction can be run with:
+\begin{lstlisting}[style=base]
+cd ~/software/ceres-master/harps/
+python harpspipe.py /data/ronny/Reduced/20180313_harps_sol_ceres_red/ -do_class
+\end{lstlisting}
+
+The pipeline produces the following files:
+\begin{description}
+  \item[spec.co.B.fits.S, spec.co.R.fits.S] 
+  \item[spec.ob.B.fits.S, spec.ob.R.fits.S] 
+  \item[proc/results.txt] Results of the cross-correlation, including the radial velocity.
+  \item[proc/*.fits] The reduced images, in the similar format as produced by the EXOhSPEC pipeline.
+\end{description}
+
+Please note that the CERES pipeline uses both the red and the blue HARPS chip in order to determine the radial velocities (the data of the blue chip can be avoided by changing \verb|spec| into \verb|spec[:,:26,:]| in \verb|harpspipe.py|, lines 1507 and 1530). Furthermore, a cosmic ray correction is applied. The extracted spectra have the same features as when extracting data with the EXOhSPEC pipeline. A wavelength shift (depending on the order) is visible between the spectra. This translates into a RV shift of $\Delta RV \approx 79$\,km/s (independent of order, no instrumental velocity drift were applied to EXOhSPEC).
+
+
 
 \subsubsection{HARPS data reduced by the ESO Phase 3 pipeline}
 % wrong: http://archive.eso.org/wdb/wdb/eso/repro/form

@@ -218,7 +218,7 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
         if 'name_data_{0}'.format(iml-1-1) in param.keys():
             for data_entry in tqdm(param['name_data_{0}'.format(iml-1-1)]):
                 data_label = data_entry.replace('data_','')
-                data = param[data_entry]
+                data = np.array(param[data_entry], float)
                 if wavelength_plot == 'w' or wavelength_plot == 'wl' or wavelength_plot == 'lw':
                     data_entry_w = data_entry.rsplit('_',iml-2)                     # iml-2 should be 2 for nomal images
                     if iml == 4:                                      # for normal images
@@ -233,7 +233,7 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                             param[data_entry_w] = im[int(text[1]), int(text[2]), int(text[3]) ]
                         elif iml ==3:
                             param[data_entry_w] = im[int(text[1]), int(text[2]) ]
-                    x_axis = param[data_entry_w]
+                    x_axis = np.array(param[data_entry_w], float)
                 else:
                     x_axis = np.arange(len(data)).astype(float)
                 x_axis = x_axis[~np.isnan(data)]
@@ -267,6 +267,7 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                     freqs = np.linspace(min(freq_range), max(freq_range), nout)
                     periods = 1.0 / freqs
                     angular_freqs = 2 * np.pi * freqs
+                    #print len(x_axis), len(data), angular_freqs, data.dtype, x_axis.dtype
                     pgram = scipy.signal.lombscargle(x_axis, data, angular_freqs)
                     normalized_pgram = np.sqrt(4 * (pgram / data.shape[0]))
                     data = normalized_pgram
@@ -432,11 +433,18 @@ if __name__ == "__main__":
     #fitsfiles.append(['FlatArc-0001_4s.npy',0,'sg'])        #20170922
     #for i in range(1,10):
     #     fitsfiles.append(['Fiberbend-{0}_4s.npy'.format('%4.4i'%i),0,'sg'])        #20170922
-    if True:
+    if len(sys.argv) > 1:
+        filenames = []
+        for filename in sys.argv[1:]:
+            if filename.find('plot_') <> -1:
+                filenames.append(filename)
+    else:
+        filenames = ['plot_files.lst']
+    for filename in filenames:
         rpath = ''
-        files = read_text_file('plot_files.lst')
+        files = read_text_file(filename)
         for line in files:
-            if line[0] <> '#' and line.find('Stray') == -1:
+            if line[0] <> '#':
                 fitsfiles.append([line,0,'sg'])
     
     data_sg = []
@@ -508,7 +516,7 @@ if __name__ == "__main__":
                     datas = data_sg.shape
                 
                 data_sg = np.append(data_sg, im, axis=0)
-                print data_sg.shape
+                #print data_sg.shape
             titel_sg += ',\n{0}'.format(fitsfile[0])
         #print data_sg.shape, data_sg.dtype, data_sg.itemsize, data_sg.nbytes, sys.getsizeof(data_sg), data_sg.nbytes   # size about the size of the fits file
     if data_sg <> []:
