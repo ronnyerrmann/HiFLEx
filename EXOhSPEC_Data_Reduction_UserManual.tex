@@ -253,7 +253,7 @@ To get the best results, the following data should be taken (all filenames are c
   \item Run the python script: \\ \verb|python <path to scripts>/reduction_day.py| .
 \end{enumerate}
 
-\noindent After checking the results (see Section~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. This can be done in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the necessary steps of \verb|reduction_day.py| will run again.
+\noindent After checking the results (see Section~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to it's big flexibility. The orders can be removed in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the depending steps of \verb|reduction_day.py| will run again.
 
 \subsection{Possible parameters for the CCD processing}
 \label{Section:parameters_CCD_proc}

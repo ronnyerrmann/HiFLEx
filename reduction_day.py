@@ -141,12 +141,12 @@ if __name__ == "__main__":
                 logger('Error: Files for creating the wavelength solution do not exist: {0}, {1}. Please check parameter {2} or create {1}.'.format(params['original_master_wavelensolution_filename'], 'arc_lines_wavelength.txt', 'original_master_wavelensolution_filename'))
             wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_arc_l)                        # For HARPS or a new wavelength solution
             save_arc_fits(wavelength_solution, wavelength_solution_arclines, params['original_master_wavelensolution_filename'])                   # For HARPS or a new wavelength solution
+            plot_wavelength_solution_form('logging/wavelength_solution_form_manual.png', axlows, axhighs, wavelength_solution)
+            plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, 'logging/arc_line_identification_spectrum_manual.pdf', wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names)
             params['order_offset'] = [0,0]
             params['px_offset'] = [-20,20,10]
             params['px_offset_order'] = [-1,1,1]
         wavelength_solution_ori, wavelength_solution_arclines_ori = read_arc_fits(params['original_master_wavelensolution_filename'])
-        #wavelength_solution_ori = np.array(wavelength_solution_ori[::-1])      # if blue and red orders are swapped
-        #wavelength_solution_ori[:,0] = np.abs(wavelength_solution_ori[:,0])    # if blue and red orders are swapped
         # Find the new wavelength solution
         wavelength_solution, wavelength_solution_arclines = adjust_wavelength_solution(params, np.array(arc_l_spec), arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, reference_catalog, reference_names, xlows, xhighs, params['GUI'])
         save_arc_fits(wavelength_solution, wavelength_solution_arclines, params['master_wavelensolution_filename'])

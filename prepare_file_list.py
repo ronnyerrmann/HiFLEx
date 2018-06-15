@@ -59,6 +59,10 @@ if __name__ == "__main__":
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
     file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' '])
     
+    if os.path.isdir(params['raw_data_path']) == False:
+        if os.path.isdir(params['raw_data_path'].replace('ncook','ronny')) == True:
+            params['raw_data_path'] = params['raw_data_path'].replace('ncook','ronny')
+
     for root, dirs, files in os.walk(params['raw_data_path']):
         for file in files:
             for fileending in params['raw_data_file_endings']:

@@ -23,7 +23,7 @@ GUI = False
 
 
 # The folder where the raw data is stored. All file names given in this section need to be given relative to this path, e.g. with leading subfolder if data is stored in a subfolder
-raw_data_path           = /local/home/ncook/data_EXOhSPEC/20180305/
+raw_data_path           = /local/home/ncook/data_EXOhSPEC/20180605/
 
 
 # Configuration file in which the processing of the raw data fits files is defined
@@ -34,18 +34,20 @@ configfile_fitsfiles = fits_conf.txt
 #                             [4250,2838,0,0], or
 #                             4250,2838,0,0
 # for QSI:              subframe        = [4250,2838,0,0]
-# for davids ccd:       subframe        = [3056,3056,0,0]
+# for QSI Bill:         subframe        = [2184,1472,0,0]
+# for Moravian:         subframe        = [2500,3056,56,0]
+# for SBIG:             subframe        = [2750,3056,350,0]
 # for HARPS:            subframe        = [4096,2048,0,50]
- subframe        = [2500,3056,56,0]
+subframe        = [2750,3056,350,0]
 
 # To extract the data correctly, the frame should be rotated in the way, that traces (dispersion axis) are along vertical direction
 #           with wavelength increasing with increasing pixel number (blue on top). 
 #           If necessary the image can be flipped after the rotation so that the central wavelength of the orders decreases with increasing 
 #           pixel number (blue orders on the right of the (rotated) image and the red orders on the left).
 #               format: multiple of 90
-# for qsi:          rotate_frame = 270
-# for davids ccd:   rotate_frame = 180; flip_frame = True
-# for HARPS:        rotate_frame = 180
+# for QSI (both):       rotate_frame = 270
+# for Moravian, SBIG:   rotate_frame = 180 or rotate_frame = 0; flip_frame = True
+# for HARPS:            rotate_frame = 180
 rotate_frame = 0
 flip_frame = True
 
@@ -67,9 +69,9 @@ update_widths = False
 # bin_search_apertures: Search the apertures of the orders in a binned image. The first value gives the binning along one order (vertical axis, dispersion axis)
 #                    and the second value the binning perpendicular to the orders (horizontal, cross-dispersion axis). 
 #                    Heavy binning along the dispersion axis is possible in this step, while binning in cross-dispersion needs to be significantly smaller than the minimum separation between orders.
-# for qsi:          bin_search_apertures = 20,5
-# for davids ccd:   bin_search_apertures = 20,4
-# for HARPS:        bin_search_apertures = 20,2
+# for QSI:              bin_search_apertures = 20,5
+# for Moravian, SBIG:   bin_search_apertures = 20,4
+# for HARPS:            bin_search_apertures = 20,2
 bin_search_apertures = 20,4
 # bin_adjust_apertures: Adjust the center of the apertures in a less binned image. Description as for bin_search_apertures. The second value should be 1 to reach best precission
 bin_adjust_apertures = 3,1
@@ -87,7 +89,7 @@ polynom_bck = [4, 4]
 ## Finding the traces of the calibration fiber 
 # arcshift_side: On which side of the science orders are the corresponding calibration orders located. Possible values are 
 #               "left" (towards the redder order), "right" (to the bluer order), or "center" (same position as the science orders
-# for HARPS:        arcshift_side = left
+# for HARPS, QSI Bill:        arcshift_side = left
 arcshift_side = right
 # arcshift_range: Range to search for the shift between the flat traces and arc_traces. This value is determinded by the the script, only in case the process fails the parameter is used.
 arcshift_range  = [25, 60]
@@ -95,7 +97,7 @@ arcshift_range  = [25, 60]
 ## The following parameters define the search area when finding the new wavelength solution for the night by using an old solution
 # order_offset: Search range to find out by how many orders are the two solutions shifted? Normally the change should be less than 1 Order. The offset will be negative, if redder orders are added.
 order_offset = [-10,1]
-# px_offset: search range and step size to find out by how much the central pixel of the orders was shifted. Normally the change should be less than 100 pixel.
+# px_offset: search range and step size to find out by how much the central pixel of the orders was shifted. Normally the change should be less than 100 pixel. Sign is the pixel shift from old to new.
 px_offset = [-200, 200, 20]
 # px_offset_order: Additional shift per order in case big variations happened.
 px_offset_order = [-1, 1, 1]
@@ -103,15 +105,16 @@ px_offset_order = [-1, 1, 1]
 resolution_offset_pct = 3
 
 ## The following parameter define the adjustments made for the wavelength solution. Thereby the process starts with a rugh wavelength solution and ends with a much better one. 5 steps with 10 iterations each are done
-# polynom_order_traces: order of a polynomial fit for rugh and final solution to fit the wavelength against line position in each order. 
-#                       Normally [2,4] should be fine. a final value of 3 is not enough to reflect the position of the lines on the CCD
-polynom_order_traces = [2,5]
-# polynom_order_intertrace: order for rugh and final solution to fit the parameters of the polynomials between the orders. Normally 2,4 should be fine
-polynom_order_intertraces = 2,5
-# opt_px_range: What fraction around the central pixel of each order should be used to corellate lines in the arc spectrum with the reference spectrum. Normally [0.5, 1.2] is good.
+# polynom_order_traces: order of a polynomial fit for rough and final solution to fit the wavelength against line position in each order. 
+#                       For a setup not covering a full order [2,4] should be fine. a final value of 3 is not enough to reflect the position of the lines on the CCD
+#                       For a setup covering a full order or more than 20 orders [2,5] might be necessary
+polynom_order_traces = [2,3]
+# polynom_order_intertrace: order for rough and final solution to fit the parameters of the polynomials between the orders. Normally 2,4 should be fine
+polynom_order_intertraces = 1,2
+# opt_px_range: What fraction around the central pixel of each order should be used to corellate lines in the arc spectrum with the reference spectrum. Normally [0.6, 1.0] is good.
 #               If the previous solution differs a lot at the edges of the orders, than the first value should be smaller.
 #               If the previous solution matches nearly exactly the current solution, then both value can be bigger, e.g. [0.8,2]
-opt_px_range = [0.5, 1.2]
+opt_px_range = [0.6, 1.0]
 # diff_pxs: What is the maximum difference between wavelength solution and reference line in order to assigned the lines together.
 #           A good value is 4px, can be higher as sigma-clipping is performed to get rid of badly assigned lines.
 diff_pxs = 4
