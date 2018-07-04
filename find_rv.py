@@ -87,7 +87,7 @@ def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logf
 def get_spec(spectra, waves, cen_wave, range_px):
     """
     :param spectra: 1d or 2d array of floats with the spectral data
-    :param waves: same format as spectra, coresponding wavelengths
+    :param waves: same format as spectra, corresponding wavelengths
     :param cen_wave: wave_length to get the spectra around
     :param range_px: how many pixel around that wavelength
     :return spec, waves: returns the spectra and the wavelengths of the area specified
@@ -107,13 +107,15 @@ def get_spec(spectra, waves, cen_wave, range_px):
             pos[1][pos[0] == order] = 1E9               # -> check the others orders
             diffp = np.abs(pos[1] - spectra.shape[1]/2)
         else:
-            print spec, waves[order, max(0,px-range_px) : min(spectra.shape[1], px+range_px+1) ]
+            #print spec, waves[order, max(0,px-range_px) : min(spectra.shape[1], px+range_px+1) ]
             return spec, waves[order, max(0,px-range_px) : min(spectra.shape[1], px+range_px+1) ]
 
     return [], []                                      # everything went wrong
 
 def rv_analysis(params, spec, im_head, fitsfile):
-    spec = np.vstack(( spec, np.zeros([4,spec.shape[1],spec.shape[2]]) ))
+    specs = spec.shape
+    spec = np.vstack(( spec, np.zeros([11-specs[0], specs[1], specs[2]]) ))
+    spec[7:11,:,:] = np.nan
     reffile = 'reffile.txt'
     obname = fitsfile.split('/')
     obname = obname[-1].split('-')
@@ -123,8 +125,8 @@ def rv_analysis(params, spec, im_head, fitsfile):
     refvel = 0
     know_moon = False
     here_moon = False
-    models_path = "/home/ronny/software/ceres-master/data/COELHO_MODELS/R_40000b/"
-    dirout = './'
+    models_path = params['rv_models_ceres'] # "/home/ronny/software/ceres-master/data/COELHO_MODELS/R_40000b/"
+    #dirout = './'          # replaced by params['path_rv']
     fsim = fitsfile
     avoid_plot = False
     RESI = 120000.
@@ -197,26 +199,38 @@ def rv_analysis(params, spec, im_head, fitsfile):
     bcvel_baryc = ( lbary_ltopo - 1.0 ) * 2.99792458E5
 
     #logger("Info: Barycentric velocity: {0}, MJD: {1}".format( bcvel_baryc, mjd))
-    
+    """ Data description of the file
+    0: wavelength for each order and pixel'
+    1: extracted spectrum'
+    2: measure of error (photon noise, read noise)'
+    3: flat corrected spectrum'
+    4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_orders)
+    5: continuum normalised spectrum'
+    6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_orders)
+    7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
+    8: spectrum of the emission line lamp'
+    """
     for order in range(spec.shape[1]):
-        L  = np.where( (spec[1,order,:] != 0) & (~np.isnan(spec[1,order,:])) ) 
+        L  = np.where( (spec[1,order,:] != 0) & (~np.isnan(spec[1,order,:])) )              # good values
         #ratio              = np.polyval(ccoefs[order],spec[0,order,:][L])*Rnorms[order]
-        ratio = spec[1,order,:][L]/  spec[5,order,:][L] 
+        ratio = spec[1,order,:][L]/  spec[5,order,:][L]                                     # ratio between extracted spectrum and continuum normalised spectrum -> blaze function, cancels absorption lines
         spec[7,order,:][L] = ratio
-        spec[8,order,:][L] = spec[6,order,:][L]
-        #spec[8,order,:][L] = ratio * R_flat_ob_n[order,1,:][L] / np.sqrt( ratio * R_flat_ob_n[order,1,:][L] / gain2 + (ron2/gain2)**2 )
+        #spec[8,order,:][L] = spec[6,order,:][L]                                             # error continuum (first guess), but not good.
+        spec[8,order,:][L] = spec[2,order,:][L]                                             # error of the extracted data, depending on what is used, the RV changes by few 100 km/s -> > several \AA
+        #spec[8,order,:][L] = ratio * R_flat_ob_n[order,1,:][L] / np.sqrt( ratio * R_flat_ob_n[order,1,:][L] / gain2 + (ron2/gain2)**2 )        # something like S/N -> used as this by XCor
         #spl           = scipy.interpolate.splrep(np.arange(WavSol.shape[0]), WavSol,k=3)
         #dlambda_dx    = scipy.interpolate.splev(np.arange(WavSol.shape[0]), spl, der=1)
         #NN            = np.average(dlambda_dx)
         #dlambda_dx    /= NN
-        LL = np.where(spec[5,order,:] > 1 + 10. / scipy.signal.medfilt(spec[8,order,:],21))[0]
+        LL = np.where(spec[5,order,:] > 1 + 10. / scipy.signal.medfilt(spec[8,order,:],21))[0]          # remove emission lines?
         spec[5,order,LL] = 1.
-        spec[9,order,:][L] = spec[5,order,:][L]# * (dlambda_dx[L] ** 1) 
-        spec[10,order,:][L] = spec[6,order,:][L]# / (dlambda_dx[L] ** 2)
+        spec[9,order,:][L] = spec[5,order,:][L]# * (dlambda_dx[L] ** 1)         # used for the analysis in XCor (spec_order=9, iv_order=10)
+        spec[10,order,:][L] = spec[2,order,:][L]# / (dlambda_dx[L] ** 2)        # used for the analysis in XCor (spec_order=9, iv_order=10)
+    #plot_img_spec.plot_spectra_UI(np.array([spec]))
     T_eff, logg, Z, vsini, vel0 = 5777, 4.4374, 0.0134, 2, 0
     if True:  
-        if False:
-            pars_file = dirout + fsim.split('/')[-1][:-4]+'_stellar_pars.txt'
+        if False:       # is not run
+            pars_file = params['path_rv'] + fsim.split('/')[-1][:-4]+'_stellar_pars.txt'
 
             if os.access(pars_file,os.F_OK) == False or force_stellar_pars:
                 print "\t\t\tEstimating atmospheric parameters:"
@@ -225,7 +239,7 @@ def rv_analysis(params, spec, im_head, fitsfile):
                 for i in range(spec.shape[1]):
                     IJ = np.where(spec[5,i]!=0.)[0]
                     spec2[5,i,IJ] = GLOBALutils.convolve(spec[0,i,IJ],spec[5,i,IJ],Rx)
-                T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base='/home/ronny/software/ceres-master/utils/Correlation/')     # Fails, because our spectrum doesn't cover the hardcoded wavelength
+                T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base='/home/ronny/software/ceres-master/utils/Correlation/')     # Fails, because our spectrum doesn't cover the hard coded wavelength
                 line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
                 f = open(pars_file,'w')
                 f.write(line)
@@ -302,6 +316,7 @@ def rv_analysis(params, spec, im_head, fitsfile):
             vels_rough  = vels
                 
             vel_width = np.maximum( 20.0, 6*disp )
+            #print vel_width, disp, vsini       # problem with vel_width, due to disp, due to p1gau below
             vels, xc_full, sn, nlines_ccf, W_ccf =\
                     GLOBALutils.XCor(spec, ml_v, mh_v, weight,\
                     vel0_xc, lbary_ltopo, vel_width=vel_width,\
@@ -355,10 +370,10 @@ def rv_analysis(params, spec, im_head, fitsfile):
         moon_dict = {'moonmatters':moonmatters,'moon_state':'dummy','moonsep':0,\
              'lunation':0,'mephem':mephem,'texp':0}
 
-        pkl_xc = dirout + fsim.split('/')[-1][:-4]+obname+'_XC_'+sp_type+'.pkl'
+        pkl_xc = params['path_rv'] + fsim.split('/')[-1][:-4]+obname+'_XC_'+sp_type+'.pkl'
         pickle.dump( xc_dict, open( pkl_xc, 'w' ) )
 
-        ccf_pdf = dirout + 'logging/' + fsim.split('/')[-1][:-4] + obname + '_XCs_' + sp_type + '.pdf'
+        ccf_pdf = params['logging_path'] + fsim.split('/')[-1][:-4] + obname + '_XCs_' + sp_type + '.pdf'       # dirout + 'logging/'
 
         if not avoid_plot:
             GLOBALutils.plot_CCF(xc_dict,moon_dict,path=ccf_pdf)
@@ -373,10 +388,9 @@ def rv_analysis(params, spec, im_head, fitsfile):
                 break
             logger('Warn: The spectra around the wavelength of {0} Angstrom is not covered'.format(cen_wave))
         
-        
         B,A = -0.00257864,0.07765779            # from Monte Carlo Simulation, different for each instrument
         B,A = 0.010, 5.0
-        print SNR_5130
+        #print SNR_5130
         RVerr  =  B + ( 1.6 + 0.2 * p1gau[2] ) * A / np.round(SNR_5130)
         depth_fact = 1. + p1gau[0]/(p1gau[2]*np.sqrt(2*np.pi))
         if depth_fact < 0.6:
@@ -398,9 +412,6 @@ def rv_analysis(params, spec, im_head, fitsfile):
         BSerr  = np.around(BSerr,4)
         bcvel_baryc = np.around(bcvel_baryc,4)
 
-        print '\t\t\tRV = '+str(RV)+' +- '+str(RVerr2)
-        print '\t\t\tBS = '+str(BS)+' +- '+str(BSerr)
-        
         return RV+bcvel_baryc, RVerr2, BS, BSerr, bcvel_baryc
         
         
@@ -420,4 +431,6 @@ if __name__ == "__main__":
             #spec[0] = spec[0,:,:]+3
             im_head = fits.getheader(line)
             RV, RVerr2, BS, BSerr, bcvel_baryc = rv_analysis(params, spec, im_head, line)
+            print '\t\t\tRV = '+str(RV)+' +- '+str(RVerr2)+' ,\tBS = '+str(BS)+' +- '+str(BSerr)+' ,\t'+str(bcvel_baryc)+' ,RV contains barycentric velocity correction'
+        
 

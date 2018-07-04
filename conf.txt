@@ -36,7 +36,7 @@ configfile_fitsfiles = fits_conf.txt
 # for QSI:              subframe        = [4250,2838,0,0]
 # for QSI Bill:         subframe        = [2184,1472,0,0]
 # for Moravian:         subframe        = [2500,3056,56,0]
-# for SBIG:             subframe        = [2750,3056,350,0]
+# for SBIG:             subframe        = [2750,4096,350,0]
 # for HARPS:            subframe        = [4096,2048,0,50]
 subframe        = [2750,3056,350,0]
 
@@ -96,7 +96,7 @@ arcshift_range  = [25, 60]
 
 ## The following parameters define the search area when finding the new wavelength solution for the night by using an old solution
 # order_offset: Search range to find out by how many orders are the two solutions shifted? Normally the change should be less than 1 Order. The offset will be negative, if redder orders are added.
-order_offset = [-10,1]
+order_offset = [-1,1]
 # px_offset: search range and step size to find out by how much the central pixel of the orders was shifted. Normally the change should be less than 100 pixel. Sign is the pixel shift from old to new.
 px_offset = [-200, 200, 20]
 # px_offset_order: Additional shift per order in case big variations happened.
@@ -127,7 +127,7 @@ badpx_mask_filename = /data/ronny/Reduced/20180105/bad_px_mask.fits
 # Path and filename to the file with the previous found positions of the orders and the previous wavelength solution.
 #   If the files don't exist, A solution is created from scratch (file arc_lines_wavelength.txt needs to be created in order to create the wavelength solution).
 #   Created by order_trace.py and read by reduction_day.py
-original_master_traces_filename = /data/ronny/Reduced/2018NA/master_traces.fits
+original_master_traces_filename = /data/ronny/Reduced/2018NA/master_traces_sci.fits
 original_master_wavelensolution_filename = /data/ronny/Reduced/20180220/master_wavelength.fits
 
 # Path and filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. The values can be used as given from the NIST database, e.g. 6550.653 \t 140* \t Ne II 
@@ -145,18 +145,18 @@ raw_data_file_endings   = .fit, .fits
 raw_data_file_list      = file_list_raw_data.txt
 raw_data_imtyp_keyword  = IMAGETYP
 raw_data_imtyp_bias     = Bias Frame
-raw_data_imtyp_dark     = Dark Frame
+raw_data_imtyp_dark     = Dark Framel
 raw_data_imtyp_flat     = Flat Frame
-raw_data_imtyp_sflat    = NA
+raw_data_imtyp_trace1   = NA
 raw_data_imtyp_flatarc  = NA
-raw_data_imtyp_arc      = NA
+raw_data_imtyp_trace2   = NA
 raw_data_exptim_keyword = EXPTIME
 raw_data_dateobs_keyword = DATE-OBS
 # HARPS:
 # raw_data_imtyp_keyword  = OBJECT
 # raw_data_imtyp_bias     = BIAS,BIAS
-# raw_data_imtyp_sflat    = LAMP,DARK,TUN
-# raw_data_imtyp_arc      = WAVE,WAVE,THAR2
+# raw_data_imtyp_trace1   = LAMP,DARK,TUN
+# raw_data_imtyp_trace2   = WAVE,WAVE,THAR2
 # raw_data_imtyp_flatarc  = LAMP,LAMP,TUN
 
 # For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create gives the information which corrections will be applied before the <filetype>_rawfiles are combined.
@@ -169,7 +169,8 @@ dark_calibs_create_g    = [subframe, badpx_mask, bias]
 rflat_calibs_create_g   = subframe, badpx_mask, dark, bias, normalise
 # The file types for the calibrations listed above are applied as CCD image
 # The file types for the calibrations listed below are used to find extracted data
-sflat_calibs_create_g   = subframe, badpx_mask, dark, bias
+trace1_calibs_create_g  = subframe, badpx_mask, dark, bias
+trace2_calibs_create_g  = [subframe, badpx_mask, dark, bias]
 arc_calibs_create_g     = [subframe, badpx_mask, dark, bias]
 flatarc_calibs_create_g = [subframe, badpx_mask, dark, bias, rflat]
 extract_calibs_create_g = [subframe, badpx_mask, dark, bias, rflat]
@@ -188,13 +189,16 @@ result_path = .
 
 # In the reduced images mark pixels above max_good_value as saturated
 #           format: float or integer
+# SBIG:         max_good_value = 46000
+# all others:   max_good_value = 63000
 max_good_value  = 63000
 
 
 ## extracted data:
 #-----------------
-# path for the extracted data.
+# path for the extracted data (ceres format / single files for extracted spectrum and wavelength)
 path_extraction             = extracted
+path_extraction_single      = extracted/single
 # BITPIX of the extracted fits-file (-32, -64, everything else: -64)
 extracted_bitpix            = -64
 
@@ -202,8 +206,8 @@ extracted_bitpix            = -64
 ## Standard filenames:
 #---------------------
 # master file for the orders of the scientific traces, of the arc traces, and the normalised extracted flat spectrum. Created by reduction_day.py
-master_traces_filename          = master_traces.fits
-master_tracesarc_filename       = master_tracesarc.fits
+master_trace_sci_filename       = master_traces_sci.fits
+master_trace_cal_filename       = master_traces_cal.fits
 master_wavelensolution_filename = master_wavelength.fits
 master_flat_spec_norm_filename  = master_flat_spec_norm.fits
 
@@ -213,14 +217,17 @@ background_px_filename          = background_px.fits
 # master file for the background correction. Created by reduction_day.py
 background_filename             = background.fits
 
+# RV analysis
+rv_models_ceres                 = /home/ronny/software/ceres-master/data/COELHO_MODELS/R_40000b/
+path_rv                         = rv_output
 
 ## Logging:
 #----------
 logging_path                        = logging
-logging_sflat_binned                = sflat_binned.fits
+logging_trace1_binned               = sci_trace_binned.fits
 logging_traces_binned               = traces_binned.fits
-logging_traces_im_binned            = traces_in_master_flat_binned.png
-logging_traces_im                   = traces_in_master_flat.png
+logging_traces_im_binned            = traces_in_master_trace1_binned.png
+logging_traces_im                   = traces_in_master_trace1.png
 logging_find_arc_traces             = arctraces_find.png
 logging_arctraces_im                = arctraces_in_master_arc.png
 logging_map_shift_orders            = map_shifts.fits

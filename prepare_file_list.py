@@ -84,7 +84,7 @@ if __name__ == "__main__":
                         if filename.lower().find('dark') >= 0:
                             fiber1, fiber2 = 'dark', 'dark'
                         if filename.lower().find('flat') >= 0 or filename.lower().find('whli') >= 0:
-                            fiber1= 'sflat'
+                            fiber1= 'cont'
                         if filename.lower().find('rflat') >= 0:
                             fiber1, fiber2 = 'rflat', 'rflat'
                         if params['raw_data_imtyp_keyword'] in im_head.keys():
@@ -92,7 +92,7 @@ if __name__ == "__main__":
                                 if filename.lower().find('rflat') >= 0:
                                     fiber1, fiber2 = 'rflat', 'rflat'
                                 else:
-                                    fiber1, fiber2 = 'sflat', 'sflat'
+                                    fiber1, fiber2 = 'cont', 'cont'
                         if filename.lower().find('arc') >= 0 or filename.lower().find('thar') >= 0 or filename.lower().find('une') >= 0:
                             fiber2 = 'wave'
                         if params['raw_data_imtyp_keyword'] in im_head.keys():
@@ -100,13 +100,13 @@ if __name__ == "__main__":
                                 fiber1, fiber2 = 'bias', 'bias'
                             if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_dark']:
                                 fiber1, fiber2 = 'dark', 'dark'
-                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_sflat']:
-                                fiber1, fiber2 = 'sflat', 'dark'
+                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace1']:
+                                fiber1, fiber2 = 'cont', 'dark'
                             if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flatarc']:
-                                fiber1, fiber2 = 'sflat', 'wave'        # for HARPS it is sflat, sflat
-                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_arc']:
+                                fiber1, fiber2 = 'cont', 'wave'        # for HARPS it is cont, cont
+                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace2']:
                                 fiber1, fiber2 = 'wave', 'wave'
-                        if (filename.lower().find('/arc') == -1 and filename.lower().find('/thar') == -1 and filename.lower().find('/une') == -1) and not (filename.lower().find('arc') == 0 or filename.lower().find('thar') == 0 or filename.lower().find('une') == 0) and fiber1 not in ['rflat', 'sflat', 'dark', 'bias', 'wave']:
+                        if (filename.lower().find('/arc') == -1 and filename.lower().find('/thar') == -1 and filename.lower().find('/une') == -1) and not (filename.lower().find('arc') == 0 or filename.lower().find('thar') == 0 or filename.lower().find('une') == 0) and fiber1 not in ['rflat', 'cont', 'dark', 'bias', 'wave']:
                             fiber1 = 'science'
                             if filename.lower().find('harps') <> -1:
                                 fiber2 = 'wave'
@@ -178,13 +178,13 @@ if __name__ == "__main__":
     flatarc_fib2 = 'none'
     exist_bias, exist_rflat, exp_darks, exist_flatarc = False, False, [], False
     for entry in file_list:
-        if entry[1] == 'sflat' and entry[2] == 'none' and flatarc_fib2 <> 'dark':              # use entry[2] == 'wave' for sflat only if entry[2] == 'none' not available
+        if entry[1] == 'cont' and entry[2] == 'none' and flatarc_fib2 <> 'dark':              # use entry[2] == 'wave' for cont only if entry[2] == 'none' not available
             sflat_fib2 = 'none'
-        if entry[1] == 'sflat' and entry[2] == 'dark':              # use entry[2] == 'dark' for sflat only if entry[2] == 'none' not available
+        if entry[1] == 'cont' and entry[2] == 'dark':              # use entry[2] == 'dark' for cont only if entry[2] == 'none' not available
             sflat_fib2 = 'dark'
-        if entry[1] == 'sflat' and entry[2] == 'wave':               # use entry[2] == 'none' for arcflat only if entry[2] == 'wave' not available
+        if entry[1] == 'cont' and entry[2] == 'wave':               # use entry[2] == 'none' for arcflat only if entry[2] == 'wave' not available
             flatarc_fib2 = 'wave'
-        if entry[1] == 'sflat' and entry[2] == 'dark' and flatarc_fib2 <> 'wave':   # use entry[2] == 'dark' for flatarc only if entry[2] == 'wave' not available
+        if entry[1] == 'cont' and entry[2] == 'dark' and flatarc_fib2 <> 'wave':   # use entry[2] == 'dark' for flatarc only if entry[2] == 'wave' not available
             flatarc_fib2 = 'dark'
         if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave') and entry[2] == 'wave':
             arc_l_exp = max(entry[3], arc_l_exp)
@@ -196,8 +196,8 @@ if __name__ == "__main__":
         if entry[1] == 'dark' and entry[2] == 'dark':
             if entry[3] not in exp_darks:
                 exp_darks.append(entry[3])
-    if arc_l_exp == 0 and arc_s_exp == 1E10:         # no single arcs taken, use sflat and arc
-        arc_fib1 = 'sflat'
+    if arc_l_exp == 0 and arc_s_exp == 1E10:         # no single arcs taken, use cont and arc
+        arc_fib1 = 'cont'
         for entry in file_list:                     # re-run to find exposure times
             if (entry[1] == arc_fib1) and entry[2] == 'wave':
                 arc_l_exp = max(entry[3], arc_l_exp)
@@ -214,15 +214,15 @@ if __name__ == "__main__":
         for par in pos_params:
             if entry[1] == par and entry[2] == par:                 # Fiber1 and Fiber2
                 conf_data, warn = create_parameters(conf_data, warn, par, par, [par], exist_bias, exist_rflat, exp_darks)
-        if entry[1] == 'sflat' and entry[2] == flatarc_fib2:         # Fiber1 and Fiber2    , might be overwritten by sflat -> later copy sflat into flatarc
+        if entry[1] == 'cont' and entry[2] == flatarc_fib2:         # Fiber1 and Fiber2    , might be overwritten by cont -> later copy cont into flatarc
             conf_data, warn = create_parameters(conf_data, warn, 'flatarc', 'flatarc', ['flatarc'], exist_bias, exist_rflat, exp_darks)
-        if entry[1] == 'sflat' and entry[2] == sflat_fib2:          # Fiber1 and Fiber2
-            conf_data, warn = create_parameters(conf_data, warn, 'sflat', 'sflat', ['sflat'], exist_bias, exist_rflat, exp_darks)
+        if entry[1] == 'cont' and entry[2] == sflat_fib2:          # Fiber1 and Fiber2
+            conf_data, warn = create_parameters(conf_data, warn, 'trace1', 'trace1', ['trace1'], exist_bias, exist_rflat, exp_darks)
         if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave' or entry[1] == arc_fib1) and entry[2] == 'wave':               # Fiber1 and Fiber2
             parcal = 'arc'
             if entry[3] == arc_l_exp:
                 conf_data, warn = create_parameters(conf_data, warn, 'arc_l', 'arc_l', [parcal], exist_bias, exist_rflat, exp_darks)
-                conf_data, warn = create_parameters(conf_data, warn, 'arc', 'arc', [parcal], exist_bias, exist_rflat, exp_darks)
+                conf_data, warn = create_parameters(conf_data, warn, 'trace2', 'trace2', ['trace2'], exist_bias, exist_rflat, exp_darks)
             elif entry[3] == arc_s_exp:                             # In case only one exposure time -> arc_l is copied in arc_s
                 conf_data, warn = create_parameters(conf_data, warn, 'arc_s', 'arc_s', [parcal], exist_bias, exist_rflat, exp_darks)
         if entry[1] == 'dark' and entry[2] == 'dark':               # Fiber1 and Fiber2

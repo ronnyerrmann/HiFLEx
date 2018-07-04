@@ -124,6 +124,15 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     dx = max(1,maxx - minx)*0.01
     dy = max(1,maxy - miny)*0.01
     plt.axis([minx-dx,maxx+dx, miny-dy,maxy+dy])
+    if type(marker) == list or type(marker) == np.ndarray:
+        if len(marker) <> len(data_x):                  # Otherwise there is no need to do anything
+            markerneu = []
+            while len(markerneu) < len(data_x):
+                for markeri in marker:
+                    markerneu = np.append(markerneu, np.repeat(markeri, 10) )
+            marker = markerneu
+    else:
+        marker = np.repeat(marker, len(data_x))
     label = ''
     for i in range(len(data_x)):
         if len(labels) > 0:
@@ -133,7 +142,7 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
             center = (data_x[i][:-1] + data_x[i][1:]) / 2
             plt.bar(center, data_y[i], align='center', width=width, label=label)
         elif data_x[i] <> []:
-            frame.plot(data_x[i], data_y[i], label=label, linestyle=linestyle, marker=marker)
+            frame.plot(data_x[i], data_y[i], label=label, linestyle=linestyle, marker=marker[i])
             
     frame.set_xlabel(x_title, fontsize=13)
     frame.set_ylabel(y_title, fontsize=13)

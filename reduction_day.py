@@ -23,32 +23,36 @@ if __name__ == "__main__":
     log_params(params)
     
     # create the median combined files
-    im_sflat, im_sflat_head = create_image_general(params, 'sflat')         # -> cont1
-    im_arc, im_archead = create_image_general(params, 'arc')                # -> trace2
-    im_arc_l, im_arclhead = create_image_general(params, 'arc_l')           # -> cal2_l
-    im_arc_s, im_arcshead = create_image_general(params, 'arc_s')           # -> cal2_s
+    im_trace1, im_trace1_head = create_image_general(params, 'trace1')         # -> cont1
+    if params['arcshift_side'] <> 0:
+        im_trace2, im_trace2_head = create_image_general(params, 'trace2')                # -> trace2
+    else:
+        im_trace2, im_trace2_head = im_trace1, im_trace1_head
+    if params['original_master_wavelensolution_filename'].lower() <> 'pseudo':
+        im_arc_l, im_arclhead = create_image_general(params, 'arc_l')           # -> cal2_l
+        im_arc_s, im_arcshead = create_image_general(params, 'arc_s')           # -> cal2_s
     #im_flatarc, im_flatarchead = create_image_general(params, 'flatarc')    # -> a later step to know the orders for localbackground -> cont1cal2
     
     reference_catalog, reference_names = read_reference_catalog(params['reference_catalog'], params['catalog_file_wavelength_muliplier'], params['use_catalog_lines'])
     
     # Create or read the file with the orders for this night
-    if os.path.isfile(params['master_traces_filename']) == True:
-        logger('Info: Using exiting trace solution: {0}'.format(params['master_traces_filename']))
-        sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['master_traces_filename'])        
-        # plot_traces_over_image(im_sflat, params['logging_traces_im'], sci_tr_poly, xlows, xhighs, widths)        # Should already exist
+    if os.path.isfile(params['master_trace_sci_filename']) == True:
+        logger('Info: Using exiting trace solution: {0}'.format(params['master_trace_sci_filename']))
+        sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['master_trace_sci_filename'])        
+        # plot_traces_over_image(im_trace1, params['logging_traces_im'], sci_tr_poly, xlows, xhighs, widths)        # Should already exist
     else:
         # load the original solution
         if os.path.isfile(params['original_master_traces_filename']) == True:
             sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['original_master_traces_filename'])
             # find the shift between the original solution and the current flat
-            shift, widths_new, shift_map, shift_error = shift_orders(im_sflat, params, sci_tr_poly, xlows, xhighs, widths, params['in_shift'])
+            shift, widths_new, shift_map, shift_error = shift_orders(im_trace1, params, sci_tr_poly, xlows, xhighs, widths, params['in_shift'])
             # save the map of the shifts
-            save_im_fits(params, shift_map, im_sflat_head, params['logging_map_shift_orders'])
+            save_im_fits(params, shift_map, im_trace1_head, params['logging_map_shift_orders'])
         else:
             shift_error = -1
         if shift_error > 1 or shift_error == -1 or abs(shift) > params['maxshift']:
             logger('Warn: The deviation of the shift of the orders seems too big or no previous solution was available, therefore searching for the position of the orders from scratch:')
-            sci_tr_poly, xlows, xhighs, widths = trace_orders(params, im_sflat, im_sflat_head)
+            sci_tr_poly, xlows, xhighs, widths = trace_orders(params, im_trace1, im_trace1_head)
         else:
             if params['update_widths'] == True:
                 widths = widths_new
@@ -57,8 +61,8 @@ if __name__ == "__main__":
             for pfit in sci_tr_poly:
                pfit[-1] += shift
             # save parameters of the polynoms into a fitsfile (from Neil)
-            save_fits_width(sci_tr_poly, xlows, xhighs, widths, params['master_traces_filename'])
-            plot_traces_over_image(im_sflat, params['logging_traces_im'], sci_tr_poly, xlows, xhighs, widths)
+            save_fits_width(sci_tr_poly, xlows, xhighs, widths, params['master_trace_sci_filename'])
+            plot_traces_over_image(im_trace1, params['logging_traces_im'], sci_tr_poly, xlows, xhighs, widths)
             
     # Create the background map, if it doesn't exist
     if os.path.isfile(params['background_filename']) == True:
@@ -66,30 +70,30 @@ if __name__ == "__main__":
     else:
         # create the background map
         if params['GUI'] == True:
-            bck_px, params = bck_px_UI(params, im_sflat, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0], params['GUI'])
+            bck_px, params = bck_px_UI(params, im_trace1, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0], params['GUI'])
         else:
-            bck_px = find_bck_px(im_sflat, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0])
-        bad_values = ( im_sflat*bck_px > np.percentile(im_sflat[bck_px==1],95) )
+            bck_px = find_bck_px(im_trace1, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0])
+        bad_values = ( im_trace1*bck_px > np.percentile(im_trace1[bck_px==1],95) )
         bck_px[bad_values] = 0
-        save_im_fits(params, bck_px, im_sflat_head, params['background_px_filename'])
-        save_im_fits(params, bck_px*im_sflat, im_sflat_head, params['logging_orig_for_background'])
+        save_im_fits(params, bck_px, im_trace1_head, params['background_px_filename'])
+        save_im_fits(params, bck_px*im_trace1, im_trace1_head, params['logging_orig_for_background'])
         # Create the fitted background map
-        #im_bck = find_bck_fit(im_sflat, im_bck_px, params['polynom_bck'], params['GUI'])       #Old
-        bck_im = fit_2d_image(im_sflat, params['polynom_bck'][1], params['polynom_bck'][0], w=bck_px)
-        save_im_fits(params, bck_im, im_sflat_head, params['background_filename'])
+        #im_bck = find_bck_fit(im_trace1, im_bck_px, params['polynom_bck'], params['GUI'])       #Old
+        bck_im = fit_2d_image(im_trace1, params['polynom_bck'][1], params['polynom_bck'][0], w=bck_px)
+        save_im_fits(params, bck_im, im_trace1_head, params['background_filename'])
         
     # Create the file for the arc orders, if it doesn't exist
-    if os.path.isfile(params['master_tracesarc_filename']) == True:
-        logger('Info: Arc trace solution already exists: {0}'.format(params['master_tracesarc_filename']))
-        cal_tr_poly, axlows, axhighs, awidths = read_fits_width(params['master_tracesarc_filename'])
+    if os.path.isfile(params['master_trace_cal_filename']) == True:
+        logger('Info: Arc trace solution already exists: {0}'.format(params['master_trace_cal_filename']))
+        cal_tr_poly, axlows, axhighs, awidths = read_fits_width(params['master_trace_cal_filename'])
     else:
-        # use im_arc for automatic solution
-        shifts = arc_shift(params, im_arc, sci_tr_poly, xlows, xhighs, widths)
+        # use im_trace2 for automatic solution
+        shifts = arc_shift(params, im_trace2, sci_tr_poly, xlows, xhighs, widths)
         width_multiplier = 1
         # check the shift between the original solution and arc using a GUI -> This is outdated as it allows only one value for the shift
         shift = round(np.median(shifts),2)
         if params['GUI'] == True:
-            shift_gui, width_multiplier = shift_orders_UI(im_arc, shift, sci_tr_poly, xlows, xhighs, widths)
+            shift_gui, width_multiplier = shift_orders_UI(im_trace2, shift, sci_tr_poly, xlows, xhighs, widths)
             shifts += shift_gui - shift
         # update the sci_tr_poly parameters
         cal_tr_poly = []
@@ -107,12 +111,12 @@ if __name__ == "__main__":
         axlows = xlows
         axhighs = xhighs
         # save parameters of the polynoms into a fitsfile (from Neil)
-        save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_tracesarc_filename'])
-        plot_traces_over_image(im_arc, params['logging_arctraces_im'], cal_tr_poly, axlows, axhighs, awidths)
+        save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_trace_cal_filename'])
+        plot_traces_over_image(im_trace2, params['logging_arctraces_im'], cal_tr_poly, axlows, axhighs, awidths)
     
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if cal_tr_poly.shape[0] <> sci_tr_poly.shape[0]:
-        logger('Error: The number of traces for the science fiber and for the calibration fiber do not match. Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_tracesarc_filename'], params['master_traces_filename']))
+        logger('Error: The number of traces for the science fiber and for the calibration fiber do not match. Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_trace_cal_filename'], params['master_trace_sci_filename']))
     
     # Create the wavelength solution for the night
     if os.path.isfile(params['master_wavelensolution_filename']) == True:
@@ -170,7 +174,7 @@ if __name__ == "__main__":
         # The file is read later on purpose
     else:
         logger('Step: Create the normalised flat for the night')
-        shift = find_shift_images(im_flatarc, im_sflat, sci_tr_poly, cal_tr_poly)
+        shift = find_shift_images(im_flatarc, im_trace1, sci_tr_poly, cal_tr_poly)
         flat_spec, good_px_mask = extract_orders(params, im_flatarc, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='prec', offset=shift)
         flatarc_spec, agood_px_mask = extract_orders(params, im_flatarc, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
         flat_spec_norm = flat_spec/np.median(flat_spec[~np.isnan(flat_spec)])
@@ -201,15 +205,22 @@ if __name__ == "__main__":
                         print extraction, im_name_full, im_name
                         params['calibs'] = params[extraction+'_calibs_create']
                         im, im_head = read_file_calibration(params, im_name_full)
-                        extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_sflat)
+                        extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
+                                         wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
             else:                                       # Combine files before extraction
                 im_comb, im_comb_head = create_image_general(params, extraction)
                 im_name = extraction
-                extraction_steps(params, im_comb, im_name, im_comb_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_sflat)
-            exit(10)
+                extraction_steps(params, im_comb, im_name, im_comb_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
+                                 wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
     
-        logger('Info: Finished extraction of the science frames. The extracted {0}/*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength, second is the extracted spectrum, followed by a measure of error (missing). Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. Th last entry is the spectrum of the calibration fiber.'.format(params['path_extraction']))
-    
-    
+        logger('Info: Finished extraction of the science frames. The extracted {0}/*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength, second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. Th last entry is the spectrum of the calibration fiber.'.format(params['path_extraction']))
     
     
+    
+""" Gnuplot analysis of part of the RV data:
+f(x) = a2*x**2 + a1*x + a0; a2=0; a1=1; a0=0; fit f(x) 'data_1208' us 1:2 via a2,a1,a0
+plot 'data_1208' us 1:2 , f(x)
+
+
+
+"""
