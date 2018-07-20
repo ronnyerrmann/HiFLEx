@@ -36,10 +36,10 @@ if __name__ == "__main__":
     reference_catalog, reference_names = read_reference_catalog(params['reference_catalog'], params['catalog_file_wavelength_muliplier'], params['use_catalog_lines'])
     
     # Create or read the file with the orders for this night
+    printresults = False
     if os.path.isfile(params['master_trace_sci_filename']) == True:
         logger('Info: Using exiting trace solution: {0}'.format(params['master_trace_sci_filename']))
-        sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['master_trace_sci_filename'])        
-        # plot_traces_over_image(im_trace1, params['logging_traces_im'], sci_tr_poly, xlows, xhighs, widths)        # Should already exist
+        sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['master_trace_sci_filename'])
     else:
         # load the original solution
         if os.path.isfile(params['original_master_traces_filename']) == True:
@@ -53,17 +53,41 @@ if __name__ == "__main__":
         if shift_error > 1 or shift_error == -1 or abs(shift) > params['maxshift']:
             logger('Warn: The deviation of the shift of the orders seems too big or no previous solution was available, therefore searching for the position of the orders from scratch:')
             sci_tr_poly, xlows, xhighs, widths = trace_orders(params, im_trace1, im_trace1_head)
+            printresults = True
         else:
+            # update the sci_tr_poly parameters
+            sci_tr_poly[:,:,-1] += shift
             if params['update_widths'] == True:
+                for order in range(sci_tr_poly.shape[0]):
+                    xarr = range(xlows[order], xhighs[order])
+                    center = np.polyval(sci_tr_poly[order, 0, 1:], xarr-sci_tr_poly[order, 0, 0])
+                    left   = np.polyval(sci_tr_poly[order, 1, 1:], xarr-sci_tr_poly[order, 1, 0])
+                    right  = np.polyval(sci_tr_poly[order, 2, 1:], xarr-sci_tr_poly[order, 2, 0])
+                    print widths_new[order,0]/widths[order,0], widths_new[order,1]/widths[order,1], widths_new[order,0],widths[order,0], widths_new[order,1],widths[order,1]
+                    left, right = adjust_width_orders(center, left, right, [widths_new[order,0]/widths[order,0], widths_new[order,1]/widths[order,1] ] )
+                    sci_tr_poly[order, 2, 1:] = np.polyfit(xarr - sci_tr_poly[order, 2, 0], right, len(sci_tr_poly[order, 2, 1:])-1 )
                 widths = widths_new
                 logger('Info: widths of the traces have been updated')
-            # update the sci_tr_poly parameters
-            for pfit in sci_tr_poly:
-               pfit[-1] += shift
+            printresults = True
+        if printresults:
             # save parameters of the polynoms into a fitsfile (from Neil)
             save_fits_width(sci_tr_poly, xlows, xhighs, widths, params['master_trace_sci_filename'])
+            # Produce some useful statistics
             plot_traces_over_image(im_trace1, params['logging_traces_im'], sci_tr_poly, xlows, xhighs, widths)
-            
+            data = np.insert(widths, 0, range(len(sci_tr_poly)), axis=1)       # order, left, right, gausswidth
+            positio, pctlwidth = [], []
+            for order in range(sci_tr_poly.shape[0]):                      # For the central data
+                xarr = range(xlows[order],xhighs[order])
+                positio.append(np.polyval(sci_tr_poly[order, 0, 1:], im_trace1.shape[0]/2 - sci_tr_poly[order, 0, 0]))
+                pctlwidth.append( np.median ( np.polyval(sci_tr_poly[order, 2, 1:], xarr - sci_tr_poly[order, 2, 0]) - np.polyval(sci_tr_poly[order, 1, 1:], xarr - sci_tr_poly[order, 1, 0]) ) )   # median pctlwidth
+            data = np.append(data, np.array(pctlwidth)[:,None],axis=1)
+            data = np.append(data, np.array(positio)[:,None],axis=1)
+            data = np.append(data, np.array(xlows)[:,None],axis=1)
+            data = np.append(data, np.array(xhighs)[:,None],axis=1)
+            printarrayformat = ['%1.1i','%3.1f', '%3.1f', '%4.2f\t','%4.2f\t', '%1.1i','%1.1i','%1.1i']
+            logger('\t\torder\tleft\tright\tgausswidth\tpctlwidth\tpositio\tmin_tr\tmax_tr\t(positio: position of the trace at the center of the image, pctlwidth: median full width of the trace at {0}% of maximum)'\
+                      .format(params['width_percentile']),printarrayformat=printarrayformat, printarray=data)
+        
     # Create the background map, if it doesn't exist
     if os.path.isfile(params['background_filename']) == True:
         logger('Info: Background map already exists: {0}'.format(params['result_path']+params['background_filename']))
@@ -97,19 +121,12 @@ if __name__ == "__main__":
             shifts += shift_gui - shift
         # update the sci_tr_poly parameters
         cal_tr_poly = []
-        for order,pfit in enumerate(sci_tr_poly):
-           new_pfit = list(pfit[:-1])
-           new_pfit.append(pfit[-1]+shifts[order])
-           cal_tr_poly.append(new_pfit)
-        awidths = []
-        for width in widths:
-            new_width = []
-            for w in width:
-                new_width.append(w*width_multiplier)
-            awidths.append(new_width)
-        cal_tr_poly, awidths = np.array(cal_tr_poly), np.array(awidths)
-        axlows = xlows
-        axhighs = xhighs
+        for order in range(sci_tr_poly.shape[0]):
+            new_pfit = []
+            for dataset in range(sci_tr_poly.shape[1]):
+                new_pfit.append(list(sci_tr_poly[order, dataset, :-1]) + [sci_tr_poly[order, dataset, -1]+shifts[order]] )
+            cal_tr_poly.append(new_pfit)
+        cal_tr_poly, awidths, axlows, axhighs = np.array(cal_tr_poly), copy.deepcopy(widths), copy.deepcopy(xlows), copy.deepcopy(xhighs)
         # save parameters of the polynoms into a fitsfile (from Neil)
         save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_trace_cal_filename'])
         plot_traces_over_image(im_trace2, params['logging_arctraces_im'], cal_tr_poly, axlows, axhighs, awidths)
@@ -160,9 +177,10 @@ if __name__ == "__main__":
             
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if wavelength_solution.shape[0] <> sci_tr_poly.shape[0]:
-        logger('Error: The number of traces for extraction and for the wavelength calibration do not match. Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_traces_filename'], params['master_wavelensolution_filename']))
+        logger('Error: The number of traces for extraction and for the wavelength calibration do not match. Please remove eighter {0} ({2}) or {1} ({3}) and re-run the script in order to solve.'\
+                    .format(params['master_trace_sci_filename'], params['master_wavelensolution_filename'], sci_tr_poly.shape[0], wavelength_solution.shape[0] ))
         
-    update_calibration_memory('sci_trace',[sci_tr_poly, xlows, xhighs, widths])         # APertures might be shifted before extraction -> this would also affect the localbackground
+    update_calibration_memory('sci_trace',[sci_tr_poly, xlows, xhighs, widths])         # Apertures might be shifted before extraction -> this would also affect the localbackground
     update_calibration_memory('cal_trace',[cal_tr_poly, axlows, axhighs, awidths])
     update_calibration_memory('wave_sol',[wavelength_solution, wavelength_solution_arclines])
     
@@ -170,7 +188,7 @@ if __name__ == "__main__":
     
     # Extract the flat spectrum and normalise it
     if os.path.isfile(params['master_flat_spec_norm_filename']) == True:
-        logger('Info: Normalised flat already exists: {0}, {1}'.format(params['master_flat_spec_norm_filename'], params['master_flat_spec_norm_filename']))
+        logger('Info: Normalised flat already exists: {0}'.format(params['master_flat_spec_norm_filename']))
         # The file is read later on purpose
     else:
         logger('Step: Create the normalised flat for the night')

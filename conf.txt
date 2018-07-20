@@ -72,11 +72,13 @@ update_widths = False
 # for QSI:              bin_search_apertures = 20,5
 # for Moravian, SBIG:   bin_search_apertures = 20,4
 # for HARPS:            bin_search_apertures = 20,2
-bin_search_apertures = 20,4
+bin_search_apertures    = 20,4
 # bin_adjust_apertures: Adjust the center of the apertures in a less binned image. Description as for bin_search_apertures. The second value should be 1 to reach best precission
-bin_adjust_apertures = 3,1
+bin_adjust_apertures    = 3,1
 # polynom_order_apertures: Order of the polynomial to define the form of the traces along the CCD
 polynom_order_apertures = 5
+# width_percentile: What part of the height should be used in order to define the width of the orders? width_percentile = 50 coesponds to the FWHM
+width_percentile        = 50
 
 
 ## To determine the background
