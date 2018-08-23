@@ -161,11 +161,13 @@ def rv_analysis(params, spec, im_head, fitsfile):
     for [i, keys, parentr] in settings:
         for entry in keys:
             if entry in im_head.keys():
-                params[parentr] = im_head[entry]
-        if parentr == 'longitude':
+                params[parentr] = im_head[entry]    # Get the information from the header
+                if entry == 'ra':                   # Assume that dec is coming from the same source
+                    source_radec = 'The object coordinates are derived from the image header'
+        if parentr == 'longitude':                  # Enough information to calculate the ephemerides of sun and moon
             gobs = ephem.Observer()  
             gobs.name = params['site']  
-            gobs.lat  = rad(params['latitude'])  # lat/long in decimal degrees  
+            gobs.lat  = rad(params['latitude'])     # lat/long in decimal degrees  
             gobs.long = rad(params['longitude'])
             DDATE     = im_head['DATE-OBS'][:10]
             HHOUR     = im_head['DATE-OBS'][11:]
@@ -174,19 +176,30 @@ def rv_analysis(params, spec, im_head, fitsfile):
             mephem.compute(gobs)
             sephem    = ephem.Sun()
             sephem.compute(gobs)
-            params['ra']          = sephem.ra
-            params['dec']         = sephem.dec
-    
-    logger('Info: Using the following data: altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}'.format(params['altitude'], params['latitude'], params['longitude'], params['ra'], params['dec'], params['epoch']))
-    ra, dec = params['ra'], params['dec']
+            if obname.find('Sun') == 0:
+                params['ra']          = sephem.ra
+                params['dec']         = sephem.dec
+                source_radec = 'The object coordinates are derived from the calculated solar ephermeris'
+            elif obname.find('Moon') == 0:
+                params['ra']          = mephem.ra
+                params['dec']         = mephem.dec
+                source_radec = 'The object coordinates are derived from the calculated lunar ephermeris'
+            else:
+                params['ra']          = mephem.ra       # To fill in the parameter
+                params['dec']         = mephem.dec      # To fill in the parameter
+                source_radec = 'The object coordinates were made up'
     
     mjd,mjd0 = mjd_fromheader(im_head)
     ra2,dec2 = GLOBALutils.getcoords(obname,mjd,filen=reffile)
     if ra2 !=0 and dec2 != 0:
-        ra = ra2
-        dec = dec2
-    else:
-        print 'Using the coordinates found in the image header.'
+        params['ra']  = ra2
+        params['dec'] = dec2
+        source_radec = 'The object coordinates are derived from the reference file {0}'.format(reffile)
+    
+    logger(('Info: Using the following data: altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}. '+\
+           '{6}').format(params['altitude'], params['latitude'], params['longitude'], 
+                                                                params['ra'], params['dec'], params['epoch'], source_radec ))
+    ra, dec = params['ra'], params['dec']
 
     iers          = GLOBALutils.JPLiers( baryc_dir, mjd-999.0, mjd+999.0 )
     obsradius, R0 = GLOBALutils.JPLR0( params['latitude'], params['altitude'])
@@ -215,14 +228,14 @@ def rv_analysis(params, spec, im_head, fitsfile):
         #ratio              = np.polyval(ccoefs[order],spec[0,order,:][L])*Rnorms[order]
         ratio = spec[1,order,:][L]/  spec[5,order,:][L]                                     # ratio between extracted spectrum and continuum normalised spectrum -> blaze function, cancels absorption lines
         spec[7,order,:][L] = ratio
-        #spec[8,order,:][L] = spec[6,order,:][L]                                             # error continuum (first guess), but not good.
+        #spec[8,order,:][L] = spec[6,order,:][L]                                             # error continuum (first guess), but not good. #sn_order=8
         spec[8,order,:][L] = spec[2,order,:][L]                                             # error of the extracted data, depending on what is used, the RV changes by few 100 km/s -> > several \AA
         #spec[8,order,:][L] = ratio * R_flat_ob_n[order,1,:][L] / np.sqrt( ratio * R_flat_ob_n[order,1,:][L] / gain2 + (ron2/gain2)**2 )        # something like S/N -> used as this by XCor
         #spl           = scipy.interpolate.splrep(np.arange(WavSol.shape[0]), WavSol,k=3)
         #dlambda_dx    = scipy.interpolate.splev(np.arange(WavSol.shape[0]), spl, der=1)
         #NN            = np.average(dlambda_dx)
         #dlambda_dx    /= NN
-        LL = np.where(spec[5,order,:] > 1 + 10. / scipy.signal.medfilt(spec[8,order,:],21))[0]          # remove emission lines?
+        LL = np.where(spec[5,order,:] > 1 + 10. / scipy.signal.medfilt(spec[8,order,:],21))[0]          # remove emission lines and cosmics
         spec[5,order,LL] = 1.
         spec[9,order,:][L] = spec[5,order,:][L]# * (dlambda_dx[L] ** 1)         # used for the analysis in XCor (spec_order=9, iv_order=10)
         spec[10,order,:][L] = spec[2,order,:][L]# / (dlambda_dx[L] ** 2)        # used for the analysis in XCor (spec_order=9, iv_order=10)
@@ -296,7 +309,7 @@ def rv_analysis(params, spec, im_head, fitsfile):
             vels, xc_full, sn, nlines_ccf, W_ccf = \
                     GLOBALutils.XCor(spec, ml_v, mh_v, weight,\
                     0, lbary_ltopo, vel_width=300, vel_step=3,\
-                    spec_order=9, iv_order=10, sn_order=8,max_vel_rough=300)
+                    spec_order=9, iv_order=10, sn_order=8, max_vel_rough=300)
 
             xc_av = GLOBALutils.Average_CCF(xc_full, sn, sn_min=3.0, Simple=True, W=W_ccf)
 
@@ -315,7 +328,7 @@ def rv_analysis(params, spec, im_head, fitsfile):
             xc_av_rough = xc_av
             vels_rough  = vels
                 
-            vel_width = np.maximum( 20.0, 6*disp )
+            vel_width = np.maximum( 20.0, 6*disp )                      # Adjusted in order to avoid crashes because of unphysical disp
             #print vel_width, disp, vsini       # problem with vel_width, due to disp, due to p1gau below
             vels, xc_full, sn, nlines_ccf, W_ccf =\
                     GLOBALutils.XCor(spec, ml_v, mh_v, weight,\
@@ -329,6 +342,7 @@ def rv_analysis(params, spec, im_head, fitsfile):
             p1,XCmodel,p1gau,XCmodelgau,Ls2 = \
                     GLOBALutils.XC_Final_Fit( vels, xc_av, sigma_res = 4,\
                      horder=8, moonv=refvel, moons=moon_sig, moon=False)
+            print 'plgau 345', p1gau
 
             moonmatters = False
             if (know_moon and here_moon):
@@ -358,6 +372,8 @@ def rv_analysis(params, spec, im_head, fitsfile):
             else:
                 cond = False
                 
+            if p1gau[2] > 1E3:
+                cond = False
                 
         xc_dict = {'vels':vels,'xc_av':xc_av,'XCmodelgau':XCmodelgau,'Ls2':Ls2,'refvel':refvel,\
                'rvels':rvels,'rxc_av':rxc_av,'rpred':rpred,'rxc_av_orig':rxc_av_orig,\

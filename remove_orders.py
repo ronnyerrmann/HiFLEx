@@ -26,11 +26,11 @@ if __name__ == "__main__":
             logger('Error: Cant create directory {0}'.format(params['folder_original_traces']))
             exit(1)
     
-    im_flat, im_head = create_image_general(params, 'sflat')
+    im_flat, im_head = create_image_general(params, 'trace1')
     
     # Remove traces in the GUI
     
-    polyfits, xlows, xhighs, widths = read_fits_width(params['master_traces_filename'])
+    polyfits, xlows, xhighs, widths = read_fits_width(params['master_trace_sci_filename'])
     fmask = run_remove_orders_UI(np.log10(im_flat), polyfits, xlows, xhighs, userinput=True)
     if len(polyfits) == len(polyfits[fmask]):
         logger('Info: No change made, therefore finished removing traces')
@@ -39,15 +39,15 @@ if __name__ == "__main__":
     polyfits, xlows, xhighs, widths = polyfits[fmask], xlows[fmask], xhighs[fmask], widths[fmask]
     
     # Move original data into a sub-folder
-    os.system('mv {0} {1}/'.format(params['master_traces_filename'], params['folder_original_traces']))
+    os.system('mv {0} {1}/'.format(params['master_trace_sci_filename'], params['folder_original_traces']))
     
-    for entry in ['background_filename', 'master_tracesarc_filename', 'master_wavelensolution_filename', 'master_flat_spec_norm_filename', 'logging_path', 'path_extraction']:
+    for entry in ['background_filename', 'master_trace_cal_filename', 'master_wavelensolution_filename', 'master_flat_spec_norm_filename', 'logging_path', 'path_extraction']:
         if os.path.isfile(params[entry]) == True:
             os.system('mv {0} {1}/'.format(params[entry], params['folder_original_traces']))
     
     # Save the new file and restart the reduction
     logger('Info: New file with the traces was created. All data depending on this will be moved to the folder {0}, the traces will be written and reduction_day.py will be run'.format(params['folder_original_traces']))
-    save_fits_width(polyfits, xlows, xhighs, widths, params['master_traces_filename'])
+    save_fits_width(polyfits, xlows, xhighs, widths, params['master_trace_sci_filename'])
     plot_traces_over_image(im_flat, params['logging_traces_im'], polyfits, xlows, xhighs, widths)
     
     os.system('python {0}/reduction_day.py'.format(os.path.dirname(sys.argv[0])) )

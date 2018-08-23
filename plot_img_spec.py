@@ -244,7 +244,7 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                             param[data_entry_w] = im[int(text[1]), int(text[2]) ]
                     x_axis = np.array(param[data_entry_w], float)
                 else:
-                    x_axis = np.arange(len(data)).astype(float)
+                    x_axis = np.arange(len(data), dtype=float)
                 x_axis = x_axis[~np.isnan(data)]
                 data = data[~np.isnan(data)]
                 """ Create a test signal

@@ -63,7 +63,7 @@ if __name__ == "__main__":
         if os.path.isdir(params['raw_data_path'].replace('ncook','ronny')) == True:
             params['raw_data_path'] = params['raw_data_path'].replace('ncook','ronny')
 
-    for root, dirs, files in os.walk(params['raw_data_path']):
+    for root, dirs, files in os.walk(params['raw_data_path'], followlinks=True):
         for file in files:
             for fileending in params['raw_data_file_endings']:
                 if file.endswith(fileending):

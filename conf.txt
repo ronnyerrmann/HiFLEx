@@ -92,6 +92,7 @@ polynom_bck = [4, 4]
 # arcshift_side: On which side of the science orders are the corresponding calibration orders located. Possible values are 
 #               "left" (towards the redder order), "right" (to the bluer order), or "center" (same position as the science orders
 # for HARPS, QSI Bill:        arcshift_side = left
+# for SBIG:                   arcshift_side = right
 arcshift_side = right
 # arcshift_range: Range to search for the shift between the flat traces and arc_traces. This value is determinded by the the script, only in case the process fails the parameter is used.
 arcshift_range  = [25, 60]
@@ -111,8 +112,8 @@ resolution_offset_pct = 3
 #                       For a setup not covering a full order [2,4] should be fine. a final value of 3 is not enough to reflect the position of the lines on the CCD
 #                       For a setup covering a full order or more than 20 orders [2,5] might be necessary
 polynom_order_traces = [2,3]
-# polynom_order_intertrace: order for rough and final solution to fit the parameters of the polynomials between the orders. Normally 2,4 should be fine
-polynom_order_intertraces = 1,2
+# polynom_order_intertrace: order for rough and final solution to fit the parameters of the polynomials between the orders. Normally 2 should be fine
+polynom_order_intertraces = 2
 # opt_px_range: What fraction around the central pixel of each order should be used to corellate lines in the arc spectrum with the reference spectrum. Normally [0.6, 1.0] is good.
 #               If the previous solution differs a lot at the edges of the orders, than the first value should be smaller.
 #               If the previous solution matches nearly exactly the current solution, then both value can be bigger, e.g. [0.8,2]
@@ -127,8 +128,10 @@ diff_pxs = 4
 badpx_mask_filename = /data/ronny/Reduced/20180105/bad_px_mask.fits
 
 # Path and filename to the file with the previous found positions of the orders and the previous wavelength solution.
-#   If the files don't exist, A solution is created from scratch (file arc_lines_wavelength.txt needs to be created in order to create the wavelength solution).
-#   Created by order_trace.py and read by reduction_day.py
+#   If the files don't exist, a solution is created from scratch 
+#       For original_master_wavelensolution_filename this means: File arc_lines_wavelength.txt needs to be created in order to create the wavelength solution. 
+#                                                                        The wavelength solution created from arc_lines_wavelength.txt will be saved in original_master_wavelensolution_filename.
+#                                                                If no wavelength solution is necessay, it can set to "pseudo".
 original_master_traces_filename = /data/ronny/Reduced/2018NA/master_traces_sci.fits
 original_master_wavelensolution_filename = /data/ronny/Reduced/20180220/master_wavelength.fits
 
@@ -163,7 +166,7 @@ raw_data_dateobs_keyword = DATE-OBS
 
 # For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create gives the information which corrections will be applied before the <filetype>_rawfiles are combined.
 # The <filetype>_calibs_create_g define thereby the general values, which will be assinged by prepare_file_list.py to <filetype>_calibs_create
-#   The following settings are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, background, normalise, combine_sum. Please check the manual for more information
+#   The following settings are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, background, localbackground, normalise, combine_sum. Please check the manual for more information
 #   For dark calibration darks with the correct exposure time will be used. 
 #   For background the key 'background_filename' needs to be defined
 bias_calibs_create_g    = [subframe, badpx_mask]
@@ -173,9 +176,9 @@ rflat_calibs_create_g   = subframe, badpx_mask, dark, bias, normalise
 # The file types for the calibrations listed below are used to find extracted data
 trace1_calibs_create_g  = subframe, badpx_mask, dark, bias
 trace2_calibs_create_g  = [subframe, badpx_mask, dark, bias]
-arc_calibs_create_g     = [subframe, badpx_mask, dark, bias]
-flatarc_calibs_create_g = [subframe, badpx_mask, dark, bias, rflat]
-extract_calibs_create_g = [subframe, badpx_mask, dark, bias, rflat]
+arc_calibs_create_g     = [subframe, badpx_mask, dark, bias, localbackground]
+flatarc_calibs_create_g = [subframe, badpx_mask, dark, bias, rflat, localbackground]
+extract_calibs_create_g = [subframe, badpx_mask, dark, bias, rflat, localbackground]
 
 # Standard calibrations to be done, if no other information is given
 standard_calibs_create = []
@@ -204,6 +207,11 @@ path_extraction_single      = extracted/single
 # BITPIX of the extracted fits-file (-32, -64, everything else: -64)
 extracted_bitpix            = -64
 
+## reduced images:
+#-----------------
+# The reduced images can be saved, if a path instead of "NA" is given path_reduced
+path_reduced                = reduced_images
+path_reduced                = NA
 
 ## Standard filenames:
 #---------------------
@@ -226,8 +234,8 @@ path_rv                         = rv_output
 ## Logging:
 #----------
 logging_path                        = logging
-logging_trace1_binned               = sci_trace_binned.fits
-logging_traces_binned               = traces_binned.fits
+logging_trace1_binned               = mstr_trace1_binned.fits
+logging_traces_binned               = sci_trace1_binned.fits
 logging_traces_im_binned            = traces_in_master_trace1_binned.png
 logging_traces_im                   = traces_in_master_trace1.png
 logging_find_arc_traces             = arctraces_find.png
