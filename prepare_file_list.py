@@ -16,41 +16,54 @@ CONFIGFILE = 'conf.txt'
 # deal with arguments from a text file
 params = textfileargs(params, CONFIGFILE)
 
-def create_parameters(conf_data, warn, param, textparam, parcals, exist_bias, exist_rflat, exp_darks):
-        calibs = []
-        for parcal in parcals:                                  # A list of calib_create can be given in case one wasn't defined by the user
-            calibs.append(parcal+'_calibs_create_g')
-        calibs.append('standard_calibs_create')
-        calibs.append('')
-        if param <> '':
-            if param+'_rawfiles' not in conf_data.keys():
-                conf_data[param+'_rawfiles'] = entry[0]             # Filename
-                if param.find('extract') == -1 or param.find('extract_combine') == 0:               # normal extraction files don't need a master, only the combined ones
-                    conf_data['master_'+param+'_filename'] = 'master_'+textparam+'.fits'
-                
-                for calib in calibs:
-                    if calib in params.keys():
-                        temp_param = params[calib]
-                        break
-                if calib == '':
-                    temp_param = []
-                    logger('Warn: Missing entry in the configuration file: {0}. Please update the configuration file.'.format(calibs[:-1]))
-                text = ''
-                for param_entry in temp_param:
-                    if (param_entry == 'bias' and exist_bias == False) or (param_entry == 'rflat' and exist_rflat == False) or (param_entry == 'dark' and entry[3] not in exp_darks):          # If the calibration data is not available, then don't do the calibration
-                        warn_text = 'Warn: The parameter {0}_calibs_create_g in the configuration file requires {1} correction, but this calibration data is not available.'.format(parcal,param_entry)
-                        if param_entry == 'dark':
-                            warn_text = warn_text = 'Warn: The parameter {0}_calibs_create_g in the configuration file requires {1} correction, but a dark with exposure time of {2}s is not available. \n\t\tPlease change the dark parameter to a fixed exposure time in {3}'.format(parcal, param_entry, entry[3], params['configfile_fitsfiles'] )
-                        if warn_text not in warn:
-                            warn.append(warn_text)
-                        continue
-                    text += ',' + param_entry
-                if len(text) > 0:
-                    text = text[1:]
-                conf_data[param+'_calibs_create'] = text
-            else:
-                conf_data[param+'_rawfiles'] += ',' + entry[0]
+def create_parameters(conf_data, warn, param, textparam, parcals, exist_bias, exist_rflat, exp_darks, entry):
+    """
+    Add information to conf_data dictionary
+    :param conf_data: dictionary
+    :param warn: list of strings: Collection of warnings
+    :param param: string:           used for param+'_rawfiles' and 'master_'+param+'_filename'
+    :param textparam: string:       used for 'master_'+textparam+'.fits'
+    :param parcals: list of strings: which general calibrations to use: parcal+'_calibs_create_g'
+    :param exist_bias: bool: Do Biases exist?
+    :param exist_rflat: bool: Do rflats exist?
+    :param exp_darks: list of floats
+    :param entry: list of [str, str, str, float, float]: entry as in params['raw_data_file_list']
+    """
+    calibs = []
+    for parcal in parcals:                                  # A list of calib_create can be given in case one wasn't defined by the user
+        calibs.append(parcal+'_calibs_create_g')
+    calibs.append('standard_calibs_create')                 # Standard calibration as backup
+    calibs.append('')                                       # No calibration at all as very last option
+    if param == '':
         return conf_data, warn
+    if param+'_rawfiles' not in conf_data.keys():           # Do all the long steps as first file for this kind
+        conf_data[param+'_rawfiles'] = entry[0]             # Filename
+        if param.find('extract') == -1 or param.find('extract_combine') == 0 or param.find('wavelengthcal') == -1:      # wavecal and normal extraction files don't need a master, only the combined extraction needs one
+            conf_data['master_'+param+'_filename'] = 'master_'+textparam+'.fits'
+        temp_param = []
+        for calib in calibs:
+            if calib in params.keys():
+                temp_param = params[calib]
+                break
+        if calib == '':
+            temp_param = []
+            logger('Warn: Missing entry in the configuration file: {0}. Please update the configuration file.'.format(calibs[:-1]))
+        text = ''
+        for param_entry in temp_param:
+            if (param_entry == 'bias' and exist_bias == False) or (param_entry == 'rflat' and exist_rflat == False) or (param_entry == 'dark' and entry[3] not in exp_darks):          # If the calibration data is not available, then don't do the calibration
+                warn_text = 'Warn: The parameter {0}_calibs_create_g in the configuration file requires {1} correction, but this calibration data is not available.'.format(parcal,param_entry)
+                if param_entry == 'dark':
+                    warn_text = 'Warn: The parameter {0}_calibs_create_g in the configuration file requires {1} correction, but a dark with exposure time of {2}s is not available. \n\t\tPlease change the dark parameter to a fixed exposure time in {3}'.format(parcal, param_entry, entry[3], params['configfile_fitsfiles'] )
+                if warn_text not in warn:
+                    warn.append(warn_text)
+                continue
+            text += ',' + param_entry
+        if len(text) > 0:
+            text = text[1:]
+        conf_data[param+'_calibs_create'] = text
+    else:                                                   # Just add the file
+        conf_data[param+'_rawfiles'] += ',' + entry[0]
+    return conf_data, warn
 
 if __name__ == "__main__":
     logger('Info: Preparing a list with the files')
@@ -120,7 +133,7 @@ if __name__ == "__main__":
                             try:
                                 exptime = float(temp[0])
                             except:
-                                print 'Problem with exptime',filename,temp
+                                logger('Warn: Problem with exposure time for file {1}. Header keyword {0} does not exist. Can not transform {2} into a number'.format(params['raw_data_exptim_keyword'], filename, temp[0]))
                         # Get the observation time
                         dateobs = 0
                         if params['raw_data_dateobs_keyword'] in im_head.keys():
@@ -148,13 +161,17 @@ if __name__ == "__main__":
     # Save the list, show to user, so the user can disable files, read the list
     file = open(params['raw_data_file_list'],'w')
     file.write('### This file contains the information for all the fits files in the raw_data_path: {0} and it\'s subfolders.\n'.format(params['raw_data_path']))
-    file.write('### Each line contains the following information:\n')
+    file.write('### Each line contains the following information, separated by one tab:\n')
     file.write('###   - Filename relativ to raw_data_path parameter\n')
     file.write('###   - Type of fiber 1 (science fiber)\n')
     file.write('###   - Type of fiber 2 (calibration fiber)\n')
     file.write('###   - Exposure time in seconds (from the header, if the information is not in the header, then from the filename)\n')
     file.write('###   - Observation time in Unix timestamp (from header)\n')
-    file.write('###   - Flag "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n###         Combination of images before the extraction is possible, please refer to the manual for more information\n')
+    file.write('###   - Flags:\n')
+    file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n')
+    file.write('###             Combination of images before the extraction is possible, please refer to the manual for more information\n')
+    file.write('###        "w", if the spectrum contains wavelength information in case of a spectrograph with single fiber input.\n')
+    file.write('###             Used to mark the files with calibration spectrum taken before or after the science observation.\n')
     file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
     file.write('### -> When finished with the editing, save the file and close the editor \n\n')
     for entry in file_list:
@@ -176,7 +193,7 @@ if __name__ == "__main__":
     arc_fib1 = ''
     sflat_fib2 = 'wave'
     flatarc_fib2 = 'none'
-    exist_bias, exist_rflat, exp_darks, exist_flatarc = False, False, [], False
+    exist_bias, exist_rflat, exp_darks = False, False, []
     for entry in file_list:
         if entry[1] == 'cont' and entry[2] == 'none' and flatarc_fib2 <> 'dark':              # use entry[2] == 'wave' for cont only if entry[2] == 'none' not available
             sflat_fib2 = 'none'
@@ -203,48 +220,69 @@ if __name__ == "__main__":
                 arc_l_exp = max(entry[3], arc_l_exp)
                 arc_s_exp = min(entry[3], arc_s_exp)
     
-    # Create the configuartion file
     conf_data = dict()
+    # Check if master files exist:
+    if not exist_rflat:
+        exist_rflat = os.path.isfile('master_rflat.fits')
+        conf_data['master_rflat_filename'] = 'master_rflat.fits'
+    if not exist_bias:
+        exist_bias = os.path.isfile('master_bias.fits')
+        conf_data['master_bias_filename'] = 'master_bias.fits'
+    for file in os.listdir("."):
+        if file.endswith(".fits"):
+            filename =os.path.join("", file)
+            if filename.find('master_dark') == 0:
+                exposure = filename.replace('master_dark','').replace('s.fits','').replace('p','.')
+                try:
+                    exposure = float( exposure )
+                except:
+                    continue
+                if exposure not in exp_darks:
+                    exp_darks.append(exposure)
+                    conf_data['master_dark{}_filename'.format(exposure)] = filename
+    
+    # Create the configuartion file
     warn = []
     pos_params = ['bias', 'rflat' ]
     for entry in file_list:                                         # Extraction is set up below
-        if entry[0].find('#') <> -1:
+        if entry[0].find('#') <> -1:        # comment # found
             continue
         param = ''
         for par in pos_params:
             if entry[1] == par and entry[2] == par:                 # Fiber1 and Fiber2
-                conf_data, warn = create_parameters(conf_data, warn, par, par, [par], exist_bias, exist_rflat, exp_darks)
+                conf_data, warn = create_parameters(conf_data, warn, par, par, [par], exist_bias, exist_rflat, exp_darks, entry)
         if entry[1] == 'cont' and entry[2] == flatarc_fib2:         # Fiber1 and Fiber2    , might be overwritten by cont -> later copy cont into flatarc
-            conf_data, warn = create_parameters(conf_data, warn, 'flatarc', 'flatarc', ['flatarc'], exist_bias, exist_rflat, exp_darks)
+            conf_data, warn = create_parameters(conf_data, warn, 'flatarc', 'flatarc', ['flatarc'], exist_bias, exist_rflat, exp_darks, entry)
         if entry[1] == 'cont' and entry[2] == sflat_fib2:          # Fiber1 and Fiber2
-            conf_data, warn = create_parameters(conf_data, warn, 'trace1', 'trace1', ['trace1'], exist_bias, exist_rflat, exp_darks)
+            conf_data, warn = create_parameters(conf_data, warn, 'trace1', 'trace1', ['trace1'], exist_bias, exist_rflat, exp_darks, entry)
         if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave' or entry[1] == arc_fib1) and entry[2] == 'wave':               # Fiber1 and Fiber2
             parcal = 'arc'
             if entry[3] == arc_l_exp:
-                conf_data, warn = create_parameters(conf_data, warn, 'arc_l', 'arc_l', [parcal], exist_bias, exist_rflat, exp_darks)
-                conf_data, warn = create_parameters(conf_data, warn, 'trace2', 'trace2', ['trace2'], exist_bias, exist_rflat, exp_darks)
+                conf_data, warn = create_parameters(conf_data, warn, 'arc_l', 'arc_l', [parcal], exist_bias, exist_rflat, exp_darks, entry)
+                conf_data, warn = create_parameters(conf_data, warn, 'trace2', 'trace2', ['trace2'], exist_bias, exist_rflat, exp_darks, entry)
             elif entry[3] == arc_s_exp:                             # In case only one exposure time -> arc_l is copied in arc_s
-                conf_data, warn = create_parameters(conf_data, warn, 'arc_s', 'arc_s', [parcal], exist_bias, exist_rflat, exp_darks)
+                conf_data, warn = create_parameters(conf_data, warn, 'arc_s', 'arc_s', [parcal], exist_bias, exist_rflat, exp_darks, entry)
         if entry[1] == 'dark' and entry[2] == 'dark':               # Fiber1 and Fiber2
             param = 'dark{0}'.format(entry[3])                      # Exposure time
             textparam = param.replace('.','p')+'s'
             parcal = 'dark'
-            conf_data, warn = create_parameters(conf_data, warn, param, textparam, [parcal], exist_bias, exist_rflat, exp_darks)
-        if entry[0].find('#') <> -1:
-            continue
-        if entry[5].find('e') == -1:          # No extraction
+            conf_data, warn = create_parameters(conf_data, warn, param, textparam, [parcal], exist_bias, exist_rflat, exp_darks, entry)
+        if entry[5].lower().find('e') == -1 and entry[5].lower().find('w') == -1:          # No extraction and no wavelength calibration
             continue
         entry[5] = entry[5].replace(' ','').split(',')
         for extraction in entry[5]:
-            if extraction.find('e') <> 0:        # use find as len(extraction) might be 0
+            if extraction.lower().find('w') == 0:       # use this file for wavelength calibration between spectra
+                param = 'wavelengthcal'
+                conf_data, warn = create_parameters(conf_data, warn, param, param, [param], exist_bias, exist_rflat, exp_darks, entry)
+                continue                        # otherwise Warn from below will be triggered
+            if extraction.lower().find('e') <> 0:        # use find as len(extraction) might be 0
                 warn.append('Warn: I dont know what to do with the extraction parameter {0} (it doesnt begin with "e") for file {1}. This spectrum will therefore not be extracted. Please check {2} and run the script again, if you perform changes.'.format(extraction, entry[0], params['raw_data_file_list'] ))
                 continue
-            if extraction.find('c') == 1:            # combine data before extraction
+            if extraction.lower().find('c') == 1:            # combine data before extraction
                 param = 'extract_combine'+extraction[2:]
-                conf_data, warn = create_parameters(conf_data, warn, param, param, [param, 'extract'], exist_bias, exist_rflat, exp_darks)
             else:
                 param = 'extract'+extraction[1:]
-                conf_data, warn = create_parameters(conf_data, warn, param, param, [param, 'extract'], exist_bias, exist_rflat, exp_darks)
+            conf_data, warn = create_parameters(conf_data, warn, param, param, [param, 'extract'], exist_bias, exist_rflat, exp_darks, entry)
     if 'arc_l_rawfiles' in conf_data.keys() and 'arc_s_rawfiles' not in conf_data.keys():
         conf_data['arc_s_rawfiles'] = conf_data['arc_l_rawfiles']
         conf_data['master_arc_s_filename'] = conf_data['master_arc_l_filename'].replace('arc_l','arc_s')
@@ -258,7 +296,7 @@ if __name__ == "__main__":
     file.write('# This file was created by combining the information in the file {0} and the parameters given in the configuration file {1}\n'.format(params['raw_data_file_list'], CONFIGFILE))
     file.write('# Changes in here will be overwritten the next time prepare_file_list.py is run, therefore we suggest to make changes in {0} and afterwards run prepare_file_list.py again.\n\n'.format(params['raw_data_file_list']))
     file.write('# For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create list all corrections that will be applied to the individual files listed in <filetype>_rawfiles. These files will then combined and stored in master_<filetype>_filename (remove/comment the parameter in order to avoid saving.\n') 
-    file.write('#   The following calibrations are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, <background>, normalisation\n') 
+    file.write('#   The following calibrations are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, <background>, normalisation, combine_sum, localbackground\n') 
     file.write('#   For dark and flat the paramerters can contain the the exposure time in float format (e.g. flat15.0_rawfiles, dark4.0_calibs_create).\n')  
     file.write('#       If a fixed dark should be used, than the parameter needs to contain "dark" and additional text (e.g. "darkfixed", or if a different exposure time should be used "dark5.0")\n') 
     file.write('#   For <background> the calibration needs to contain "background" but can contain more information. The key needs to be defined\n') 

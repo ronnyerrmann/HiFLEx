@@ -24,9 +24,9 @@ if __name__ == "__main__":
     
     # create the median combined files
     im_trace1, im_trace1_head = create_image_general(params, 'trace1')         # -> cont1
-    if params['arcshift_side'] <> 0:
+    if params['arcshift_side'] <> 0 or 'trace2_rawfiles' in params.keys():      # calibration spectrum at the same time
         im_trace2, im_trace2_head = create_image_general(params, 'trace2')                # -> trace2
-    else:
+    else:                                                                       # no calibration spectrum at the same time
         im_trace2, im_trace2_head = im_trace1, im_trace1_head
     #flatarc, arc_l, arc_s: at a later step to know the orders for localbackground -> cont1cal2
     
@@ -86,7 +86,7 @@ if __name__ == "__main__":
             logger('\t\torder\tleft\tright\tgausswidth\tpctlwidth\tpositio\tmin_tr\tmax_tr\t(positio: position of the trace at the center of the image, pctlwidth: median full width of the trace at {0}% of maximum)'\
                       .format(params['width_percentile']),printarrayformat=printarrayformat, printarray=data)
         
-    # Create the background map, if it doesn't exist
+    """# Create the background map, if it doesn't exist
     if os.path.isfile(params['background_filename']) == True:
         logger('Info: Background map already exists: {0}'.format(params['result_path']+params['background_filename']))
     else:
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         # Create the fitted background map
         #im_bck = find_bck_fit(im_trace1, im_bck_px, params['polynom_bck'], params['GUI'])       #Old
         bck_im = fit_2d_image(im_trace1, params['polynom_bck'][1], params['polynom_bck'][0], w=bck_px)
-        save_im_fits(params, bck_im, im_trace1_head, params['background_filename'])
+        save_im_fits(params, bck_im, im_trace1_head, params['background_filename'])"""
         
     # Create the file for the arc orders, if it doesn't exist
     if os.path.isfile(params['master_trace_cal_filename']) == True:
@@ -163,9 +163,12 @@ if __name__ == "__main__":
             im_name = params['master_arc_s_filename'].replace('.fits','')
         im_name = im_name.replace('.fit','')
         save_multispec([arc_s_spec, arc_s_spec, arc_s_spec, arc_s_spec], params['path_extraction']+im_name, im_arcshead)
-        arc_lines_px = identify_lines(params, arc_l_spec, arc_s_spec, good_px_mask_l, new_format=True)
-        if os.path.isfile(params['original_master_wavelensolution_filename']) == False:                                                        # Create a new solution
-            if os.path.isfile('arc_lines_wavelength.txt') == False:
+        arc_lines_px = identify_lines(params, arc_l_spec, arc_s_spec, good_px_mask_l, good_px_mask_s, new_format=True)
+        if os.path.isfile(params['original_master_wavelensolution_filename']) == False:                                                         # Create a new solution
+            if os.path.isfile('arc_lines_wavelength.txt') == False:                                                                             # No arc_lines_wavelength.txt available
+                wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(arc_l_spec.shape[0])                      # Create a pseudo solution
+                plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf', 
+                                              wavelength_solution, wavelength_solution_arclines, np.zeros((1,3)), ['dummy'])                                        # Plot the spectrum
                 logger('Error: Files for creating the wavelength solution do not exist: {0}, {1}. Please check parameter {2} or create {1}.'.format(\
                                         params['original_master_wavelensolution_filename'], 'arc_lines_wavelength.txt', 'original_master_wavelensolution_filename'))
             wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_arc_l)         # For a new wavelength solution
@@ -192,7 +195,7 @@ if __name__ == "__main__":
         
     update_calibration_memory('wave_sol',[wavelength_solution, wavelength_solution_arclines])
     
-    im_flatarc, im_flatarchead = create_image_general(params, 'flatarc')    # -> cont1cal2
+    im_flatarc, im_flatarc_head = create_image_general(params, 'flatarc')    # -> cont1cal2
     
     # Extract the flat spectrum and normalise it
     if os.path.isfile(params['master_flat_spec_norm_filename']) == True:
@@ -200,50 +203,88 @@ if __name__ == "__main__":
         # The file is read later on purpose
     else:
         logger('Step: Create the normalised flat for the night')
+        obsdate, obsdate_float = get_obsdate(params, im_flatarc_head)
         shift = find_shift_images(params, im_flatarc, im_trace1, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly, extract=True)
         flat_spec, good_px_mask = extract_orders(params, im_flatarc, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='prec', offset=shift)
-        flatarc_spec, agood_px_mask = extract_orders(params, im_flatarc, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
         flat_spec_norm = flat_spec/np.nanmedian(flat_spec)
         flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.1)
-        wavelength_solution_shift = shift_wavelength_solution(flatarc_spec, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs)
+        if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
+            flatarc_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
+        else:
+            flatarc_spec, agood_px_mask = extract_orders(params, im_flatarc, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
+        wavelength_solution_shift = shift_wavelength_solution(params, flatarc_spec, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly)
         wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, flatarc_spec)
-        save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, flatarc_spec], params['master_flat_spec_norm_filename'], im_flatarchead)
+        save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, flatarc_spec], params['master_flat_spec_norm_filename'], im_flatarc_head)
         #save_im_fits(params, flat_spec_norm, im_sflat_head, params['master_flat_spec_norm_filename'])
     
     log_params(params)
     logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the loging directory {0}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?\n'.format(params['logging_path']))
     
+    obj_names = []
     extractions = []
+    wavelengthcals = []
     for entry in params.keys():
         if entry.find('extract') >= 0 and entry.find('_rawfiles') >= 0:
             extractions.append(entry.replace('_rawfiles',''))
-    if len(extractions) > 0:
-        logger('Info: Starting to extract spectra')
-        flat_spec_norm = np.array(fits.getdata(params['master_flat_spec_norm_filename']))           # read it again, as the file is different than the data above
-        for extraction in extractions:
-            if  extraction.find('extract_combine') == -1:     # Single file extraction
-                for im_name_full in params[extraction+'_rawfiles']:
-                    im_name = im_name_full.rsplit('/')
-                    im_name = im_name[-1].rsplit('.',1)         # remove the file ending
-                    im_name = im_name[0]
-                    if os.path.isfile(params['path_extraction']+im_name+'.fits'):
-                        logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
-                    else:
-                        print extraction, im_name_full, im_name
-                        params['calibs'] = params[extraction+'_calibs_create']
-                        im, im_head = read_file_calibration(params, im_name_full)
-                        extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
-                                         wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
-            else:                                       # Combine files before extraction
-                im_comb, im_comb_head = create_image_general(params, extraction)
-                im_name = extraction
-                extraction_steps(params, im_comb, im_name, im_comb_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
-                                 wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
+        if entry.find('wavelengthcal') >= 0 and entry.find('_rawfiles') >= 0:
+            wavelengthcals.append(entry.replace('_rawfiles',''))
+    if len(extractions) == 0:                                               # no extractions to do
+        exit(0)
+    flat_spec_norm = np.array(fits.getdata(params['master_flat_spec_norm_filename']))           # read it again, as the file is different than the data above
+    if params['arcshift_side'] == 0:                                            # no calibration spectrum at the same time
+        logger('Info: Starting to extract wavelength calibrations')
+        for wavelengthcal in wavelengthcals:
+            for im_name_full in params[wavelengthcal+'_rawfiles']:
+                im_name = im_name_full.rsplit('/')
+                im_name = im_name[-1].rsplit('.',1)         # remove the file ending
+                im_name = im_name[0]+'_wavecal'
+                if os.path.isfile(params['path_extraction']+im_name+'.fits'):
+                    logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
+                    continue
+                params['calibs'] = params[wavelengthcal+'_calibs_create']
+                im, im_head = read_file_calibration(params, im_name_full)
+                extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
+                                                    wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
+    logger('Info: Starting to extract spectra')
+    for extraction in extractions:
+        if  extraction.find('extract_combine') == -1:     # Single file extraction
+            for im_name_full in params[extraction+'_rawfiles']:
+                im_name = im_name_full.rsplit('/')
+                im_name = im_name[-1].rsplit('.',1)         # remove the file ending
+                im_name = im_name[0]
+                if os.path.isfile(params['path_extraction']+im_name+'.fits'):
+                    logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
+                    continue
+                #print extraction, im_name_full, im_name
+                params['calibs'] = params[extraction+'_calibs_create']
+                im, im_head = read_file_calibration(params, im_name_full)
+                """print '!!!!!!!!! WARN: image is modified'
+                print im.shape
+                imtemp = copy.copy(im)
+                imtemp[:-1,:] = im[1:,:]
+                imtemp[ -1,:] = im[0 ,:]
+                im = imtemp"""
+                obj_name = extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
+                                                    wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
+                if obj_name not in obj_names:
+                    obj_names.append(obj_name)
+        else:                                       # Combine files before extraction
+            im_comb, im_comb_head = create_image_general(params, extraction)
+            im_name = extraction
+            obj_name = extraction_steps(params, im_comb, im_name, im_comb_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
+                                        wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
+            if obj_name not in obj_names:
+                obj_names.append(obj_name)
     
-        logger('Info: Finished extraction of the science frames. The extracted {0}/*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength, second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. Th last entry is the spectrum of the calibration fiber.'.format(params['path_extraction']))
+    logger('Info: Finished extraction of the science frames. The extracted {0}/*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. Th last entry is the spectrum of the calibration fiber.'.format(params['path_extraction']))
     
-    
-    
+    # Do the Terra RVs
+    os.system('echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       Object1/" > astrocatalog.example')
+    if os.path.isfile('~/software/terra/PRV.jar') == True:
+        os.system('java -jar ~/software/terra/PRV.jar -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0]) )
+        os.system('gedit Object1/results/synthetic.rv &')
+        
+        
 """ Gnuplot analysis of part of the RV data:
 f(x) = a2*x**2 + a1*x + a0; a2=0; a1=1; a0=0; fit f(x) 'data_1208' us 1:2 via a2,a1,a0
 plot 'data_1208' us 1:2 , f(x)

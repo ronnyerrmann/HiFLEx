@@ -31,33 +31,7 @@ params = dict()     # default param dictionary
 
 # rm analysis_files.lst ; ls extracted/SunArc*2s.fits > analysis_files.lst ; python ~/Scripts/exohspec/find_rv.py | tee RV_logfile ; grep 'RV = ' RV_logfile | cut -d' ' -f 3,5
 
-def mjd_fromheader(head):       # from CERES, slightly modified
-    """
-    return modified Julian date from header
-    """
-    secinday = 24*3600.0
-
-    datetu   = head['DATE-OBS'][:10] 
-    ut       = head['DATE-OBS'][11:]
-
-    mjd0,mjd,i = GLOBALutils.iau_cal2jd(int(datetu[0:4]),int(datetu[5:7]),int(datetu[8:10]))
-
-    ut        = (float(ut[:2])*3600. + float(ut[3:5])*60. + float(ut[6:]))
-    mjd_start = mjd + ut / secinday
-    
-    if 'HIERARCH ESO INS DET1 TMMEAN' in head:
-        fraction = head['HIERARCH ESO INS DET1 TMMEAN']
-    elif 'ESO INS DET1 TMMEAN' in head:
-        fraction = head['ESO INS DET1 TMMEAN']
-    else:
-        fraction = 0.5
-    texp     = head['EXPTIME'] #sec
-
-    mjd = mjd_start + (fraction * texp) / secinday
-
-    return mjd, mjd0
-
-def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logfile'):
+def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logfile'):          # Copy from procedures.py
     """
     Saves the status information to a logfile
     :param message: Text to log
@@ -112,14 +86,12 @@ def get_spec(spectra, waves, cen_wave, range_px):
 
     return [], []                                      # everything went wrong
 
-def rv_analysis(params, spec, im_head, fitsfile):
+
+
+def rv_analysis(params, spec, im_head, fitsfile, obname, bcvel_baryc, reffile, mephem):
     specs = spec.shape
     spec = np.vstack(( spec, np.zeros([11-specs[0], specs[1], specs[2]]) ))
     spec[7:11,:,:] = np.nan
-    reffile = 'reffile.txt'
-    obname = fitsfile.split('/')
-    obname = obname[-1].split('-')
-    obname = obname[0]
     lbary_ltopo = 1
     npools = 1
     refvel = 0
@@ -136,80 +108,6 @@ def rv_analysis(params, spec, im_head, fitsfile):
     #ron1,gain1 = h[1].header['HIERARCH ESO DET OUT1 RON'],h[1].header['HIERARCH ESO DET OUT1 GAIN']
     #ron2,gain2 = h[2].header['HIERARCH ESO DET OUT1 RON'],h[2].header['HIERARCH ESO DET OUT1 GAIN']
     #halfcounts = h[0].header['HIERARCH ESO INS DET1 TMMEAN']
-
-    # Find lambda_bary/lambda_topo using baryc
-    site_keys       = ['TELESCOP']
-    altitude_keys   = ['HIERARCH ESO TEL GEOELEV', 'ESO TEL GEOELEV']
-    latitude_keys   = ['HIERARCH ESO TEL GEOLAT', 'ESO TEL GEOLAT']
-    longitude_keys  = ['HIERARCH ESO TEL GEOLON', 'ESO TEL GEOLON']
-    ra_keys         = ['RA']
-    dec_keys        = ['DEC']
-    epoch_keys      = ['HIERARCH ESO TEL TARG EQUINOX', 'ESO TEL TARG EQUINOX']
-    params['site']        = 'UH'
-    params['altitude']    = 30
-    params['latitude']    = 51.7534
-    params['longitude']   = -0.2401
-    params['epoch']       = 2000.0
-    settings = []
-    settings.append( [0, site_keys, 'site'] )
-    settings.append( [0, altitude_keys, 'altitude'] )
-    settings.append( [0, latitude_keys, 'latitude'] )
-    settings.append( [0, longitude_keys, 'longitude'] )
-    settings.append( [0, ra_keys, 'ra'] )
-    settings.append( [0, dec_keys, 'dec'] )
-    settings.append( [0, epoch_keys, 'epoch'] )
-    for [i, keys, parentr] in settings:
-        for entry in keys:
-            if entry in im_head.keys():
-                params[parentr] = im_head[entry]    # Get the information from the header
-                if entry == 'ra':                   # Assume that dec is coming from the same source
-                    source_radec = 'The object coordinates are derived from the image header'
-        if parentr == 'longitude':                  # Enough information to calculate the ephemerides of sun and moon
-            gobs = ephem.Observer()  
-            gobs.name = params['site']  
-            gobs.lat  = rad(params['latitude'])     # lat/long in decimal degrees  
-            gobs.long = rad(params['longitude'])
-            DDATE     = im_head['DATE-OBS'][:10]
-            HHOUR     = im_head['DATE-OBS'][11:]
-            gobs.date = str(DDATE[:4]) + '-' +  str(DDATE[5:7]) + '-' + str(DDATE[8:]) + ' ' +  HHOUR[:2] + ':' + HHOUR[3:5] +':' + str(float(HHOUR[6:]) + 0.5*im_head[params['raw_data_exptim_keyword']] )
-            mephem    = ephem.Moon()
-            mephem.compute(gobs)
-            sephem    = ephem.Sun()
-            sephem.compute(gobs)
-            if obname.find('Sun') == 0:
-                params['ra']          = sephem.ra
-                params['dec']         = sephem.dec
-                source_radec = 'The object coordinates are derived from the calculated solar ephermeris'
-            elif obname.find('Moon') == 0:
-                params['ra']          = mephem.ra
-                params['dec']         = mephem.dec
-                source_radec = 'The object coordinates are derived from the calculated lunar ephermeris'
-            else:
-                params['ra']          = mephem.ra       # To fill in the parameter
-                params['dec']         = mephem.dec      # To fill in the parameter
-                source_radec = 'The object coordinates were made up'
-    
-    mjd,mjd0 = mjd_fromheader(im_head)
-    ra2,dec2 = GLOBALutils.getcoords(obname,mjd,filen=reffile)
-    if ra2 !=0 and dec2 != 0:
-        params['ra']  = ra2
-        params['dec'] = dec2
-        source_radec = 'The object coordinates are derived from the reference file {0}'.format(reffile)
-    
-    logger(('Info: Using the following data: altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}. '+\
-           '{6}').format(params['altitude'], params['latitude'], params['longitude'], 
-                                                                params['ra'], params['dec'], params['epoch'], source_radec ))
-    ra, dec = params['ra'], params['dec']
-
-    iers          = GLOBALutils.JPLiers( baryc_dir, mjd-999.0, mjd+999.0 )
-    obsradius, R0 = GLOBALutils.JPLR0( params['latitude'], params['altitude'])
-    obpos         = GLOBALutils.obspos( params['longitude'], obsradius, R0 )
-    jplephem.set_ephemeris_dir( baryc_dir , ephemeris )
-    jplephem.set_observer_coordinates( obpos[0], obpos[1], obpos[2] )
-
-    res         = jplephem.doppler_fraction(ra/15.0, dec, int(mjd), mjd%1, 1, 0.0)
-    lbary_ltopo = 1.0 + res['frac'][0]
-    bcvel_baryc = ( lbary_ltopo - 1.0 ) * 2.99792458E5
 
     #logger("Info: Barycentric velocity: {0}, MJD: {1}".format( bcvel_baryc, mjd))
     """ Data description of the file
@@ -338,7 +236,10 @@ def rv_analysis(params, spec, im_head, fitsfile):
             xc_av = GLOBALutils.Average_CCF(xc_full, sn, sn_min=3.0, Simple=True, W=W_ccf)
             pred = scipy.interpolate.splev(vels,tck1)
             xc_av /= pred
-
+            print 'min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig', min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig
+            if max(np.abs(xc_av)) > 10:
+                logger('Warn: stopped RV fit because of too big absolute value in xc_av: min(xc_av) = {0} , max(xc_av) = {1} , len(xc_av) = {2}'.format(min(xc_av),max(xc_av),len(xc_av)))
+                return -999.0, 999.0, -999.0, 999.0, bcvel_baryc
             p1,XCmodel,p1gau,XCmodelgau,Ls2 = \
                     GLOBALutils.XC_Final_Fit( vels, xc_av, sigma_res = 4,\
                      horder=8, moonv=refvel, moons=moon_sig, moon=False)
@@ -405,7 +306,7 @@ def rv_analysis(params, spec, im_head, fitsfile):
             logger('Warn: The spectra around the wavelength of {0} Angstrom is not covered'.format(cen_wave))
         
         B,A = -0.00257864,0.07765779            # from Monte Carlo Simulation, different for each instrument
-        B,A = 0.010, 5.0
+        B,A = 0.005, 0.2
         #print SNR_5130
         RVerr  =  B + ( 1.6 + 0.2 * p1gau[2] ) * A / np.round(SNR_5130)
         depth_fact = 1. + p1gau[0]/(p1gau[2]*np.sqrt(2*np.pi))

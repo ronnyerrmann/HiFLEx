@@ -112,10 +112,11 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
     minx, miny, maxx, maxy = 1e10, 1e10, -1e10, -1e10
     for i in range(len(data_x)):
-        if data_x[i] <> []:
+        if len(data_x[i]) > 0:
             minx = min(minx, np.nanmin(data_x[i]) )
             maxx = max(maxx, np.nanmax(data_x[i]) )
-            data_yi = np.array(data_y[i])           # Necessary, because data_y[i][ ~np.isnan(data_y[i]) ] fails
+            data_yi = np.array(data_y[i], dtype=float)           # Necessary, because data_y[i][ ~np.isnan(data_y[i]) ] fails, float necessary, otherwise data_yi.dtype will object, which fails np.isnan
+            #print type(data_yi), data_yi.shape, data_yi.dtype, np.isnan(data_yi)
             if len( data_yi[ ~np.isnan(data_yi) ] ) > 0:       # only search min/max, if non-nan data exists
                 miny = min(miny, np.nanmin(data_yi) )
                 maxy = max(maxy, np.nanmax(data_yi) )
@@ -141,7 +142,7 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
             width = (( 1 - i/len(data_x) ) * 0.7 + 0.1) * (data_x[i][1] - data_x[i][0])
             center = (data_x[i][:-1] + data_x[i][1:]) / 2
             plt.bar(center, data_y[i], align='center', width=width, label=label)
-        elif data_x[i] <> []:
+        elif len(data_x[i]) > 0:
             frame.plot(data_x[i], data_y[i], label=label, linestyle=linestyle, marker=marker[i])
             
     frame.set_xlabel(x_title, fontsize=13)
