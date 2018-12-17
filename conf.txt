@@ -188,6 +188,25 @@ standard_calibs_create = []
 # when reading already processed images from the result path, this defines what calibrations should be done. If one file type should be handled different, then <filetype>_calibs_read can be used
 calibs_read = [subframe]
 
+## Getting oject site and object coordinates to perform barycentric correction. If the values are stored in the header, then the header values are used
+-------------------------------------------------------------------------------
+# Define the observatory site:
+site        = UH
+altitude    = 30
+latitude    = 51.7534
+longitude   = -0.2401
+  
+site        = TNT
+altitude    = 2457
+latitude    = 18.59055
+longitude   = -98.48655
+  
+# Define the object coordinates using a file with a list of objects.
+# The file needs to contain the comma separated values: Object name, RA (hh:mm:ss.ss), DEC (+-dd:mm:ss.ss), PM RA ("/year), PM DEC ("year), Epoch of the coordinates (only the number), Enable/Disable flag (1 for enabled)
+object_file = object_list.txt
+
+
+
 
 ## Result storage information:
 #-----------------------------

@@ -31,7 +31,7 @@
 }
 
 \title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: V0.3.1}
-\date{September, 2018}
+\date{December, 2018}
 \author{Ronny Errmann, Neil Cook\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -70,7 +70,7 @@ Similar to the CERES pipeline, the SSEphem package (\url{http://www.cv.nrao.edu/
 
 \subsection{With Anaconda and python 2.7}
 
-\noindent Anaconda can be downloaded from \url{https://www.continuum.io/downloads}. Please select the version for python 2.7. After download it can be installed by running
+\noindent Anaconda can be downloaded from \url{https://www.anaconda.com/download/}. Please select the version for python 2.7. After download it can be installed by running
 \begin{lstlisting}[style=base]
 sh Downloads/Anaconda2-5.0.1-Linux-x86_64.sh
 \end{lstlisting}
@@ -91,7 +91,7 @@ After making the change and opening a new terminal python should point to the fi
 
 \noindent Once Anaconda is installed tow other modules are needed (tqdm, gatspy). If Anaconda is installed correctly then pip can be used to install this module
 \begin{lstlisting}[style=base]
-pip install tqdm gatspy
+pip install tqdm gatspy pyfits
 \end{lstlisting}
 %gatspy for lomb scargle
 
@@ -148,39 +148,6 @@ When running the scripts for the first time, python will create a new file calle
 
 
 
-\newpage
-\section{Short introduction to reduction of CCD images}
-
-The data stored in CCD images is affected by the physical parameters of the individual pixels and way the readout electronics work. Therefore each scientific frame needs to be corrected (pixel by pixel) with the formula:
-\begin{equation}
-  \mathrm{reduced\ Science} = \frac{\mathrm{raw\ Science} - \mathrm{master\ Bias} - \mathrm{master\ Dark}}{\mathrm{master\ Flat}}\,.
-\end{equation}
-The master Dark should have the same exposure time as the Science frame and the master Flat should be normalised in order to keep the flux levels. To create the master Dark and master Flat, the following steps are necessary:
-\begin{equation}
-  \mathrm{master\ Dark} = \mathrm{raw\ Dark} - \mathrm{master\ Bias}
-\end{equation}
-\begin{equation}
-  \mathrm{master\ Flat} = \mathrm{raw\ Flat} - \mathrm{master\ Bias} - \mathrm{master\ Dark}\,.
-\end{equation}
-The master Dark used for the creation of the master Flat should have the same exposure time as the Flat and needs to be corrected with the Bias. The master Bias in each of the formulas can be different.
-
-In order to decrease the noise levels, each of the master file should be created by median combining several (corrected) images together. If the brightness of the individual flats vary, then the flats should be weighted by their median flux before combining them. Combining all steps leads to the formula
-\begin{equation}
-  \label{eq:reduction_full}
-  \mathrm{reduced\ Science} = \frac{\mathrm{raw\ Science} - B_S - (D_S - B_{D_S})}{F - B_F - (D_F - B_{D_F})}\,,
-\end{equation}
-where $B_S$ is the master Bias, created by combining biases taken at a similar time as the science frame, $D_S$ is the master Dark, created of darks with the same exposure time as the science frame. In case the bias level and noise don't change during the night, then Equation~\ref{eq:reduction_full} changes to
-\begin{equation}
-  \mathrm{reduced\ Science} = \frac{\mathrm{raw\ Science} - D_S}{F - D_F}\,.
-\end{equation}
-
-In case the dark level is negligible and the Bias level is constant, then Equation~\ref{eq:reduction_full} changes to
-\begin{equation}
-  \mathrm{reduced\ Science} = \frac{\mathrm{raw\ Science} - B}{F - B}\,.
-\end{equation}
-
-
-In the pipeline always the individual frames are corrected before frames are combined.
 % -------------------------------------------------------------------------------------------
 
 
@@ -235,6 +202,7 @@ To get the best results, the following data should be taken (all filenames are c
   \item Arc (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc}, \textbf{ThAr}, or \textbf{UNe} and the science fiber should be dark for this data.
 %  \item FlatArc (11x, white light source and calibration lamp), the filename should be \textbf{flatarc}, \textbf{sflatThAr}, \textbf{whli-UNe}, or similar.
   \item Bias (11x) and/or Darks (11x, for the exposure time of the true Flat and Flat)% and FlatArc)
+  \item Filenames science images: the optimimum is to use ``\_'' for object name (as in reference file \verb|object_file|, see Chapter~\ref{Section:create_object_list_file}). Use ``-'' to seperate exposure time, number of series and other information.
 \end{itemize}
 
 \subsection{Steps to run the code on a new set of data}
@@ -274,7 +242,7 @@ To get the best results, the following data should be taken (all filenames are c
   \item[localbackground] : Applies background correction by fitting a 2d polynomalial against the current reduced image, excluding the area of the science and calibration traces. The fitted 2d-image is then subtracted from the (reduced) image.
 \end{description}
 
-\noindent The following parameters change the way, several CCD images are combined:
+\noindent The following parameters change the way, several CCD images are combined. In the pipeline always the individual frames are corrected before frames are combined.
 \begin{description}
   \item[normalise] : Before combining the files the images are normalised by their median flux.
   \item[combine\_sum] : Normally files are combined using a pixel by pixel median. With this keyword the files will summed up. This parameter will be overwritten by \verb|combine_mean| (This might collide with \verb|max_good_value|.)
@@ -334,7 +302,7 @@ The script \verb|prepare_file_list.py| reads all files in the folder (and subfol
   \item Type of light for the calibration fiber
   \item Exposure time in seconds
   \item Observation time
-  \item Flag 'e', if the spectrum should be extracted. This can be modified in order to allow different processing of the images before extraction. The following options are possible:
+  \item Flag 'w', if the Arc spectrum should be extracted (important for single fiber spectrographs). Flag 'e', if the spectrum should be extracted. This can be modified in order to allow different processing of the images before extraction. The following options are possible:
     \begin{description}
       \item[e alone:] The processing as given in parameter \verb|extract_calibs_create_g| will be assigned.
       \item[e \textless obj \textgreater :] The processing as given in parameter \\ \verb|extract<obj>_calibs_create_g| will be assigned. If this parameter doesn't exist, then parameter \verb|extract_calibs_create_g| will be used.
@@ -343,19 +311,52 @@ The script \verb|prepare_file_list.py| reads all files in the folder (and subfol
     \end{description}
 \end{itemize}
 
+\subsection{Necessary information to calculate the barycentric correction}
+In order to calculate the barycentric correction the time of the observation (or Julian Date), the pointing on the sky, and the position of the observatory on earth need to be known. These information can be given in different ways. 
+
+\begin{itemize}
+ \item The mid-exposure date and time is derived from the image header using the keys given in the parameter \verb|raw_data_dateobs_keyword| and \verb|raw_data_exptim_keyword| (half of the exposure time). The pipeline can handle different standard formats (YYYY-MM-DDThh:mm:ss). If necessary, further formats can be added in the procedure \textit{get\_obsdate}.
+ \item The position of the observatory will be extracted from the following sources (using the first available source in the following list:
+ \begin{enumerate}\setlength\itemsep{0em}
+  \item Reading latitude, longitude, and elevation from the header, using the the header keys defined in the beginning of procedure \textit{get\_barycent\_cor}: site\_keys, altitude\_keys, latitude\_keys, longitude\_keys (the first available entry of each list will be used, if necessary these lists can be extended).
+  \item Using the site coordinates as given in the configuration file.
+ \end{enumerate}
+ \item The pointing of the telescope (RA and DEC) will be derived from the following sources (using the first available source in the following list:
+ \begin{enumerate}\setlength\itemsep{0em}
+  \item reading the object coordinates from a list of objects (see Chaper~\ref{Section:create_object_list_file}).
+  \item Reading the object coordinates and epoch from the image header, using the header keys defined in the beginning of procedure \textit{get\_barycent\_cor}: ra\_keys, dec\_keys, epoch\_keys (the first available entry of each list will be used, if necessary these lists can be extended).
+  \item If the object name contains sun or moon, then the coordinates of the sun/moon are calculated for the mid of the observing time.
+ \end{enumerate}
+\end{itemize}
+
+
+\subsubsection{Creating a list of objects}
+\label{Section:create_object_list_file}
+If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file|. The file must contain one line per object. For each object the following tab-separated values need to be given:
+\begin{enumerate}\setlength\itemsep{0em}
+ \item Object name (the filename should start with the object name in order to be used)
+ \item RA (hh:mm:ss.ss)
+ \item DEC ($\pm$dd:mm:ss.ss)
+ \item PM RA (arcsec/year)
+ \item PM DEC (arcsec/year)
+ \item Epoch of the coordinates (only the number)
+ \item Enable/Disable flag (1 for enabled)
+\end{enumerate}
+
+
 \subsection{Format of the extracted files}
 Different types of extracted files are created. They are described in the following subsections.
 
-\subsubsection{raw-data filename}
+\subsubsection*{raw-data filename}
 \label{section:extraction_data_format}
 The final fits file contains the original header and some additional information, for example the calibration steps which were applied and some information about the flux collected in the different apertures. The data in the file is stored in a 3D array in the form: data type, aperture, and pixel. The data types are similar to the ones created by the CERES pipeline and are the following:
 \begin{enumerate}
   \setcounter{enumi}{-1}
   \item 2D array with the wavelength for each aperture and pixel.
   \item Extracted spectrum without any modification.
-  \item (Measurement of the error the extracted spectrum)
-  \item Flat corrected spectrum, calculated by dividing the extracted spectrum and the normalised flat spectrum.
-  \item (Error the flat corrected spectrum)
+  \item Measurement of the error the extracted spectrum (using the scatter of the residuals after fitting a 2d polynomalial to the background areas (noise in the dark/bias))
+  \item Blaze corrected spectrum, calculated by dividing the extracted spectrum and the normalised flat spectrum.
+  \item Error of the flat corrected spectrum (residuals of a polynomial fitted to the blaze corrected spectrum).
   \item Continuum normalised spectrum. The continuum is derived by fitting a polynomial to the flat corrected spectrum, using only areas of the spectrum where no lines are located. 
   \item Signal to noise ratio in the continuum, calculated from the residuals between continuum fit and measured continuum and the flux in the continuum.
   \item Mask with good areas of the spectrum. The following values are used:
@@ -368,15 +369,24 @@ The final fits file contains the original header and some additional information
   \item Spectrum of the calibration fiber, e.g. of the emission line lamp.
 \end{enumerate}
 
-\subsubsection{raw-data filename + \_harps\_e2ds}
+\subsubsection*{raw-data filename + \_harps\_e2ds}
 This file contains the extracted spectrum without any modification in the same form as the \textit{e2ds} files created by the HARPS pipeline. The wavelength solution is stored in the header.
 
-\subsubsection{raw-data filename + \_lin}
+\subsubsection*{raw-data filename + \_lin}
 \label{Section:linearised_spectrum}
 The extracted spectrum is linearised using a wavelength step as given in parameter \verb|wavelength_scale_resolution|. The wavelength spectrum is interpolated by using the weighted mean of the neighbouring data points with the wavelength difference as weights.
 
-\subsubsection{raw-data filename + \_lin\_cont}
+\subsubsection*{raw-data filename + \_lin\_cont}
 This file contains data in the same form as described in Section~\ref{Section:linearised_spectrum}, only that the continuum corrected data was linearised.
+
+\subsubsection*{inside single folder}
+\begin{itemize}
+ \item[raw-data filename + \_spec] Continuum normalised spectrum.
+ \item[raw-data filename + \_wave] 2D array with the wavelength for each aperture and pixel.
+ \item[raw-data filename + \_weight] Mask with good areas of the spectrum.
+\end{itemize}
+
+\subsubsection*{Object1/data/YYYY-MM-DDHHMMSS}
 
 \subsection{Results from the pipeline}
 \label{section:results_pipeline}
@@ -409,7 +419,7 @@ The identification of the traces can be checked easily in the file given in para
     \includegraphics[width=\textwidth]{./figures/arcorders_in_master_arc}
   \end{center} 
   \caption{Reduced CCD image of a ThAr exposure (log10 gray scale) with the marked traces of the identified calibration orders/apertures (red). The extraction width is given in dashed lines. The extraction width (determined from the Gaussian width of the order multiplied with the value in parameter \textbf{arcextraction\_width\_multiplier}) is given in dashed lines.
-    \label{figure_arapertures_in_master_arc}}
+    \label{figure_arcapertures_in_master_arc}}
 \end{figure}
 
 
@@ -787,6 +797,44 @@ This is experimental and the pipeline is not designed (yet) to take into account
 \end{itemize}
 
 % Other versions may work but these are the ones tested.
+
+
+\newpage
+\appendix
+\section{Short introduction to reduction of CCD images}
+
+The data stored in CCD images is affected by the physical parameters of the individual pixels and way the readout electronics work. Therefore each scientific frame needs to be corrected (pixel by pixel) with the formula:
+\begin{equation}
+  \mathrm{reduced\ Science} = \frac{\mathrm{raw\ Science} - \mathrm{master\ Bias} - \mathrm{master\ Dark}}{\mathrm{master\ Flat}}\,.
+\end{equation}
+The master Dark should have the same exposure time as the Science frame and the master Flat should be normalised in order to keep the flux levels. To create the master Dark and master Flat, the following steps are necessary:
+\begin{equation}
+  \mathrm{master\ Dark} = \mathrm{raw\ Dark} - \mathrm{master\ Bias}
+\end{equation}
+\begin{equation}
+  \mathrm{master\ Flat} = \mathrm{raw\ Flat} - \mathrm{master\ Bias} - \mathrm{master\ Dark}\,.
+\end{equation}
+The master Dark used for the creation of the master Flat should have the same exposure time as the Flat and needs to be corrected with the Bias. The master Bias in each of the formulas can be different.
+
+In order to decrease the noise levels, each of the master file should be created by median combining several (corrected) images together. If the brightness of the individual flats vary, then the flats should be weighted by their median flux before combining them. Combining all steps leads to the formula
+\begin{equation}
+  \label{eq:reduction_full}
+  \mathrm{reduced\ Science} = \frac{\mathrm{raw\ Science} - B_S - (D_S - B_{D_S})}{F - B_F - (D_F - B_{D_F})}\,,
+\end{equation}
+where $B_S$ is the master Bias, created by combining biases taken at a similar time as the science frame, $D_S$ is the master Dark, created of darks with the same exposure time as the science frame. In case the bias level and noise don't change during the night, then Equation~\ref{eq:reduction_full} changes to
+\begin{equation}
+  \mathrm{reduced\ Science} = \frac{\mathrm{raw\ Science} - D_S}{F - D_F}\,.
+\end{equation}
+
+In case the dark level is negligible and the Bias level is constant, then Equation~\ref{eq:reduction_full} changes to
+\begin{equation}
+  \mathrm{reduced\ Science} = \frac{\mathrm{raw\ Science} - B}{F - B}\,.
+\end{equation}
+
+
+In the pipeline always the individual frames are corrected before frames are combined.
+
+
 
 \end{document}
 

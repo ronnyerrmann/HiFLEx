@@ -45,22 +45,22 @@ calimages = dict()  # dictionary for all calibration images used by create_image
 oldorder = 12
 
 class Constants:                    # from Ceres
-	"Here I declare the constants I will use in the different functions"
-	"G,c: the gravity and speed of light constants in SI units; mearth and mmoon: the earth and moon masses in kg"
-	G,c = 6.673E-11,2.99792458E8
-	mearth, mmoon = 5.9736E24,7.349E22 
-	"the mass of the planets,moon and sun in earth masses, the ennumeration is sun, moon, mercury,venus,mars,jupiter,saturn, uranus,neptune,pluto"	
-	mplanets = np.array([332981.787,0.0123000371,0.05528,0.815,0.10745,317.83,95.19,14.536,17.147,0.0021])
-	"conversion from degrees to radians, and from hours to degrees, and from degrees to hours"
-	degtorad = np.pi/180.0
-	radtodeg = 180.0/np.pi
-	HtoDeg = 360.0/24.0
-	DegtoH = 1.0/HtoDeg
-	"Req: equatorial radius	f: polar flatenning , w angular speedof earth in rad/s"
-	Req = 6378136.6 #in m
-	f = 1.0/298.256420
-	w = 7.2921158554E-5 
-	DaystoYear = 1.0/365.256363004
+    "Here I declare the constants I will use in the different functions"
+    "G,c: the gravity and speed of light constants in SI units; mearth and mmoon: the earth and moon masses in kg"
+    G,c = 6.673E-11,2.99792458E8
+    mearth, mmoon = 5.9736E24,7.349E22 
+    "the mass of the planets,moon and sun in earth masses, the ennumeration is sun, moon, mercury,venus,mars,jupiter,saturn, uranus,neptune,pluto"    
+    mplanets = np.array([332981.787,0.0123000371,0.05528,0.815,0.10745,317.83,95.19,14.536,17.147,0.0021])
+    "conversion from degrees to radians, and from hours to degrees, and from degrees to hours"
+    degtorad = np.pi/180.0
+    radtodeg = 180.0/np.pi
+    HtoDeg = 360.0/24.0
+    DegtoH = 1.0/HtoDeg
+    "Req: equatorial radius    f: polar flatenning , w angular speedof earth in rad/s"
+    Req = 6378136.6 #in m
+    f = 1.0/298.256420
+    w = 7.2921158554E-5 
+    DaystoYear = 1.0/365.256363004
 
 def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logfile'):
     """
@@ -192,6 +192,9 @@ def textfileargs(params, textfile=None):
     lists = ['subframe', 'arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck']
     for entry in lists:
+        if entry not in params.keys():
+            emsg2 = 'Parameter "{0}" '.format(entry)
+            logger(emsg + emsg2 + ' missing')
         if params[entry] <> ['']:           # only make useful data into integers
             for i in range(len(params[entry])):
                 try:
@@ -203,6 +206,9 @@ def textfileargs(params, textfile=None):
     # deal with lists of floats
     lists = ['opt_px_range', 'background_width_multiplier']
     for entry in lists:
+        if entry not in params.keys():
+            emsg2 = 'Parameter "{0}" '.format(entry)
+            logger(emsg + emsg2 + ' missing')
         if params[entry] <> ['']:           # only make useful data into floats
             for i in range(len(params[entry])):
                 try:
@@ -212,8 +218,11 @@ def textfileargs(params, textfile=None):
                     logger(emsg + emsg2 + ' must be a list of floats')
     
     # deal with ints
-    floats = ['polynom_order_apertures', 'rotate_frame']
-    for entry in floats:
+    ints = ['polynom_order_apertures', 'rotate_frame']
+    for entry in ints:
+        if entry not in params.keys():
+            emsg2 = 'Parameter "{0}" '.format(entry)
+            logger(emsg + emsg2 + ' missing')
         try:
             params[entry] = int(params[entry])
         except:
@@ -222,7 +231,7 @@ def textfileargs(params, textfile=None):
             
     # deal with floats
     floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier',
-              'resolution_offset_pct', 'diff_pxs', 'maxshift', 'wavelength_scale_resolution', 'width_percentile']
+              'resolution_offset_pct', 'diff_pxs', 'maxshift', 'wavelength_scale_resolution', 'width_percentile', 'altitude', 'latitude', 'longitude']
     for entry in floats:
         if entry not in params.keys():
             emsg2 = 'Parameter "{0}" '.format(entry)
@@ -490,10 +499,12 @@ def read_file_calibration(params, filename, level=0):
                 #plot_img_spec.plot_image(bck_im, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bck_im')
                 #plot_img_spec.plot_image(im-bck_im, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'diff')
                 plot_img_spec.plot_image((im - bck_im)*bck_px, \
-                                        [params['logging_path']+filename.replace(params['raw_data_path'],'background_subtracted-').replace(params['raw_data_path'].replace('ncook','ronny'),'background_subtracted-')+'.png'],\
-                                         1, False, [0.05,0.95,0.95,0.05], 'difference between image and background fit')        # replace(params['raw_data_path'].replace('ncook','ronny'),'background_subtracted-')    only to make life easier at UH
+                                        [params['logging_path']+'background_subtracted-'+filename.rsplit('/',1)[-1]+'.png'],\
+                                         1, False, [0.05,0.95,0.95,0.05], 'difference between image and background fit')
                 im = im - bck_im
                 bck_noise_std, bck_noise_var = measure_background_noise(im * bck_px)
+                if np.isnan(bck_noise_var):
+                    bck_noise_var = -1
                 logger('Info: {1}: background correction applied: {0}'.format(entry, level))
                 im_head['redu{0}f'.format(level)] = 'Background: {0}'.format(entry)
                 im_head['BCKNOISE'] = bck_noise_std
@@ -880,7 +891,7 @@ def save_multispec(data, fname, head, bitpix='-64'):
         logger('Warn: The bitpix parameter ({0}) is unknown, using the data suggested one ({1})'.format(bitpix,hdu.header['BITPIX']))
         hdu = fits.PrimaryHDU(np.array(data), header=head)
         
-    hdu.writeto(fname+'.fits', clobber=True)    # as .fits
+    hdu.writeto(fname+'.fits', overwrite=True)    # as .fits # clobber=True was used earlier
     
 def rotate_flip_frame(im, params, invert=False):
     """
@@ -1556,7 +1567,7 @@ def find_trace_orders(params, im):
     maxshift = 0.15*binx                    # Only 0.15px shift per pixel along one order
     ims = im.shape
     cen_px = ims[0]*binx/2                  # central pixel to base the fit on
-    breakvalue = np.percentile(im,30)       # The brightes pixel of one order needs to be brighter than this value, otherwise it won't be identified (lower values -> darker orders are found)
+    breakvalue = np.percentile(im,25)       # The brightes pixel of one order needs to be brighter than this value, otherwise it won't be identified (lower values -> darker orders are found)
     im_orig = copy.deepcopy(im)
     im_traces = np.zeros(ims)               # Masks the orders in order to avoid overlapping traces
     traces = []
@@ -2127,11 +2138,14 @@ def measure_background_noise(im):
     im[im == 0.0] = np.nan                                                              # Replace zeros with NaNs
     im[im == 0] = np.nan                                                              # Replace zeros with NaNs
     #plot_img_spec.plot_image(im, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'orig')
-    dummy, gim, sim = bin_im(im, [10, 10])
+    dummy, gim, sim = bin_im(im, [10, 10])          # gim: number of eleements, sim: standard deviation
     #plot_img_spec.plot_image(dummy, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_im')
     #plot_img_spec.plot_image(gim, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_datapoints')
     #plot_img_spec.plot_image(sim, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_std')
-    sim = sim[ gim >= 90 ]                  # only use data where 90% of the data is defined
+    for threshold in range(90,30,-5):
+        if np.sum( gim >= threshold ) >= gim.shape[0] * gim.shape[1] * 0.10:              # 10% of the binned data is available
+            break
+    sim = sim[ gim >= threshold ]                  # only use data where 90% of the data is defined
     return np.nanmedian(sim), np.nanstd(sim, ddof=1)
     
     """ first idea
@@ -2619,7 +2633,7 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float):
     all_shifts = read_text_file(params['master_wavelengths_shift_filename'], no_empty_lines=True)
     all_shifts = convert_readfile(all_shifts, [float, float, float], delimiter='\t', replaces=['\n'])       # obsdate_float, shift_avg, shift_std, can contain duplicate obsdate_float (last one is the reliable one)
     if len(all_shifts) == 0:
-        logger('Warn: No pixel-shiftor the wavelength solution is available.')
+        logger('Warn: No pixel-shift or the wavelength solution is available.')
         return copy.deepcopy(wavelength_solution)               # No shift is possible
     all_shifts = np.array(all_shifts)
     shifts = []
@@ -2816,9 +2830,10 @@ def get_obsdate(params, im_head):
     :return obsdate: datetime.datetime object, containing the the center of the observation
     :return obsdate_float: float, unix timestamp of the mid observation time
     """
+    obsformats = ['%Y-%m-%dT%H:%M:%S.%f','%Y-%m-%dT%H:%M:%S']           # Put into the parameters
+    
     if params['raw_data_dateobs_keyword'] not in im_head.keys():
         logger('Warn: Cannot find the raw_data_dateobs_keyword = {0} in the header.'.format(params['raw_data_dateobs_keyword'] ))
-    obsformats = ['%Y-%m-%dT%H:%M:%S.%f','%Y-%m-%dT%H:%M:%S']
     for obsformat in obsformats:
         try:
             obsdate = datetime.datetime.strptime(im_head[params['raw_data_dateobs_keyword']], obsformat)      # datetime object
@@ -2857,6 +2872,8 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     """
     if 'BCKNOISE' not in im_head.keys():        # if not already done because localbackground is in parameters
         bck_noise_std, bck_noise_var = prepare_measure_background_noise(params, im, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths)
+        if np.isnan(bck_noise_var):
+            bck_noise_var = -1
         im_head['BCKNOISE'] = bck_noise_std
         im_head['BNOISVAR'] = bck_noise_var             # Background noise variation can be very high, because some light of the traces remains
     if im_head['BCKNOISE'] <= 0 or np.isnan(im_head['BCKNOISE']):
@@ -2904,17 +2921,23 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     ceres_spec = np.array([wavelengths, spectra, espectra, fspectra, efspectra, cspectra, sn_cont, good_px_mask, aspectra])
     ceres_spec = clip_noise(ceres_spec)
     
-    reffile = 'reffile.txt'
+    # Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
     obname = im_name.split('/')    # get rid of the path
     obname = obname[-1].split('-')  # remove the numbering and exposure time from the filename
     obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
-    obname_short = copy.copy(obname)
-    for rplc in ['_arc','arc', '_thar','thar', '_une','une']:
-        posi = obname_short.lower().find(rplc)
-        if posi + len(rplc) == len(obname_short):           # the searchtext is at the end of the filename
-            obname_short = obname_short[:posi]              # get rid of the Arc in the filename
-            break
-    params, bcvel_baryc, mephem = get_barycent_cor(params, im_head, obname, obname_short, reffile)
+    obname = obname.replace('\n','')
+    obnames = []
+    obname += '_'
+    while obname.find('_') <> -1:
+        obname = obname.rsplit('_', 1)
+        obname = obname[0]
+        for rplc in ['_arc','arc', '_thar','thar', '_une','une']:
+            posi = obname.lower().find(rplc)
+            if posi + len(rplc) == len(obname) and posi <> -1:           # the searchtext is at the end of the filename
+                obname = obname[:posi]              # get rid of the Arc in the filename
+                break
+        obnames.append(obname)
+    params, bcvel_baryc, mephem, obnames = get_barycent_cor(params, im_head, obnames, params['object_file'])
     
     if np.max(wavelength_solution[:,-1]) < 100 or im_name.lower().find('flat') in [0,1,2,3,4,5]:     # pseudo solution / no data for RV
         bcvel_baryc = 0.0
@@ -2924,7 +2947,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         #    ceres_spec = np.delete(ceres_spec, 0, axis=1)
         #ceres_spec = np.delete(ceres_spec, -1, axis=1)
         #logger('Warn: the first 3 orders are deleted for RV analysis. Remaining format: {0}'.format(ceres_spec.shape))
-        RV, RVerr2, BS, BSerr, bcvel_baryc = find_rv.rv_analysis(params, ceres_spec, im_head, im_name, obname, bcvel_baryc, reffile, mephem)
+        RV, RVerr2, BS, BSerr, bcvel_baryc = find_rv.rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], bcvel_baryc, params['object_file'], mephem)
         logger('Info: The radial velocity (including barycentric correction) for {0} gives: RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s'.format(\
                                     im_name, RV, RVerr2, BS, BSerr, bcvel_baryc))
     
@@ -3110,7 +3133,7 @@ def plot_wavelength_solution_width_emmission_lines(fname, specs, arc_lines_wavel
     axis_name = ['Position in Dispersion direction [{0} px]'.format(step), 'Order', 'Gaussian width of the emission lines [px] (white shows areas with no data available)'.format(step)]
     plot_img_spec.plot_image(gauss_ima, [fname], pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, autotranspose=False, colorbar=True, axis_name=axis_name)
 
-def plot_wavelength_solution_spectrum(spec1, spec2, fname, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names):
+def plot_wavelength_solution_spectrum(spec1, spec2, fname, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=False):
     """
     Creates a pdf with one page for each ThAr spectrum and adds the identified and further catalogue lines to the plots
     :param spec1: 2d array of floats, extracted spectrum of the long exposed arc
@@ -3124,15 +3147,25 @@ def plot_wavelength_solution_spectrum(spec1, spec2, fname, wavelength_solution, 
     max_reflines = 30
     plot_pos = [0.01, 0.035, 0.04]      # begin line, end line, beginn of text; all relative to the the flux at the position and proportional to the range of the flux
     
+    labels = ['long exp','short exp']
+    x_title = 'Wavelength [Angstroms]'
+    y_title = 'extracted flux [ADU]'
+    titel_f = 'Order {0}, real Order {1}\nmarked (proportional to line strength) are the identified reference lines (red, {2} lines) and\na subset of the omitted reference lines (green, showing the brightes {3} out of {4} lines)'
+    
+    spec1, spec2 = copy.copy(spec1), copy.copy(spec2)
+    if plot_log:
+        y_title = 'log10 ( {0} )'.format(y_title)
+        if np.nanmin(spec1) < 1:
+            spec1 += 1 - np.nanmin(spec1)       # minus to cancel negative minimum
+        if np.nanmin(spec2) < 1:
+            spec2 += 1 - np.nanmin(spec2)       # minus to cancel negative minimum
+        spec1 = np.log10(spec1)
+        spec2 = np.log10(spec2)
     reference_catalog = np.array(sorted(reference_catalog, key=operator.itemgetter(1), reverse=True ))          # Sort by intensity in reverse order
     wavelengths = create_wavelengths_from_solution(wavelength_solution, spec1)
     
     # multiple pdf pages from https://matplotlib.org/examples/pylab_examples/multipage_pdf.html
     with PdfPages(fname) as pdf:
-        labels = ['long exp','short exp']
-        x_title = 'Wavelength [Angstroms]'
-        y_title = 'extracted flux [ADU]'
-        titel_f = 'Order {0}, real Order {1}\nmarked (proportional to line strength) are the identified reference lines (red, {2} lines) and\na subset of the omitted reference lines (green, showing the brightes {3} out of {4} lines)'
         for order in range(wavelength_solution.shape[0]):
             x_range = wavelengths[ order, ~np.isnan(spec1[order,:]) ]
             if len(x_range) < 10:                                       # the reference trace cod fall completely out of the CCD
@@ -4135,7 +4168,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         px_range = opt_px_range[step]
         polynom_order_trace = polynom_order_traces[step]
         polynom_order_intertrace = polynom_order_intertraces[step]
-        good_values = (arc_lines_px[:,1] >= px_range+pxdiff) & (arc_lines_px[:,1] <= specs[1]-px_range+pxdiff) & (arc_lines_px[:,0] not in ignoreorders)        #+pxdiff to start with the lines closest to the center of the old wavelength solution
+        good_values = (arc_lines_px[:,1] >= px_range+pxdiff) & (arc_lines_px[:,1] <= specs[1]-px_range+pxdiff) & (arc_lines_px[:,0] not in ignoreorders)        #+pxdiff to start with the lines closest to the center of the old wavelength solution   !!! add cen_px, but keep in mind that opt_px_range = 1 should include the whole order
         arc_lines_px_step = arc_lines_px[good_values,:]                             # Subset of the emission lines in the spectrum to which the fitting is done in this step
         weights1, weights3 = arc_lines_px_step[:,3], 1/(abs(arc_lines_px_step[:,2]-med_arc_width)+med_arc_width)     # height of the arc line, 1/width of the arc line
         reference_catalog = reference_catalog_full[ reference_catalog_full[:,1] >= np.percentile(reference_catalog_full[:,1], ref_catalog_brigthness[step]) ,:]   # use only the brightest lines
@@ -4176,11 +4209,14 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                 x2 = arc_lines_px_step[:,1] - cen_pxs                         # The pixel position of all lines in this step
                 y2 = 1.0/(arc_lines_px_step[:,0]+order_offset)
                 arc_line_wave = polynomial_value_2d(x2, y2, polynom_order_trace, polynom_order_intertrace, poly2d_params)
+                #print len(x2),len(x), px_range, pxdiff, np.sum(arc_lines_px_step[:,0]==26)
+                #print np.vstack([y2,x2,arc_line_wave]).T[arc_lines_px_step[:,0] == 26,:]
                 ## Resolution around the line
                 arc_line_res = np.abs(polynomial_value_2d(x2+1, y2, polynom_order_trace, polynom_order_intertrace, poly2d_params) - \
                                       polynomial_value_2d(x2-1, y2, polynom_order_trace, polynom_order_intertrace, poly2d_params) )/2
                 # Avoid running off the wavelength solution with high orders -> fit linear solution and use it for the outer areas
                 if old_px_range - px_range > 10:    # only use linear solution when more than 10 px more
+                    #print "use linear values"
                     good_values_l = ( arc_lines_px_step[:,1] <= old_px_range+pxdiff + min(100,4*(old_px_range - px_range)) ) & \
                                     ( arc_lines_px_step[:,1] >= old_px_range+pxdiff)   # lines on the left, covered by the old solution
                     good_values_r = ( arc_lines_px_step[:,1] >= specs[1]-old_px_range+pxdiff - min(100,4*(old_px_range - px_range)) ) & \
@@ -4223,14 +4259,17 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                     # Ignore lines, for which the resolution is unphysical
                     index = np.where( np.abs( 1/(arc_lines_px_step[i,0]+order_offset) - y_lin ) < 0.00001 )[0]      # Find the index of the order in res_cen, orders might be missing
                     if len(index) <> 1:
-                        logger('Error: that should not have happened, check code around line 3570. Index contains {0} entries'.format(len(index)))
+                        logger('Error: that should not have happened, check code around line 4300. Index contains {0} entries'.format(len(index)))
                     index = index[0]                                                    # make the list into an integer
-                    if abs(arc_line_res[i] - res_cen[index]) > res_cen[index] * 0.15:   # The variation in one order should be less than 15%
-                            #1#print "ignore the line", arc_line_res[i], res_cen[int(arc_lines_px_step[i,0])], arc_lines_px_step[i,0], arc_lines_px_step[i,1]
-                            continue                # Ignore lines which differ a lot, hopefully other lines will fix that
+                    if abs(arc_line_res[i] - res_cen[index]) > res_cen[index] * 0.25:   # The variation in one order should be less than 15% (exohspec), 25% MRES
+                        #1#print "ignore the line", arc_line_res[i], res_cen[int(arc_lines_px_step[i,0])], arc_lines_px_step[i,0], arc_lines_px_step[i,1]
+                        #if arc_lines_px_step[i,0] == 26:
+                        #    print arc_lines_px_step[i,0], arc_lines_px_step[i,1], arc_line_wave[i], "resolution too far off"
+                        continue                # Ignore lines which differ a lot, hopefully other lines will fix that
                     # Wavelength difference to the catalog lines
                     diff_catalog = reference_catalog[:,0] - arc_line_wave[i]    # Diff between catalog wavelength and fitted wavelength
                     good_pos = np.where( np.abs(diff_catalog) <= max_diff_px*arc_line_res[i] )[0]                   # Lines which are close to the fitted wavelength
+                    #print i, arc_line_wave[i], len(good_pos), max_diff_px, arc_line_res[i], max_diff_px*arc_line_res[i]
                     # Remove already identified lines, can't be done earlier, as the index in good_pos is important
                     if only_one_line == True:
                         good_pos = np.array( [j for j in good_pos if j not in assigned_reflines] )                  # Only keep the good_pos, which are not in assigned_reflines
@@ -4245,6 +4284,8 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                         assigned_reflines.append(j)                                                         # Don't use the line again
                         #if arc_lines_px_step[i,0] == 43:            #testing
                         #    print arc_lines_wavelength[-1]          #testing
+                    #if arc_lines_px_step[i,0] == 26:
+                    #    print arc_lines_px_step[i,0], arc_lines_px_step[i,1], arc_line_wave[i], len(good_pos), min(np.abs(diff_catalog)), len(arc_lines_wavelength), reference_catalog[j,0]
                     
                 arc_lines_wavelength = np.array(arc_lines_wavelength)   
                 # arc_lines_wavelength: order, px in spectrum, wavelength in reference catalog, difference in wavelength between wavelength solution and reference line, 
@@ -4350,8 +4391,17 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     
     # Log the results
     # print np.vstack([ arc_lines_wavelength[:,2], arc_lines_wavelength[:,3], arc_lines_wavelength[:,-3], arc_lines_wavelength[:,2]/arc_lines_wavelength[:,3] ]).T
+    #np.set_printoptions(threshold=np.inf)
+    #print np.sort(arc_lines_wavelength[:,3])
+    #np.set_printoptions(threshold=1000)
+    #print np.histogram(arc_lines_wavelength[:,3], 20), arc_lines_wavelength.shape
+    # Remove the most scattered lines (highest 1% and lowest 1%
+    todel = np.argsort(arc_lines_wavelength[:,3])
+    todel = np.delete(todel, np.arange(len(todel)/100, len(todel)*99/100), axis=0)
+    arc_lines_wavelength = np.delete(arc_lines_wavelength, todel, axis=0)
+    #print np.histogram(arc_lines_wavelength[:,3], 20), arc_lines_wavelength.shape
     avg_diff_fit = np.mean(np.abs(arc_lines_wavelength[:,3]))           # Diff between catalog wavelength and fitted wavelength
-    std_diff_fit = np.std(arc_lines_wavelength[:,3], ddof=(polynom_order_trace+polynom_order_intertrace+1))
+    std_diff_fit = np.std(arc_lines_wavelength[:,3], ddof=(polynom_order_trace+polynom_order_intertrace+1))             # real standard deviation, asume values +-1 to convice yourself
     # Resolution from the precission of the fit
     std_R_fit = 1/np.std(arc_lines_wavelength[:,3]/arc_lines_wavelength[:,2], ddof=(polynom_order_trace+polynom_order_intertrace+1))    # lambda/d_lambda
     # Resolution using the Gaussian width of the arc lines
@@ -4560,6 +4610,7 @@ def read_fit_wavelength_solution(params, filename, im):
     
     cen_px = np.repeat([im.shape[0]/2.], len(orders))       # cen_px needs to be float, cen_px defines the zeropoint of np.polyfit
     cen_px_old = copy.copy(cen_px)
+    deleted_lines = ''
     for dummy in range(20):
         cen_pxs = arc_lines_wavelength[:,0] * np.nan
         for i,order in enumerate(orders):
@@ -4573,6 +4624,7 @@ def read_fit_wavelength_solution(params, filename, im):
             arc_line_res = np.abs(arc_line_wave_fit - arc_lines_wavelength[:,3])
             if max(arc_line_res) < 1:       # only good data left, probably should be less than 1 Angstrom
                 break
+            deleted_lines += '{0}, '.format( arc_lines_wavelength[arc_line_res.argmax(),0:4] )
             arc_lines_wavelength = np.delete(arc_lines_wavelength, arc_line_res.argmax(), 0)        # Delete the least matching line
             cen_pxs = np.delete(cen_pxs, arc_line_res.argmax())                                     # Apply the same correction
         if arc_lines_wavelength.shape[0] <= polynom_order_trace*polynom_order_intertrace:
@@ -4611,7 +4663,8 @@ def read_fit_wavelength_solution(params, filename, im):
              '{6} + {7}*order + {8}*order**2.').format( round(np.mean(arc_line_res),4), 
                             round(np.std(arc_line_res, ddof=polynom_order_trace+polynom_order_intertrace+1),4), arc_lines_wavelength.shape[0], 
                             polynom_order_trace, polynom_order_intertrace, orig_lines, p_cen_px[2], p_cen_px[1], p_cen_px[0] ))
-
+    if len(deleted_lines) > 0:
+        logger('Warn: The following lines from {0} have not been used: {1}'.format(filename, deleted_lines) )
     
     """# Testing
     xarr = np.repeat( [np.arange(max( arc_lines_wavelength[:,2] ))], len(orders), axis=0)
@@ -4900,10 +4953,12 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
         data[6,:] = np.polyval(p_sn, data[1,:]-x_cen)
         for nc_step in range(1,nc_noise)[::-1]:                                 # Use a lower order, if fit remains stupid
             for dummy in range(100):
+                np.warnings.filterwarnings('ignore')
                 if sum(~sub[5,:]*sub[1,:]) > 0:                                     # There are values that can be replaced
                     index = data[0,sub[1,:]][np.abs(data[6,sub[1,:]] - np.nanmin(data[6,~sub[5,:]]) ) < 1E-4].astype(int)   # Find the position where the fit has the smallest value and the residual there isn't used for the fit
                 else:
                     index = data[0,~sub[6,:]][np.abs(data[6,~sub[6,:]] - np.nanmin(data[6,~sub[6,:]]) ) < 1E-4].astype(int) # Find the smalles value of the fit, ignore already changed values
+                np.warnings.resetwarnings()
                 #print order,index, np.max(data[5,sub[5,:]]), data[5,index], sub[5,index]
                 data[5,index] = np.max(np.abs(data[5,sub[5,:]]))                                            # Replace with the maximum residual as worst case
                 sub[5:7,index] = True                                                                       # use the value for the fit
@@ -5163,103 +5218,137 @@ def mjd_fromheader(params, head):       # from CERES, slightly modified
     return mjd, mjd0
 
 def iau_cal2jd(IY,IM,ID):               # from CERES
-	IYMIN = -4799.
-	MTAB = np.array([ 31., 28., 31., 30., 31., 30., 31., 31., 30., 31., 30., 31.])
-	J = 0
-	if IY < IYMIN:
-		J = -1
-	else:
-		if IM>=1 and IM <= 12:
-			if IY%4 == 0:
-				MTAB[1] = 29.
-			else:
-				MTAB[1] = 28.
-			if IY%100 == 0 and IY%400!=0:
-				MTAB[1] = 28.
-			if ID < 1 or ID > MTAB[IM-1]:
-				J = -3
-			a = ( 14 - IM ) / 12
-			y = IY + 4800 - a
-			m = IM + 12*a -3
-			DJM0 = 2400000.5
-			DJM = ID + (153*m + 2)/5 + 365*y + y/4 - y/100 + y/400 - 32045 - 2400001.
-		else:
-			J = -2
-	return DJM0, DJM, J
+    IYMIN = -4799.
+    MTAB = np.array([ 31., 28., 31., 30., 31., 30., 31., 31., 30., 31., 30., 31.])
+    J = 0
+    if IY < IYMIN:
+        J = -1
+    else:
+        if IM>=1 and IM <= 12:
+            if IY%4 == 0:
+                MTAB[1] = 29.
+            else:
+                MTAB[1] = 28.
+            if IY%100 == 0 and IY%400!=0:
+                MTAB[1] = 28.
+            if ID < 1 or ID > MTAB[IM-1]:
+                J = -3
+            a = ( 14 - IM ) / 12
+            y = IY + 4800 - a
+            m = IM + 12*a -3
+            DJM0 = 2400000.5
+            DJM = ID + (153*m + 2)/5 + 365*y + y/4 - y/100 + y/400 - 32045 - 2400001.
+        else:
+            J = -2
+    return DJM0, DJM, J
 
-def getcoords(obname,mjd,filen='/data/echelle/feros/coords.txt'):               # from CERES
-	RA,DEC = 0.,0.
-	mjdJ2000 = 2451545.0 - 2400000.5
-
-	try:
-		f = open(filen,'r')
-		lines = f.readlines()
-		f.close()
-		for line in lines:
-			cos = line.split(',')
-			if cos[0]==obname and int(cos[5])==1:
-				ra,dec = cos[1],cos[2]
-				cos1 = ra.split(':')
-				cos2 = dec.split(':')
-				RA0 = (float(cos1[0]) + float(cos1[1])/60. + float(cos1[2])/3600.) * 360. / 24.
-				if float(cos2[0]) > 0:
-					DEC0 = np.absolute(float(cos2[0])) + float(cos2[1])/60. + float(cos2[2])/3600.
-				else:
-					DEC0 = -(np.absolute(float(cos2[0])) + float(cos2[1])/60. + float(cos2[2])/3600.)
-				PMRA = float(cos[3])/1000.
-				PMDEC = float(cos[4])/1000.
-
-				RA  = RA0 + (PMRA/3600.)*(mjd-mjdJ2000)/365.
-				DEC = DEC0 + (PMDEC/3600.)*(mjd-mjdJ2000)/365.
-				break
-	except:
-		print '\t\tWarning! Problem with reference coordinates files.'
-	return RA,DEC
+def getcoords(obnames,mjd,filen='coords.txt'):               # from CERES, modified
+    """
+    1-  name of the target as specified in the image header.
+    2-  right ascension of the target (J2000) with format hh:mm:ss.
+    3-  declination of the target (J2000) with format dd:mm:ss.
+    4-  proper motion in RA [mas/yr].
+    5-  proper motion in DEC [mas/yr].
+    6-  epoch (J2000)
+    7-  integer (0 or 1). If 0, the code uses the cordinates given in the image header.
+        If 1, the code uses the coordinates given in this file.
+    old7-  mask that will be used to compute the CCF. Allowed entries are G2, K5 and M2.
+    old8-  velocity width in km/s that is used to broaden the lines of the binary mask.
+        It should be similar to the standard deviation of the Gaussian that is fitted to the CCF.
+    """
+    RA,DEC,epoch = 0., 0., 2000.
+    
+    try:
+        # !!! Use read files with split already available
+        f = open(filen,'r')
+        lines = f.readlines()
+        f.close()
+        for line in lines:
+            line = line[:-1].replace('\t',',')
+            cos = line.split(',')
+            for obname in obnames:
+                if cos[0]==obname and int(cos[6])==1:
+                    print "matched"
+                    if cos[1].find(':') > 0 or cos[1].find(' ') > 0:
+                        cos[1] = cos[1].replace(' ',':')
+                        cos1 = cos[1].split(':')
+                        RA0 = (float(cos1[0]) + float(cos1[1])/60. + float(cos1[2])/3600.) * 360. / 24.
+                    else:
+                        RA0 = float(cos[1])
+                    if cos[2].find(':') > 0 or cos[2].find(' ') > 0:
+                        cos[2] = cos[2].replace(' ',':')
+                        cos2 = cos[2].split(':')
+                        if cos2[0][0] <> '-':
+                            DEC0 = np.absolute(float(cos2[0])) + float(cos2[1])/60. + float(cos2[2])/3600.
+                        else:
+                            DEC0 = -(np.absolute(float(cos2[0])) + float(cos2[1])/60. + float(cos2[2])/3600.)
+                    else:
+                        DEC0 = float(cos[2])
+                    PMRA = float(cos[3])/1000.
+                    PMDEC = float(cos[4])/1000.
+                    
+                    mjdepoch = 2451545.0 - 2400000.5 + (float(cos[5]) - 2000.)
+    
+                    RA  = RA0 + (PMRA/3600.)*(mjd-mjdepoch)/365.
+                    DEC = DEC0 + (PMDEC/3600.)*(mjd-mjdepoch)/365.
+                    obnames = [obname]
+                    break
+            if RA <> 0. or DEC <> 0:
+                break
+    except:
+        logger('Warn: Problem with reference coordinates files: {0}.'.format(filen))
+    return RA, DEC, epoch, obnames
 
 def JPLR0(lat, altitude):               # from CERES
-	"the corrections due to earth rotation"
-	"this function returns the velocity in m/s, the projected distance of the observatory in the equator axis and in the earth spin axis and \
-	also returns the distance from the rotation axis, and the distance from the equator plane to the observatory position"
-	"The arguments are latitude,altitude and hour angle at observatory , dec: the declination of the star\
-	the variables are: \
-	Raxis: the distance from the observatory to the earth axis, and Psid: the period of sidereal day"
-	lat = Constants.degtorad*lat
-	e2 = Constants.f*(2.0-Constants.f)
-	c1 = 1.0 - e2*(2.0 - e2)*np.sin(lat)**2
-	c2 = 1.0 - e2*np.sin(lat)**2
+    "the corrections due to earth rotation"
+    "this function returns the velocity in m/s, the projected distance of the observatory in the equator axis and in the earth spin axis and \
+    also returns the distance from the rotation axis, and the distance from the equator plane to the observatory position"
+    "The arguments are latitude,altitude and hour angle at observatory , dec: the declination of the star\
+    the variables are: \
+    Raxis: the distance from the observatory to the earth axis, and Psid: the period of sidereal day"
+    lat = Constants.degtorad*lat
+    e2 = Constants.f*(2.0-Constants.f)
+    c1 = 1.0 - e2*(2.0 - e2)*np.sin(lat)**2
+    c2 = 1.0 - e2*np.sin(lat)**2
 
-	#radius at 0 elevation	
-	R0 = Constants.Req*np.sqrt(c1/c2) 
-	
-	#the geocentric latitude 
-	c1 = e2*np.sin(2.0*lat)
-	c2 = 2.0*c2
-	geolat = lat - np.arctan(c1/c2) 	
-	#Calculate geocentric radius at altitude of the observatory 
-	GeoR = R0*np.cos(geolat) + altitude*np.cos(lat)
-	
-	# the R0 vector is now the distance from the observatory to the declination 0 deg plane
-	R0 = R0*np.sin(abs(geolat))+altitude*np.sin(lat)
-	return GeoR,R0
+    #radius at 0 elevation    
+    R0 = Constants.Req*np.sqrt(c1/c2) 
+    
+    #the geocentric latitude 
+    c1 = e2*np.sin(2.0*lat)
+    c2 = 2.0*c2
+    geolat = lat - np.arctan(c1/c2)     
+    #Calculate geocentric radius at altitude of the observatory 
+    GeoR = R0*np.cos(geolat) + altitude*np.cos(lat)
+    
+    # the R0 vector is now the distance from the observatory to the declination 0 deg plane
+    R0 = R0*np.sin(abs(geolat))+altitude*np.sin(lat)
+    return GeoR,R0
 
 def obspos(longitude,obsradius,R0):               # from CERES
-	"""
+    """
         Set the observatory position respect to geocenter in the coordinates(x,y,z)required by jplepem, 
         x to equator/greenwich intersection, 
         y 90 degrees east, 
         z positive to north
         """
-	obpos = []	
-	x = obsradius*np.cos( (np.pi / 180.0) * longitude )
-	obpos.append(x)	
-	y = obsradius*np.sin( (np.pi / 180.0) * longitude )
-	obpos.append(y)
-	z = R0
-	obpos.append(z)
-	return obpos
+    obpos = []    
+    x = obsradius*np.cos( (np.pi / 180.0) * longitude )
+    obpos.append(x)    
+    y = obsradius*np.sin( (np.pi / 180.0) * longitude )
+    obpos.append(y)
+    z = R0
+    obpos.append(z)
+    return obpos
 
-def get_barycent_cor(params, im_head, obname, obname_short, reffile):
-    # Find lambda_bary/lambda_topo using baryc
+def get_barycent_cor(params, im_head, obnames, reffile):
+    """
+    Calculates the barycentric correction.
+    To do this, position of the telescope and pointing of the telescope need to be known.
+    Header vaulues are read, if they are not available, then using 
+    
+    """
+    # Define the header keywords, if available
     site_keys       = ['TELESCOP']
     altitude_keys   = ['HIERARCH ESO TEL GEOELEV', 'ESO TEL GEOELEV']
     latitude_keys   = ['HIERARCH ESO TEL GEOLAT', 'ESO TEL GEOLAT']
@@ -5267,25 +5356,38 @@ def get_barycent_cor(params, im_head, obname, obname_short, reffile):
     ra_keys         = ['RA']
     dec_keys        = ['DEC']
     epoch_keys      = ['HIERARCH ESO TEL TARG EQUINOX', 'ESO TEL TARG EQUINOX']
-    params['site']        = 'UH'
-    params['altitude']    = 30
-    params['latitude']    = 51.7534
-    params['longitude']   = -0.2401
+    # The following values are stored in the header, hence everything with #1 is not needed anymore
+    #1 params['site']        = ['UH'    , 'TNT'     ]
+    #1 params['altitude']    = [30      , 2457      ]
+    #1 params['latitude']    = [51.7534 , 18.59055  ]
+    #1 params['longitude']   = [-0.2401 , -98.48655 ]
     params['epoch']       = 2000.0
+    site_id = -1
+    #1 if 'HEAD' in im_head.keys():
+    #1     if im_head['HEAD'] == 'DU940P_BV':
+    #1         site_id = 1
+    #1 if 'SWOWNER' in im_head.keys():
+    #1     if im_head['SWOWNER'] == 'University of Hertfordshire PAM':
+    #1         site_id = 0   
+    source_obs = 'The site coordinates from the configuration file were used.'
     settings = []
-    settings.append( [0, site_keys, 'site'] )
-    settings.append( [0, altitude_keys, 'altitude'] )
-    settings.append( [0, latitude_keys, 'latitude'] )
-    settings.append( [0, longitude_keys, 'longitude'] )     # Order is important, at this stage 'site', 'altitude', and 'latitude' need to be defined, but 'ra' and 'dec' will be overwritten later
+    settings.append( [site_id, site_keys, 'site'] )
+    settings.append( [site_id, altitude_keys, 'altitude'] )
+    settings.append( [site_id, latitude_keys, 'latitude'] )
+    settings.append( [site_id, longitude_keys, 'longitude'] )     # Order is important, at this stage 'site', 'altitude', and 'latitude' need to be defined, but 'ra' and 'dec' will be overwritten later
     settings.append( [0, ra_keys, 'ra'] )
     settings.append( [0, dec_keys, 'dec'] )
     settings.append( [0, epoch_keys, 'epoch'] )
     for [i, keys, parentr] in settings:
-        for entry in keys:
-            if entry in im_head.keys():
-                params[parentr] = im_head[entry]    # Get the information from the header, overrides the manual values
-                if parentr == 'ra':                   # Assume that dec is coming from the same source
-                    source_radec = 'The object coordinates are derived from the image header.'
+        #1 # First, use the hard coded data as set in params['site'], params['altitude'], params['latitude'], params['longitude']
+        #1 #if parentr in params.keys():               # Will be always the case
+        #1 if type(params[parentr]) is list:
+        #1         params[parentr] = params[parentr][i]
+        #1         if parentr == 'site':
+        #1             source_obs = 'The hard coded site coordinates for site {0} were used.'.format(params[parentr])
+        #1             if i == -1:
+        #1                 source_obs = 'Warn: The site coordinates were made up!'
+        # Calculate the coordinates for sun and moon as soon as the observatory parameters are set
         if parentr == 'longitude':                  # Enough information to calculate the ephemerides of sun and moon.
             gobs = ephem.Observer()  
             gobs.name = params['site']  
@@ -5299,11 +5401,11 @@ def get_barycent_cor(params, im_head, obname, obname_short, reffile):
             mephem.compute(gobs)
             sephem    = ephem.Sun()
             sephem.compute(gobs)
-            if obname.lower().find('sun') == 0:
+            if obnames[0].lower().find('sun') == 0:
                 params['ra']          = sephem.ra
                 params['dec']         = sephem.dec
                 source_radec = 'The object coordinates are derived from the calculated solar ephermeris.'
-            elif obname.lower().find('moon') == 0:
+            elif obnames[0].lower().find('moon') == 0:
                 params['ra']          = mephem.ra
                 params['dec']         = mephem.dec
                 source_radec = 'The object coordinates are derived from the calculated lunar ephermeris.'
@@ -5311,14 +5413,22 @@ def get_barycent_cor(params, im_head, obname, obname_short, reffile):
                 params['ra']          = mephem.ra       # To fill in the parameter, might be overwritten later by [0, ra_keys, 'ra']
                 params['dec']         = mephem.dec      # To fill in the parameter, might be overwritten later by [0, dec_keys, 'dec']
                 source_radec = 'Warn: The object coordinates were made up!'
-    
+        # Overwrite hard coded values with the information from the header
+        for entry in keys:
+            if entry in im_head.keys():
+                params[parentr] = im_head[entry]    # Get the information from the header, overrides the manual values
+                if parentr == 'ra':                   # Assume that dec is coming from the same source
+                    source_radec = 'The object coordinates are derived from the image header.'
+                if parentr == 'latitude':
+                    source_obs = 'The site coordinates are derived from the image header.'
+        
     mjd,mjd0 = mjd_fromheader(params, im_head)
-    ra2,dec2 = getcoords(obname_short, mjd, filen=reffile)
-    #print(ra2,dec2,obname_short, mjd)
+    ra2,dec2,epoch,obnames = getcoords(obnames, mjd, filen=reffile)
     if ra2 !=0 and dec2 != 0:
         params['ra']  = ra2
         params['dec'] = dec2
-        source_radec = 'The object coordinates are derived from the reference file: {0}'.format(reffile)
+        params['epoch'] = epoch
+        source_radec = 'The object coordinates are derived from the reference file: {0}.'.format(reffile)
     
     ra, dec = params['ra'], params['dec']
     
@@ -5334,11 +5444,11 @@ def get_barycent_cor(params, im_head, obname, obname_short, reffile):
         lbary_ltopo = 1.0 + res['frac'][0]
         bcvel_baryc = ( lbary_ltopo - 1.0 ) * 2.99792458E5
     
-    logger(('Info: Using the following data: altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}. '+\
-           '{6} This leads to a barycentric velocity of {7} km/s.').format(params['altitude'], params['latitude'], params['longitude'], 
-                         ra, dec, params['epoch'], source_radec, round(bcvel_baryc,4) ))
+    logger(('Info: Using the following data: Observatory site = {9}, altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}. '+\
+           '{8} {6} This leads to a barycentric velocity of {7} km/s.').format(params['altitude'], params['latitude'], params['longitude'], 
+                         ra, dec, params['epoch'], source_radec, round(bcvel_baryc,4), source_obs, params['site'] ))
 
-    return params, bcvel_baryc, mephem
+    return params, bcvel_baryc, mephem, obnames
 
 
 

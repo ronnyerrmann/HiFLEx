@@ -124,7 +124,9 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, bcvel_baryc, reffile, m
     for order in range(spec.shape[1]):
         L  = np.where( (spec[1,order,:] != 0) & (~np.isnan(spec[1,order,:])) )              # good values
         #ratio              = np.polyval(ccoefs[order],spec[0,order,:][L])*Rnorms[order]
+        np.warnings.filterwarnings('ignore')
         ratio = spec[1,order,:][L]/  spec[5,order,:][L]                                     # ratio between extracted spectrum and continuum normalised spectrum -> blaze function, cancels absorption lines
+        np.warnings.resetwarnings()
         spec[7,order,:][L] = ratio
         #spec[8,order,:][L] = spec[6,order,:][L]                                             # error continuum (first guess), but not good. #sn_order=8
         spec[8,order,:][L] = spec[2,order,:][L]                                             # error of the extracted data, depending on what is used, the RV changes by few 100 km/s -> > several \AA
@@ -133,7 +135,9 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, bcvel_baryc, reffile, m
         #dlambda_dx    = scipy.interpolate.splev(np.arange(WavSol.shape[0]), spl, der=1)
         #NN            = np.average(dlambda_dx)
         #dlambda_dx    /= NN
+        np.warnings.filterwarnings('ignore')
         LL = np.where(spec[5,order,:] > 1 + 10. / scipy.signal.medfilt(spec[8,order,:],21))[0]          # remove emission lines and cosmics
+        np.warnings.resetwarnings()
         spec[5,order,LL] = 1.
         spec[9,order,:][L] = spec[5,order,:][L]# * (dlambda_dx[L] ** 1)         # used for the analysis in XCor (spec_order=9, iv_order=10)
         spec[10,order,:][L] = spec[2,order,:][L]# / (dlambda_dx[L] ** 2)        # used for the analysis in XCor (spec_order=9, iv_order=10)
@@ -236,14 +240,14 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, bcvel_baryc, reffile, m
             xc_av = GLOBALutils.Average_CCF(xc_full, sn, sn_min=3.0, Simple=True, W=W_ccf)
             pred = scipy.interpolate.splev(vels,tck1)
             xc_av /= pred
-            print 'min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig', min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig
+            #print 'min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig', min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig
             if max(np.abs(xc_av)) > 10:
                 logger('Warn: stopped RV fit because of too big absolute value in xc_av: min(xc_av) = {0} , max(xc_av) = {1} , len(xc_av) = {2}'.format(min(xc_av),max(xc_av),len(xc_av)))
                 return -999.0, 999.0, -999.0, 999.0, bcvel_baryc
             p1,XCmodel,p1gau,XCmodelgau,Ls2 = \
                     GLOBALutils.XC_Final_Fit( vels, xc_av, sigma_res = 4,\
                      horder=8, moonv=refvel, moons=moon_sig, moon=False)
-            print 'plgau 345', p1gau
+            #print 'plgau 345', p1gau
 
             moonmatters = False
             if (know_moon and here_moon):
