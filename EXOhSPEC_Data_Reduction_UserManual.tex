@@ -321,6 +321,7 @@ The script \verb|prepare_file_list.py| reads all files in the folder (and subfol
 \end{itemize}
 
 \subsection{Necessary information to calculate the barycentric correction}
+\label{Section:barycentric_correction}
 In order to calculate the barycentric correction the time of the observation (or Julian Date), the pointing on the sky, and the position of the observatory on earth need to be known. These information can be given in different ways. 
 
 \begin{itemize}
@@ -535,6 +536,7 @@ When setting up a new camera or a new account paths and parameters need to be ad
   \item[raw\_data\_imtyp\_keyword, raw\_data\_imtyp\_*] : Put the correct information for the image type header key here. 
   \item[raw\_data\_exptim\_keyword, raw\_data\_dateobs\_keyword] : Use the right header keywords for the exposure time and the observation date.
   \item[standard\_calibs\_create] : Define the standard CCD processing, if necessary (see Section~\ref{Section:parameters_CCD_proc} for options).
+  \item[site, altitude, latitude, longitude] : If the site information is not stored in the header (see Section~\ref{Section:barycentric_correction}), then the information can be stored in the configuration file.
 %  \item[] : 
 \end{description}
 
