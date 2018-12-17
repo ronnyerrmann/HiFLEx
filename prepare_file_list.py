@@ -179,7 +179,7 @@ if __name__ == "__main__":
     file.close()
     if 'nocheck' not in sys.argv:
         start = time.time()
-        rtn = os.system('gedit {0}'.format(params['raw_data_file_list']))
+        rtn = os.system('{1} {0}'.format(params['raw_data_file_list'], params['editor'] ))
         if rtn <> 0 or time.time()-start < 10:
             print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
             raw_input('To continue please press Enter\t\t')

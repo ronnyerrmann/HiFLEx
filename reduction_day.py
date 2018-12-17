@@ -104,7 +104,7 @@ if __name__ == "__main__":
         bck_im = fit_2d_image(im_trace1, params['polynom_bck'][1], params['polynom_bck'][0], w=bck_px)
         save_im_fits(params, bck_im, im_trace1_head, params['background_filename'])"""
         
-    # Create the file for the arc orders, if it doesn't exist
+    # Create the file for the calibration orders, if it doesn't exist
     if os.path.isfile(params['master_trace_cal_filename']) == True:
         logger('Info: Arc trace solution already exists: {0}'.format(params['master_trace_cal_filename']))
         cal_tr_poly, axlows, axhighs, awidths = read_fits_width(params['master_trace_cal_filename'])
@@ -168,14 +168,14 @@ if __name__ == "__main__":
             if os.path.isfile('arc_lines_wavelength.txt') == False:                                                                             # No arc_lines_wavelength.txt available
                 wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(arc_l_spec.shape[0])                      # Create a pseudo solution
                 plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf', 
-                                              wavelength_solution, wavelength_solution_arclines, np.zeros((1,3)), ['dummy'])                                        # Plot the spectrum
+                                              wavelength_solution, wavelength_solution_arclines, np.zeros((1,3)), ['dummy'], plot_log=True)     # Plot the spectrum
                 logger('Error: Files for creating the wavelength solution do not exist: {0}, {1}. Please check parameter {2} or create {1}.'.format(\
                                         params['original_master_wavelensolution_filename'], 'arc_lines_wavelength.txt', 'original_master_wavelensolution_filename'))
             wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_arc_l)         # For a new wavelength solution
             save_arc_fits(wavelength_solution, wavelength_solution_arclines, params['original_master_wavelensolution_filename'])                   # For a new wavelength solution
             plot_wavelength_solution_form(params['logging_wavelength_solution_form'].replace('.png','')+'_manual.png', axlows, axhighs, wavelength_solution)
             plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf', 
-                                              wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names)
+                                              wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
             params['order_offset'] = [0,0]
             params['px_offset'] = [-10,10,2]
             params['px_offset_order'] = [-1,1,1]
@@ -185,7 +185,7 @@ if __name__ == "__main__":
                                                                                        wavelength_solution_arclines_ori, reference_catalog, reference_names, xlows, xhighs, params['GUI'])
         save_arc_fits(wavelength_solution, wavelength_solution_arclines, params['master_wavelensolution_filename'])
         plot_wavelength_solution_form(params['logging_wavelength_solution_form'], axlows, axhighs, wavelength_solution)
-        plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names)
+        plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
         plot_wavelength_solution_image(im_arc_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
             
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.

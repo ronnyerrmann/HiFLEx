@@ -26,9 +26,6 @@ GUI = False
 raw_data_path           = /local/home/ncook/data_EXOhSPEC/20180605/
 
 
-# Configuration file in which the processing of the raw data fits files is defined
-configfile_fitsfiles = fits_conf.txt
-
 # subframe: gives the size in x (dispersion axis) and y (cross-dispersion axis), and the starting coordinates in x and y in case only a subframe should be used. Needed when reading files
 #           possible formats: can be empty, or
 #                             [4250,2838,0,0], or
@@ -39,6 +36,7 @@ configfile_fitsfiles = fits_conf.txt
 # for Moravian:         subframe        = [2500,3056,56,0]
 # for SBIG:             subframe        = [2750,4096,350,0]
 # for HARPS:            subframe        = [4096,2048,0,50]
+# for MRES:             
 subframe        = [2184,1472,0,0]
 
 # To extract the data correctly, the frame should be rotated in the way, that traces (dispersion axis) are along vertical direction
@@ -148,7 +146,6 @@ use_catalog_lines = NeI, UI, ThI, ArI
 ## Raw data information:
 #-----------------------
 raw_data_file_endings   = .fit, .fits
-raw_data_file_list      = file_list_raw_data.txt
 raw_data_imtyp_keyword  = IMAGETYP
 raw_data_imtyp_bias     = Bias Frame
 raw_data_imtyp_dark     = Dark Frame
@@ -207,6 +204,17 @@ object_file = object_list.txt
 
 
 
+## Configuration files in which the processing of the raw data fits files is defined
+# raw_data_file_list contains the analysis of the raw data files (fiber1 and fiber2, exposure time, what to extract
+raw_data_file_list      = file_list_raw_data.txt
+
+# configfile_fitsfiles contains the information of how to processes the raw data and is created by prepare_file_list.py
+configfile_fitsfiles    = fits_conf.txt
+
+# editor defines the program which should be used to allow the user to manipulate raw_data_file_list
+editor                  = gedit
+
+
 
 ## Result storage information:
 #-----------------------------
@@ -263,7 +271,7 @@ logging_traces_binned               = sci_trace1_binned.fits
 logging_traces_im_binned            = traces_in_master_trace1_binned.png
 logging_traces_im                   = traces_in_master_trace1.png
 logging_find_arc_traces             = arctraces_find.png
-logging_arctraces_im                = arctraces_in_master_arc.png
+logging_arctraces_im                = arctraces_in_master_trace2.png
 logging_map_shift_orders            = map_shifts.fits
 logging_orig_for_background         = orig_for_background_map.fits
 logging_found_arc_lines             = arc_lines_found.txt

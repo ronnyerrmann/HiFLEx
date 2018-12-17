@@ -2485,6 +2485,8 @@ def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
         arc_lines[i] = arc_lines[i].replace(' ','')
     reference_catalog = []
     reference_names = []
+    if os.path.isfile(filename) == False:
+        logger('Error: file {0} does not exist'.format(filename) )
     file = open(filename, 'r')
     for line in file:
         line = line[:-1].split('\t')
@@ -4422,7 +4424,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     text = 'Info: A 2d polynom fit with {0} orders in dispersion direction (along the traces) and {1} orders in cross-dispersion direction was used. '+\
                   'With this solution, the offset between aperture and real orders is {2}. To fulfil the grating equation the central pixel of the individual orders needs to be {5} + {6}*order + {7}*order**2.'+\
                   'With this values the standard deviation of the residuals between the central wavelengths and the grating equation is {3} Angstrom. Using the original solution gives an offset of {4}.'
-    logger(text.format(polynom_order_trace, polynom_order_intertrace, order_offset, round(np.std(diff_real_cent, ddof=len(p_real_cent)),4), order_offset_old, p_cen_px[2], p_cen_px[1], p_cen_px[0] ))
+    logger(text.format(polynom_order_trace, polynom_order_intertrace, int(order_offset), round(np.std(diff_real_cent, ddof=len(p_real_cent)),4), order_offset_old, p_cen_px[2], p_cen_px[1], p_cen_px[0] ))
     
     # Create a wavelength solution
     wavelength_solution = np.array( [polynom_order_trace, polynom_order_intertrace, np.mean(cen_px), order_offset] + list(poly2d_params) )
@@ -4467,10 +4469,12 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     statistics_arc_reference_lines(arc_lines_wavelength, [0,-2,-1,2], reference_names, wavelength_solution, xlows, xhighs)
         
     if std_diff_fit > 2*max(wavelength_solution[:,-2]) or std_diff_fit < 1E-8:        # if residuals are bigger than 1px or unreasonable small
-        plot_wavelength_solution_spectrum(spectrum, spectrum, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names)
-        logger('Error: The wavelength solution seems wrong. Please check the parameters "order_offset", "px_offset", and "px_offset_order". \
-                \n\t\tIt might be useful to compare the file with the emission lines ({0}) in the current folder and the folder folder with the previous wavelength solution (see parameter "original_master_wavelensolution_filename")\
-                \n\t\tThe results of the identification can be seen in {1}.'.format(params['master_arc_l_filename'], params['logging_arc_line_identification_spectrum']))
+        plot_wavelength_solution_spectrum(spectrum, spectrum, params['logging_arc_line_identification_spectrum'], wavelength_solution, 
+                                          wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
+        logger('Error: The wavelength solution seems wrong. Please check the parameters "order_offset", "px_offset", and "px_offset_order".' + \
+               '\n\t\tIt might be useful to compare the file with the emission lines ({0}) in the current folder and ' + \
+               'the folder with the previous wavelength solution (see parameter "original_master_wavelensolution_filename")' +\
+               '\n\t\tThe results of the identification can be seen in {1}.'.format(params['master_arc_l_filename'], params['logging_arc_line_identification_spectrum']))
     
     # See the results
     if show_res:

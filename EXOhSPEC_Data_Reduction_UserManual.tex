@@ -30,7 +30,7 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 
-\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: V0.3.1}
+\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: V0.3.2}
 \date{December, 2018}
 \author{Ronny Errmann, Neil Cook\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
@@ -76,7 +76,7 @@ sh Downloads/Anaconda2-5.0.1-Linux-x86_64.sh
 \end{lstlisting}
 (no superuser permissions are needed, the version might need to be changed).
 
-After the installation and opening a new terminal python should point to the one in the Anaconda installation. It can be checked by running \verb|which python| . If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
+After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
 \begin{lstlisting}[style=base]
 export PATH="/home/exohspec/anaconda2/bin:$PATH"
 \end{lstlisting}
@@ -85,23 +85,31 @@ If you use \verb|csh| add the following line (replace \textit{/home/exohspec} by
 setenv PATH /home/exohspec/anaconda2/bin\:$PATH
 \end{lstlisting}
 
-After making the change and opening a new terminal python should point to the file in the Anaconda installation (\verb|which python|).
+After making the change and opening a new terminal, python should point to the file in the Anaconda installation (\verb|which python|).
 
 \subsubsection{Additional modules}
 
 \noindent Once Anaconda is installed tow other modules are needed (tqdm, gatspy). If Anaconda is installed correctly then pip can be used to install this module
 \begin{lstlisting}[style=base]
-pip install tqdm gatspy pyfits
+pip install tqdm
+pip install gatspy
+pip install ephem
 \end{lstlisting}
 %gatspy for lomb scargle
 
+%pip install pyfits
+%If the \verb|pyfits|
+%conda update --prefix /home/exohspec/anaconda2 anaconda
+%conda install -c piyanatk pyfits 
+%conda install -c cxc pyfits
+%conda install pyfits
 
 
 \subsection{Necessary files}
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/exohspec/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/exohspec/archive/v0.3.1.tar.gz
+wget https://github.com/ronnyerrmann/exohspec/archive/v0.3.2.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
 
@@ -117,7 +125,7 @@ tar -xzvf v*.tar.gz
 \item[plot\_img\_spec.py] This script controls plotting of CCD images, graphs, and the extracted spectra.
 \item[remove\_orders.py] If the automatic process identified wrong orders, then this script allows the user to remove them using a GUI.
 \item[create\_badpx\_mask.py] Script to create a bad pixel mask (in testing).
-\item[SSEphem] Necessary folder to calculate barycentric velocity. \textit{(This was tested only on one machine yet, it might be necessary to install the package to have the correct paths.)}
+\item[SSEphem] Necessary folder to calculate barycentric velocity. \textit{(It might be necessary to install the package to have the correct paths.)}
 \end{description}
 
 When running the scripts for the first time, python will create a new file called \verb|<filename>.pyc| for some of the files (compiled script). No harm will be done in removing or keeping the files.
@@ -130,8 +138,8 @@ When running the scripts for the first time, python will create a new file calle
 
 \begin{enumerate}
   \item The script has some hard coded values in the *.py files (normally at the beginning of a procedure). These values can be changed for testing, but usually do not need any changes.
-  \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|, given at the beginning of the python scripts). Some of the parameters in the configuration file need adjustment on a regular basis (see Section~\ref{section:steps_new_data_set}).
-  \item Furthermore, the pipeline reads the configuration file given in parameter \verb|configfile_fitsfiles|, which is automatically created by the pipeline when running \verb|prepare_file_list.py|.
+  \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|), given at the beginning of the python scripts. Some of the parameters in the configuration file need adjustment on a regular basis (see Section~\ref{section:steps_new_data_set}).
+  \item Furthermore, the pipeline reads the configuration file given in parameter \verb|configfile_fitsfiles| (standard: \verb|fits_conf.txt|), which is automatically created by the pipeline when running \verb|prepare_file_list.py|.
   \item The parameters which are set in the configuration file(s) can be overwritten with a command line input when a python script is started (e.g. \verb|python bla.py argument1=valueX argument2=valueY|).
   \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
 \end{enumerate}
@@ -170,22 +178,23 @@ When running the scripts for the first time, python will create a new file calle
   \end{description}
   \item[2.] Determining the shift of the science traces compared to the previous solution (e.g. previous day). If the instrument was not touched, the shift should be small and constant ($\rightarrow$~Fig.~\ref{figure_apertures_in_master_flat}). If the file for the previous solution does not exist, or if a big deviation to the previous solution has been found, then another step will be executed:
   \begin{itemize}
-    \item[2a.] Finding the traces of all science orders.
+    \item[2a.] Finding the traces of all science orders. First in a heavily binned image (20,5) to find the traces, and then in a slightly binned image (only few pixel in dispersion direction) where the position is redefined.
   \end{itemize}
-  \item[3.] Creating a map of the leaking light between the science orders (background map).
-  \item[4.] Finding the traces of the calibration orders ($\rightarrow$~Fig.~\ref{figure_arcapertures_in_master_arc}).
-  \item[5.] Create the wavelength solution for the night ($\rightarrow$~Fig.~\ref{figure_arc_line_identification_positions} and \ref{figure_arc_line_identification_residuals}). This is based on the solution of the previous data set, which is adjusted according to the given parameters.
-  \item[6.] Extract the flat and normalise it. This is used for the blaze correction.
+% not useful  \item[3.] Creating a map of the leaking light between the science orders (background map).
+  \item[3.] (for bifurcated fiber spectrographs) Finding the traces of the calibration orders by searching for the shift between each order in the trace1 and trace2 file ($\rightarrow$~Fig.~\ref{figure_arcapertures_in_master_arc}). 
+  \item[4.] Create the wavelength solution for the night ($\rightarrow$~Fig.~\ref{figure_arc_line_identification_positions} and \ref{figure_arc_line_identification_residuals}). This is based on the solution of the previous data set, which is adjusted according to the given parameters.
+  \item[5.] Extract the flat and normalise it. This is used for the blaze correction.
+  \item[6.] (for single fiber spectrographs) Measure the instrumental drift in emission line spectra to calibrate the wavelength solution.
   \item[7.] Extract the science spectra. This includes the following steps for each image:
   \begin{itemize}
     \item[a)] Data reduction of the CCD frame (if set up).
     \item[b)] Finding the shift between this frame and the \textbf{sflat} file.
-    \item[c)] Extraction of the apertures for the science fiber
-    \item[d)] Extraction of the apertures for the calibration fiber
-    \item[e)] Finding the shift between the emission lines in the calibration spectra and the lines used for the wavelength solution, and calculating the wavelength for each pixel in the extracted spectrum.
+    \item[c)] Extraction of the apertures for the science fiber.
+    \item[d)] (for bifurcated fiber spectrographs) Extraction of the apertures for the calibration fiber.
+    \item[e)] Finding the shift between the emission lines in the calibration spectra and the lines used for the wavelength solution (for bifurcated fiber spectrographs) or interpolating the measured drift from step 6. Calculating the wavelength for each pixel in the extracted spectrum.
     \item[f)] Creating the flat corrected spectrum.
     \item[g)] Creating the spectrum with normalised continuum.
-    \item[h)] Perform the radial velocity analysis (cross-correlation with template spectrum).
+    \item[h)] Perform the radial velocity analysis (cross-correlation with template spectrum, work in progress).
     \item[i)] Perform some general measurements which are stored in the header.
     \item[j)] Write the file with all extracted data into the folder given in the parameter \verb|path_extraction| (standard: \textit{extracted}).
     \item[k)] Write subsets of data into different files to keep compatible with other software.
@@ -213,7 +222,7 @@ To get the best results, the following data should be taken (all filenames are c
   \item Create and enter a new folder. This folder will be used for the reduced and extracted data.
   \item Copy the configuration file (\verb|conf.txt|) into the folder. The following parameters might need to be changed in the file \verb|conf.txt|:
   \begin{description}
-    \item[GUI] : If set to true, this allows manipulation of some parameters in a graphical user interface (GUI) during the runtime of the script.
+    \item[GUI] : If set to true, this allows manipulation of some parameters in a graphical user interface (GUI) during the runtime of the script. (not tested recently)
     \item[raw\_data\_path] : Folder to the raw data.
     %\item*\_rawfiles] : Replace any filenames, which are different in the current observation
     %\item[*\_calibs\_create] : Change the calibration steps, which are applied to the raw files before combining them. A list of possible calibrations are given in Section~\ref{section:extraction}.
@@ -224,7 +233,7 @@ To get the best results, the following data should be taken (all filenames are c
   \end{description}
   \item Run the python script: \\ \verb|python <path to scripts>/prepare_file_list.py| . \\ See Section~\ref{Section:prepare_files} below for more information.
   \item Run the python script: \\ \verb|python <path to scripts>/reduction_day.py| .
-  \item Check the results in the \verb|logfile| or in the extracted files.
+  \item Check the out in the \verb|logfile|, the images in the logging path, or in results in the extracted files.
 \end{enumerate}
 
 \noindent After checking the results (see Section~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to it's big flexibility. The orders can be removed in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the depending steps of \verb|reduction_day.py| will run again.
@@ -237,16 +246,16 @@ To get the best results, the following data should be taken (all filenames are c
   \item[badpx\_mask] : Apply the bad pixel mask, given in parameter \verb|badpx_mask_filename|. If the file doesn't exist, all pixels are assumed to be good.
   \item[bias] : Apply a master bias, which will be created from the files given in the parameter \verb|bias_rawfiles| by using the settings given in the parameter \verb|bias_calibs_create|. These two parameters are created automatically by the script \verb|prepare_file_list.py| if bias frames exist in the raw data path.
   \item[dark] : Apply a master dark. A dark with the same exposure time as read from the fits header will be applied. The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
-  \item[flat] : Apply a master flat. The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
-  \item[background] : Applies background correction using the filename given in the parameter \verb|background_filename|.The background image will be scaled by the exposure time of the scientific image, before its subtracted from the scientific image.
+  \item[rflat] : Apply a master true flat. The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
+%  \item[background] : Applies background correction using the filename given in the parameter \verb|background_filename|.The background image will be scaled by the exposure time of the scientific image, before its subtracted from the scientific image.
   \item[localbackground] : Applies background correction by fitting a 2d polynomalial against the current reduced image, excluding the area of the science and calibration traces. The fitted 2d-image is then subtracted from the (reduced) image.
 \end{description}
 
 \noindent The following parameters change the way, several CCD images are combined. In the pipeline always the individual frames are corrected before frames are combined.
 \begin{description}
   \item[normalise] : Before combining the files the images are normalised by their median flux.
-  \item[combine\_sum] : Normally files are combined using a pixel by pixel median. With this keyword the files will summed up. This parameter will be overwritten by \verb|combine_mean| (This might collide with \verb|max_good_value|.)
-  \item[combine\_mean] : Normally files are combined using a median. With this keyword a pixel by pixel average will be used.
+  \item[combine\_sum] : Normally, files are combined using a pixel by pixel median. With this keyword the files will summed up. This parameter will be overwritten by \verb|combine_mean|. When summing up several images, the value of pixels might extend \verb|max_good_value|.
+  \item[combine\_mean] : Normally, files are combined using a median. With this keyword a pixel by pixel average will be used.
   %\item[] : 
 \end{description}
 
@@ -332,14 +341,14 @@ In order to calculate the barycentric correction the time of the observation (or
 
 \subsubsection{Creating a list of objects}
 \label{Section:create_object_list_file}
-If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file|. The file must contain one line per object. For each object the following tab-separated values need to be given:
+If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file must contain one line per object. For each object the following tab-separated values need to be given:
 \begin{enumerate}\setlength\itemsep{0em}
  \item Object name (the filename should start with the object name in order to be used)
  \item RA (hh:mm:ss.ss)
  \item DEC ($\pm$dd:mm:ss.ss)
- \item PM RA (arcsec/year)
- \item PM DEC (arcsec/year)
- \item Epoch of the coordinates (only the number)
+ \item PM RA (arcsec/year, can be 0 in the most cases)
+ \item PM DEC (arcsec/year, can be 0 in the most cases)
+ \item Epoch of the coordinates (only the number, e.g. 2000 or 2015.5)
  \item Enable/Disable flag (1 for enabled)
 \end{enumerate}
 
@@ -387,9 +396,11 @@ This file contains data in the same form as described in Section~\ref{Section:li
 \end{itemize}
 
 \subsubsection*{Object1/data/YYYY-MM-DDHHMMSS}
+The data in here is used in order to measure RV with Terra (\url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}) (work in progress)
 
 \subsection{Results from the pipeline}
 \label{section:results_pipeline}
+For each of the steps given in Section~\ref{Section:pipeline_steps_general} the following data will be created.
 
 \noindent \textbf{Step 1:} The reduced and combined CCD images will be stored in the folder where the pipeline was run. The file name is \verb|master_<type>.fits|, where \verb|<type>| defines the different image types, e.g. bias, sflat, or arc\_l.
 
@@ -398,32 +409,32 @@ This file contains data in the same form as described in Section~\ref{Section:li
   \item Number of the aperture (starting at 0).
   \item Parameters of a polynomial fit to the trace (given in parameter \verb|polynom_traces_apertures|), e.g. 5 values if the trace is fitted with a polynom of order 5.
   \item The lowest and highest pixel in dispersion axis, for which the trace can be identified.
-  \item The last three entries of each line define the width of the trace: the width from the center to the left, the width from the center to the right, and the Gaussian width.
+  \item The last three entries of each line define the width of the trace: left border (where the flux raises over the value given in parameter \verb|width_percentile|), the right border (where the flux falls below \verb|width_percentile|), and the Gaussian width.
 \end{itemize}
-The identification of the traces can be checked easily in the file given in parameter \verb|logging_traces_im| (standard: \textit{traces\_in\_master\_flat.png}). This file is located in the folder given in the parameter \verb|logging_path| (standard: \textit{logging}). An example is show in Fig.~\ref{figure_apertures_in_master_flat}.
+The identification of the traces can be checked easily in the file given in parameter \verb|logging_traces_im| (standard: \textit{traces\_in\_master\_trace1.png}). This file is located in the folder given in the parameter \verb|logging_path| (standard: \textit{logging}). An example is show in Fig.~\ref{figure_apertures_in_master_flat}.
 
 \begin{figure} 
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/orders_in_master_flat}
   \end{center} 
-  \caption{Reduced CCD image of a white light flat (log10 gray scale) with the marked traces of the identified scientific orders/apertures (red). The extraction width (determined from the Gaussian width of the order multiplied with the value in parameter \textbf{extraction\_width\_multiplier}) is given in dashed lines.
+  \caption{Reduced CCD image of a white light flat (log10 gray scale) with the marked traces of the identified scientific orders/apertures (red). The extraction width (determined from the width given in parameter \textbf{width\_percentile} of the order multiplied with the value in parameter \textbf{extraction\_width\_multiplier}) is given in the dashed lines.
     \label{figure_apertures_in_master_flat}}
 \end{figure}
 
-\vspace{0.5em}\noindent \textbf{Step 3:} The background map, 2d image is stored in the file given in parameter \verb|background_filename| (standard: \textit{background.fits}). Additionally a mask which provides the pixel which are used to create the background map is stored in the file given in parameter \verb|background_px_filename| (standard: \textit{background\_px.fits}).
+%\vspace{0.5em}\noindent \textbf{Step 3:} The background map, 2d image is stored in the file given in parameter \verb|background_filename| (standard: \textit{background.fits}). Additionally a mask which provides the pixel which are used to create the background map is stored in the file given in parameter \verb|background_px_filename| (standard: \textit{background\_px.fits}).
 
-\vspace{0.5em}\noindent \textbf{Step 4:} The traces of the apertures of the calibration fiber are stored in the file given in parameter \verb|master_tracesarc_filename| (standard: \textit{master\_tracesarc.fits}). This file contains the same information as the result of \textbf{Step 2}, only that the lowest order of the parameters of polynomial fit is shifted (the curvature of the traces is kept the same). The result can be checked easily in the file given in parameter \verb|logging_arctraces_im| (standard: \textit{arctraces\_in\_master\_arc.png}). An example is show in Fig.~\ref{figure_arcapertures_in_master_arc}.
+\vspace{0.5em}\noindent \textbf{Step 3:} The traces of the apertures of the calibration fiber are stored in the file given in parameter \verb|master_tracesarc_filename| (standard: \textit{master\_tracesarc.fits}). This file contains the same information as the result of \textbf{Step 2}, only that the lowest order of the parameters of polynomial fit is shifted (the curvature of the traces is kept the same). The result can be checked easily in the file given in parameter \verb|logging_arctraces_im| (standard: \textit{arctraces\_in\_master\_trace2.png}). An example is show in Fig.~\ref{figure_arcapertures_in_master_arc}.
 
 \begin{figure} 
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/arcorders_in_master_arc}
   \end{center} 
-  \caption{Reduced CCD image of a ThAr exposure (log10 gray scale) with the marked traces of the identified calibration orders/apertures (red). The extraction width is given in dashed lines. The extraction width (determined from the Gaussian width of the order multiplied with the value in parameter \textbf{arcextraction\_width\_multiplier}) is given in dashed lines.
+  \caption{Reduced CCD image of a ThAr exposure (log10 gray scale) with the marked traces of the identified calibration orders/apertures (red). The extraction width (determined from the width given in parameter \textbf{width\_percentile} of the order multiplied with the value in parameter \textbf{extraction\_width\_multiplier}) is given in the dashed lines.
     \label{figure_arcapertures_in_master_arc}}
 \end{figure}
 
 
-\vspace{0.5em}\noindent \textbf{Step 5:} The wavelength solution is stored in the file given in parameter \verb|master_wavelensolution_filename| (standard: \textit{master\_wavelength.fits}). The parameters for each order are stored in one line. For each order the following values are stored:
+\vspace{0.5em}\noindent \textbf{Step 4:} The wavelength solution is stored in the file given in parameter \verb|master_wavelensolution_filename| (standard: \textit{master\_wavelength.fits}). The parameters for each order are stored in one line. For each order the following values are stored:
 \begin{itemize}
   \item Real order, as derived from the grating equation.
   \item Central pixel of the order.
@@ -490,7 +501,7 @@ The last lines give the information for all apertures. Columns, for which no use
     \label{figure_arc_line_identification_residuals}}
 \end{figure}
 
-\vspace{0.5em}\noindent \textbf{Step 6:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \textit{master\_flat\_spec\_norm.fits}). The extraction and data format is described in Section~\ref{section:extraction_data_format}
+\vspace{0.5em}\noindent \textbf{Step 5:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \textit{master\_flat\_spec\_norm.fits}). The extraction and data format is described in Section~\ref{section:extraction_data_format}
 
 
 \newpage
@@ -720,40 +731,30 @@ For more information about TERRA please refer to the literature\footnote{\url{ht
 
 \subsection{Extracting MRES data}
 
-This is experimental and the pipeline is not designed (yet) to take into account different ThAr calibration images, which are taken before or after a science observation. The raw data files need to be assigned manually to the different data types as \verb|prepare_file_list.py| isn't set up (yet).
+The testing of the pipeline was done for the MRES data taken on 2018-11-27.
 
 \noindent The following replacements/insertions are necessary in the conf.txt file:
 \begin{itemize}\setlength\itemsep{0em}
 \small
-  \item \verb|subframe                 = [1250,512,350,0]|
+  \item \verb|subframe                 = [12091,511,380,0]|
   \item \verb|rotate_frame             = 270|
-  \item \verb|arcextraction_width_multiplier = 2|
+  \item \verb|arcextraction_width_multiplier = 1|
   \item \verb|maxshift                 = 5|
-  \item \verb|bin_search_apertures     = 5,1|
+  \item \verb|bin_search_apertures     = 10,1|
   \item \verb|bin_adjust_apertures     = 2,1|
+  \item \verb|width_percentile         = 10|
   \item \verb|arcshift_side            = center|
   \item \verb|raw_data_imtyp_bias      = NA|
   \item \verb|raw_data_imtyp_dark      = NA|
   \item \verb|raw_data_imtyp_flat      = NA|
   \item \verb|raw_data_exptim_keyword  = EXPOSURE|
   \item \verb|raw_data_dateobs_keyword = DATE|
-  \item \verb|arc_l_rawfiles           = <arcs long exposure>|
-  \item \verb|arc_rawfiles             = <arc long exposure>|
-  \item \verb|arc_s_rawfiles           = <arcs short exposure>|
-  \item \verb|extract_rawfiles         = <file to extract>|
-  \item \verb|flatarc_rawfiles         = <continuum spectrum>|
-  \item \verb|sflat_rawfiles           = <continuum spectrum>||
-  \item \verb|arc_calibs_create        = subframe, <...>|
-  \item \verb|arc_l_calibs_create      = subframe, <...>|
-  \item \verb|arc_s_calibs_create      = subframe, <...>|
-  \item \verb|extract_calibs_create    = subframe, <...>|
-  \item \verb|flatarc_calibs_create    = subframe, <...>|
-  \item \verb|sflat_calibs_create      = subframe, <...>|
-  \item \verb|master_arc_filename      = master_arc.fits|
-  \item \verb|master_arc_l_filename    = master_arc_l.fits|
-  \item \verb|master_arc_s_filename    = master_arc_s.fits|
-  \item \verb|master_flatarc_filename  = master_flatarc.fits|
-  \item \verb|master_sflat_filename    = master_sflat.fits|
+  \item \verb|arc_calibs_create_g      = subframe, <...>|
+  \item \verb|trace1_calibs_create_g   = subframe, <...>|
+  \item \verb|trace2_calibs_create_g   = subframe, <...>|
+  \item \verb|extract_calibs_create_g  = subframe, <...>|
+  \item \verb|flatarc_calibs_create_g  = subframe, <...>|
+  \item \verb|wavelengthcal_calibs_create_g = subframe, <...>|
   \item \verb|extracted_bitpix         = -32|
 \end{itemize}
 
