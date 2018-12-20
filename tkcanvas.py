@@ -12,10 +12,12 @@ Version 0.0.11
 
 import numpy as np
 import sys
-
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.backends.backend_tkagg import NavigationToolbar2TkAgg
+try:        # after version 2.2
+    from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk as NavigationToolbar2TkAgg
+except:     # before version 2.2
+    from matplotlib.backends.backend_tkagg import NavigationToolbar2TkAgg
 from matplotlib.backend_bases import cursors
 import matplotlib.backends.backend_tkagg as tkagg
 
@@ -95,9 +97,13 @@ class TkCanvas:
         toolbar.update()
         self.mwindow.get_tk_widget().pack(side=Tk.TOP, fill='both',
                                           expand='YES')
-        self.mwindow.show()
-        # fix native matplotlib cursor bug
-        tkagg.cursord[cursors.POINTER] = ""
+        self.mwindow.draw()         # 20/12 replaced show with draw
+        #self.mwindow.show()        20/12 replaced show with draw
+        try:
+            # fix native matplotlib cursor bug  # fails in version 2.2
+            tkagg.cursord[cursors.POINTER] = ""
+        except:
+            "do nothing"
         #extra room at top
         plt.subplots_adjust(top=0.75)
         self.mwindow.draw()

@@ -97,13 +97,26 @@ pip install ephem
 \end{lstlisting}
 %gatspy for lomb scargle
 
-%pip install pyfits
-%If the \verb|pyfits|
-%conda update --prefix /home/exohspec/anaconda2 anaconda
-%conda install -c piyanatk pyfits 
-%conda install -c cxc pyfits
-%conda install pyfits
+To use the cross-correlation based on the CERES pipeline the package pyfits is necessary:
+\begin{lstlisting}[style=base]
+conda install gsl=2.2.1
+pip install pyfits
+\end{lstlisting}
 
+If the installation of pyfits fails, the following two commands can be tried to install it under conda:
+\begin{lstlisting}[style=base]
+conda install -c sherpa pyfits
+conda install -c cefca pyfits
+\end{lstlisting}
+This might downgrade numpy, which will cause problems. Therefore, after installing pyfits, numpy needs to be upgraded again:
+\begin{lstlisting}[style=base]
+pip install numpy --upgrade
+\end{lstlisting}
+
+Updating anaconda might also solve it:
+\begin{lstlisting}[style=base]
+conda update --prefix /home/exohspec/anaconda2 anaconda
+\end{lstlisting}
 
 \subsection{Necessary files}
 
@@ -391,7 +404,7 @@ This file contains data in the same form as described in Section~\ref{Section:li
 
 \subsubsection*{inside single folder}
 \begin{itemize}
- \item[raw-data filename + \_spec] Continuum normalised spectrum.
+ \item[raw-data filename + \_spec] Blaze corrected spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
  \item[raw-data filename + \_wave] 2D array with the wavelength for each aperture and pixel.
  \item[raw-data filename + \_weight] Mask with good areas of the spectrum.
 \end{itemize}
@@ -408,7 +421,12 @@ For each of the steps given in Section~\ref{Section:pipeline_steps_general} the 
 \vspace{0.5em}\noindent \textbf{Step 2:} The trace of each scientific order is stored in the file given in parameter \verb|master_traces_filename| (standard: \textit{master\_traces.fits}). This file contains one line for each order, normally starting with the reddest order, which is located on the left side of the CCD image. Each line contains the following information:
 \begin{itemize}\setlength\itemsep{0em}
   \item Number of the aperture (starting at 0).
-  \item Parameters of a polynomial fit to the trace (given in parameter \verb|polynom_traces_apertures|), e.g. 5 values if the trace is fitted with a polynom of order 5.
+  \item Central pixel (in dispersion direction) for the polynomial fit along the center (Gaussian centre) of the trace.
+  \item Parameters of a polynomial fit to the center of the trace (given in parameter \verb|polynom_traces_apertures|), e.g. 5 values if the trace is fitted with a polynomial of order 5.
+  \item Central pixel (in dispersion direction) for the polynomial fit along the left limit of the trace. The limit is determined from the value given in parameter \verb|width_percentile|
+  \item Parameters of a polynomial fit to the left limit of the trace (given in parameter \verb|polynom_traces_apertures|).
+  \item Central pixel (in dispersion direction) for the polynomial fit along the right limit of the trace. The limit is determined from the value given in parameter \verb|width_percentile|
+  \item Parameters of a polynomial fit to the right limit of the trace (given in parameter \verb|polynom_traces_apertures|).
   \item The lowest and highest pixel in dispersion axis, for which the trace can be identified.
   \item The last three entries of each line define the width of the trace: left border (where the flux raises over the value given in parameter \verb|width_percentile|), the right border (where the flux falls below \verb|width_percentile|), and the Gaussian width.
 \end{itemize}
@@ -438,8 +456,8 @@ The identification of the traces can be checked easily in the file given in para
 \vspace{0.5em}\noindent \textbf{Step 4:} The wavelength solution is stored in the file given in parameter \verb|master_wavelensolution_filename| (standard: \textit{master\_wavelength.fits}). The parameters for each order are stored in one line. For each order the following values are stored:
 \begin{itemize}
   \item Real order, as derived from the grating equation.
-  \item Central pixel of the order.
-  \item Parameters of a polynomial fit to the trace, e.g. 4 values if the dispersion axis is fitted with a polynom of order 4.
+  \item Central pixel of the order (in dispersion direction).
+  \item Parameters of a polynomial fit to the trace, e.g. 4 values if the dispersion axis is fitted with a polynomial of order 4.
   \item List of the wavelengths of all the identified reference lines in this order.
 \end{itemize}
 
@@ -583,13 +601,13 @@ The following options for axis plotting exist:
 \end{description}
 
 
-\subsection{Finding the radial velocity }
+%\subsection{Finding the radial velocity }
 
-\noindent The radial velocity measurement is based on the \textit{CERES} pipeline. Thereby a template is cross correlated with the scientific spectrum. For the analysis the following steps need to be run:
-\begin{lstlisting}[style=base]
-ls extracted/*.fits > analysis_files.lst
-python <path to script>/find_rv.py | tee RV_logfile
-\end{lstlisting}
+%\noindent The radial velocity measurement is based on the \textit{CERES} pipeline. Thereby a template is cross correlated with the scientific spectrum. For the analysis the following steps need to be run:
+%\begin{lstlisting}[style=base]
+%ls extracted/*.fits > analysis_files.lst
+%python <path to script>/find_rv.py
+%\end{lstlisting}
 
 
 \newpage

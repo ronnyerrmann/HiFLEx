@@ -161,16 +161,6 @@ def textfileargs(params, textfile=None):
             logger('Warn: I dont know how to handle command line argument: {0}'.format(arg))
     params.update(cmdparams)
     
-    # deal with paths, create folders
-    for entry in params.keys():
-         if entry.find('path') <> -1:
-            params[entry] = (params[entry]+'/').replace('//', '/')
-            if not os.path.exists(params[entry]) and entry <> 'raw_data_path' and params[entry].lower() <> 'na/':
-                try:
-                    os.makedirs(params[entry])
-                except:
-                    logger('Warn: Cant create directory {0}'.format(params[entry]))
-    
     # deal with lists
     lists = ['subframe', 'arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'use_catalog_lines', 'polynom_order_traces', 
              'polynom_order_intertraces', 'opt_px_range', 'bin_search_apertures', 'bin_adjust_apertures', 'raw_data_file_endings', 
@@ -276,6 +266,10 @@ def textfileargs(params, textfile=None):
         emsg2 = 'Parameter "{0}" (value of "{1}")'.format(svar, params[svar])
         logger(emsg + emsg2 + ' must be one of the following: left, l, right, r, center, c')
     
+    for entry in params.keys():
+        if entry.find('path') <> -1:
+            params[entry] = (params[entry]+'/').replace('//', '/')              # Add a / at the end in case the user didn't
+    
     # deal with lists of raw data filenames -> add path
     filenlists = []
     for entry in params.keys():
@@ -286,7 +280,7 @@ def textfileargs(params, textfile=None):
             params[entry][i] = params['raw_data_path'] + params[entry][i]
     
     # deal with result filenames/folders -> add path
-    filenames = ['path_extraction', 'logging_path']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
+    filenames = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
     for entry in params.keys():
         if (entry.find('master_') == 0 or entry.find('background_') == 0) and entry.find('_filename') > 0:
             filenames.append(entry)
@@ -303,6 +297,16 @@ def textfileargs(params, textfile=None):
     
     # deal with full filenames -> nothing to do
     filenames = ['badpx_mask_filename', 'original_master_traces_filename']
+    
+    # deal with paths, create folders
+    for entry in params.keys():
+        if entry.find('path') <> -1:
+            if not os.path.exists(params[entry]) and entry <> 'raw_data_path' and params[entry].lower() <> 'na/'and params[entry].lower() <> params['result_path']+'na/':
+                try:
+                    os.makedirs(params[entry])
+                except:
+                    logger('Warn: Cant create directory {0}'.format(params[entry]))
+    
     
     return params
 
@@ -660,15 +664,25 @@ def read_fits_width(filename):
     read in the polynomial fit fits file
     :param filename: string, location and file name of the file containing the polynomial fits
     fits file should look like the following:
-    Order          6                  5          ...       0        low_x   high_x  width_left width_right width_gauss
-    float64      float64            float64       ...    float64    float64 float64    float64     float64     float64
-    ------- ------------------ ------------------ ... ------------- ------- ------- ---------- ----------- -----------
-        1.0  7.80380819018e-20 -7.28455089523e-16 ... 1086.73647399     0.0  3028.0       13.5        11.2      2.234
-        2.0  2.09138850722e-19 -2.01802656266e-15 ... 1123.38227429     0.0  3082.0       11.5        12.7      2.546
+     Order  cen_center cen_poly5 ... cen_poly0 left_center left_poly5 ... left_poly0 right_center right_poly5 ... right_poly0   low_x   high_x   width_left   width_right   width_gauss  
+    float64  float64    float64  ...  float64    float64     float64  ...   float64   float64     float64     ...   float64    float64 float64    float64       float64       float64    
+    ------- ---------- --------- ... --------- ----------- ---------- ... ---------- ------------ ----------- ... ------------ ------- ------- ------------- ------------- --------------
+        0.0      601.0 -5.54e-14 ... 22.010051       601.0 6.3123e-13 ... 21.4594466        601.0 1.06323e-12 ... 26.154773181     0.0   569.0 1.68522324742  2.8547112791   1.3453208386
     ...
-    where 6, 5, 4, 3, 2, 1, 0 are the polynomial powers in p
-        i.e. p where:
-            p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
+       54.0      601.0  1.04e-14 ... 499.13391       601.0 4.8593e-14 ... 497.680562        601.0 -5.3207e-13 ... 500.67363664   379.0  1069.0 1.45191600068 1.42653756074  1.16066630044
+    from which the polynomials are calculated (y for cen, left, and right):
+        y_poly5*(x-y_center)**4 + y_poly4*(x-y_center)**(3) + ... + y_poly1*(x-y_center) + y_poly0
+    
+    #fits file should look like the following (old version):
+    #Order          6                  5          ...       0        low_x   high_x  width_left width_right width_gauss
+    #float64      float64            float64       ...    float64    float64 float64    float64     float64     float64
+    #------- ------------------ ------------------ ... ------------- ------- ------- ---------- ----------- -----------
+    #    1.0  7.80380819018e-20 -7.28455089523e-16 ... 1086.73647399     0.0  3028.0       13.5        11.2      2.234
+    #    2.0  2.09138850722e-19 -2.01802656266e-15 ... 1123.38227429     0.0  3082.0       11.5        12.7      2.546
+    #...
+    #where 6, 5, 4, 3, 2, 1, 0 are the polynomial powers in p
+    #    i.e. p where:
+    #        p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
     :return: array of the parameters for the polynomial fit
     :return: minimum and maximum position of the trace in dispersion direction
     :return: array with the width of the trace in cross-dispersion direction, giving the width to the left, to the right, and the Gaussian width
@@ -722,10 +736,11 @@ def read_fits_width(filename):
 def save_fits_width(pfits, xlows, xhighs, widths, filename):
     """
     save the fits to file, for use in extracting future spectra
-    :param pfits: list, length same as number of orders, polynomial values
-                      (output of np.polyval)
+    :param pfits: 2d array or 3d array of floats. If 2d: length same as number of orders, width same as order of polynomial + 1
+                                                  If 3d: 3 entries of the 2d: for center, left, right
+                      Each last dimension is the output of np.polyval, with a refit of the center as zerost entry
                       i.e. p where:
-                      p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
+                      p[1]*(x-p[0])**(N-1) + p[2]*(x-p[0])**(N-2) + ... + p[N-2]*(x-p[0]) + p[N-1]
     :param xlows: list, length same as number of orders, the lowest x pixel
                    (wavelength direction) used in each order
     :param xhighs: list, length same as number of orders, the highest x pixel
@@ -923,7 +938,7 @@ def bin_im(im, binxy):
     [binx, biny] = binxy
     ims = im.shape
     if binx <1 or biny <1 or (binx == 1 and biny == 1):
-        logger('Warning: no binning possible: {0},{1}'.format(binx,biny))
+        logger('Warn: no binning possible: {0},{1}'.format(binx,biny))
         return(im)
     nim, gim, sim = [], [], []
     if binx > 1 and biny > 1:
@@ -2907,9 +2922,10 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     #cspectra, sn_cont = normalise_continuum(spectra, wavelengths, nc=4, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders)      
     # normalise_continuum measures the noise different than measure_noise
     im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
-    im_head_wave, im_head_weight, im_head_spec = copy.copy(im_head), copy.copy(im_head), copy.copy(im_head)
+    im_head_wave, im_head_weight = copy.copy(im_head), copy.copy(im_head)
     im_head = add_specinfo_head(spectra, im_head)
     im_head_harps_format = copy.copy(im_head)
+    im_head_iraf_format = copy.copy(im_head)
     im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
     im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
     im_head['Comment'] = ' 1: extracted spectrum'
@@ -2939,11 +2955,9 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
                 obname = obname[:posi]              # get rid of the Arc in the filename
                 break
         obnames.append(obname)
+    # Get the baycentric velocity
     params, bcvel_baryc, mephem, obnames = get_barycent_cor(params, im_head, obnames, params['object_file'])
-    
-    if np.max(wavelength_solution[:,-1]) < 100 or im_name.lower().find('flat') in [0,1,2,3,4,5]:     # pseudo solution / no data for RV
-        bcvel_baryc = 0.0
-    elif os.path.exists(os.path.dirname(os.path.abspath(__file__))+'/find_rv.py') == True:
+    if np.max(wavelength_solution[:,-1]) > 100 and im_name.lower().find('flat') >= 5 and os.path.exists(os.path.dirname(os.path.abspath(__file__))+'/find_rv.py') == True:  # if not pseudo-solution and not flat
         # Do the RV analysis using the adapted code from ceres
         #for i in range(7):
         #    ceres_spec = np.delete(ceres_spec, 0, axis=1)
@@ -2959,9 +2973,10 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     # Save in a easier way
     im_head_wave['Comment'] = 'Contains the wavelength per order and exctracted pixel for file {0}'.format(im_name+'_spec')
     im_head_weight['Comment'] = 'Contains the weights per order and exctracted pixel for file {0}'.format(im_name+'_spec')
-    save_multispec(fspectra,                params['path_extraction_single']+im_name+'_spec', im_head_spec, bitpix=params['extracted_bitpix'])
-    save_multispec(wavelengths_bary,        params['path_extraction_single']+im_name+'_wave', im_head_wave, bitpix=params['extracted_bitpix'])
-    save_multispec(good_px_mask* flat_spec_norm[1],   params['path_extraction_single']+im_name+'_weight', im_head_weight, bitpix=params['extracted_bitpix'])  # Weight shouldn't be the espectra, the flat provides a smoother function
+    im_head_iraf_format = wavelength_solution_iraf(params, im_head_iraf_format, wavelengths, wavelength_solution_shift, norder=params['polynom_order_traces'][-1]+2)
+    save_multispec(fspectra,                        params['path_extraction_single']+im_name+'_spec', im_head_iraf_format, bitpix=params['extracted_bitpix'])
+    save_multispec(wavelengths,                     params['path_extraction_single']+im_name+'_wave', im_head_wave, bitpix=params['extracted_bitpix'])
+    save_multispec(good_px_mask* flat_spec_norm[1], params['path_extraction_single']+im_name+'_weight', im_head_weight, bitpix=params['extracted_bitpix'])  # Weight shouldn't be the espectra, the flat provides a smoother function
     
     fname = obsdate.strftime('%Y-%m-%d%H%M%S')
     save_spec_csv(cspectra, wavelengths_bary, good_px_mask, params['csv_path']+fname)
@@ -3019,6 +3034,47 @@ def wavelength_solution_harps(params, head, wavelengths):
     
     return head
 
+def wavelength_solution_iraf(params, head, wavelengths, wavelength_solution, norder=10):
+    """
+    Save the wavelength solution in the same way as IRAF does
+    Sources: chapter 5 in http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?specwcs
+    :param norder: Degree of the fitting polynomials
+    """
+    ws = wavelengths.shape
+    deg = max(params['polynom_order_traces'])
+    head['WAT0_001'] = 'system=multispec'
+    head['WAT1_001'] = 'wtype=multispec label=Wavelength units=Angstroms'
+    text = 'wtype=multispec'
+    for order in range(ws[0]):
+        avg_dwave = np.nanmean(wavelengths[order,1:] - wavelengths[order,:-1])
+        cheb_pol = np.polynomial.chebyshev.chebfit(np.arange(ws[1])+1, wavelengths[order,:], norder)
+        cheb_pol_txt = np.str(cheb_pol)[1:-1].replace('\n',' ').replace('  ',' ').replace('  ',' ').replace('  ',' ')
+        text += ' spec{0} = "{1} {2} 2 {3} {4} {5} 0. {0}. {0}. 1. 0. 1 {6} 1. {5}. {7}"'.format(order+1, order, int(wavelength_solution[order,0]), round(wavelengths[order,0],6), round(avg_dwave,6), ws[1], norder, cheb_pol_txt)
+        # 1/1: order (arbitary)
+        # 2/2: wavelength_solution[order,0] : real order
+        # 3: 2 for non-linear solution
+        # 4/3: wavelength at first pixel
+        # 5/4: average dispersion
+        # 6/5: number of valid pixel
+        # 7: 0. as doppler correction
+        # 8/0: extraction aperture limit (float, as in iraf created spectrum: Keck-Spectra/3218_706r_wc.fits)
+        # 9/0: extraction aperture limit (float, as in iraf created spectrum)
+        # 10: 1. as weight
+        # 11: 0. as zero point offset
+        # 12: 1 for chebychev dispersion function
+        # 13/6: order of the polynomial
+        # 14: 1. as lowest pixel
+        # 15/5: highest good pixel
+        # 16-end/7: coefficients from the chebychev fit
+    
+    split = 68
+    for i in range(len(text)/split):
+        head['WAT2_%3.3i'%(i+1)] = text[i*split:(i+1)*split]
+    head['WAT2_%3.3i'%(i+2)] = text[(i+1)*split:]               # remaining text
+    if i+2 > 999:
+        logger('Warn: IRAF wavelength solution is too long. Try to use a smaller degree of freedom to fit the wavelength solution (polynom_order_traces)')
+    return head
+    
 def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1, mask=[], frame=None, return_frame=False):
     """
     Plot the found traces over the CCD image in order to allow error detection
@@ -4993,7 +5049,9 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
         bad_value = ( (fit_sn <= 0) | (fit_flux <= 0) )                                  # Errors smaller than 0, or Flux smaller than 0 (will make absorption lines into emission lines)
         np.warnings.resetwarnings()
         if np.sum(bad_value) > 5:
-            print order,'Warning: some of the normalistion or the signal', np.sum(fit_sn[~np.isnan(fit_sn)] <= 0), np.sum(fit_flux[~np.isnan(fit_flux)] <= 0)
+            logger('Warn: Normalisation of order {0} had a problem. {1} pixel of the fitted flux are below zero and {2} pixel of the fitted signal-to-noise is below zero. ' +\
+                   'Values below 0 should not hapen, use a polynomial with lower order by adjusting measure_noise_orders'.format(order, 
+                                                    np.sum(fit_flux[~np.isnan(fit_flux)] <= 0), np.sum(fit_sn[~np.isnan(fit_sn)] <= 0) ))
             showorder = order
         fit_sn[bad_value] = np.nan
         fit_flux[bad_value] = np.nan
@@ -5427,7 +5485,7 @@ def get_barycent_cor(params, im_head, obnames, reffile):
                     source_obs = 'The site coordinates are derived from the image header.'
         
     mjd,mjd0 = mjd_fromheader(params, im_head)
-    ra2,dec2,epoch,obnames = getcoords(obnames, mjd, filen=reffile)
+    ra2,dec2,epoch,obnames = getcoords(obnames, mjd, filen=reffile)     # obnames will be a list with only one entry: the matching entry 
     if ra2 !=0 and dec2 != 0:
         params['ra']  = ra2
         params['dec'] = dec2
@@ -5448,9 +5506,9 @@ def get_barycent_cor(params, im_head, obnames, reffile):
         lbary_ltopo = 1.0 + res['frac'][0]
         bcvel_baryc = ( lbary_ltopo - 1.0 ) * 2.99792458E5
     
-    logger(('Info: Using the following data: Observatory site = {9}, altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}. '+\
+    logger(('Info: Using the following data for object name(s) {10}: Observatory site = {9}, altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}. '+\
            '{8} {6} This leads to a barycentric velocity of {7} km/s.').format(params['altitude'], params['latitude'], params['longitude'], 
-                         ra, dec, params['epoch'], source_radec, round(bcvel_baryc,4), source_obs, params['site'] ))
+                         ra, dec, params['epoch'], source_radec, round(bcvel_baryc,4), source_obs, params['site'], str(obnames).replace("'","").replace('"','') ))
 
     return params, bcvel_baryc, mephem, obnames
 

@@ -260,7 +260,6 @@ background_px_filename          = background_px.fits
 background_filename             = background.fits
 
 # RV analysis
-rv_models_ceres                 = /home/ronny/software/ceres-master/data/COELHO_MODELS/R_40000b/
 path_rv                         = rv_output
 
 ## Logging:
