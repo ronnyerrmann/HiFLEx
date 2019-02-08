@@ -536,6 +536,7 @@ def create_image_general(params, imtype, level=0):
     Reads or creates the imtype file. If the key and file for master_<imtype>_filename exists the file is read, otherwise the file is created by combining the <imtype>_rawfiles
     :param params: Dictionary with all the parameters
     :param imtype: type of images, e.g. flat, dark5.0, bias
+    :param level: Sometimes the calibration images has to be created before it can be applied, to destinguish between this and the current image, the level can be increased by one
     :return im: 2d array of the combined file
     :return im_head: header of the last read file
     """
@@ -626,6 +627,7 @@ def get_minimum_data_type(arr, allow_unsigned=True):
     """
     Finds the smallest necessary data type (in terms of memory) to handle the data in an array by checking, if numbers can be intergers or not and then searching for the required precession
     :param arr: list or array of numbers
+    :param allow_unsigned: an unsigned data type might be less storage dependent, but not all programs will be able to handle it
     :return arr: array of numbers, using the smallest possible data type
     """
     arr = np.array(arr)
@@ -670,7 +672,7 @@ def save_im_fits(params, im, im_head, filename):
 
 def read_fits_width(filename):
     """
-    read in the polynomial fit fits file
+    Reads fits file containign a table, which defines the individual orders by parameters of a polynomial fit)
     :param filename: string, location and file name of the file containing the polynomial fits
     fits file should look like the following:
      Order  cen_center cen_poly5 ... cen_poly0 left_center left_poly5 ... left_poly0 right_center right_poly5 ... right_poly0   low_x   high_x   width_left   width_right   width_gauss  
@@ -831,7 +833,7 @@ def save_fits_width(pfits, xlows, xhighs, widths, filename):
 
 def save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_arclines, filename):
     """
-    save the arc solution in a file for later use
+    save the wavelength solution in a file for later use
     :param wavelength_solution: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
                       (output of np.polyval)
                       i.e. p where:
@@ -862,7 +864,7 @@ def save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_ar
 
 def read_wavelength_solution_from_fits(filename):
     """
-    reads the arc solution from a file
+    Reads the wavelength solution from a file
     :param filename: string, location and file name of the file
     fits file should look like the following:
     real_order central_px               2 ...             0 arclin1 ... arclin345
@@ -898,12 +900,13 @@ def read_wavelength_solution_from_fits(filename):
     logger('Info: Master file for arc solution read: {0}'.format(filename))
     return np.array(wavelength_solution), np.array(wavelength_solution_arclines)
 
-def save_multispec(data, fname, head, bitpix='-64'):
+def save_multispec(data, fname, head, bitpix='-32'):
     """
     Saves a n-d array into a fits file
     :param data: n-d array of data or list of arrays
     :param fname: filename in which the data should be written. The filename will end in .fits
     :param head: header, which should be written to the fits file
+    :param bitpix: Precission in which the data should be stored
     """
     fname = fname.replace('.npy', '')   
     fname = fname.replace('.fits', '')
@@ -942,8 +945,8 @@ def rotate_flip_frame(im, params, invert=False):
 
 def bin_im(im, binxy):
     """
-    :param params: Dictionary with all the parameters. 'binx' and 'biny' are required
     :param im: 2d numpy array
+    :param binxy: list of integers (entries), contains the number of pixel which should be binned into one in x and y direction
     :return: 2d numpy arrays of the image, the number of elements which are not NaN, and of the standard deviation of each combined pixel
     """
     [binx, biny] = binxy
@@ -1042,7 +1045,7 @@ def percentile_list(data, prcentl):
     """
     Removes the highest and lowest prcentl percent of the data
     :param data: 1-d aray of data
-    :param prcentl: gives the number of how much data to remove
+    :param prcentl: integer or float, gives the number of how much data to remove
     :return data: sorted list without the highest and smallest values, and without NaNs
     """
     if prcentl < 0 or prcentl > 0.5:
@@ -1131,8 +1134,8 @@ def unify_pord(pfits):                          # Only required because of the u
         polyfits.append(polyfit)
     return np.array(polyfits)
 
-def polynomialfit_notusedanymore(x, y, nmin=1, nmax=3):        # Not really necessary, the result is always that nmax fits best
-    """
+"""def polynomialfit_notusedanymore(x, y, nmin=1, nmax=3):        # Not really necessary, the result is always that nmax fits best
+    ""
     Select the minimum chi squared polynomial fit between nmin and nmax
     :param x: x axis array
     :param y: y axis array
@@ -1140,7 +1143,7 @@ def polynomialfit_notusedanymore(x, y, nmin=1, nmax=3):        # Not really nece
     :param nmax: maximum order to fit
     return ps: array of the parameters from the fit
     return nrange: number of parameters for the best fit, e.g. len(ps)
-    """
+    ""
     chis, ps = [], []
     nrange = range(nmin, nmax+1)
     for n in nrange:
@@ -1163,6 +1166,7 @@ def polyfit_adjust_order(xarr, yarr, p_orders, w=None):
                 except np.RankWarning:
                     poly = poly
     return poly
+"""
 
 def polynomial_value_2d(xx, yy, xord, yord, poly2d_params):
     """
@@ -1451,6 +1455,14 @@ def centroid_order(x, y, center, width, significance=3, blended_gauss=False, bug
     return popt
 
 def find_border_pctl(data, border_pctl=50):
+    """
+    Calculates the position where the signal falls below a certain threashold. If enough data points are available, then a linear fit is done in the transition area
+    :param data: 1d list or array of floats, contains a Gauss-like signal
+    :param border_pctl: integer or float, defines the percentage of the signal at which the cut should be done
+    :return result[0]: float, position on the left of the maximum where the signal in data falls below border_pctl percent
+    :return result[1]: float, position on the right of the maximum where the signal in data falls below
+ border_pctl percent
+    """
     min_dat, max_dat = min(data), max(data)
     ran_dat = max_dat - min_dat
     higher = np.where( data > ran_dat*border_pctl/100. + min_dat)[0]         # Find the indexes above the percentile value
@@ -1543,10 +1555,15 @@ def measure_noise(spectra, p_order=12, semi_range=10):
     return np.array(noise)
 
 def estimate_width(im):
+    """
+    Finding a guess of the Gaussian width of the traces in an image by using a set of random positions
+    :param im: 2d array of float, image with the orders
+    :return width: float, median of the measured Gaussian widths
+    """
     ims = im.shape
     widths = []
     logger('Info: Estimate the width of the traces')
-    for i in range(ims[0]*ims[1]/50):
+    for i in range(max(200,ims[0]*ims[1]/50)):     # Use at least 200 positions in order to be sure to find at least 10
         x = random.randint(int(0.05*ims[0]), int(0.95*ims[0]))
         y = random.randint(int(min(50,0.05*ims[1])), int(max(ims[1]-50,0.95*ims[1])))
         yr = range(max(0,y-30), min(ims[1],y+31))
@@ -1898,6 +1915,7 @@ def adjust_trace_orders(params, im, pfits, xlows, xhighs):
 
 def adjust_width_orders(center, left, right, w_mult):
     """
+    Adjusts the width of the orders by stretching the distance between the border of the trace and the centre of the trace
     :param center, left, right: 1d arrays of floats, center of order and borders of the order
     :param w_mult: list of float, multiplicator in order to adjust the width of the order to the left and right
     :return left, right: 1d arrays of floats, borders of the order
@@ -1909,6 +1927,9 @@ def adjust_width_orders(center, left, right, w_mult):
     return left, right
 
 def no_tqdm(input, desc=''):
+    """
+    In order to switch between tqdm on and off, this is needed
+    """
     return input
     
 def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset = 0, var='fast', plot_tqdm=True):
@@ -2192,8 +2213,10 @@ def find_bck_px(im, pfits, xlows, xhighs, widths, w_mult):
 
 def measure_background_noise(im):
     """
-    :return median(simt): float, median of the standard deviations from parts of the images
-    :return std(sim): float, median of the standard deviations from parts of the images
+    Measures the background noise in an image by binning it into 10x10 sized areas and measuring the median and std of the noise in these 100px small areas
+    :param im: 2d array of float, the traces are already removed
+    :return median(sim): float, median of the standard deviations from parts of the images
+    :return std(sim): float, variation of the standard deviations from parts of the images
     """
     im[im == 0.0] = np.nan                                                              # Replace zeros with NaNs
     im[im == 0] = np.nan                                                              # Replace zeros with NaNs
@@ -2795,7 +2818,10 @@ def trace_orders(params, im_sflat, im_sflat_head):
 
 def prepare_measure_background_noise(params, im, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths):
     """
+    Removes the area with traces from an images and then measures the noise (std) in the remaining image
     Part of it is the same as read_file_calibration, if localbackground is not part of the calibrations
+    :return bck_noise_std: median of the noise
+    :return bck_noise_var: variance of the noise in the image (std of noise in different areas)
     """
     bck_px_sci = find_bck_px(im, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0])
     bck_px_cal = find_bck_px(im, cal_tr_poly, axlows, axhighs, awidths, params['background_width_multiplier'][1])
@@ -3074,6 +3100,7 @@ def save_spec_csv(spec, wavelengths, good_px_mask, fname):
 def wavelength_solution_harps(params, head, wavelengths):
     """
     Save the wavelength solution in the same way as the ESO DRS 
+    :return head: Modified header
     """
     ws = wavelengths.shape
     deg = max(params['polynom_order_traces'])
@@ -3093,6 +3120,7 @@ def wavelength_solution_iraf(params, head, wavelengths, wavelength_solution, nor
     Sources: chapter 5 in http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?specwcs
     Tested with: https://github.com/kgullikson88/General/blob/master/readmultispec.py
     :param norder: Degree of the fitting polynomials
+    :return head: Modified header
     """
     ws = wavelengths.shape
     deg = max(params['polynom_order_traces'])
@@ -3142,6 +3170,8 @@ def wavelength_air_to_vacuum(wave):         # from CERES, naming and structure c
     """
     Converts the the Air wavelength into vacuum wavelength, using the material in 
     https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf
+    :param wave: nd array of floats, containing the air wavelengths per pixel
+    :return wave_new: nd array of floats, same format as wave, containing the vacuum wavelengths per pixel
     """
     wave_prev = wave.copy()
     while(True):                                # Iterative 
@@ -3155,6 +3185,11 @@ def wavelength_vacuum_to_air(wave):         # from CERES, naming changed
     return (wave / n_Edlen(wave))
 
 def n_Edlen(l):
+    """
+    Calculates the dispersion index, depending on the wavelength l
+    :params l: nd array of floats, containing the air wavelengths
+    return n: nd array of floats, same format as l, distpersion index for each wavelength
+    """
     s = 1e4 / l
     s2 = s*s
     n = 1 + 8.34213e-5 + 2.406030e-2/(130-s2) + 1.5997e-4/(38.9-s2)    # applied from https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf same formular as in Ceres
@@ -3162,7 +3197,7 @@ def n_Edlen(l):
 
 def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1, mask=[], frame=None, return_frame=False):
     """
-    Plot the found traces over the CCD image in order to allow error detection
+    Plot the found traces over the CCD image in order to allow the detection of mistakes made by the automatic steps
     :param im: 2d array of floats with the image
     :param fname: String, file to which should be saved
     :param pfits: list of floats, length same as number of orders, polynomial values
@@ -3470,7 +3505,7 @@ def plot_wavelength_solution_image(im, fname, pfits, xlows, xhighs, wavelength_s
 
 
             
-def find_bck_fit(im, im_bck_px, p_orders, GUI=True):         # Needs to be rewritten using 2d image fit.
+""" not used anymore def find_bck_fit(im, im_bck_px, p_orders, GUI=True):         # Needs to be rewritten using 2d image fit.
     ims = im.shape
     im_bck = []
     xarr = np.array(range(ims[1]))
@@ -3500,8 +3535,9 @@ def find_bck_fit(im, im_bck_px, p_orders, GUI=True):         # Needs to be rewri
     if GUI == True:
         plot_img_spec.plot_image(im_bck1, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'Background map')
     return im_bck1
+"""
 
-def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=True):
+def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=True):	# not used anymore
     fig, frame = plt.subplots(1, 1)
     def plot(frame, im_orig, pfits, xlows, xhighs, widths, w_mult):
         frame.clear()
@@ -4139,6 +4175,11 @@ def correlate_px_wavelength(im, orig_arc_lines_wavelength, reference_catalog, re
 """
 
 def create_pseudo_wavelength_solution(number_orders):
+    """
+    Creates a pseudo wavelength solution with one Angstrom per pixel
+    :param number_orders: interger, number of orders for which the solution should be created
+    
+    """
     wavelength_solution, wavelength_solution_arclines = [], []
     for order in range(number_orders):
         wavelength_solution.append([order, 0., 1., 0. ])
@@ -4878,6 +4919,9 @@ def read_fit_wavelength_solution(params, filename, im):
     return wavelength_solution, np.array(wavelength_solution_arclines)
 
 def read_text_file(filename, no_empty_lines=False):
+    """
+    Read a textfile and put it into a list, one entry per line
+    """
     text = []
     if os.path.isfile(filename) == True:
         text1 = open(filename,'r').readlines()
@@ -4892,11 +4936,17 @@ def read_text_file(filename, no_empty_lines=False):
     return text
 
 def add_text_file(text, filename):
+    """
+    Adds a line or lines of text to a file
+    """
     file = open(filename,'a')
     file.write(text+'\n')
     file.close()
 
 def add_text_to_file(text, filename):
+    """
+    If the text is not yet in the file, the test is added
+    """
     oldtext = read_text_file(filename)
     exists = False
     for line in oldtext:
@@ -4907,6 +4957,12 @@ def add_text_to_file(text, filename):
         add_text_file(text, filename)
         
 def remove_orders(pfits, rm_orders):
+    """
+    Remove orders by masking them
+    :param pfits:
+    :param rm_orders: list of integers, contains the orders to be removed
+    return mask: array of bool with the same length as original orders
+    """
     mask = np.repeat([True], len(pfits))
     if type(rm_orders) is not list:
         return mask
@@ -4917,6 +4973,9 @@ def remove_orders(pfits, rm_orders):
     return mask
 
 def run_remove_orders_UI(im1, pfits, xlows, xhighs, userinput=True):
+    """
+    Removes orders from the pfits array in a GUI
+    """
     # Plot fitted orders
     if not userinput:
         return pfits, xlows, xhighs, True
@@ -4995,6 +5054,9 @@ def run_remove_orders_UI(im1, pfits, xlows, xhighs, userinput=True):
     return fmask
 
 def plot_gauss_data_center(datapoints_x, datapoints, label_datapoins, gauss, label_gauss, centroids, label_centroids, filename='', title=''):
+    """
+    Plot a 1D Gaussian to data
+    """
     adjust=[0.05,0.95,0.95,0.05, 1.0,1.01]
     size = datapoints.shape
     for step in range((size[0]+9)/10):          # Only plot 10 graphs in one image
@@ -5029,6 +5091,9 @@ def plot_gauss_data_center(datapoints_x, datapoints, label_datapoins, gauss, lab
             plt.close()
 
 def add_specinfo_head(spectra, im_head):
+    """
+    Add information from the spectra to the header
+    """
     spectra = np.array(spectra)
     im_head['fmin'] = np.nanmin(spectra)
     im_head['fmax'] = np.nanmax(spectra)
@@ -5184,7 +5249,7 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
     """
     return np.array(contspec), np.array(sn_cont)
 
-def get_cont_ceres(W,F,nc=3,ll=1.,lu = 5.,frac=0.05,window=21):     # Based on ceres pipeline (copied, added comments, maybe changed code), not used anymore
+"""def get_cont_ceres(W,F,nc=3,ll=1.,lu = 5.,frac=0.05,window=21):     # Based on ceres pipeline (copied, added comments, maybe changed code), not used anymore
     blns = [[6755,6769],[6530,6600],[4840,4880],[4320,4360],[4085,4120],[3950,3990],[3880,3910],[3825,3850]]        #These wavelength ranges will be ignored
     flx = F[0]
     wav = W[0]
@@ -5264,7 +5329,7 @@ def get_cont_ceres(W,F,nc=3,ll=1.,lu = 5.,frac=0.05,window=21):     # Based on c
         else:
             coefs = np.vstack((coefs,coef))
 
-    return coefs
+    return coefs"""
 
 def linearise_wavelength_spec(params, wavelength_solution, spectra, method='sum', weight=[]):    
     """
