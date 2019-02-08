@@ -69,6 +69,7 @@ def plot_spectra(spectra_x, spectra_y, labels, spaths, show=False, adjust=[0.05,
     :param title: Titel for the plot
     :return:
     """
+    #spectra_x = np.array(spectra_x)
     if frame is None:
         fig, frame = plt.subplots(1, 1)
         fig.set_size_inches(16.2, 10)
@@ -96,7 +97,51 @@ def plot_spectra(spectra_x, spectra_y, labels, spaths, show=False, adjust=[0.05,
             plt.savefig(spath, bbox_inches='tight')
         plt.close()
 
-def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.95,0.05, 1.0,1.01], title='', return_frame=False, frame=None, x_title='x', y_title='y', linestyle="", marker="o"):
+def create_plot_marker_linestyle_color(length, linestyle=None, marker=None, color=None):
+    """
+    :param length: integer, number of individual plots in the graph
+    :param linestyle, marker, color: List, Array, String, or None: use the given properties for the plot. String will be transformed to a list, and the list will multiplied by the number of entries
+                If None is given for color then the matplotlib standards are used
+    :return cycler_plt: cycler.Cycler, contains the information to make a easy looking graph
+    """
+    cycler_ori = plt.rcParams["axes.prop_cycle"]            # Get the current properties of the cycler
+    #if linestyle == None:                       # replace None by empty string
+    #    linestyle = ['']
+    #if marker == None:                          # replace None by empty string
+    #    marker = ['']
+    if type(linestyle).__name__ == 'str':       # Make string to list
+        linestyle = [linestyle]
+    if type(marker).__name__ == 'str':          # Make string to list
+        marker = [marker]
+    if type(color).__name__ == 'str':           # Make string to list
+        color = [color]
+    if linestyle <> None:
+        for i in range(len(linestyle)):         # replace None by empty string
+            if linestyle[i] == None:
+                linestyle[i] = ''
+    if marker <> None:
+        for i in range(len(marker)):            # replace None by empty string
+            if marker[i] == None:
+                marker[i] = ''
+    if color <> None:                           # user color
+        cycler_plt = plt.cycler(color=color*length)
+    else:                                       # No color given
+        if 'color' in cycler_ori.by_key():      # user original colors
+            cycler_plt = plt.cycler(color=cycler_ori.by_key()['color']*length)
+        else:                                   # use dummy colors
+            cycler_plt = plt.cycler(color=[u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22', u'#17becf']*length)
+    if type(marker) == list or type(marker) == np.ndarray:
+        cycler_plt += plt.cycler(marker=marker*length)
+    elif 'marker' in cycler_ori.by_key():
+        cycler_plt += plt.cycler(marker=cycler_ori.by_key()['marker']*length)
+    if type(linestyle) == list or type(linestyle) == np.ndarray:
+        cycler_plt += plt.cycler(linestyle=linestyle*length)
+    elif 'linestyle' in cycler_ori.by_key():
+        cycler_plt += plt.cycler(linestyle=cycler_ori.by_key()['linestyle']*length)
+    
+    return cycler_plt
+
+def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.95,0.05, 1.0,1.01], title='', return_frame=False, frame=None, x_title='x', y_title='y', linestyle="", marker="o", color=None, size=[16.2, 10]):
     """
     Plots the Spectra to files $spaths$
     :param spectra: ???
@@ -104,46 +149,49 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     :param show: if True then plot is shown instead of saved
     :param adjust: to avoid big white areas in the figure: left, right, top, bottom, legend left, legend top
     :param title: Titel for the plot
+    :param size: size of the plot. For display on screen: 16.2, 10 ; for publication (single column): 6.7, 4.1; for publication, 2 columns: 3.3, 2.1
     :return:
     """
     if frame is None:
         fig, frame = plt.subplots(1, 1)
-        fig.set_size_inches(16.2, 10)
+        fig.set_size_inches(size[0], size[1])
     plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
     minx, miny, maxx, maxy = 1e10, 1e10, -1e10, -1e10
     for i in range(len(data_x)):
-        if len(data_x[i]) > 0:
-            minx = min(minx, np.nanmin(data_x[i]) )
-            maxx = max(maxx, np.nanmax(data_x[i]) )
+        if type(data_x[i]) in [np.ndarray, list]:
+            if sum(~np.isnan(data_x[i])) > 0:
+                minx = min(minx, np.nanmin(data_x[i]) )
+                maxx = max(maxx, np.nanmax(data_x[i]) )
             data_yi = np.array(data_y[i], dtype=float)           # Necessary, because data_y[i][ ~np.isnan(data_y[i]) ] fails, float necessary, otherwise data_yi.dtype will object, which fails np.isnan
             #print type(data_yi), data_yi.shape, data_yi.dtype, np.isnan(data_yi)
-            if len( data_yi[ ~np.isnan(data_yi) ] ) > 0:       # only search min/max, if non-nan data exists
+            if sum(~np.isnan(data_yi)) > 0:       # only search min/max, if non-nan data exists
                 miny = min(miny, np.nanmin(data_yi) )
                 maxy = max(maxy, np.nanmax(data_yi) )
+        else:
+            minx = min(minx, data_x[i] )
+            maxx = max(maxx, data_x[i] )
+            miny = min(miny, data_y[i] )
+            maxy = max(maxy, data_y[i] )
     #miny,maxy = -0.3,0.3
     #minx,maxx = 0,4250
     dx = max(1,maxx - minx)*0.01
     dy = max(1,maxy - miny)*0.01
     plt.axis([minx-dx,maxx+dx, miny-dy,maxy+dy])
-    if type(marker) == list or type(marker) == np.ndarray:
-        if len(marker) <> len(data_x):                  # Otherwise there is no need to do anything
-            markerneu = []
-            while len(markerneu) < len(data_x):
-                for markeri in marker:
-                    markerneu = np.append(markerneu, np.repeat(markeri, 10) )
-            marker = markerneu
-    else:
-        marker = np.repeat(marker, len(data_x))
+
+    cycler_plt = create_plot_marker_linestyle_color(len(data_x), linestyle, marker, color)
+    frame.set_prop_cycle(cycler_plt)
     label = ''
     for i in range(len(data_x)):
         if len(labels) > 0:
             label = labels[i]
-        if len(data_x[i]) - len(data_y[i]) == 1:        # Histogram (one data point less in y
+        if type(data_x[i]) is not np.ndarray and type(data_x[i]) is not list:
+            frame.plot(data_x[i], data_y[i], label=label)#, linestyle=linestyle[i], marker=marker[i])
+        elif len(data_x[i]) - len(data_y[i]) == 1:        # Histogram (one data point less in y
             width = (( 1 - i/len(data_x) ) * 0.7 + 0.1) * (data_x[i][1] - data_x[i][0])
             center = (data_x[i][:-1] + data_x[i][1:]) / 2
             plt.bar(center, data_y[i], align='center', width=width, label=label)
         elif len(data_x[i]) > 0:
-            frame.plot(data_x[i], data_y[i], label=label, linestyle=linestyle, marker=marker[i])
+            frame.plot(data_x[i], data_y[i], label=label)#, linestyle=linestyle[i], marker=marker[i])
             
     frame.set_xlabel(x_title, fontsize=13)
     frame.set_ylabel(y_title, fontsize=13)

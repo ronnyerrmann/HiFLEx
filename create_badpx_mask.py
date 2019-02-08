@@ -22,18 +22,28 @@ params['exptimes'] = [0.1,0.4,0.7, 1,1.2,1.4,1.6,1.8, 2,2.2,2.4,2.6,2.8, 3,3.2,3
 #params['exptimes'] = [0.01,0.04,0.07,0.1,0.4,0.5, 1,1.3,1.7, 2,2.4,2.8,3.2,3.6, 4,4.5,5]      #5/1
 #params['exptimes'] = [0.1,1,3.2]      #5/1
 params['exptimes'] = [0.1,0.15,0.2,0.3,0.5,0.7, 1,1.5,2,3,5,7, 10,15,16,17,18,19,20]     # 20180924
+params['exptimes'] = [0.001,0.002,0.003,0.005,0.007, 0.01,0.02,0.03,0.05,0.07, 0.1,0.2,0.3,0.5,0.7, 1,2,3,5,7, 10]     # 20190110
+params['exptimes'] = [0.01,0.02,0.03,0.05,0.07, 0.1,0.2,0.3,0.5,0.7, 1,2,3,5,7, 10]     # 20190110
+params['exptimes'] = [0.001,0.01,0.02,0.03,0.05,0.07, 0.1,0.2,0.3,0.5,0.7, 1,1.5,2,2.5,3,3.5,4,5,6,7]                  # 20190116
+#params['exptimes'] = [0.5,0.7, 1,1.5,2,2.5,3,3.5,4,5,6]                  # 20190116
+params['exptimes'] = [1,10,20,40,60]                  # 20190116
+params['exptimes'] = [0.01, 0.02,0.03,0.04,0.06,0.08, 0.1,0.12,0.14,0.16,0.18, 0.2,0.22,0.24,0.26,0.28, 0.3,0.4,0.5,0.6,0.7,0.8,0.9, 1,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8, 2,2.2,2.4,2.6,2.8, 3,3.2,3.4,3.6,3.8, 4,4.2,4.4,4.6,4.8, 5,5.2,5.4,5.6,5.8, 6,6.2,6.4,6.6,6.8, 7,7.2,7.4,7.6]                  # 20190116
 #params['exptimes'] = []
-range_bias = range(1,32)
-range_dark = range(1,6)
+range_bias = range(1,52)
+range_dark = range(1,8)
 range_flat = range(1,6)
+#range_flat = range(0,0)
 show_stats = ['bias', 'dark', 'flat']
-#show_stats = ['flat']
-#show_stats = ['dark']
+show_stats = ['flat']
+show_stats = ['dark']
 show_stats = []
 params['gains'] = 'gains.fits'
 params['zerop'] = 'zerop.fits'
 params['xord'], params['yord'] = 5, 5       # for qsi camera yord is along dispersion axis, 3,4 needs about 3GB memory, 4,4 about 3.5 GB; 1,0 is for bias/dark; 4,4 for flats, gain
-#params['xord'], params['yord'] = 2, 2       # for biases/darks
+params['xord'], params['yord'] = 2, 2       # for biases/darks
+
+#get_statistics = ['Flat-0001_0p001s.fit', 'Flat-0002_0p001s.fit', 'Flat-0003_0p001s.fit', 'Flat-0004_0p001s.fit', 'Flat-0005_0p001s.fit', 'Flat-0001b_0p001s.fit', 'Flat-0002b_0p001s.fit', 'Flat-0003b_0p001s.fit', 'Flat-0004b_0p001s.fit', 'Flat-0005b_0p001s.fit', 'Flat-0001c_0p001s.fit', 'Flat-0002c_0p001s.fit', 'Flat-0003c_0p001s.fit', 'Flat-0004c_0p001s.fit', 'Flat-0005c_0p001s.fit']
+get_statistics = []
 
 # Start of code
 # deal with arguments from a text file
@@ -43,7 +53,7 @@ def find_stats(im_stats):
     if len(im_stats) == 0:
         return
     stat_single = []
-    for im in im_stats:
+    for im in tqdm(im_stats):
         im_fit = fit_2d_image(im, params['xord'], params['yord'])
         im_diff = im - im_fit
         #plot_img_spec.plot_image(im_diff, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'residuals between fit of the gain and the gain')
@@ -78,7 +88,89 @@ def find_stats(im_stats):
     printarrayformat = ['%1.1i', '%1.1i', '%4.2f', '%4.2f', '%5.3f']
     logger('The difference between 2 files have the following properties (values given in ADU, stdev defines the readout noise):\n\t\tindex1\tindex2\taverage\tmedian\tstdev',printarrayformat=printarrayformat, printarray=stat_diff)
 
+def plot_linearity_UI(exp_times, data, title='', adjust=[0.07,0.90,0.94,0.06, 1.0,1.01]):
+    
+    fig, frame = plt.subplots(1, 1)
+    plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
+    
+    datac = np.median(data, axis=(1,2))
+        
+    def plot(frame, x, data, datac):
+        frame.clear()
+        datas = data.shape
+        try:
+            option = gui3.data['option_plot']
+        except:
+            option = 0
+        try:
+            number_graphs = gui3.data['number_graphs']
+        except:
+            number_graphs = 5           # not yet initialised
+        for number in range(number_graphs):
+            i, j = np.random.randint(0,datas[1]+1), np.random.randint(0,datas[2]+1)     # get random pixel
+            if option == 0:
+                frame.plot((data[1:,i,j]-data[0,i,j]), (data[1:,i,j]-data[0,i,j])/(x[1:]-x[0]), label='{0},{1}'.format(i,j) )
+            elif option == 1:
+                frame.plot(x, data[:,i,j], label='{0},{1}'.format(i,j) )
+            elif option == 2:
+                frame.plot(x, data[:,i,j]/x, label='{0},{1}'.format(i,j) )
+            elif option == 3:
+                frame.plot(x[1:], (data[1:,i,j]-data[0,i,j])/(x[1:]-x[0]), label='{0},{1}'.format(i,j) )
+        if option == 0:
+            frame.plot((datac[1:]-datac[0]), (datac[1:]-datac[0])/(x[1:]-x[0]), label='all', linewidth=3, color='black' )
+        elif option == 1:
+            frame.plot(x, datac[:], label='all', linewidth=3, color='black' )
+        elif option == 2:
+            frame.plot(x, datac[:]/x, label='all', linewidth=3, color='black' )
+        elif option == 3:
+            frame.plot(x[1:], (datac[1:]-datac[0])/(x[1:]-x[0]), label='all', linewidth=3, color='black' )
+        #xlabel_text = 'exposure time [s]'
+        xlabel_text = ['zero-corrected flux [ADU]'                           , 'exposure time [s]', 'exposure time [s]'                     , 'exposure time [s]'                                    ]
+        ylabel_text = ['zero-corrected flux devided by exposure time [ADU/s]', 'flux [ADU]'       , 'flux divided by exposure time [ADU/s]' , 'zero-corrected flux divided by exposure time [ADU/s]' ]
+        frame.set_xlabel(xlabel_text[option], fontsize=14)
+        frame.set_ylabel(ylabel_text[option], fontsize=14)
+        frame.set_title(title, fontsize=16)
+        frame.legend(loc='upper left', bbox_to_anchor=(adjust[4], adjust[5]))
+    # get kwargs
+    pkwargs = dict(frame=frame, x=exp_times, data=data, datac=datac)
+    # run initial update plot function
+    plot(**pkwargs)
+    
+    # define valid_function
+    # input is one variable (the string input)
+    # return is either:
+    #   True and values
+    # or
+    #   False and error message
+    def vfunc_int(xs):
+        try:
+            value = int(xs)
+            return True, value
+        except:
+            return False, ('Error, input must be integer')
+    # define widgets
+    widgets = dict()
+    starta = 5
+    startb = 0
+    widgets['number_graphs'] = dict(label='Number of\nGraphs?', comment=None, #'integer',
+                                kind='TextEntry', minval=None, maxval=None,
+                                fmt=str, start=starta, valid_function=vfunc_int,
+                                width=10)
+    widgets['option_plot'] = dict(label='Option', comment='0, 1, 2, or 3',
+                                kind='TextEntry', minval=None, maxval=None,
+                                fmt=str, start=startb, valid_function=vfunc_int,
+                                width=10)
+    widgets['accept'] = dict(label='Close', kind='ExitButton', position=Tk.BOTTOM)
+    widgets['update'] = dict(label='Update', kind='UpdatePlot', position=Tk.BOTTOM)
 
+    wprops = dict(orientation='v', position=Tk.RIGHT)
+
+    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
+                        title='Plot flux as funktion of exposure time', widgets=widgets,
+                        widgetprops=wprops)
+    
+    gui3.master.mainloop()
+    
 if __name__ == "__main__":
     logger('Info: Starting routine to create a bad pixel map')
     log_params(params)
@@ -95,8 +187,20 @@ if __name__ == "__main__":
             im_stats.append(im)
     params['bias_rawfiles'] = biases
     params['bias_calibs_create'] = ['subframe', 'badpx_mask']
+    params['master_bias_filename'] = 'master_bias.fits'
     im_bias, im_head_bias = create_image_general(params, 'bias')
     find_stats(im_stats)
+
+    if len(get_statistics) > 0:
+        #params['subframe'] = [48,48,1000,1000]      # measure the gain in a subwindow
+        params['calibs'] = ['subframe', 'badpx_mask']
+        images = []
+        for image in get_statistics:
+            images.append(params['raw_data_path']+image)
+            im, im_head = read_file_calibration(params, images[-1])
+            im_stats.append(im)
+        find_stats(im_stats)
+        
 
     im_flats = []
     for exptime in params['exptimes']:
@@ -111,9 +215,13 @@ if __name__ == "__main__":
                 im_stats.append(im)
         params['dark{0}_rawfiles'.format(exptime)] = darks
         params['master_dark{0}_filename'.format(exptime)] = 'master_dark_{0}s.fits'.format(expname)        # Change the name of the Flat files, if necessary
+        #im_dark, im_head_dark = create_image_general(params, 'dark{0}'.format(exptime))                # if you need the master dark files
+        find_stats(im_stats)
         
+        if len(range_flat) == 0:    
+            continue
         for i in range_flat:
-            flats.append(params['raw_data_path']+'rFlat-{0}_{1}s.fit'.format('%4.4i'%i, expname))
+            flats.append(params['raw_data_path']+'Flat-{0}_{1}s.fit'.format('%4.4i'%i, expname))
             if 'flat' in show_stats:
                 params['calibs'] = ['subframe', 'badpx_mask']                                   # is overwritten, if a dark is loaded
                 im, im_head = read_file_calibration(params, flats[-1])                          # disable, if only darks should be checked and flats with this exposure time don't exist
@@ -133,7 +241,7 @@ if __name__ == "__main__":
         
     #exit(100)
     
-    exptimes = np.array(params['exptimes'])
+    exptimes = np.array(params['exptimes'],dtype=float)
     badpx_mask = calimages['badpx_mask']
     try:
         im_head_bias
@@ -141,10 +249,16 @@ if __name__ == "__main__":
         im_head_bias = im_head
     
     # Check the gain and zeropoint for different max_good_values to check the linearity
-    for max_value in [10000,20000,30000,40000,50000,60000,62000,630000,640000]:
+    print('Check for linearity')
+    # Create the data as Mugrauer 2010
+    datac = np.median(im_flats, axis=(1,2))
+    
+    # Plot the data
+    plot_linearity_UI(exptimes, im_flats)
+    for max_value in [1200,2500,10000,13000,20000,30000,40000,50000,55000,60000,61000,62000,630000,640000]:
         gains = copy.copy(badpx_mask)*0
         zerop = copy.copy(badpx_mask)*0
-        for i in tqdm(range(params['subframe'][0]), desc='determine the gain for each pixel for up to {0} ADU'.format(max_value)):
+        for i in tqdm(range(params['subframe'][0]), desc='determine the gain for each pixel for up to {0} ADU: maximum flux, gain, zeropoint'.format(max_value)):
             for j in range(params['subframe'][1]):
                 exp_range = (im_flats[:,i,j] < max_value)# & (im_flats[:,i,j] > 100)
                 fit = np.polyfit(exptimes[exp_range], im_flats[exp_range,i,j],1)
@@ -165,7 +279,7 @@ if __name__ == "__main__":
         for i in tqdm(range(params['subframe'][0]), desc='determine the gain for each pixel'):
             for j in range(params['subframe'][1]):
                 exp_range = (im_flats[:,i,j] < params['max_good_value'])# & (im_flats[:,i,j] > 100)
-                fit = np.polyfit(exptimes[exp_range], im_flats[exp_range,i,j],1)
+                fit = np.polyfit(exptimes[exp_range], im_flats[exp_range,i,j],1)            # linear fit
                 gains[i,j] = fit[0]
                 zerop[i,j] = fit[1]
         save_im_fits(params, gains, im_head_bias, params['result_path']+params['gains'])

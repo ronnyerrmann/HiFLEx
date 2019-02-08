@@ -44,7 +44,15 @@
 
 % -------------------------------------------------------------------------------------------
 
+\section{Changelog}
+\subsection{v0.3.3}
+\begin{itemize}
+ \item Added parameter \verb|raw_data_timezone_cor| to conf.txt.
+\end{itemize}
 
+
+% ------------------------------------------------------------------------------
+\newpage
 
 \section{Introduction}
 \label{intro}
@@ -105,8 +113,8 @@ pip install pyfits
 
 If the installation of pyfits fails, the following two commands can be tried to install it under conda:
 \begin{lstlisting}[style=base]
-conda install -c sherpa pyfits
 conda install -c cefca pyfits
+conda install -c sherpa pyfits
 \end{lstlisting}
 This might downgrade numpy, which will cause problems. Therefore, after installing pyfits, numpy needs to be upgraded again:
 \begin{lstlisting}[style=base]
@@ -128,17 +136,18 @@ tar -xzvf v*.tar.gz
 
 \noindent The following files should be available now in the program folder:
 \begin{description}
-\item[prepare\_file\_list.py] Script to automatically assign the fits files into the corresponding calibration steps.
-\item[reduction\_day.py] Script which needs to be run on each new set of data. It creates the data, which is necessary in order to extract the scientific spectra. Afterwards it extracts the Echelle spectra of the science images.
+ \item[prepare\_file\_list.py] Script to automatically assign the fits files into the corresponding calibration steps.
+ \item[reduction\_day.py] Script which needs to be run on each new set of data. It creates the data, which is necessary in order to extract the scientific spectra. Afterwards it extracts the Echelle spectra of the science images.
 %\item[extract.py] Script that extracts the scientific echelle spectra.
 %\item[order\_trace.py] Script that searches for the flat orders in the CCD images.
-\item[procedures.py] Contains all the procedures for the data analysis.
+ \item[procedures.py] Contains all the procedures for the data analysis.
 %%%\item[find\_rv.py] Script that performs the radial velocity analysis.
-\item[tkcanvas.py] Contains the plotting routines to create the user interfaces (UI).
-\item[plot\_img\_spec.py] This script controls plotting of CCD images, graphs, and the extracted spectra.
-\item[remove\_orders.py] If the automatic process identified wrong orders, then this script allows the user to remove them using a GUI.
-\item[create\_badpx\_mask.py] Script to create a bad pixel mask (in testing).
-\item[SSEphem] Necessary folder to calculate barycentric velocity. \textit{(It might be necessary to install the package to have the correct paths.)}
+ \item[tkcanvas.py] Contains the plotting routines to create the user interfaces (UI).
+ \item[plot\_img\_spec.py] This script controls plotting of CCD images, graphs, and the extracted spectra.
+ \item[remove\_orders.py] If the automatic process identified wrong orders, then this script allows the user to remove them using a GUI.
+ \item[create\_badpx\_mask.py] Script to create a bad pixel mask (in testing).
+ \item[SSEphem] Necessary folder to calculate barycentric velocity. \textit{(It might be necessary to install the package to have the correct paths.)} 
+ \item[ssephem\_update.py] Script to update the SSEphem package (See Section~\ref{Section:update_ssephem}).
 \end{description}
 
 When running the scripts for the first time, python will create a new file called \verb|<filename>.pyc| for some of the files (compiled script). No harm will be done in removing or keeping the files.
@@ -217,7 +226,7 @@ When running the scripts for the first time, python will create a new file calle
 \noindent If the result file of any of the above steps already exist in the folder in which the code is run, then the existing file is read instead of performing the step again in order to safe computational time. If a step needs to run again, the according result file needs to be deleted.
 
 \subsection{Necessary CCD images}
-To get the best results, the following data should be taken (all filenames are case-insensitive):
+To get the best results, the following data should be taken (all filenames are case-insensitive). \textbf{No spaces are allowed in the file names.}
 \begin{itemize}
   \item \textit{true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{rflat} for automatic processing.
   \item Flat (11x, white light source through the science fiber), with the filename containing \textbf{sflat} or \textbf{whli}. The calibration fiber should be dark for this data.
@@ -352,14 +361,19 @@ In order to calculate the barycentric correction the time of the observation (or
  \end{enumerate}
 \end{itemize}
 
+\subsubsection{get\_ut1\_offset: requested mjd is beyond end of IERS file}
+\label{Section:update_ssephem}
+If the message \verb|get_ut1_offset: requested mjd is beyond end of IERS file| appears, the data from Jet Propulsion Laboratory Development Ephemeris is out of date. It can be updated by running \verb|ssephem_update.py|. 
+
+%\textit{At the moment DE403 is used (the CERES pipeline uses DE403). This can be changed by updating \verb|ssephem_update.py|, \verb|SSEphem/update_ssephem.py| (updating the procedure} SSEphemDownload \textit{, and at the beginning of \verb|procedures.py|.} However, this doesn't seem to have an impact on the resulting barycentric corrections.
 
 \subsubsection{Creating a list of objects}
 \label{Section:create_object_list_file}
 If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file must contain one line per object. For each object the following tab-separated values need to be given:
 \begin{enumerate}\setlength\itemsep{0em}
  \item Object name (the filename should start with the object name in order to be used)
- \item RA (hh:mm:ss.ss)
- \item DEC ($\pm$dd:mm:ss.ss)
+ \item RA (hh:mm:ss.ss or as one number in degrees)
+ \item DEC ($\pm$dd:mm:ss.ss or as one number in degrees)
  \item PM RA (arcsec/year, can be 0 in the most cases)
  \item PM DEC (arcsec/year, can be 0 in the most cases)
  \item Epoch of the coordinates (only the number, e.g. 2000 or 2015.5)
@@ -404,7 +418,8 @@ This file contains data in the same form as described in Section~\ref{Section:li
 
 \subsubsection*{inside single folder}
 \begin{itemize}
- \item[raw-data filename + \_spec] Blaze corrected spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
+ \item[raw-data filename + \_extr] Extracted spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
+ \item[raw-data filename + \_blaze] Blaze corrected spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
  \item[raw-data filename + \_wave] 2D array with the wavelength for each aperture and pixel.
  \item[raw-data filename + \_weight] Mask with good areas of the spectrum.
 \end{itemize}
@@ -546,13 +561,14 @@ Afterwards the script can run again and will use this data to create a new wavel
 When setting up a new camera or a new account paths and parameters need to be adjusted. The following list explains necessary changes and how to determine parameters which need to be changed.
 \begin{description}
   \item[badpx\_mask\_filename] : Insert path to the bad-pixel mask. Use 'NA', if no bad-pixel mask is needed.
-  \item[reference\_catalog] : Change the path to the catalogue of the reference lines. The file contains one entry per line, each entry consists of tab-separated wavelength, line strength, and element. line strength can be empty.
+  \item[reference\_catalog] : Change the path to the catalogue of the reference lines. The file contains one entry per line, each entry consists of tab-separated wavelength, line strength, and element. Line strength can be empty.
   \item[rotate\_frame, flip\_frame] : The CCD image needs to be aligned in a way that the cross-dispersion axis is along vertical direction and the dispersion axis is along the horizontal direction, AND that the wavelength in dispersion direction is increasing with higher pixel number by providing the necessary angle for \verb|rotate_frame|. If necessary the image can be flipped (\verb|flip_frame = True|) after the rotation so that the wavelength in cross-dispersion direction decreases with increasing pixel number (blue orders on the right and the red orders on the left).
-  \item[extraction\_width\_multiplier, arcextraction\_width\_multiplier] : The spectrum will be extracted by summing up the data between the center of a trace and \verb|extraction_width_multiplier| times the Gaussian width of the order to either side of center. The covered area can be checked in the logged images given in the parameters \verb|logging_traces_im| and \verb|logging_arctraces_im|. In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
+  \item[width\_percentile] Only pixel with more flux than the value given in \verb|width_percentile| (of the maximum flux) will be extracted. The extraction width can be varied later using the parameters \verb|extraction_width_multiplier| and \verb|arcextraction_width_multiplier|. The covered area can be checked in the logged images given in the parameters \verb|logging_traces_im| and \verb|logging_arctraces_im|. %In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
   \item[bin\_search\_apertures] : In order to speed up the search for the traces, heavy binning should be applied. However, the value for the cross-dispersion axis should to chosen in a way, that neighbouring orders are still separated. This can be checked in the images \verb|flat_binned.fits|.
   \item[arcshift\_side] : Position of the calibration traces compared to the science traces. Can be 'left', 'right', or 'center'. The later option implies, that only one fiber exists.
   \item[raw\_data\_imtyp\_keyword, raw\_data\_imtyp\_*] : Put the correct information for the image type header key here. 
-  \item[raw\_data\_exptim\_keyword, raw\_data\_dateobs\_keyword] : Use the right header keywords for the exposure time and the observation date.
+  \item[raw\_data\_exptim\_keyword, raw\_data\_dateobs\_keyword] : Use the right header keywords for the exposure time and the observation date. The format should be \verb|%Y-%m-%dT%H:%M:%S.%f| or\footnote{\url{https://docs.python.org/2/library/datetime.html\#strftime-and-strptime-behavior}} \verb|%Y-%m-%dT%H:%M:%S|. More formats can be added in the procedure \textit{get\_obsdate}.
+  \item[raw\_data\_timezone\_cor] In the unlikely case, that the date and time stored in \verb|raw_date_timezone_cor| is not UTC, the time zone correction can be given here. Numbers will be positive east of UTC and negative west of UTC, e.g. +7 for Bangkok time or -10 for Hawaii.
   \item[standard\_calibs\_create] : Define the standard CCD processing, if necessary (see Section~\ref{Section:parameters_CCD_proc} for options).
   \item[site, altitude, latitude, longitude] : If the site information is not stored in the header (see Section~\ref{Section:barycentric_correction}), then the information can be stored in the configuration file.
 %  \item[] : 

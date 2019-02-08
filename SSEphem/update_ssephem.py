@@ -3,6 +3,7 @@ import numpy as np
 
 def LeapSecUpdate():
 	os.system('wget http://maia.usno.navy.mil/ser7/leapsec.dat')
+	#os.system('wget http://toshi.nofs.navy.mil/ser7/leapsec.dat')      # Backup
 	if os.access('leapsec.tab', os.F_OK):
 		os.system('mv leapsec.tab leapsec_old.tab')
 	try:
@@ -53,6 +54,7 @@ def IersUpdate():
 	if os.access('finals2000A.data',os.F_OK):
 		os.system('mv finals2000A.data finals2000A_old.data')
 	os.system('wget http://maia.usno.navy.mil/ser7/finals2000A.data')
+	#os.system('wget http://toshi.nofs.navy.mil/ser7/finals2000A.data')      # Backup
 	if os.access('finals2000A.data',os.F_OK) == False:
 		print 'one'
 		print 'No Luck...'
