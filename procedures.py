@@ -1151,9 +1151,12 @@ def unify_pord(pfits):                          # Only required because of the u
         ps.append(p)
         chis.append(np.sum((y-np.polyval(p, x))**2))
     argmin = np.argmin(chis)
-    return ps[argmin], nrange[argmin]
+    return ps[argmin], nrange[argmin]"""
 
 def polyfit_adjust_order(xarr, yarr, p_orders, w=None):
+    """
+    Finds the polynomial with the highest posible order to fit the data
+    """
     xarr = np.array(xarr)
     yarr = np.array(yarr)
     poly = np.array([np.mean(yarr)])            # if the order = 0 is failing, then report at least the average (which is a polynom of order 0)
@@ -1166,7 +1169,6 @@ def polyfit_adjust_order(xarr, yarr, p_orders, w=None):
                 except np.RankWarning:
                     poly = poly
     return poly
-"""
 
 def polynomial_value_2d(xx, yy, xord, yord, poly2d_params):
     """
@@ -2599,7 +2601,7 @@ def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
         logger('Info The faintest {0} of {1} entries in the arc reference file {2} will not be used '.format(arcs[0]-reference_catalog.shape[0], arcs[0], filename ))
     return reference_catalog, reference_names
 
-def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly):
+def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, objname):
     """
     Determines the pixelshift between the current arc lines and the wavelength solution
             maybe replace by a cross correlation between arc spectra: x1, y1 from wavelength solution, x2, y2 from the current file -> y2'(x) = y1(x+dx)*a+b so that y2 and y2' match best
@@ -2616,7 +2618,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     if np.max(wavelength_solution[:,-1]) < 100 or False:     # pseudo solution
         return copy.deepcopy(wavelength_solution)               # No shift is necessary
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0 and np.nansum(aspectra) == 0:         # science and calibration traces are at the same position and it's not the calibration spectrum
-        wavelength_solution_shift = shift_wavelength_solution_times(params, wavelength_solution, obsdate_float)
+        wavelength_solution_shift = shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, objname)
         return wavelength_solution_shift
 
     FWHM = 3.5
@@ -2674,10 +2676,10 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
         # Save the shift for later use
         add_text_to_file('{0}\t{1}\t{2}\n'.format(obsdate_float, shift_avg, shift_std), params['master_wavelengths_shift_filename'] )
         
-    logger('Info: The shift between the lines used in the wavelength solution and the current calibration spectrum is {0} +- {1} px ({8} km/s). {2} reference lines have been used, {7} reference lines have been tested. The arc lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px'\
+    logger('Info: The shift between the lines used in the wavelength solution and the current calibration spectrum of file {9} is {0} +- {1} px ({8} km/s). {2} reference lines have been used, {7} reference lines have been tested. The arc lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px'\
                 .format(round(shift_avg,4), round(shift_std,4), shifts.shape[0], round(width_avg,3), \
                         round(width_std,3), round(width_avg*2.35482,3), round(width_std*2.35482,3), checked_arc_lines,
-                        round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4) ))
+                        round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), objname ))
     if len(shifts) >= ratio_lines_identified * checked_arc_lines and len(shifts) != 0:                          # Statistics only if enough lines were detected
         statistics_arc_reference_lines(shifts, [0,1,6,2], reference_names, wavelength_solution, xlows, xhighs, show=False)
     # correction in the other side of the shift
@@ -2698,7 +2700,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     
     return np.array(wavelength_solution_new)"""
 
-def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float):
+def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, objname):
     """
     In case no calibration spectrum was taken at the same time as the science spectra use the stored information to aply a shift in the lines
     !!! shift_avg = np.average( shifts[:,1], weights=weight )  -> Tested, will work fine for obsdate in range(all_shifts), but will fail for extrapolation. Maybe it's necessary to replace this by a linear fit?
@@ -2722,11 +2724,11 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float):
     weight /= np.nansum(weight)
     weight = 1 - weight
     shift_avg = np.average( shifts[:,1], weights=weight )           # Tested, will work fine for obsdate in range(all_shifts), but will fail for extrapolation. Maybe it's necessary to replace this by a linear fit?
-    logger('Info: The shift between the wavelength solution and the current data (center of exposure is {1}) is {0} px ({6} km/s). The stored shifts {2} ({3}) and {4} ({5}) were used.'.format(\
+    logger('Info: The shift between the wavelength solution and the current file {7} (center of exposure is {1}) is {0} px ({6} km/s). The stored shifts {2} ({3}) and {4} ({5}) were used.'.format(\
                         round(shift_avg,4), datetime.datetime.utcfromtimestamp(obsdate_float).strftime('%Y-%m-%d %H:%M:%S'), 
                         round(shifts[0,1],4), datetime.datetime.utcfromtimestamp(shifts[0,0]).strftime('%Y-%m-%d %H:%M:%S'),
                         round(shifts[-1,1],4), datetime.datetime.utcfromtimestamp(shifts[-1,0]).strftime('%Y-%m-%d %H:%M:%S'),
-                        round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4) ) )
+                        round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), objname ) )
 
     wavelength_solution_new = copy.deepcopy(wavelength_solution)
     #wavelength_solution_new[:,1] -= shift_avg                       # shift the central pixel, - sign is right, tested before 19/9/2018
@@ -2934,7 +2936,7 @@ def get_obsdate(params, im_head):
     obsdate_float = (obsdate - epoch).total_seconds()                                   # (obsdate - epoch) is a timedelta
     return obsdate, obsdate_float
     
-def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace):
+def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace, objname):
     """
     Extracts the wavelength calibration
     
@@ -2945,7 +2947,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     #shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces
     aspectra, agood_px_mask = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
     wavelength_solution_shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
-                                                              reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly)   # This is only for a shift of the pixel, but not for the shift of RV
+                                                              reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, objname)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, aspectra)
     im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
     im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
@@ -2970,6 +2972,24 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         im_head['BNOISVAR'] = 1
     obsdate, obsdate_float = get_obsdate(params, im_head)               # in UTC, mid of the exposure
     
+    im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
+    # Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
+    obname = im_name.split('/')    # get rid of the path
+    obname = obname[-1].split('-')  # remove the numbering and exposure time from the filename
+    obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
+    obname = obname.replace('\n','')
+    obnames = []
+    obname += '_'
+    while obname.find('_') <> -1:
+        obname = obname.rsplit('_', 1)
+        obname = obname[0]
+        for rplc in ['_arc','arc', '_thar','thar', '_une','une']:
+            posi = obname.lower().find(rplc)
+            if posi + len(rplc) == len(obname) and posi <> -1:           # the searchtext is at the end of the filename
+                obname = obname[:posi]              # get rid of the Arc in the filename
+                break
+        obnames.append(obname)
+    
     shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces
     spectra, good_px_mask = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift)#, var='prec')
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
@@ -2980,7 +3000,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     #aspectra, spectra, flat_spec_norm, good_px_mask = aspectra[:,px:], spectra[:,px:], flat_spec_norm[:,:,px:], good_px_mask[:,px:]
     #print wavelength_solution[0]
     wavelength_solution_shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
-                                                              reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly)   # This is only for a shift of the pixel, but not for the shift of RV
+                                                              reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, im_name)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, spectra)
     wavelengths_vac = wavelength_air_to_vacuum(wavelengths)                             # change into vacuum wavelengths
     
@@ -2994,7 +3014,6 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     #logger('Warn: !!!! no blaze correction before continuum correction')
     #cspectra, sn_cont = normalise_continuum(spectra, wavelengths, nc=4, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders)      
     # normalise_continuum measures the noise different than measure_noise
-    im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
     im_head_wave, im_head_weight = copy.copy(im_head), copy.copy(im_head)
     im_head = add_specinfo_head(spectra, im_head)
     im_head_harps_format = copy.copy(im_head)
@@ -3012,22 +3031,6 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     ceres_spec = np.array([wavelengths_vac, spectra, espectra, fspectra, efspectra, cspectra, sn_cont, good_px_mask, aspectra])
     ceres_spec = clip_noise(ceres_spec)
     
-    # Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
-    obname = im_name.split('/')    # get rid of the path
-    obname = obname[-1].split('-')  # remove the numbering and exposure time from the filename
-    obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
-    obname = obname.replace('\n','')
-    obnames = []
-    obname += '_'
-    while obname.find('_') <> -1:
-        obname = obname.rsplit('_', 1)
-        obname = obname[0]
-        for rplc in ['_arc','arc', '_thar','thar', '_une','une']:
-            posi = obname.lower().find(rplc)
-            if posi + len(rplc) == len(obname) and posi <> -1:           # the searchtext is at the end of the filename
-                obname = obname[:posi]              # get rid of the Arc in the filename
-                break
-        obnames.append(obname)
     # Get the baycentric velocity
     params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, params['object_file'])
     if np.max(wavelength_solution[:,-1]) > 100 and not (im_name.lower().find('flat') in [1,2,3,4,5]) and os.path.exists(os.path.dirname(os.path.abspath(__file__))+'/find_rv.py') == True:  # if not pseudo-solution and not flat

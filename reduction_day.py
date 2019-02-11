@@ -237,14 +237,15 @@ if __name__ == "__main__":
             for im_name_full in params[wavelengthcal+'_rawfiles']:
                 im_name = im_name_full.rsplit('/')
                 im_name = im_name[-1].rsplit('.',1)         # remove the file ending
-                im_name = im_name[0]+'_wavecal'
-                if os.path.isfile(params['path_extraction']+im_name+'.fits'):
-                    logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
+                im_name = im_name[0]
+                im_name_wc = im_name+'_wavecal'
+                if os.path.isfile(params['path_extraction']+im_name_wc+'.fits'):
+                    logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name_wc, params['path_extraction']))
                     continue
                 params['calibs'] = params[wavelengthcal+'_calibs_create']
                 im, im_head = read_file_calibration(params, im_name_full)
-                extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
-                                                    wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
+                extraction_wavelengthcal(params, im, im_name_wc, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
+                                                    wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1, im_name)
     logger('Info: Starting to extract spectra')
     for extraction in extractions:
         if  extraction.find('extract_combine') == -1:     # Single file extraction
