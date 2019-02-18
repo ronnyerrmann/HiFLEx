@@ -3,6 +3,8 @@
 
 import numpy as np
 from astropy.io import fits
+import matplotlib       # To avoid crashing when ssh into Narit using putty
+matplotlib.use('agg')   # To avoid crashing when ssh into Narit using putty
 import matplotlib.pyplot as plt
 import matplotlib.cm as cmaps
 import matplotlib.colors as colors

@@ -4,6 +4,12 @@
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
+import astropy.time as asttime
+import astropy.coordinates as astcoords
+import astropy.units as astunits
+import astropy.constants as astconst
+import matplotlib	# To avoid crashing when ssh into Narit using putty
+matplotlib.use('agg')	# To avoid crashing when ssh into Narit using putty
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import os
@@ -33,11 +39,13 @@ if os.path.exists(os.path.dirname(os.path.abspath(__file__))+'/find_rv.py') == T
 import psutil
 import ephem
 from math import radians as rad
+import jplephem                     # jplehem from the pip install jplehem
+import de423
 
 # SSEphem package http://www.cv.nrao.edu/~rfisher/Python/py_solar_system.html coupled to SOFA http://www.iausofa.org/
 baryc_dir = os.path.dirname(os.path.abspath(__file__))+'/SSEphem/'
 sys.path.append(baryc_dir)
-import jplephem
+import man_jplephem                 # jplephem in the SSEphem folder
 ephemeris = 'DEc403'        # To use the JPL DE403 ephemerides, https://en.wikipedia.org/wiki/Jet_Propulsion_Laboratory_Development_Ephemeris
 
 tqdm.monitor_interval = 0   #On the virtual machine at NARIT the code raises an exception otherwise
@@ -2604,6 +2612,9 @@ def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
 def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, objname):
     """
     Determines the pixelshift between the current arc lines and the wavelength solution
+    Two ways for a wavelength shift can happen:
+        1: The CCD moves -> all ThAr lines are moved by the same pixel distance -> this was implemented from the beginning
+        2: The light hits the grating at a different position and passes through different are of the lens -> Pixelshift depends on wavelength, pixel
             maybe replace by a cross correlation between arc spectra: x1, y1 from wavelength solution, x2, y2 from the current file -> y2'(x) = y1(x+dx)*a+b so that y2 and y2' match best
     :param aspectra: spectrum of the reference orders
     :param wavelength_solution: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
@@ -2928,7 +2939,7 @@ def get_obsdate(params, im_head):
     fraction = 0.5                                          # mid exposure is half of the exposure time
     for exp_fraction in exp_fractions:
         if exp_fraction in im_head.keys():                  # Weight of the exposure in header
-            fraction = head[exp_fraction]                   # replace the fraction of half the exposure time
+            fraction = im_head[exp_fraction]                   # replace the fraction of half the exposure time
             break
     obsdate += datetime.timedelta(0, fraction*im_head[params['raw_data_exptim_keyword']])      # days, seconds, then other fields.
     
@@ -3014,44 +3025,36 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     #logger('Warn: !!!! no blaze correction before continuum correction')
     #cspectra, sn_cont = normalise_continuum(spectra, wavelengths, nc=4, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders)      
     # normalise_continuum measures the noise different than measure_noise
-    im_head_wave, im_head_weight = copy.copy(im_head), copy.copy(im_head)
-    im_head = add_specinfo_head(spectra, im_head)
-    im_head_harps_format = copy.copy(im_head)
-    im_head_iraf_format = copy.copy(im_head)
-    im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
-    im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
-    im_head['Comment'] = ' 1: extracted spectrum'
-    im_head['Comment'] = ' 2: measure of error (photon noise, read noise)'
-    im_head['Comment'] = ' 3: flat corrected spectrum'
-    im_head['Comment'] = ' 4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_orders)
-    im_head['Comment'] = ' 5: continuum normalised spectrum'
-    im_head['Comment'] = ' 6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_orders)
-    im_head['Comment'] = ' 7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
-    im_head['Comment'] = ' 8: spectrum of the emission line lamp'
     ceres_spec = np.array([wavelengths_vac, spectra, espectra, fspectra, efspectra, cspectra, sn_cont, good_px_mask, aspectra])
     ceres_spec = clip_noise(ceres_spec)
     
     # Get the baycentric velocity
-    params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, params['object_file'])
+    params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, params['object_file'])       # obnames becomes the single entry which matched entry in params['object_file']
     if np.max(wavelength_solution[:,-1]) > 100 and not (im_name.lower().find('flat') in [1,2,3,4,5]) and os.path.exists(os.path.dirname(os.path.abspath(__file__))+'/find_rv.py') == True:  # if not pseudo-solution and not flat
         """
         Ceres mask in /home/ronny/software/ceres-master/data/xc_masks/ contain only limited wavelength range (+ additional gaps):
-        G2: 3751 to 6798, 2625 data points
-        K5: 3782 to 6798, 5129 data points
-        M2: 4401 to 6862, 9493 data points
-        Given is the lower and the higher end of the line, and the weight
+        G2: 3751 to 6798, 2625 data points/lines
+        K5: 3782 to 6798, 5129 data points/lines
+        M2: 4401 to 6862, 9493 data points/lines
+        Given in the mask is the lower and the higher end of the line, and the weight
         """
-        RV, RVerr2, BS, BSerr = find_rv.rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], params['object_file'], mephem)        # For unknown reason the RV is 83.15 km/s too low
-        # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf
+        RV, RVerr2, BS, BSerr = find_rv.rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], params['object_file'], mephem)
+        # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf (no, causes 83.15 km/s shift, < 5m/s is between the different models)
         logger('Info: The radial velocity (including barycentric correction) for {0} gives: RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s'.format(\
                                     im_name, round(RV+bcvel_baryc,4), round(RVerr2,4), round(BS,4), round(BSerr,4), round(bcvel_baryc,4) ))
-        im_head['RV_BARY'] = round(RV+bcvel_baryc)
+        im_head['RV_BARY'] = (round(RV+bcvel_baryc),'RV including BCV  (measured RV+BCV)')
         im_head['RV_ERR'] = round(RVerr2,4)
     
     # Correct wavelength by barycentric velocity
     wavelengths_bary = wavelengths * (1 + bcvel_baryc/(Constants.c/1000.) )
 
-    # Save in a easier way
+    im_head = add_specinfo_head(spectra, im_head)
+    im_head_wave, im_head_weight = copy.copy(im_head), copy.copy(im_head)
+    im_head_harps_format = copy.copy(im_head)
+    im_head_iraf_format = copy.copy(im_head)
+    
+    ## Save in a easier way
+    # Single files
     im_head_wave['Comment'] = 'Contains the wavelength per order and exctracted pixel for file {0}'.format(im_name+'_extr/_blaze')
     im_head_weight['Comment'] = 'Contains the weights per order and exctracted pixel for file {0}'.format(im_name+'_extr/_blaze')
     im_head_iraf_format = wavelength_solution_iraf(params, im_head_iraf_format, wavelengths, wavelength_solution_shift, norder=params['polynom_order_traces'][-1]+2)
@@ -3060,9 +3063,11 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     save_multispec(wavelengths,                     params['path_extraction_single']+im_name+'_wave', im_head_wave, bitpix=params['extracted_bitpix'])
     save_multispec(good_px_mask* flat_spec_norm[1], params['path_extraction_single']+im_name+'_weight', im_head_weight, bitpix=params['extracted_bitpix'])  # Weight shouldn't be the espectra, the flat provides a smoother function
     
+    # CSV file for terra
     fname = obsdate.strftime('%Y-%m-%d%H%M%S')
     save_spec_csv(cspectra, wavelengths_bary, good_px_mask, params['csv_path']+fname)
     
+    # Harps format
     im_head_harps_format = wavelength_solution_harps(params, im_head_harps_format, wavelengths_bary)
     save_multispec(spectra, params['path_extraction']+im_name+'_harps_e2ds', im_head_harps_format, bitpix=params['extracted_bitpix'])
     
@@ -3077,7 +3082,16 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     add_text_to_file(params['path_extraction']+im_name+'.fits', 'plot_files.lst')
 
     ceres_spec = np.array([wavelengths_bary, spectra, espectra, fspectra, efspectra, cspectra, sn_cont, good_px_mask, aspectra])        
-    #print im_head.keys(), im_head.values()
+    im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
+    im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
+    im_head['Comment'] = ' 1: extracted spectrum'
+    im_head['Comment'] = ' 2: measure of error (photon noise, read noise)'
+    im_head['Comment'] = ' 3: flat corrected spectrum'
+    im_head['Comment'] = ' 4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_orders)
+    im_head['Comment'] = ' 5: continuum normalised spectrum'
+    im_head['Comment'] = ' 6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_orders)
+    im_head['Comment'] = ' 7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
+    im_head['Comment'] = ' 8: spectrum of the emission line lamp'
     save_multispec(ceres_spec, params['path_extraction']+im_name, im_head, bitpix=params['extracted_bitpix'])
         
 def save_spec_csv(spec, wavelengths, good_px_mask, fname):
@@ -5649,8 +5663,6 @@ def get_barycent_cor(params, im_head, obnames, reffile):
                     source_obs = 'The site coordinates are derived from the image header.'
         
     mjd,mjd0 = mjd_fromheader(params, im_head)
-    im_head['JD_PIPE'] = round(mjd+mjd0,5)      # MJD = JD - 2400000.5 from http://www.csgnetwork.com/julianmodifdateconv.html
-    im_head['MJD_PIPE'] = round(mjd,5)          # round 5 -> precision is 1 second, timing is not more precise
     
     ra2,dec2,epoch,obnames = getcoords(obnames, mjd, filen=reffile)     # obnames will be a list with only one entry: the matching entry 
     if ra2 !=0 and dec2 != 0:
@@ -5661,26 +5673,33 @@ def get_barycent_cor(params, im_head, obnames, reffile):
     
     ra, dec = params['ra'], params['dec']
     
-    bcvel_baryc = 0.0
+    bcvel_baryc, bjd = 0.0, 0.0
     if source_radec <> 'Warn: The object coordinates were made up!':
         iers          = JPLiers( baryc_dir, mjd-999.0, mjd+999.0 )      # updates the iers.tab file so it contains only 2000 entries
         obsradius, R0 = JPLR0( params['latitude'], params['altitude'])
         obpos         = obspos( params['longitude'], obsradius, R0 )
-        jplephem.set_ephemeris_dir( baryc_dir , ephemeris )
-        jplephem.set_observer_coordinates( obpos[0], obpos[1], obpos[2] )
-        res         = jplephem.doppler_fraction(ra/15.0, dec, int(mjd), mjd%1, 1, 0.0)
+        man_jplephem.set_ephemeris_dir( baryc_dir , ephemeris )
+        man_jplephem.set_observer_coordinates( obpos[0], obpos[1], obpos[2] )
+        res         = man_jplephem.doppler_fraction(ra/15.0, dec, int(mjd), mjd%1, 1, 0.0)
         lbary_ltopo = 1.0 + res['frac'][0]
         bcvel_baryc = ( lbary_ltopo - 1.0 ) * (Constants.c/1000.)       # c in m/s
         
-        im_head['RA_PIPE'] = round(ra,6)
-        im_head['DEC_PIPE'] = round(dec,6)
-        im_head['VEL_BARY'] = round(bcvel_baryc,4)
-    
+        im_head['RA_PIPE'] = (round(ra,6), 'RA in degrees, used to calculated BCV, BJD')
+        im_head['DEC_PIPE'] = (round(dec,6), 'DEC in degrees, used to calculated BCV, BJD')
+        im_head['BCV_PIPE'] = (round(bcvel_baryc,4), 'barycentric velocity in km/s')
+        
+        bjd = jd_corr(mjd, ra, dec, params['epoch'], params['latitude'], params['longitude'], jd_type='bjd')
+        bjd = bjd[0]
+        im_head['BJD_PIPE'] = (round(bjd,5), 'Barycentric corrected JD (BJD_UTC, no leap sec)')     #, add 32.184+N leap seconds after 1961'
+
+    im_head['JD_PIPE'] = (round(mjd+mjd0,5), 'Julian date')             # MJD = JD - 2400000.5 from http://www.csgnetwork.com/julianmodifdateconv.html
+    im_head['MJD_PIPE'] = (round(mjd,5), 'modified Julian data')        # round 5 -> precision is 1 second, timing is not more precise
+
     logger(('Info: Using the following data for object name(s) {10}, Observatory site {9}, mid exposure MJD {11}: '+\
                     'altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}. {8} {6} '+\
-                    'This leads to a barycentric velocity of {7} km/s.').format(params['altitude'], params['latitude'], params['longitude'], 
+                    'This leads to a barycentric velocity of {7} km/s. and a BJD of {12}').format(params['altitude'], params['latitude'], params['longitude'], 
                          round(ra,6), round(dec,6), params['epoch'], source_radec, round(bcvel_baryc,4), source_obs, 
-                         params['site'], str(obnames).replace("'","").replace('"',''), mjd ))
+                         params['site'], str(obnames).replace("'","").replace('"',''), mjd, round(bjd,5) ))
     
     
     return params, bcvel_baryc, mephem, obnames, im_head
@@ -5705,9 +5724,58 @@ def JPLiers(path, mjdini, mjdend):                  # from CERES, updates the ie
 	output.close()
 	pass
 
+def jd_corr(mjd, ra, dec, epoch, lat, lon, jd_type='bjd'):
+    """
+    Return BJD or HJD for input MJD(UTC).
+    Adapted from https://mail.python.org/pipermail/astropy/2014-April/002843.html
+    Ignores the position of the observatory at the moment, but this will change it by less than 0.1s
+    Comparing to http://astroutils.astronomy.ohio-state.edu/time/utc2bjd.html gives a difference of 69s, which is probably due to using BJD_TDB there and BJD_UTC here (32.184+37 leap seconds (Feb 2019))
+    return new_jd.jd: 1d array of floats, same length as mjd
+    """
+    # Initialise ephemeris from jplephem
+    eph = jplephem.Ephemeris(de423)
 
+    # Source unit-vector
+    ## Set distance to unit (kilometers)
+    src_vec = astcoords.SkyCoord(ra=ra*astunits.degree, dec=dec*astunits.degree, frame=astcoords.FK5(equinox='J{0}'.format(epoch)), distance=1*astunits.km)
+    # Convert epochs to astropy.time.Time
+    ## Assume MJD(UTC)
+    t = asttime.Time(mjd, scale='utc', format='mjd')#, lat=lat, lon=lon)    # Lat, lon not supported anymore?
 
+    # Get Earth-Moon barycenter position
+    ## NB: jplephem uses Barycentric Dynamical Time, e.g. JD(TDB)
+    ## and gives positions relative to solar system barycenter
+    barycenter_earthmoon = eph.position('earthmoon', t.tdb.jd)
 
+    # Get Moon position vectors
+    moonvector = eph.position('moon', t.tdb.jd)
+
+    # Compute Earth position vectors
+    pos_earth = (barycenter_earthmoon - moonvector * eph.earth_share)*astunits.km
+
+    if jd_type == 'bjd':
+        # Compute BJD correction
+        ## Assume source vectors parallel at Earth and Solar System Barycenter
+        ## i.e. source is at infinity
+        corr = np.dot(pos_earth.T, src_vec.cartesian.xyz)/astconst.c            # light travel time in seconds
+    elif jd_type == 'hjd':
+        # Compute HJD correction via Sun ephemeris
+        pos_sun = eph.position('sun', t.tdb.jd)*astunits.km
+        sun_earth_vec = pos_earth - pos_sun
+        corr = np.dot(sun_earth_vec.T, src_vec.cartesian.xyz)/astconst.c        # light travel time in seconds
+
+    # TDB is the appropriate time scale for these ephemerides
+    dt = asttime.TimeDelta(corr, scale='tdb', format='jd')                      # light travel time in days
+    t.format='jd'
+    # Compute and return HJD/BJD as astropy.time.Time
+    new_jd = t + dt
+
+    return new_jd.jd            # Return as float-array
+
+def wavelength_shift_between_bifurcated_fibers():
+    """
+    """
+    
 
 
 

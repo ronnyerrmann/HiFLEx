@@ -191,7 +191,7 @@ calibs_read = [subframe]
 
 ## Getting oject site and object coordinates to perform barycentric correction. If the values are stored in the header, then the header values are used
 #-------------------------------------------------------------------------------
-# Define the observatory site. Longitude is measured to the East (comment/uncomment/delete accordingly):
+# Define the observatory site. Longitude is measured to the East (comment/uncomment/delete accordingly). Values can be set arbitrarily if the information is stored in the fits-headers:
 site        = UH
 altitude    = 30
 latitude    = 51.7534
@@ -202,20 +202,21 @@ longitude   = -0.2401
 #latitude    = 18.59055
 #longitude   = 98.48655
   
-# Define the object coordinates using a file with a list of objects.
+# Define the object coordinates using a file with a list of objects. Needed for barycentric correction and RV calculation. Not necessary if the object information are stored in the header.
 # The file needs to contain the comma separated values: Object name, RA (hh:mm:ss.ss), DEC (+-dd:mm:ss.ss), PM RA ("/year), PM DEC ("year), Epoch of the coordinates (only the number), Enable/Disable flag (1 for enabled)
 object_file = object_list.txt
 
 
 
 ## Configuration files in which the processing of the raw data fits files is defined
+#-------------------------------------------------------------------------------
 # raw_data_file_list contains the analysis of the raw data files (fiber1 and fiber2, exposure time, what to extract
 raw_data_file_list      = file_list_raw_data.txt
 
 # configfile_fitsfiles contains the information of how to processes the raw data and is created by prepare_file_list.py
 configfile_fitsfiles    = fits_conf.txt
 
-# editor defines the program which should be used to allow the user to manipulate raw_data_file_list
+# editor defines the program which should be used to allow the user to manipulate raw_data_file_list, e.g. vim, emacs, gedit, kwrite
 editor                  = gedit
 
 

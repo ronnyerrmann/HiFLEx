@@ -102,6 +102,8 @@ After making the change and opening a new terminal, python should point to the f
 pip install tqdm
 pip install gatspy
 pip install ephem
+pip install jplephem
+pip install de423
 \end{lstlisting}
 %gatspy for lomb scargle
 
@@ -378,6 +380,8 @@ If the coordinates of the object are not stored in the fits header, then they ca
  \item PM DEC (arcsec/year, can be 0 in the most cases)
  \item Epoch of the coordinates (only the number, e.g. 2000 or 2015.5)
  \item Enable/Disable flag (1 for enabled)
+ \item Mask to use. At the moment G2, K2, or M2 are possible options. Can be empty
+ \item Velocity width to broaden the lines of the binary mask
 \end{enumerate}
 
 
@@ -425,7 +429,8 @@ This file contains data in the same form as described in Section~\ref{Section:li
 \end{itemize}
 
 \subsubsection*{Object1/data/YYYY-MM-DDHHMMSS}
-The data in here is used in order to measure RV with Terra (\url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}) (work in progress)
+The data in here is used in order to measure RV with Terra (\url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}). Tha barycentric corrected wavelength solution and the continuum corrected spectrum (multiplied by the bad-pixel mask) are used. 
+(work in progress)
 
 \subsection{Results from the pipeline}
 \label{section:results_pipeline}

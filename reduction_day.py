@@ -212,7 +212,8 @@ if __name__ == "__main__":
             flatarc_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
         else:
             flatarc_spec, agood_px_mask = extract_orders(params, im_flatarc, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
-        wavelength_solution_shift = shift_wavelength_solution(params, flatarc_spec, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly)
+        wavelength_solution_shift = shift_wavelength_solution(params, flatarc_spec, wavelength_solution, wavelength_solution_arclines, 
+                                            reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, params['master_flat_spec_norm_filename'])
         wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, flatarc_spec)
         save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, flatarc_spec], params['master_flat_spec_norm_filename'], im_flatarc_head)
         #save_im_fits(params, flat_spec_norm, im_sflat_head, params['master_flat_spec_norm_filename'])
@@ -281,7 +282,7 @@ if __name__ == "__main__":
     
     # Do the Terra RVs
     os.system('echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       Object1/" > astrocatalog.example')
-    if os.path.isfile('~/software/terra/PRV.jar') == True:
+    if os.path.isfile('/home/ronny/software/terra/PRV.jar') == True:
         os.system('java -jar ~/software/terra/PRV.jar -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0]) )
         os.system('gedit Object1/results/synthetic.rv &')
         
