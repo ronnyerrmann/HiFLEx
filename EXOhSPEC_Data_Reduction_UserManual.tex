@@ -30,8 +30,8 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 
-\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: V0.3.2}
-\date{December, 2018}
+\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: v0.4.0}
+\date{March, 2019}
 \author{Ronny Errmann, Neil Cook\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -55,6 +55,12 @@
  \item Added parameter \verb|object_file| to conf.txt.
  \item More information are stored in the header of the different output files.
  \item Barycentric velocity calculation and barycentric JD were improved/added.
+\end{itemize}
+
+\subsection{v0.4.0}
+\begin{itemize}
+  \item Included the comparison between the wavelength solutions in science and calibration fiber.
+  \item Renamed \verb|arc_l| and \verb|arc_s| into \verb|cal2_l| and \verb|cal2_s|.
 \end{itemize}
 
 % ------------------------------------------------------------------------------
@@ -202,8 +208,9 @@ When running the scripts for the first time, python will create a new file calle
   \begin{description}
     \item[trace1] File in which the science traces can be determined (standard: 5x white light flats, best without arc lamp). This file is also used to create a map of the background flux.
     \item[trace2] File in which the wavelength calibration traces can be determined (standard: 5x ThAr alone (future development: white light flats)).
-    \item[arc\_l]: Long arc exposure to create a good wavelength solution over the whole chip (standard: 5x 100\,s ThAr or UNe).
-    \item[arc\_s]: Short exposure in order to find the center of the saturated lines in arc\_l (standard: 5x 10\,s ThAr or UNe taken between the arc\_l images).
+    \item[cal2\_l]: Long emission lamp exposure to create a good wavelength solution over the whole chip for the calibration fiber (standard: 5x 100\,s ThAr or UNe).
+    \item[cal2\_s]: Short exposure in order to find the center of the saturated lines in cal2\_l (standard: 5x 10\,s ThAr or UNe taken between the cal2\_l images).
+    \item[(cal1\_l, cal1\_s)]: emission lamp spectra to create a wavelength solution for the science fiber (if applicable)
     \item[flatarc]: File which contains the blaze correction in the science fiber (standard: 5x files with the white light flats in science fiber).
   \end{description}
   \item[2.] Determining the shift of the science traces compared to the previous solution (e.g. previous day). If the instrument was not touched, the shift should be small and constant ($\rightarrow$~Fig.~\ref{figure_apertures_in_master_flat}). If the file for the previous solution does not exist, or if a big deviation to the previous solution has been found, then another step will be executed:
@@ -212,9 +219,10 @@ When running the scripts for the first time, python will create a new file calle
   \end{itemize}
 % not useful  \item[3.] Creating a map of the leaking light between the science orders (background map).
   \item[3.] (for bifurcated fiber spectrographs) Finding the traces of the calibration orders by searching for the shift between each order in the trace1 and trace2 file ($\rightarrow$~Fig.~\ref{figure_arcapertures_in_master_arc}). 
-  \item[4.] Create the wavelength solution for the night ($\rightarrow$~Fig.~\ref{figure_arc_line_identification_positions} and \ref{figure_arc_line_identification_residuals}). This is based on the solution of the previous data set, which is adjusted according to the given parameters.
+  \item[4.] Create the wavelength solution for the night on the calibration fiber spectra (and maybe the science fiber spectra). ($\rightarrow$~Fig.~\ref{figure_arc_line_identification_positions} and \ref{figure_arc_line_identification_residuals}). This is based on the solution of the previous data set, which is adjusted according to the given parameters.
   \item[5.] Extract the flat and normalise it. This is used for the blaze correction.
-  \item[6.] (for single fiber spectrographs) Measure the instrumental drift in emission line spectra to calibrate the wavelength solution.
+  \item[6a.] (for single fiber spectrographs) Measure the instrumental drift in emission line spectra to calibrate the wavelength solution.
+  \item[6b.] (if applicable: find the radial velocity drift between the wavelength solutions of calibration and science fiber)
   \item[7.] Extract the science spectra. This includes the following steps for each image:
   \begin{itemize}
     \item[a)] Data reduction of the CCD frame (if set up).
@@ -224,10 +232,10 @@ When running the scripts for the first time, python will create a new file calle
     \item[e)] Finding the shift between the emission lines in the calibration spectra and the lines used for the wavelength solution (for bifurcated fiber spectrographs) or interpolating the measured drift from step 6. Calculating the wavelength for each pixel in the extracted spectrum.
     \item[f)] Creating the flat corrected spectrum.
     \item[g)] Creating the spectrum with normalised continuum.
-    \item[h)] Perform the radial velocity analysis (cross-correlation with template spectrum, work in progress).
+    \item[h)] Perform the radial velocity analysis (cross-correlation with template spectrum).
     \item[i)] Perform some general measurements which are stored in the header.
     \item[j)] Write the file with all extracted data into the folder given in the parameter \verb|path_extraction| (standard: \textit{extracted}).
-    \item[k)] Write subsets of data into different files to keep compatible with other software.
+    \item[k)] Write subsets of data into different files to create compatibility with other software.
   \end{itemize}
 \end{itemize}
 
@@ -554,7 +562,7 @@ The last lines give the information for all apertures. Columns, for which no use
 
 \subsection{Creating a new wavelength solution}
 \label{section:create_new_wave_solution}
-If no previous wavelength solution exist, then wavelengths and pixel need to correlated manually. In this case the parameter \verb|original_master_arc_solution_filename| needs to point to a file, which does not exist (e.g. \textit{master\_wavelength\_manual.fits}). Then the python scrip can be run normally. It will stop after searching for the lines in the emission line spectra. The order and pixel position of all identified lines are stored in the file given in parameter \verb|logging_found_arc_lines|. This file can be opened and the corresponding wavelengths can be added to some of the lines. I have found that providing 1.5 lines per order is enough for the pipeline to do the rest. The lines should cover as much of the CCD image as possible.
+If no previous wavelength solution exist, then wavelengths and pixel need to correlated manually. In this case the parameter \verb|original_master_wavelensolution_filename| needs to point to a file, which does not exist (e.g. \textit{master\_wavelength\_manual.fits}). Then the python scrip can be run normally. It will stop after searching for the lines in the emission line spectra. The order and pixel position of all identified lines are stored in the file given in parameter \verb|logging_found_arc_lines|. This file can be opened and the corresponding wavelengths can be added to some of the lines. I have found that providing 1.5 lines per order is enough for the pipeline to do the rest. The lines should cover as much of the CCD image as possible.
 
 The correlated data needs to be saved into file \verb|arc_lines_wavelength.txt| with the following tab-separated entries:
 \begin{itemize}
@@ -681,7 +689,7 @@ python extract_single_chip.py
   \item \verb|bin_search_apertures    = 20,2|
   %\item \verb|arcshift_range    = [-12, -20]| (red chip),\\ \verb|arcshift_range  = [-12, -20]| (blue chip)
   \item \verb|arcshift_side           = left|
-  \item \verb|original_master_arc_solution_filename = master_arc_solution_manual.fits|. The file \verb|arc_lines_wavelength.txt| needs to be created (Section~\ref{section:create_new_wave_solution}).
+  \item \verb|original_master_wavelensolution_filename = master_wavelensolution_manual.fits|. The file \verb|arc_lines_wavelength.txt| needs to be created (Section~\ref{section:create_new_wave_solution}).
   \item \verb|arc_lines_catalog 	  = <path>reference_lines_ThAr-HARPS_Ceres.txt|
   \item \verb|use_catalog_lines 	  = ThI, ArI, ?, NoID, ArII, ThII|
   \item \verb|raw_data_imtyp_keyword  = OBJECT|

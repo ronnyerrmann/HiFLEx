@@ -86,11 +86,11 @@ def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logf
     file.write('{0} - {1} - {2}\n'.format( time.strftime("%Y%m%d%H%M%S", time.localtime()), os.getpid(), message ))
     if printarrayformat <> [] and printarray <> []:
         for line in printarray:
-            text = '\t'
+            text = ''
             for i,printformat in enumerate(printarrayformat):
                 #print printformat,line[i]
-                text += '\t'+printformat%line[i]
-            file.write(text+'\n')
+                text += printformat%line[i] + '\t'
+            file.write(text[:-1]+'\n')
             if show:
                 print text
     file.close()
@@ -332,6 +332,44 @@ def update_calibration_memory(key,value):
     global calimages
     calimages[key] = value
 
+def read_text_file(filename, no_empty_lines=False):
+    """
+    Read a textfile and put it into a list, one entry per line
+    """
+    text = []
+    if os.path.isfile(filename) == True:
+        text1 = open(filename,'r').readlines()
+        for line in text1:
+            line = line.replace('\n', '')
+            linetemp = line.replace('\t', '')
+            if ( line == '' or linetemp == '') and no_empty_lines:
+                continue
+            text.append(line)
+    else:
+        logger('Warn: File {0} does not exist, assuming empty file'.format(filename))    
+    return text
+
+def add_text_file(text, filename):
+    """
+    Adds a line or lines of text to a file
+    """
+    file = open(filename,'a')
+    file.write(text+'\n')
+    file.close()
+
+def add_text_to_file(text, filename):
+    """
+    If the text is not yet in the file, the test is added
+    """
+    oldtext = read_text_file(filename)
+    exists = False
+    for line in oldtext:
+        if line.find(text) <> -1:
+            exists = True
+            break
+    if exists == False:
+        add_text_file(text, filename)
+        
 def convert_readfile(input_list, textformat, delimiter='\t', replaces=[]):
     """
     Can be used convert a read table into entries with the correct format. E.g integers, floats
@@ -990,13 +1028,13 @@ def bin_im(im, binxy):
             temdata = im[i*binx:min(ims[0],(i+1)*binx),:]
             nim.append(np.median(temdata,0))
             gim.append(np.sum( ~np.isnan(temdata), axis=0))  # number of the elements not nan
-            sim.append(np.nanstd(temdata, ddof=1, axis=0))      # standard deviation
+            sim.append(np.nanstd(temdata, ddof=min(1,temdata.shape[0]-1), axis=0))      # standard deviation, if only one column of pixels left, then std with ddof=0
     elif biny > 1:
         for i in range((ims[1]+biny-1)/biny):
             temdata = im[:,i*biny:min(ims[1],(i+1)*biny)]
             nim.append(np.median(temdata,1))
             gim.append(np.sum( ~np.isnan(temdata), axis=1))  # number of the elements not nan
-            sim.append(np.nanstd(temdata, ddof=1, axis=1))      # standard deviation
+            sim.append(np.nanstd(temdata, ddof=min(1,temdata.shape[1]-1), axis=1))      # standard deviation
         nim = np.transpose(np.array(nim))
     #logger('Info: image binned')
     return np.array(nim), np.array(gim), np.array(sim)
@@ -2468,13 +2506,12 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
     logger('Info: The parameters of the polynomial are: {0}'.format(poly), show=False)
     return shifts
     
-def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None, new_format='dummy'):         # Old format is only needed for ident_arc.py, this routine needs revision
+def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None):
     """
     Identifies the lines in a spectrum by searching for the significant outliers in a polynomial fit to the data and subsequent fitting of Gaussian profiles to this positions
     :param im: 2d array with the extracted spectra
     :param im_short: 2d array with the extracted spectra in which the saturated lines of {im} should be identified
     :param im_badpx: The bad-pixel-mask for the extracted spectrum {im}. Used to identify the lines with saturated pixels
-    :param new_format: Not used anymore, new format is always used
     :return lines: 2d array with one line for each identified line, sorted by order and amplitude of the line. For each line the following informaiton is given:
                     order, pixel, width of the line, and height of the line
     """
@@ -2541,9 +2578,6 @@ def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None
     good_values, pfit = sigma_clip(lines[:,2]*0, lines[:,2], 0, 3, 3)  #orders, sigma low, sigma high
     lines = lines[good_values, :]
     
-    logger('Info: Identified {0} lines in the arc spectrum. These lines are stored in file {1}'.format(len(lines), params['logging_found_arc_lines']))
-    printarrayformat = ['%1.1i', '%3.2f', '%3.2f', '%3.1f']
-    logger('order\tpixel\twidth\theight of the line', show=False, printarrayformat=printarrayformat, printarray=lines, logfile=params['logging_found_arc_lines'])
     return lines
 
 def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
@@ -4418,7 +4452,10 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                 weight_scale = []
                 for order in np.unique(arc_lines_wavelength[:,0]):
                     weight_scale.append( np.sum( weight[arc_lines_wavelength[:,0] == order] ))
-                weight_scale = np.array(weight_scale)/np.median(weight_scale)
+                divisor = np.median(weight_scale)
+                if divisor == 0:
+                    divisor = 1.
+                weight_scale = np.array(weight_scale)/divisor
                 weight_scale[weight_scale > 10] = 10
                 weight_scale[weight_scale < 0.1] = 0.1                              # Otherwise that might scale a badly covered order too much
                 for i, order in enumerate(np.unique(arc_lines_wavelength[:,0])):
@@ -4586,8 +4623,11 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     median = []
     for order in np.unique(arc_lines_wavelength[:,0]):
         median.append( np.max( weight[arc_lines_wavelength[:,0] == order] ))
-    median = np.array(median)/np.median(median)
-    median[median == 0] = 1
+    divisor = np.median(median)
+    if divisor == 0:
+        divisor = 1.
+    median = np.array(median)/divisor
+    median[median == 0] = 1.
     for i, order in enumerate(np.unique(arc_lines_wavelength[:,0])):
         weight[arc_lines_wavelength[:,0] == order] /= median[i]
     weight = []         # No weight fits the data better
@@ -4696,10 +4736,14 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     if std_diff_fit > 2*max(wavelength_solution[:,-2]) or std_diff_fit < 1E-8:        # if residuals are bigger than 1px or unreasonable small
         plot_wavelength_solution_spectrum(spectrum, spectrum, params['logging_arc_line_identification_spectrum'], wavelength_solution, 
                                           wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
+        if 'master_cal2_l_filename' in params.keys():
+            text = '{0} in the current folder'.format(params['master_cal2_l_filename'])
+        else:
+            text = 'files listed in the parameter cal2_l_rawfiles'
         logger(('Error: The wavelength solution seems wrong. Please check the parameters "order_offset", "px_offset", and "px_offset_order".' + \
-               '\n\t\tIt might be useful to compare the file with the emission lines ({0}) in the current folder and ' + \
+               '\n\t\tIt might be useful to compare the file with the emission lines ({0}) and ' + \
                'the folder with the previous wavelength solution (see parameter "original_master_wavelensolution_filename")' +\
-               '\n\t\tThe results of the identification can be seen in {1}.').format(params['master_arc_l_filename'], params['logging_arc_line_identification_spectrum']))
+               '\n\t\tThe results of the identification can be seen in {1}.').format(text, params['logging_arc_line_identification_spectrum']))
     
     # See the results
     if show_res:
@@ -4935,44 +4979,6 @@ def read_fit_wavelength_solution(params, filename, im):
     
     return wavelength_solution, np.array(wavelength_solution_arclines)
 
-def read_text_file(filename, no_empty_lines=False):
-    """
-    Read a textfile and put it into a list, one entry per line
-    """
-    text = []
-    if os.path.isfile(filename) == True:
-        text1 = open(filename,'r').readlines()
-        for line in text1:
-            line = line.replace('\n', '')
-            linetemp = line.replace('\t', '')
-            if ( line == '' or linetemp == '') and no_empty_lines:
-                continue
-            text.append(line)
-    else:
-        logger('Warn: File {0} does not exist, assuming empty file'.format(filename))    
-    return text
-
-def add_text_file(text, filename):
-    """
-    Adds a line or lines of text to a file
-    """
-    file = open(filename,'a')
-    file.write(text+'\n')
-    file.close()
-
-def add_text_to_file(text, filename):
-    """
-    If the text is not yet in the file, the test is added
-    """
-    oldtext = read_text_file(filename)
-    exists = False
-    for line in oldtext:
-        if line.find(text) <> -1:
-            exists = True
-            break
-    if exists == False:
-        add_text_file(text, filename)
-        
 def remove_orders(pfits, rm_orders):
     """
     Remove orders by masking them

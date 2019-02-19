@@ -23,12 +23,12 @@ if __name__ == "__main__":
     log_params(params)
     
     # create the median combined files
-    im_trace1, im_trace1_head = create_image_general(params, 'trace1')         # -> cont1
+    im_trace1, im_trace1_head = create_image_general(params, 'trace1')
     if params['arcshift_side'] <> 0 or 'trace2_rawfiles' in params.keys():      # calibration spectrum at the same time
-        im_trace2, im_trace2_head = create_image_general(params, 'trace2')                # -> trace2
+        im_trace2, im_trace2_head = create_image_general(params, 'trace2')
     else:                                                                       # no calibration spectrum at the same time
         im_trace2, im_trace2_head = im_trace1, im_trace1_head
-    #flatarc, arc_l, arc_s: at a later step to know the orders for localbackground -> cont1cal2
+    #flatarc, cal2_l, cal2_s: at a later step to know the orders for localbackground -> cont1cal2
     
     # Load the reference catalogue. Note that the Ar I lines are rescaled!
     reference_catalog, reference_names = read_reference_catalog(params['reference_catalog'], params['catalog_file_wavelength_muliplier'], params['use_catalog_lines'])
@@ -86,7 +86,8 @@ if __name__ == "__main__":
             logger('\t\torder\tleft\tright\tgausswidth\tpctlwidth\tpositio\tmin_tr\tmax_tr\t(positio: position of the trace at the center of the image, pctlwidth: median full width of the trace at {0}% of maximum)'\
                       .format(params['width_percentile']),printarrayformat=printarrayformat, printarray=data)
         
-    """# Create the background map, if it doesn't exist
+    """Not really useful
+    # Create the background map, if it doesn't exist
     if os.path.isfile(params['background_filename']) == True:
         logger('Info: Background map already exists: {0}'.format(params['result_path']+params['background_filename']))
     else:
@@ -136,57 +137,88 @@ if __name__ == "__main__":
     update_calibration_memory('sci_trace',[sci_tr_poly, xlows, xhighs, widths])         # Apertures might be shifted before extraction -> this would also affect the localbackground
     update_calibration_memory('cal_trace',[cal_tr_poly, axlows, axhighs, awidths])
     
+    for calib in [ ['','cal2'], ['_sci','cal1'] ]:
+        # first entry is the standard wavelength solution
+        # second entry is for finding the wavelength solution in a bifurcated fiber
+        if calib[1] == 'cal1' and ('cal1_l_rawfiles' not in params.keys() ):
+            break                                           # Not set up for bifurcated fiber use -> stop after the first step
+        elif calib[1] == 'cal1':                            # Update and rename a few parameters
+            if 'master_wavelensolution'+calib[0]+'_filename' not in params.keys():
+                params['master_wavelensolution'+calib[0]+'_filename'] = params['master_wavelensolution_filename'].replace('.fit',calib[0]+'.fit')
+            for pngparam in ['logging_wavelength_solution_form', 'logging_em_lines_gauss_width_form', 'logging_arc_line_identification_residuals', 'logging_arc_line_identification_positions']:
+                params[pngparam] = params[pngparam].replace('.png','')+calib[0]+'.png'
+            for pdfparam in ['logging_arc_line_identification_spectrum']:
+                params[pdfparam] = params[pdfparam].replace('.pdf','')+calib[0]+'.pdf'
+        # Create the wavelength solution for the night
+        if params['original_master_wavelensolution_filename'].lower() <> 'pseudo':                  # Create the master files
+            im_cal_l, im_arclhead = create_image_general(params, calib[1]+'_l')           # arc_l -> cal2_l
+            im_cal_s, im_arcshead = create_image_general(params, calib[1]+'_s')           # arc_s -> cal2_s
+        #wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_arc_l)         # Testing
+        if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']) == True:
+            logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution'+calib[0]+'_filename']))
+            wavelength_solution, wavelength_solution_arclines = read_wavelength_solution_from_fits(params['master_wavelensolution_filename'])
+        elif params['original_master_wavelensolution_filename'].lower() == 'pseudo':
+            logger('Warning: Using a pseudo solution for the wavelength (1 step per px)')
+            wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(sci_tr_poly.shape[0])
+        else:
+            cal_l_spec, good_px_mask_l = extract_orders(params, im_cal_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
+            cal_s_spec, good_px_mask_s = extract_orders(params, im_cal_s, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
+            # Begin: This bit is not necessary once the procedure has been written
+            im_name = 'master_'+calib[1]+'_long'
+            if 'master_'+calib[1]+'_l_filename' in params.keys():
+                im_name = params['master_'+calib[1]+'_l_filename'].replace('.fits','')
+            im_name = im_name.replace('.fit','')
+            save_multispec([cal_l_spec, cal_l_spec, cal_l_spec, cal_l_spec], params['path_extraction']+im_name, im_arclhead)                    # This needs updating!!!
+            im_name = 'master_'+calib[1]+'_short'
+            if 'master_'+calib[1]+'_s_filename' in params.keys():
+                im_name = params['master_'+calib[1]+'_s_filename'].replace('.fits','')
+            im_name = im_name.replace('.fit','')
+            save_multispec([cal_s_spec, cal_s_spec, cal_s_spec, cal_s_spec], params['path_extraction']+im_name, im_arcshead)
+            
+            # Identify the Emission lines
+            if os.path.isfile(params['logging_found_arc_lines']+calib[0]) == True:
+                logger('Info: List of the identified emission lines already exists. Using the information from file: {0}'.format(params['logging_found_arc_lines']+calib[0] ))
+                arc_lines_px_txt = read_text_file(params['logging_found_arc_lines']+calib[0], no_empty_lines=True)              # list of strings, first entry is header 
+                arc_lines_px = np.array( convert_readfile(arc_lines_px_txt[1:], [int, float, float, float], delimiter='\t', replaces=['\n',' ']) )
+            else:
+                arc_lines_px = identify_lines(params, cal_l_spec, cal_s_spec, good_px_mask_l, good_px_mask_s)
+                logger('Info: Identified {0} lines in the arc spectrum. These lines are stored in file {1}'.format(len(arc_lines_px), params['logging_found_arc_lines']+calib[0] ))
+                printarrayformat = ['%1.1i', '%3.2f', '%3.2f', '%3.1f']
+                logger('order\tpixel\twidth\theight of the line', show=False, printarrayformat=printarrayformat, printarray=arc_lines_px, logfile=params['logging_found_arc_lines']+calib[0])
     
-    # Create the wavelength solution for the night
-    if params['original_master_wavelensolution_filename'].lower() <> 'pseudo':                  # Create the master files
-        im_arc_l, im_arclhead = create_image_general(params, 'arc_l')           # -> cal2_l
-        im_arc_s, im_arcshead = create_image_general(params, 'arc_s')           # -> cal2_s
-    #Testing
-    #wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_arc_l)         # Testing
-    if os.path.isfile(params['master_wavelensolution_filename']) == True:
-        logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution_filename']))
-        wavelength_solution, wavelength_solution_arclines = read_wavelength_solution_from_fits(params['master_wavelensolution_filename'])
-    elif params['original_master_wavelensolution_filename'].lower() == 'pseudo':
-        logger('Warning: Using a pseudo solution for the wavelength (1 step per px)')
-        wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(sci_tr_poly.shape[0])
-    else:
-        arc_l_spec, good_px_mask_l = extract_orders(params, im_arc_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
-        arc_s_spec, good_px_mask_s = extract_orders(params, im_arc_s, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
-        # Begin: This bit is not necessary once the procedure has been written
-        im_name = 'master_arc_long'
-        if 'master_arc_l_filename' in params.keys():
-            im_name = params['master_arc_l_filename'].replace('.fits','')
-        im_name = im_name.replace('.fit','')
-        save_multispec([arc_l_spec, arc_l_spec, arc_l_spec, arc_l_spec], params['path_extraction']+im_name, im_arclhead)                    # This needs updating!!!
-        im_name = 'master_arc_short'
-        if 'master_arc_s_filename' in params.keys():
-            im_name = params['master_arc_s_filename'].replace('.fits','')
-        im_name = im_name.replace('.fit','')
-        save_multispec([arc_s_spec, arc_s_spec, arc_s_spec, arc_s_spec], params['path_extraction']+im_name, im_arcshead)
-        arc_lines_px = identify_lines(params, arc_l_spec, arc_s_spec, good_px_mask_l, good_px_mask_s, new_format=True)
-        if os.path.isfile(params['original_master_wavelensolution_filename']) == False:                                                         # Create a new solution
-            if os.path.isfile('arc_lines_wavelength.txt') == False:                                                                             # No arc_lines_wavelength.txt available
-                wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(arc_l_spec.shape[0])                      # Create a pseudo solution
-                plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf', 
-                                              wavelength_solution, wavelength_solution_arclines, np.zeros((1,3)), ['dummy'], plot_log=True)     # Plot the spectrum
-                logger('Error: Files for creating the wavelength solution do not exist: {0}, {1}. Please check parameter {2} or create {1}.'.format(\
-                                        params['original_master_wavelensolution_filename'], 'arc_lines_wavelength.txt', 'original_master_wavelensolution_filename'))
-            wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_arc_l)         # For a new wavelength solution
-            save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_arclines, params['original_master_wavelensolution_filename'])                   # For a new wavelength solution
-            plot_wavelength_solution_form(params['logging_wavelength_solution_form'].replace('.png','')+'_manual.png', axlows, axhighs, wavelength_solution)
-            plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf', 
-                                              wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
-            params['order_offset'] = [0,0]
-            params['px_offset'] = [-10,10,2]
-            params['px_offset_order'] = [-1,1,1]
-        wavelength_solution_ori, wavelength_solution_arclines_ori = read_wavelength_solution_from_fits(params['original_master_wavelensolution_filename'])
-        # Find the new wavelength solution
-        wavelength_solution, wavelength_solution_arclines = adjust_wavelength_solution(params, np.array(arc_l_spec), arc_lines_px, wavelength_solution_ori, 
-                                                                                       wavelength_solution_arclines_ori, reference_catalog, reference_names, xlows, xhighs, params['GUI'])
-        save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_arclines, params['master_wavelensolution_filename'])
-        plot_wavelength_solution_form(params['logging_wavelength_solution_form'], axlows, axhighs, wavelength_solution)
-        plot_wavelength_solution_spectrum(arc_l_spec, arc_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
-        plot_wavelength_solution_image(im_arc_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
+            if calib[1] == 'cal2':          # for the calibration fiber
+                if os.path.isfile(params['original_master_wavelensolution_filename']) == False:                                                         # Create a new solution
+                    if os.path.isfile('arc_lines_wavelength.txt') == False:                                                                             # No arc_lines_wavelength.txt available
+                        wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(cal_l_spec.shape[0])                      # Create a pseudo solution
+                        plot_wavelength_solution_spectrum(cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf', 
+                                                      wavelength_solution, wavelength_solution_arclines, np.array([0,1,0]).reshape(1,3), ['dummy'], plot_log=True)     # Plot the spectrum
+                        logger('Error: Files for creating the wavelength solution do not exist: {0}, {1}. Please check parameter {2} or create {1}.'.format(\
+                                                params['original_master_wavelensolution_filename'], 'arc_lines_wavelength.txt', 'original_master_wavelensolution_filename'))
+                    wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_cal_l)         # For a new wavelength solution
+                    save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_arclines, params['original_master_wavelensolution_filename'])                   # For a new wavelength solution
+                    plot_wavelength_solution_form(params['logging_wavelength_solution_form'].replace('.png','')+'_manual.png', axlows, axhighs, wavelength_solution)
+                    plot_wavelength_solution_spectrum(cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf', 
+                                                      wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
+                    params['order_offset'] = [0,0]
+                    params['px_offset'] = [-10,10,2]
+                    params['px_offset_order'] = [-1,1,1]
+                wavelength_solution_ori, wavelength_solution_arclines_ori = read_wavelength_solution_from_fits(params['original_master_wavelensolution_filename'])
+                # Find the new wavelength solution
+                wavelength_solution, wavelength_solution_arclines = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wavelength_solution_ori, 
+                                                                                               wavelength_solution_arclines_ori, reference_catalog, reference_names, xlows, xhighs, params['GUI'])
+            else:
+                params['order_offset'] = [0,0]
+                params['px_offset'] = [-10,10,2]
+                params['px_offset_order'] = [-1,1,1]
+                wavelength_solution, wavelength_solution_arclines = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wavelength_solution, 
+                                                                                               wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, params['GUI'])
+            save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_arclines, params['master_wavelensolution'+calib[0]+'_filename'])
+            plot_wavelength_solution_form(params['logging_wavelength_solution_form'], axlows, axhighs, wavelength_solution)
+            plot_wavelength_solution_spectrum(cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
+            plot_wavelength_solution_image(im_cal_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
+    
+    # Create the wavelength solution for the science fiber, if using a bifurcated fiber
+    
             
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if wavelength_solution.shape[0] <> sci_tr_poly.shape[0]:

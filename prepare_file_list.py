@@ -78,85 +78,109 @@ if __name__ == "__main__":
 
     for root, dirs, files in os.walk(params['raw_data_path'], followlinks=True):
         for file in files:
+            matchin_fileending = False                      # has the file the correct ending?
             for fileending in params['raw_data_file_endings']:
                 if file.endswith(fileending):
-                    filename = os.path.join(root, file).replace(params['raw_data_path'],'')     # Only relative folder and filename
-                    if not os.path.exists(params['raw_data_path'] + filename):
-                        continue
-                    new = True
-                    for entry in file_list:
-                        if entry[0].find(filename) == 0 or entry[0].find(' '+filename) >= 0 or entry[0].find('#'+filename) >= 0:    # 3 entries as otherwise problem with SunArc-0... and Arc-0...
-                            new = False
-                            break
-                    if new:
-                        im_head = fits.getheader(params['raw_data_path'] + filename)
-                        # Identify the image type and find out what the fibers show
-                        fiber1, fiber2 = 'none', 'none'
-                        if filename.lower().find('bias') >= 0:
-                            fiber1, fiber2 = 'bias', 'bias'
-                        if filename.lower().find('dark') >= 0:
-                            fiber1, fiber2 = 'dark', 'dark'
-                        if filename.lower().find('flat') >= 0 or filename.lower().find('whli') >= 0:
-                            fiber1= 'cont'
-                        if filename.lower().find('rflat') >= 0:
-                            fiber1, fiber2 = 'rflat', 'rflat'
-                        if params['raw_data_imtyp_keyword'] in im_head.keys():
-                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flat']:      # replace because when reading the conf file spaces are placed
-                                if filename.lower().find('rflat') >= 0:
-                                    fiber1, fiber2 = 'rflat', 'rflat'
-                                else:
-                                    fiber1, fiber2 = 'cont', 'cont'
-                        if filename.lower().find('arc') >= 0 or filename.lower().find('thar') >= 0 or filename.lower().find('une') >= 0:
-                            fiber2 = 'wave'
-                        if params['raw_data_imtyp_keyword'] in im_head.keys():
-                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_bias']:
-                                fiber1, fiber2 = 'bias', 'bias'
-                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_dark']:
-                                fiber1, fiber2 = 'dark', 'dark'
-                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace1']:
-                                fiber1, fiber2 = 'cont', 'dark'
-                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flatarc']:
-                                fiber1, fiber2 = 'cont', 'wave'        # for HARPS it is cont, cont
-                            if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace2']:
-                                fiber1, fiber2 = 'wave', 'wave'
-                        if (filename.lower().find('/arc') == -1 and filename.lower().find('/thar') == -1 and filename.lower().find('/une') == -1) and not (filename.lower().find('arc') == 0 or filename.lower().find('thar') == 0 or filename.lower().find('une') == 0) and fiber1 not in ['rflat', 'cont', 'dark', 'bias', 'wave']:
-                            fiber1 = 'science'
-                            if filename.lower().find('harps') <> -1:
-                                fiber2 = 'wave'
-                        # Get the exposure time
-                        exptime = -1
-                        if params['raw_data_exptim_keyword'] in im_head.keys():
-                            exptime = im_head[params['raw_data_exptim_keyword']]
-                        else:
-                            temp = filename.rsplit('_',1)
-                            temp = temp[1].split('s')
-                            try:
-                                exptime = float(temp[0])
-                            except:
-                                logger('Warn: Problem with exposure time for file {1}. Header keyword {0} does not exist. Can not transform {2} into a number'.format(params['raw_data_exptim_keyword'], filename, temp[0]))
-                        # Get the observation time
-                        dateobs = 0
-                        if params['raw_data_dateobs_keyword'] in im_head.keys():
-                            dateobs = im_head[params['raw_data_dateobs_keyword']]
-                            found_time = False
-                            for timestring in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S']:
-                                try:
-                                    dateobs = datetime.datetime.strptime(dateobs, timestring)
-                                    found_time = True
-                                except:
-                                    found_time = False
-                                if found_time:
-                                    break
-                            if found_time:        
-                                dateobs = time.mktime(dateobs.timetuple())             #Time in seconds
-                            else:
-                                dateobs = 0
-                        
-                        extract = ''
-                        if fiber1 == 'science':
-                            extract = 'e'
-                        file_list.append([filename, fiber1, fiber2, exptime, dateobs, extract])
-                        #print file_list[-1]
+                    matchin_fileending = True               # right file ending
+                    break
+            if not matchin_fileending:
+                continue                                    # wrong file ending
+                    
+            filename = os.path.join(root, file).replace(params['raw_data_path'],'')     # Only relative folder and filename
+            if not os.path.exists(params['raw_data_path'] + filename):                  # that should never be a problem
+                continue
+            new = True                                      # is it a new file
+            for entry in file_list:
+                if entry[0].find(filename) == 0 or entry[0].find(' '+filename) >= 0 or entry[0].find('#'+filename) >= 0:    # spaces are replaced in convert_readfile, so shouldn't be a problem
+                    new = False
+                    break
+            if not new:
+                continue                                    # if not new, then no further analysis is needed
+            im_head = fits.getheader(params['raw_data_path'] + filename)
+            # Identify the image type and find out what the fibers show
+            fiber1, fiber2 = 'none', 'none'
+            fnlow = filename.lower()
+            if fnlow.find('bias') >= 0:                     # hardcoded: Bias
+                fiber1, fiber2 = 'bias', 'bias'
+            if fnlow.find('dark') >= 0:                     # hardcoded: Dark
+                fiber1, fiber2 = 'dark', 'dark'
+            posi  = [fnlow.find('flat') , fnlow.find('whli') ]      # hardcoded: White light (Tungston) spectrum in science fiber
+            posi2 = [fnlow.find('flat2'), fnlow.find('whli2')]      # hardcoded: White light (Tungston) spectrum in calibration fiber
+            for i in range(len(posi)):
+                if posi2[i] >= 0:
+                    fiber2 = 'cont'
+                    if posi[i] <> posi2[i]:                 # both fibers
+                        fiber1 = 'cont'
+                elif posi[i] >= 0:
+                    fiber1 = 'cont'
+            if fnlow.find('rflat') >= 0:                    # hardcoded: real flat
+                fiber1, fiber2 = 'rflat', 'rflat'
+            if params['raw_data_imtyp_keyword'] in im_head.keys():
+                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flat']:      # replace because when reading the conf file spaces are placed
+                    if fnlow.find('rflat') >= 0:
+                        fiber1, fiber2 = 'rflat', 'rflat'
+                    else:
+                        fiber1, fiber2 = 'cont', 'cont'
+            posi  = [fnlow.find('arc') , fnlow.find('thar') , fnlow.find('une') ]        # hardcoded: emission line spectrum in calibration fiber
+            posi2 = [fnlow.find('arc2'), fnlow.find('thar2'), fnlow.find('une2')]        # hardcoded: emission line spectrum in science fiber
+            for i in range(len(posi)):
+                if posi2[i] >= 0:
+                    fiber1 = 'wave'
+                    if posi[i] <> posi2[i]:                 # both fibers
+                        fiber2 = 'wave'
+                elif posi[i] >= 0:
+                    fiber2 = 'wave'
+            if params['raw_data_imtyp_keyword'] in im_head.keys():
+                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_bias']:
+                    fiber1, fiber2 = 'bias', 'bias'
+                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_dark']:
+                    fiber1, fiber2 = 'dark', 'dark'
+                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace1']:
+                    fiber1, fiber2 = 'cont', 'dark'
+                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flatarc']:
+                    fiber1, fiber2 = 'cont', 'wave'        # for HARPS it is cont, cont
+                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace2']:
+                    fiber1, fiber2 = 'wave', 'wave'
+            if (fnlow.find('/arc') == -1 and fnlow.find('/thar') == -1 and fnlow.find('/une') == -1) and \
+                        not (fnlow.find('arc') == 0 or fnlow.find('thar') == 0 or fnlow.find('une') == 0) and \
+                        fiber1 not in ['rflat', 'cont', 'dark', 'bias', 'wave']:
+                fiber1 = 'science'
+                if fnlow.find('harps') <> -1:
+                    fiber2 = 'wave'
+            # Get the exposure time
+            exptime = -1
+            if params['raw_data_exptim_keyword'] in im_head.keys():
+                exptime = im_head[params['raw_data_exptim_keyword']]
+            else:
+                temp = filename.rsplit('_',1)
+                temp = temp[1].split('s')
+                try:
+                    exptime = float(temp[0])
+                except:
+                    logger('Warn: Problem with exposure time for file {1}. Header keyword {0} does not exist. Can not transform {2} into a number'.format(params['raw_data_exptim_keyword'], filename, temp[0]))
+            # Get the observation time
+            dateobs = 0
+            if params['raw_data_dateobs_keyword'] in im_head.keys():
+                dateobs = im_head[params['raw_data_dateobs_keyword']]
+                found_time = False
+                for timestring in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S']:
+                    try:
+                        dateobs = datetime.datetime.strptime(dateobs, timestring)
+                        found_time = True
+                    except:
+                        found_time = False
+                    if found_time:
+                        break
+                if found_time:        
+                    dateobs = time.mktime(dateobs.timetuple())             #Time in seconds
+                else:
+                    dateobs = 0
+            
+            extract = ''
+            if fiber1 == 'science':
+                extract = 'e'
+            file_list.append([filename, fiber1, fiber2, exptime, dateobs, extract])
+            #print file_list[-1]
     file_list = sorted(file_list, key=operator.itemgetter(1,2,3,0))
     # Save the list, show to user, so the user can disable files, read the list
     file = open(params['raw_data_file_list'],'w')
@@ -177,7 +201,7 @@ if __name__ == "__main__":
     for entry in file_list:
         file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], entry[4], entry[5] ))
     file.close()
-    if 'nocheck' not in sys.argv:
+    if 'nocheck' not in sys.argv or '-nocheck' not in sys.argv or '--nocheck' not in sys.argv:
         start = time.time()
         rtn = os.system('{1} {0}'.format(params['raw_data_file_list'], params['editor'] ))
         if rtn <> 0 or time.time()-start < 10:
@@ -189,7 +213,7 @@ if __name__ == "__main__":
     
     file_list = sorted(file_list, key=operator.itemgetter(1,2,3,0))
     # Check what data is available
-    arc_l_exp, arc_s_exp = 0, 1E10
+    cal2_l_exp, cal2_s_exp, cal1_l_exp, cal1_s_exp = 0, 1E10, 0, 1E10
     arc_fib1 = ''
     sflat_fib2 = 'wave'
     flatarc_fib2 = 'none'
@@ -204,8 +228,11 @@ if __name__ == "__main__":
         if entry[1] == 'cont' and entry[2] == 'dark' and flatarc_fib2 <> 'wave':   # use entry[2] == 'dark' for flatarc only if entry[2] == 'wave' not available
             flatarc_fib2 = 'dark'
         if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave') and entry[2] == 'wave':
-            arc_l_exp = max(entry[3], arc_l_exp)
-            arc_s_exp = min(entry[3], arc_s_exp)
+            cal2_l_exp = max(entry[3], cal2_l_exp)
+            cal2_s_exp = min(entry[3], cal2_s_exp)
+        if (entry[2] == 'none' or entry[2] == 'dark' or entry[2] == 'wave') and entry[1] == 'wave':
+            cal1_l_exp = max(entry[3], cal1_l_exp)
+            cal1_s_exp = min(entry[3], cal1_s_exp)
         if entry[1] == 'bias' and entry[2] == 'bias':
             exist_bias = True
         if entry[1] == 'rflat' and entry[2] == 'rflat':
@@ -213,12 +240,12 @@ if __name__ == "__main__":
         if entry[1] == 'dark' and entry[2] == 'dark':
             if entry[3] not in exp_darks:
                 exp_darks.append(entry[3])
-    if arc_l_exp == 0 and arc_s_exp == 1E10:         # no single arcs taken, use cont and arc
+    if cal2_l_exp == 0 and cal2_s_exp == 1E10:         # no single arcs taken, use cont and arc
         arc_fib1 = 'cont'
         for entry in file_list:                     # re-run to find exposure times
             if (entry[1] == arc_fib1) and entry[2] == 'wave':
-                arc_l_exp = max(entry[3], arc_l_exp)
-                arc_s_exp = min(entry[3], arc_s_exp)
+                cal2_l_exp = max(entry[3], cal2_l_exp)
+                cal2_s_exp = min(entry[3], cal2_s_exp)
     
     conf_data = dict()
     # Check if master files exist:
@@ -257,11 +284,17 @@ if __name__ == "__main__":
             conf_data, warn = create_parameters(conf_data, warn, 'trace1', 'trace1', ['trace1'], exist_bias, exist_rflat, exp_darks, entry)
         if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave' or entry[1] == arc_fib1) and entry[2] == 'wave':               # Fiber1 and Fiber2
             parcal = 'arc'
-            if entry[3] == arc_l_exp:
-                conf_data, warn = create_parameters(conf_data, warn, 'arc_l', 'arc_l', [parcal], exist_bias, exist_rflat, exp_darks, entry)
+            if entry[3] == cal2_l_exp:
+                conf_data, warn = create_parameters(conf_data, warn, 'cal2_l', 'cal2_l', [parcal], exist_bias, exist_rflat, exp_darks, entry)
                 conf_data, warn = create_parameters(conf_data, warn, 'trace2', 'trace2', ['trace2'], exist_bias, exist_rflat, exp_darks, entry)
-            elif entry[3] == arc_s_exp:                             # In case only one exposure time -> arc_l is copied in arc_s
-                conf_data, warn = create_parameters(conf_data, warn, 'arc_s', 'arc_s', [parcal], exist_bias, exist_rflat, exp_darks, entry)
+            elif entry[3] == cal2_s_exp:                             # In case only one exposure time -> cal2_l is copied in cal2_s
+                conf_data, warn = create_parameters(conf_data, warn, 'cal2_s', 'cal2_s', [parcal], exist_bias, exist_rflat, exp_darks, entry)
+        if (entry[2] == 'none' or entry[2] == 'dark' or entry[2] == 'wave') and entry[1] == 'wave' and cal1_l_exp >= cal1_s_exp:               # wave in science fiber
+            parcal = 'arc'
+            if entry[3] == cal1_l_exp:
+                conf_data, warn = create_parameters(conf_data, warn, 'cal1_l', 'cal1_l', [parcal], exist_bias, exist_rflat, exp_darks, entry)
+            elif entry[3] == cal1_s_exp:                             # In case only one exposure time -> cal1_l is copied in cal1_s
+                conf_data, warn = create_parameters(conf_data, warn, 'cal1_s', 'cal1_s', [parcal], exist_bias, exist_rflat, exp_darks, entry)
         if entry[1] == 'dark' and entry[2] == 'dark':               # Fiber1 and Fiber2
             param = 'dark{0}'.format(entry[3])                      # Exposure time
             textparam = param.replace('.','p')+'s'
@@ -283,10 +316,12 @@ if __name__ == "__main__":
             else:
                 param = 'extract'+extraction[1:]
             conf_data, warn = create_parameters(conf_data, warn, param, param, [param, 'extract'], exist_bias, exist_rflat, exp_darks, entry)
-    if 'arc_l_rawfiles' in conf_data.keys() and 'arc_s_rawfiles' not in conf_data.keys():
-        conf_data['arc_s_rawfiles'] = conf_data['arc_l_rawfiles']
-        conf_data['master_arc_s_filename'] = conf_data['master_arc_l_filename'].replace('arc_l','arc_s')
-        conf_data['arc_s_calibs_create'] = conf_data['arc_l_calibs_create']
+    for fiber in [2,1]:
+        if 'cal{0}_l_rawfiles'.format(fiber) in conf_data.keys() and 'cal{0}_s_rawfiles'.format(fiber) not in conf_data.keys():
+            conf_data['cal{0}_s_rawfiles'.format(fiber)]        = conf_data['cal{0}_l_rawfiles'.format(fiber)]
+            conf_data['master_cal{0}_s_filename'.format(fiber)] = conf_data['master_cal{0}_l_filename'.format(fiber)].replace('cal{0}_l'.format(fiber),'cal{0}_s'.format(fiber))
+            conf_data['cal{0}_s_calibs_create'.format(fiber)]   = conf_data['cal{0}_l_calibs_create'.format(fiber)]
+
     for entry in warn:
         logger(entry)
     # Save the results in a conf_data.txt file
