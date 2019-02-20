@@ -137,6 +137,7 @@ if __name__ == "__main__":
     update_calibration_memory('sci_trace',[sci_tr_poly, xlows, xhighs, widths])         # Apertures might be shifted before extraction -> this would also affect the localbackground
     update_calibration_memory('cal_trace',[cal_tr_poly, axlows, axhighs, awidths])
     
+    two_solutions = False
     for calib in [ ['','cal2'], ['_sci','cal1'] ]:
         # first entry is the standard wavelength solution
         # second entry is for finding the wavelength solution in a bifurcated fiber
@@ -151,9 +152,8 @@ if __name__ == "__main__":
                 params[pdfparam] = params[pdfparam].replace('.pdf','')+calib[0]+'.pdf'
         # Create the wavelength solution for the night
         if params['original_master_wavelensolution_filename'].lower() <> 'pseudo':                  # Create the master files
-            im_cal_l, im_arclhead = create_image_general(params, calib[1]+'_l')           # arc_l -> cal2_l
-            im_cal_s, im_arcshead = create_image_general(params, calib[1]+'_s')           # arc_s -> cal2_s
-        #wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_arc_l)         # Testing
+            im_cal_l, im_arclhead = create_image_general(params, calib[1]+'_l')
+            im_cal_s, im_arcshead = create_image_general(params, calib[1]+'_s')
         if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']) == True:
             logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution'+calib[0]+'_filename']))
             wavelength_solution, wavelength_solution_arclines = read_wavelength_solution_from_fits(params['master_wavelensolution_filename'])
@@ -206,9 +206,11 @@ if __name__ == "__main__":
                 # Find the new wavelength solution
                 wavelength_solution, wavelength_solution_arclines = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wavelength_solution_ori, 
                                                                                                wavelength_solution_arclines_ori, reference_catalog, reference_names, xlows, xhighs, params['GUI'])
+                # Store the information for later
+                update_calibration_memory('wave_sol'+calib[0],[wavelength_solution, wavelength_solution_arclines])
             else:
                 params['order_offset'] = [0,0]
-                params['px_offset'] = [-10,10,2]
+                params['px_offset'] = [-60,60,6]
                 params['px_offset_order'] = [-1,1,1]
                 wavelength_solution, wavelength_solution_arclines = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wavelength_solution, 
                                                                                                wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, params['GUI'])
@@ -216,16 +218,26 @@ if __name__ == "__main__":
             plot_wavelength_solution_form(params['logging_wavelength_solution_form'], axlows, axhighs, wavelength_solution)
             plot_wavelength_solution_spectrum(cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
             plot_wavelength_solution_image(im_cal_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
+        if calib[1] == 'cal2':          # for the calibration fiber
+            wavelength_solution_cal, wavelength_solution_arclines_cal = copy.deepcopy(wavelength_solution), copy.deepcopy(wavelength_solution_arclines)
+        else:
+            wavelength_solution_sci, wavelength_solution_arclines_sci = copy.deepcopy(wavelength_solution), copy.deepcopy(wavelength_solution_arclines)
+            wavelength_solution, wavelength_solution_arclines = wavelength_solution_cal, wavelength_solution_arclines_cal           # Put the calibration fiber wavelength solution back as main solution
+            two_solutions = True
+            
+    # Compare the radial velocity shift between the two wavelength solution, if using a bifurcated fiber
+    rv_shift, rv_schift_err = 0., 0.
+    #if two_solutions:
+    #    rv_shift, rv_schift_err = find_RVshift_between_wavelength_solutions(wavelength_solution_cal, wavelength_solution_arclines_cal, wavelength_solution_sci, wavelength_solution_arclines_sci, 
+                                                                            np.zeros((wavelength_solution_cal.shape[0],im_trace1.shape[0])) )
     
-    # Create the wavelength solution for the science fiber, if using a bifurcated fiber
-    
+        
             
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if wavelength_solution.shape[0] <> sci_tr_poly.shape[0]:
+        print 'im_trace1.shape', im_trace1.shape
         logger('Error: The number of traces for extraction and for the wavelength calibration do not match. Please remove eighter {0} ({2}) or {1} ({3}) and re-run the script in order to solve.'\
-                    .format(params['master_trace_sci_filename'], params['master_wavelensolution_filename'], sci_tr_poly.shape[0], wavelength_solution.shape[0] ))
-        
-    update_calibration_memory('wave_sol',[wavelength_solution, wavelength_solution_arclines])
+                    .format(params['master_trace_sci_filename'], params['master_wavelensolution_filename'], sci_tr_poly.shape[0], wavelength_solution.shape[0], im_trace1.shape[0]))
     
     im_flatarc, im_flatarc_head = create_image_general(params, 'flatarc')    # -> cont1cal2
     

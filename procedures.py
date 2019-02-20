@@ -330,7 +330,7 @@ def update_calibration_memory(key,value):
     :param value: string, number, array, or anything: value for the dictionary
     """
     global calimages
-    calimages[key] = value
+    calimages[key] = copy.deepcopy(value)
 
 def read_text_file(filename, no_empty_lines=False):
     """
@@ -880,12 +880,12 @@ def save_fits_width(pfits, xlows, xhighs, widths, filename):
 def save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_arclines, filename):
     """
     save the wavelength solution in a file for later use
-    :param wavelength_solution: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
                       (output of np.polyval)
                       i.e. p where:
                       p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
-    :param wavelength_solution_arclines: list, same length as number of orders, each line contains the wavelength of the used reference lines. 
-                                        Each order must have the same number of entries, if less reference lines are available in the order, the array is filled with 0.
+    :param wavelength_solution_arclines: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
+                                        sorted by the brightest to faintest (in spectrum from which the solution is derived) and 0 to make into an array
     :param filename: string, location and file name of the file
     """
     data = []
@@ -1091,7 +1091,7 @@ def percentile_list(data, prcentl):
     """
     Removes the highest and lowest prcentl percent of the data
     :param data: 1-d aray of data
-    :param prcentl: integer or float, gives the number of how much data to remove
+    :param prcentl: integer or float, gives the number (in fractions, e.g. percent/100) of how much data to remove
     :return data: sorted list without the highest and smallest values, and without NaNs
     """
     if prcentl < 0 or prcentl > 0.5:
@@ -2651,13 +2651,14 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
         2: The light hits the grating at a different position and passes through different are of the lens -> Pixelshift depends on wavelength, pixel
             maybe replace by a cross correlation between arc spectra: x1, y1 from wavelength solution, x2, y2 from the current file -> y2'(x) = y1(x+dx)*a+b so that y2 and y2' match best
     :param aspectra: spectrum of the reference orders
-    :param wavelength_solution: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
-    :param wavelength_solution_arclines: list of floats, same length as number of orders, each line contains the wavelength of the used reference lines.
+    :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param wavelength_solution_arclines: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
+                                        sorted by the brightest to faintest (in spectrum from which the solution is derived) and 0 to make into an array
     :param reference_catalog: 2d array of floats with one entry for each line. Each entry contains the wavelength and the intensity of the line
     :param reference_names: list of strings with same length as reference_catalog, name of each line
     :param xlows: list of floats, length same as number of orders, the lowest x pixel (wavelength direction) used in each order
     :param xhighs: list of floats, length same as number of orders, the highest x pixel (wavelength direction) used in each order
-    :return wavelength_solution: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
     #logger('Step: Finding the wavelength shift for this exposure')
     if np.max(wavelength_solution[:,-1]) < 100 or False:     # pseudo solution
@@ -2749,7 +2750,7 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
     """
     In case no calibration spectrum was taken at the same time as the science spectra use the stored information to aply a shift in the lines
     !!! shift_avg = np.average( shifts[:,1], weights=weight )  -> Tested, will work fine for obsdate in range(all_shifts), but will fail for extrapolation. Maybe it's necessary to replace this by a linear fit?
-    :return wavelength_solution: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
     all_shifts = read_text_file(params['master_wavelengths_shift_filename'], no_empty_lines=True)
     all_shifts = convert_readfile(all_shifts, [float, float, float], delimiter='\t', replaces=['\n'])       # obsdate_float, shift_avg, shift_std, can contain duplicate obsdate_float (last one is the reliable one)
@@ -2784,8 +2785,8 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
 def create_wavelengths_from_solution(wavelength_solution, spectra):
     """
     Converts the wavelength solution into a 2d array with the wavelength for each pixel and order
-    :param wavelength_solution: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
-    :param spectra: 2d array of floats, spectrum
+    :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param spectra: 2d array of floats, spectrum, only needed for the shape of the wavelengths array
     :return wavelengths: 2d array of floats, same dimensions as spectra, contains the wavelength for each pixel
     """
     wavelengths = []
@@ -3323,7 +3324,7 @@ def plot_wavelength_solution_form(fname, xlows, xhighs, wavelength_solution):
     :param fname: Filename to which the image is saved
     :param xlows: list, length same as number of orders, the lowest x pixel (wavelength direction) used in each order
     :param xhighs: list, length same as number of orders, the highest x pixel (wavelength direction) used in each order
-    :param wavelength_solution: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
     step = 25
     im = np.zeros([max(xhighs)/step, len(xlows)])+np.nan
@@ -3348,7 +3349,7 @@ def plot_wavelength_solution_width_emmission_lines(fname, specs, arc_lines_wavel
     Creates a map of the Gaussian width of the emmission lines
     :param fname: Filename to which the image is saved
     :param specs: 1d list with two integers: shape of the extracted spectrum, first entry gives the number of orders and the second the number of pixel
-    :param wavelength_solution: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
     step = 20
     gauss_ima = np.empty((specs[0], specs[1]/step+1)) * np.nan
@@ -3368,8 +3369,9 @@ def plot_wavelength_solution_spectrum(spec1, spec2, fname, wavelength_solution, 
     :param spec1: 2d array of floats, extracted spectrum of the long exposed arc
     :param spec2: 2d array of floats, extracted spectrum of the short exposed arc
     :param fname: string, Filename to which the image is saved
-    :param wavelength_solution: 2d array, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
-    :param wavelength_solution_arclines: list, same length as number of orders, each line contains the wavelength of the used reference lines
+    :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param wavelength_solution_arclines: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
+                                        sorted by the brightest to faintest (in spectrum from which the solution is derived) and 0 to make into an array
     :param reference_catalog: 2d array or list of floats with one entry for each line. Each entry contains the wavelength and the intensity of the line (set to 1 if not provided by the catalog file), and the index in the file
     :param reference_names: list of strings, same length as reference_catalog. Names of the reference lines
     """
@@ -3487,8 +3489,9 @@ def plot_wavelength_solution_image(im, fname, pfits, xlows, xhighs, wavelength_s
     :param pfits: list of floats, length same as number of orders, polynomial values
     :param xlows: list, length same as number of orders, the lowest x pixel (wavelength direction) used in each order
     :param xhighs: list, length same as number of orders, the highest x pixel (wavelength direction) used in each order
-    :param wavelength_solution: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
-    :param wavelength_solution_arclines: list, same length as number of orders, each line contains the wavelength of the used reference lines. The lines don't have the same length
+    :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param wavelength_solution_arclines: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
+                                        sorted by the brightest to faintest (in spectrum from which the solution is derived) and 0 to make into an array
     :param reference_catalog: 2d array of floats with one entry for each line. Each entry contains the wavelength and the intensity of the line
     """
     logger('Step: logging results to {0}'.format(fname))
@@ -4239,14 +4242,17 @@ def create_pseudo_wavelength_solution(number_orders):
 
 def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, reference_catalog_full, reference_names, xlows, xhighs, show_res=False):
     """
-    :param wavelength_solution_ori: list, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param wavelength_solution_ori: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :param arc_lines_px: 2d array with one line for each identified line, sorted by order and amplitude of the line. For each line the following informaiton is given:
                     order, pixel, width of the line, and height of the line
-    :param wavelength_solution_arclines_ori: 2d array with one line for each order. Each order contains the wavelengths of the identified reference lines, sorted by the arc_lines_px (brightest to faintest) and 0 to make into an array
+    :param wavelength_solution_arclines_ori: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
+                                        sorted by the brightest to faintest (in spectrum from which the solution is derived) and 0 to make into an array
                                         not used, only to return the correct values when no solution is found
     :param reference_catalog: 2d array of floats with one entry for each line. Each entry contains the wavelength and the intensity of the line
     :param reference_names: list of strings with same length as reference_catalog, name of each line
-    :return wavelength_solution_arclines: 2d array with one line for each order. Each order contains the wavelengths of the identified reference lines, sorted by the arc_lines_px (brightest to faintest)
+    :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :return wavelength_solution_arclines: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
+                                        sorted by the brightest to faintest (in spectrum from which the solution is derived).
                                         To create the same number of lines for each order, the array is filled with 0
     """
     ignoreorders = [] #[0,1,2,3,4,5,6,7,8]
@@ -5778,10 +5784,53 @@ def jd_corr(mjd, ra, dec, epoch, lat, lon, jd_type='bjd'):
 
     return new_jd.jd            # Return as float-array
 
-def wavelength_shift_between_bifurcated_fibers():
+def find_RVshift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_sol_2, wave_sol_lines_2, spectra):
     """
+    :param wave_sol_1, wave_sol_2: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param wave_sol_lines_1, wave_sol_lines_2: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
+                                        sorted by the brightest to faintest (in spectrum from which the solution is derived).
+                                        To create the same number of lines for each order, the array is filled with 0
+    :param spectra: 2d array of floats, spectrum, only needed for the shape of the wavelengths array
     """
-    
+    # make it into wavelength, find the wavelengths of the first arclines in both, find the wavelengths of the second arclines in both, find the overlapping lines -> directly to lambda-shift -> RV
+    # Make the solutions into wavelengths
+    wavelengths1 = create_wavelengths_from_solution(wave_sol_1, spectra)
+    wavelengths2 = create_wavelengths_from_solution(wave_sol_2, spectra)
+    # find the closest pixel of each catalog line
+    result = []
+    for order in range(spectra.shape[0]):
+        catalog_lines1 = wave_sol_lines_1[order,:]
+        catalog_lines1 = catalog_lines1[catalog_lines1 > 100]          # ignore the entries necessary to fill the array
+        catalog_lines2 = wave_sol_lines_2[order,:]
+        catalog_lines2 = catalog_lines2[catalog_lines2 > 100]          # ignore the entries necessary to fill the array
+        catalog_lines3 = list( set(catalog_lines1) & set(catalog_lines2) )      # overlapping entries
+        for [i, catalog_lines] in [ [0, catalog_lines3], [1, catalog_lines1], [2, catalog_lines2] ]:    # use the different catalogs
+            for catalog_line in catalog_lines:
+                for [j, wavelengths] in [ [0, wavelengths1], [1, wavelengths2] ]:                       # use both wavelength solutions
+                    if (i == 1 and j == 1) or (i == 2 and j == 0):                                      # don't apply catalog lines from the first solution to the second solution
+                        continue
+                    diff = np.abs(catalog_line - wavelengths[order,:])
+                    pos = np.argmin(diff)                                 # closest pixel
+                    rel_diff = 2. * (wavelengths1[order,pos] - wavelengths2[order,pos]) / (wavelengths1[order,pos] + wavelengths2[order,pos])
+                    result.append([ rel_diff,i,j,order,catalog_line ])
+                    #print rel_diff,i,j,order,catalog_line
+    result = np.array(result)
+    good_values = range(len(result))
+    print 'median, average, std:',np.median(result[good_values,0]), np.mean(result[good_values,0]), np.std(result[good_values,0], ddof=1),
+    for pctl in [1,5,10,20]:
+        temp = percentile_list(result[good_values,0], pctl/100.)
+        print 'pctl, mean, std:', pctl, np.mean(temp), np.std(temp, ddof=1),
+    print ""
+
+
+
+
+
+
+
+
+
+
 
 
 

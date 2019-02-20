@@ -55,6 +55,7 @@
  \item Added parameter \verb|object_file| to conf.txt.
  \item More information are stored in the header of the different output files.
  \item Barycentric velocity calculation and barycentric JD were improved/added.
+ \item \verb|extraction_width_multiplier = 1|, \verb|arcextraction_width_multiplier = 1| \verb|width_percentile = 05|, and \verb|extracted_bitpix = -32| are standard now.
 \end{itemize}
 
 \subsection{v0.4.0}
@@ -788,28 +789,32 @@ For more information about TERRA please refer to the literature\footnote{\url{ht
 
 The testing of the pipeline was done for the MRES data taken on 2018-11-27.
 
-\noindent The following replacements/insertions are necessary in the conf.txt file:
+\noindent The following replacements/insertions are necessary in the conf.txt file. 
 \begin{itemize}\setlength\itemsep{0em}
 \small
   \item \verb|subframe                 = [12091,511,380,0]|
   \item \verb|rotate_frame             = 270|
-  \item \verb|arcextraction_width_multiplier = 1|
+  %\item \verb|arcextraction_width_multiplier = 1|
   \item \verb|maxshift                 = 5|
   \item \verb|bin_search_apertures     = 10,1|
   \item \verb|bin_adjust_apertures     = 2,1|
-  \item \verb|width_percentile         = 10|
+  \item \verb|width_percentile         = 5|
   \item \verb|arcshift_side            = center|
   \item \verb|raw_data_imtyp_bias      = NA|
   \item \verb|raw_data_imtyp_dark      = NA|
   \item \verb|raw_data_imtyp_flat      = NA|
   \item \verb|raw_data_exptim_keyword  = EXPOSURE|
   \item \verb|raw_data_dateobs_keyword = DATE|
-  \item \verb|arc_calibs_create_g      = subframe, <...>|
-  \item \verb|trace1_calibs_create_g   = subframe, <...>|
-  \item \verb|trace2_calibs_create_g   = subframe, <...>|
-  \item \verb|extract_calibs_create_g  = subframe, <...>|
-  \item \verb|flatarc_calibs_create_g  = subframe, <...>|
-  \item \verb|wavelengthcal_calibs_create_g = subframe, <...>|
+  \item \verb|arc_calibs_create_g      = subframe|
+  \item \verb|trace1_calibs_create_g   = subframe|
+  \item \verb|trace2_calibs_create_g   = subframe|
+  \item \verb|extract_calibs_create_g  = subframe|
+  \item \verb|flatarc_calibs_create_g  = subframe|
+  \item \verb|wavelengthcal_calibs_create_g = subframe|
+  \item \verb|site        = TNT|
+  \item \verb|altitude    = 2457|
+  \item \verb|latitude    = 18.59055|
+  \item \verb|longitude   = 98.48655|
   \item \verb|extracted_bitpix         = -32|
 \end{itemize}
 
