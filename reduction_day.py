@@ -141,8 +141,8 @@ if __name__ == "__main__":
     for calib in [ ['','cal2'], ['_sci','cal1'] ]:
         # first entry is the standard wavelength solution
         # second entry is for finding the wavelength solution in a bifurcated fiber
-        if calib[1] == 'cal1' and ('cal1_l_rawfiles' not in params.keys() ):
-            break                                           # Not set up for bifurcated fiber use -> stop after the first step
+        if calib[1] == 'cal1' and ('cal1_l_rawfiles' not in params.keys() or  params['original_master_wavelensolution_filename'].lower() == 'pseudo' or params['arcshift_side'] == 0):
+            break                                           # Not set up for bifurcated fiber use or pseudo or only one fiber -> stop after the first step
         elif calib[1] == 'cal1':                            # Update and rename a few parameters
             if 'master_wavelensolution'+calib[0]+'_filename' not in params.keys():
                 params['master_wavelensolution'+calib[0]+'_filename'] = params['master_wavelensolution_filename'].replace('.fit',calib[0]+'.fit')
@@ -154,14 +154,14 @@ if __name__ == "__main__":
         if params['original_master_wavelensolution_filename'].lower() <> 'pseudo':                  # Create the master files
             im_cal_l, im_arclhead = create_image_general(params, calib[1]+'_l')
             im_cal_s, im_arcshead = create_image_general(params, calib[1]+'_s')
+            cal_l_spec, good_px_mask_l = extract_orders(params, im_cal_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
         if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']) == True:
             logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution'+calib[0]+'_filename']))
-            wavelength_solution, wavelength_solution_arclines = read_wavelength_solution_from_fits(params['master_wavelensolution_filename'])
+            wavelength_solution, wavelength_solution_arclines = read_wavelength_solution_from_fits(params['master_wavelensolution'+calib[0]+'_filename'])
         elif params['original_master_wavelensolution_filename'].lower() == 'pseudo':
             logger('Warning: Using a pseudo solution for the wavelength (1 step per px)')
             wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(sci_tr_poly.shape[0])
         else:
-            cal_l_spec, good_px_mask_l = extract_orders(params, im_cal_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
             cal_s_spec, good_px_mask_s = extract_orders(params, im_cal_s, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
             # Begin: This bit is not necessary once the procedure has been written
             im_name = 'master_'+calib[1]+'_long'
@@ -220,19 +220,52 @@ if __name__ == "__main__":
             plot_wavelength_solution_image(im_cal_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
         if calib[1] == 'cal2':          # for the calibration fiber
             wavelength_solution_cal, wavelength_solution_arclines_cal = copy.deepcopy(wavelength_solution), copy.deepcopy(wavelength_solution_arclines)
+            params['wavelength_solution_type'] = 'cal-fiber'
+            cal2_l_spec = copy.deepcopy(cal_l_spec)
         else:
             wavelength_solution_sci, wavelength_solution_arclines_sci = copy.deepcopy(wavelength_solution), copy.deepcopy(wavelength_solution_arclines)
-            wavelength_solution, wavelength_solution_arclines = wavelength_solution_cal, wavelength_solution_arclines_cal           # Put the calibration fiber wavelength solution back as main solution
+            params['wavelength_solution_type'] = 'sci-fiber'
+            cal1_l_spec = copy.deepcopy(cal_l_spec)
             two_solutions = True
+    
+    # Use the better wavelength solution: should be the one of the science fiber (wavelength_solution_sci), but if calibration fiber is better, then use calibration fiber
+    if two_solutions:       # solutions for both fibers
+        if len(wavelength_solution_arclines_cal[wavelength_solution_arclines_cal > 100]) > 2* len(wavelength_solution_arclines_sci[wavelength_solution_arclines_sci > 100]):
+            # if twice as many lines were identified (should also check that the residuals are not worse, but this is difficult as solution might have been loaded from file
+            wavelength_solution, wavelength_solution_arclines = wavelength_solution_cal, wavelength_solution_arclines_cal           # Put the calibration fiber wavelength solution back as main solution
+            params['wavelength_solution_type'] = 'cal-fiber'
+            logger('Info: Using the calibration fiber wavelength solution (first solution) as master wavelength solution, as this solution seems to be better')
+        else:
+            logger('Info: Using the science fiber wavelength solution (second solution) as master wavelength solution')
+
             
-    # Compare the radial velocity shift between the two wavelength solution, if using a bifurcated fiber
-    rv_shift, rv_schift_err = 0., 0.
+    # Compare the radial velocity shift between the two wavelength solution, if using a bifurcated fiber -> this is wrong
+    #rv_shift, rv_schift_err = 0., 0.
     #if two_solutions:
     #    rv_shift, rv_schift_err = find_RVshift_between_wavelength_solutions(wavelength_solution_cal, wavelength_solution_arclines_cal, wavelength_solution_sci, wavelength_solution_arclines_sci, 
-                                                                            np.zeros((wavelength_solution_cal.shape[0],im_trace1.shape[0])) )
+    #                                                                        np.zeros((wavelength_solution_cal.shape[0],im_trace1.shape[0])) )
     
+    # Find the pixel-shift between the two solutions
+    # Possibilities: 
+    #   - science fiber wavelength solution vs. calibration fiber wavelength solution
+    #   - shift between science and calibration fiber arc lines
+    #   - shift in the calibration fibers arc lines (old)
+    master_shift = 0
+    if two_solutions:
+        shift, shift_err = find_shift_between_wavelength_solutions(wavelength_solution_cal, wavelength_solution_arclines_cal, wavelength_solution_sci, wavelength_solution_arclines_sci, 
+                                                                            np.zeros((wavelength_solution_cal.shape[0],im_trace1.shape[0])), ['calibration fiber','science fiber'] )
+        if params['wavelength_solution_type'] == 'sci-fiber':
+            aspectra = cal2_l_spec
+            im_name = 'long_exposure_wavelength_solution_calibration_fiber'
+        else:
+            aspectra = cal1_l_spec
+            im_name = 'long_exposure_wavelength_solution_science_fiber'
+            shift = -shift                          # reverse, as opposite to find_shift_between_wavelength_solutions
+        obsdate_float = 0
         
-            
+        dummy_shift_wavesoln, master_shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
+                                                              reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, im_name, maxshift=max(2,2*shift_err), in_shift=int(shift) )
+
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if wavelength_solution.shape[0] <> sci_tr_poly.shape[0]:
         print 'im_trace1.shape', im_trace1.shape
@@ -256,7 +289,7 @@ if __name__ == "__main__":
             flatarc_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
         else:
             flatarc_spec, agood_px_mask = extract_orders(params, im_flatarc, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
-        wavelength_solution_shift = shift_wavelength_solution(params, flatarc_spec, wavelength_solution, wavelength_solution_arclines, 
+        wavelength_solution_shift, shift = shift_wavelength_solution(params, flatarc_spec, wavelength_solution, wavelength_solution_arclines, 
                                             reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, params['master_flat_spec_norm_filename'])
         wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, flatarc_spec)
         save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, flatarc_spec], params['master_flat_spec_norm_filename'], im_flatarc_head)
@@ -326,8 +359,8 @@ if __name__ == "__main__":
     
     # Do the Terra RVs
     os.system('echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       Object1/" > astrocatalog.example')
-    if os.path.isfile('/home/ronny/software/terra/PRV.jar') == True:
-        os.system('java -jar ~/software/terra/PRV.jar -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0]) )
+    if os.path.isfile(params['terra_jar_file']) == True:
+        os.system('java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] ) )
         os.system('gedit Object1/results/synthetic.rv &')
         
         

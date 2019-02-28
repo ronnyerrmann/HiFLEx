@@ -45,23 +45,29 @@
 % -------------------------------------------------------------------------------------------
 
 \section{Changelog}
-\subsection{v0.3.3}
-\begin{itemize}
+\subsection*{v0.3.3}
+\begin{itemize}\setlength\itemsep{0em}
  \item Added parameter \verb|raw_data_timezone_cor| to conf.txt.
 \end{itemize}
 
-\subsection{v0.3.4}
-\begin{itemize}
+\subsection*{v0.3.4}
+\begin{itemize}\setlength\itemsep{0em}
  \item Added parameter \verb|object_file| to conf.txt.
  \item More information are stored in the header of the different output files.
  \item Barycentric velocity calculation and barycentric JD were improved/added.
  \item \verb|extraction_width_multiplier = 1|, \verb|arcextraction_width_multiplier = 1| \verb|width_percentile = 05|, and \verb|extracted_bitpix = -32| are standard now.
 \end{itemize}
 
-\subsection{v0.4.0}
-\begin{itemize}
+\subsection*{v0.4.0}
+\begin{itemize}\setlength\itemsep{0em}
   \item Included the comparison between the wavelength solutions in science and calibration fiber.
   \item Renamed \verb|arc_l| and \verb|arc_s| into \verb|cal2_l| and \verb|cal2_s|.
+  \item Better way of getting the object name from the filename.
+  \item Added parameter \verb|path_ceres| to conf.txt.
+  \item Added parameter \verb|terra_jar_file| to conf.txt.
+  \item Renamed parameter \verb|path_rv| to \verb|path_rv_ceres|.
+  \item Renamed parameter \verb|csv_path| to \verb|path_csv_terra|.
+  \item General bug fixing.
 \end{itemize}
 
 % ------------------------------------------------------------------------------
@@ -250,7 +256,7 @@ To get the best results, the following data should be taken (all filenames are c
   \item Arc (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc}, \textbf{ThAr}, or \textbf{UNe} and the science fiber should be dark for this data.
 %  \item FlatArc (11x, white light source and calibration lamp), the filename should be \textbf{flatarc}, \textbf{sflatThAr}, \textbf{whli-UNe}, or similar.
   \item Bias (11x) and/or Darks (11x, for the exposure time of the true Flat and Flat)% and FlatArc)
-  \item Filenames science images: the optimimum is to use ``\_'' for object name (as in reference file \verb|object_file|, see Chapter~\ref{Section:create_object_list_file}). Use ``-'' to seperate exposure time, number of series and other information.
+  \item Filenames science images: the optimum is to start the filename with the object name (as in reference file given by parameter \verb|object_file|, see Chapter~\ref{Section:create_object_list_file}). However, in order to try to match the object name with entries in the \verb|object_file| the parts of the filename containing ``\_'' and ``-'' are stripped away one by one from the end of the filename.
 \end{itemize}
 
 \subsection{Steps to run the code on a new set of data}
@@ -403,7 +409,7 @@ If the coordinates of the object are not stored in the fits header, then they ca
 \subsection{Format of the extracted files}
 Different types of extracted files are created. They are described in the following subsections.
 
-\subsubsection*{raw-data filename}
+\subsubsection{raw-data filename}
 \label{section:extraction_data_format}
 The final fits file contains the original header and some additional information, for example the calibration steps which were applied and some information about the flux collected in the different apertures. The data in the file is stored in a 3D array in the form: data type, aperture, and pixel. The data types are similar to the ones created by the CERES pipeline and are the following:
 \begin{enumerate}
@@ -425,35 +431,39 @@ The final fits file contains the original header and some additional information
   \item Spectrum of the calibration fiber, e.g. of the emission line lamp.
 \end{enumerate}
 
-\subsubsection*{raw-data filename + \_harps\_e2ds}
+\subsubsection{raw-data filename + \_harps\_e2ds}
 This file contains the extracted spectrum without any modification in the same form as the \textit{e2ds} files created by the HARPS pipeline. The wavelength solution is stored in the header.
 
-\subsubsection*{raw-data filename + \_lin}
+\subsubsection{raw-data filename + \_lin}
 \label{Section:linearised_spectrum}
 The extracted spectrum is linearised using a wavelength step as given in parameter \verb|wavelength_scale_resolution|. The wavelength spectrum is interpolated by using the weighted mean of the neighbouring data points with the wavelength difference as weights.
 
-\subsubsection*{raw-data filename + \_lin\_cont}
+\subsubsection{raw-data filename + \_lin\_cont}
 This file contains data in the same form as described in Section~\ref{Section:linearised_spectrum}, only that the continuum corrected data was linearised.
 
-\subsubsection*{inside single folder}
-\begin{itemize}
+\subsubsection{inside single folder}
+All the files are 2D arrays with the order/aperture as first and number of pixel in second dimension.
+\begin{description}
  \item[raw-data filename + \_extr] Extracted spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
+ \item[raw-data filename + \_extr\_bluefirst] Same as the entry before, but starting with the blue orders instead of the red orders.
  \item[raw-data filename + \_blaze] Blaze corrected spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
- \item[raw-data filename + \_wave] 2D array with the wavelength for each aperture and pixel.
+ \item[raw-data filename + \_blaze\_bluefirst] Same as the entry before, but starting with the blue orders instead of the red orders.
+ \item[raw-data filename + \_wave] The wavelength for each aperture and pixel.
  \item[raw-data filename + \_weight] Mask with good areas of the spectrum.
-\end{itemize}
+\end{description}
 
-\subsubsection*{Object1/data/YYYY-MM-DDHHMMSS}
+\subsubsection{Object1/data/YYYY-MM-DDHHMMSS.cvs files}
 The data in here is used in order to measure RV with Terra (\url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}). Tha barycentric corrected wavelength solution and the continuum corrected spectrum (multiplied by the bad-pixel mask) are used. 
 (work in progress)
 
 \subsection{Results from the pipeline}
+\subsubsection{Preparing the data for one night}
 \label{section:results_pipeline}
 For each of the steps given in Section~\ref{Section:pipeline_steps_general} the following data will be created.
 
-\noindent \textbf{Step 1:} The reduced and combined CCD images will be stored in the folder where the pipeline was run. The file name is \verb|master_<type>.fits|, where \verb|<type>| defines the different image types, e.g. bias, sflat, or arc\_l.
+\noindent \textbf{Step 1:} The reduced and combined CCD images will be stored in the folder where the pipeline was run. The file name is \verb|master_<type>.fits|, where \verb|<type>| defines the different image types, e.g. bias, sflat, trace, or arc\_l.
 
-\vspace{0.5em}\noindent \textbf{Step 2:} The trace of each scientific order is stored in the file given in parameter \verb|master_traces_filename| (standard: \textit{master\_traces.fits}). This file contains one line for each order, normally starting with the reddest order, which is located on the left side of the CCD image. Each line contains the following information:
+\vspace{0.5em}\noindent \textbf{Step 2:} The trace of each scientific order is stored as a table in the file given in parameter \verb|master_trace_sci_filename| (standard: \textit{master\_traces\_sci.fits}). This is a table fits-file and contains one line for each order, normally starting with the reddest order, which is located on the left side of the CCD image. Each line contains the following information:
 \begin{itemize}\setlength\itemsep{0em}
   \item Number of the aperture (starting at 0).
   \item Central pixel (in dispersion direction) for the polynomial fit along the center (Gaussian centre) of the trace.
@@ -477,7 +487,7 @@ The identification of the traces can be checked easily in the file given in para
 
 %\vspace{0.5em}\noindent \textbf{Step 3:} The background map, 2d image is stored in the file given in parameter \verb|background_filename| (standard: \textit{background.fits}). Additionally a mask which provides the pixel which are used to create the background map is stored in the file given in parameter \verb|background_px_filename| (standard: \textit{background\_px.fits}).
 
-\vspace{0.5em}\noindent \textbf{Step 3:} The traces of the apertures of the calibration fiber are stored in the file given in parameter \verb|master_tracesarc_filename| (standard: \textit{master\_tracesarc.fits}). This file contains the same information as the result of \textbf{Step 2}, only that the lowest order of the parameters of polynomial fit is shifted (the curvature of the traces is kept the same). The result can be checked easily in the file given in parameter \verb|logging_arctraces_im| (standard: \textit{arctraces\_in\_master\_trace2.png}). An example is show in Fig.~\ref{figure_arcapertures_in_master_arc}.
+\vspace{0.5em}\noindent \textbf{Step 3:} The traces of the apertures of the calibration fiber are stored in the file given in parameter \verb|master_trace_cal_filename| (standard: \textit{master\_traces\_cal.fits}). This is a table fits-file and contains the same information as the result of \textbf{Step 2}, only that the lowest order of the parameters of the polynomial fits are shifted (the curvature of the traces is kept the same). The result can be checked easily in the file given in parameter \verb|logging_arctraces_im| (standard: \textit{arctraces\_in\_master\_traces\_cal.png}). An example is show in Fig.~\ref{figure_arcapertures_in_master_arc}.
 
 \begin{figure} 
   \begin{center}
@@ -488,7 +498,7 @@ The identification of the traces can be checked easily in the file given in para
 \end{figure}
 
 
-\vspace{0.5em}\noindent \textbf{Step 4:} The wavelength solution is stored in the file given in parameter \verb|master_wavelensolution_filename| (standard: \textit{master\_wavelength.fits}). The parameters for each order are stored in one line. For each order the following values are stored:
+\vspace{0.5em}\noindent \textbf{Step 4:} The wavelength solution is stored in a table fits-file given in parameter \verb|master_wavelensolution_filename| (standard: \textit{master\_wavelength.fits}). The parameters for each order are stored in one line. For each order the following values are stored:
 \begin{itemize}
   \item Real order, as derived from the grating equation.
   \item Central pixel of the order (in dispersion direction).
@@ -542,7 +552,7 @@ The last lines give the information for all apertures. Columns, for which no use
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/screenshot_spectral-atlas}
   \end{center} 
-  \caption{One page (aperture 13, order 88)real  of the spectral atlas (file created from parameter \textbf{logging\_arc\_line\_identification\_spectrum}) created from the wavelength solution. Blue shows the emission lines in the long and orange the emission lines in the short exposure. The identified lines are marked in red, with the length of the marker being proportional to the intensity of the line as given in the \textbf{reference\_catalog} (length is reset for each order). Green shows a subset of the non-identified lines from the \textbf{reference\_catalog}, this means the green markers should normally be shorter than the red ones. Problems with an overcrowded \textbf{reference\_catalog} is visible at a few places (e.g. 6466\,\AA).
+  \caption{One page (aperture 13, real order 88) of the spectral atlas (file created from parameter \textbf{logging\_arc\_line\_identification\_spectrum}) created from the wavelength solution. Blue shows the spectrum of the emission lines in the long and orange the emission lines in the short exposure. The identified lines are marked in red, with the length of the marker being proportional to the intensity of the line as given in the \textbf{reference\_catalog} (length is reset for each order). Green shows a subset of the non-identified lines from the \textbf{reference\_catalog}, this means the green markers should normally be shorter than the red ones. Problems with an overcrowded \textbf{reference\_catalog} is visible at a few places (e.g. 6466\,\AA), for better wavelength solutions the line catalogue should be cleared of bad lines.
     \label{figure_arc_line_identification_spectrum}}
 \end{figure}
 
@@ -557,6 +567,18 @@ The last lines give the information for all apertures. Columns, for which no use
 
 \vspace{0.5em}\noindent \textbf{Step 5:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \textit{master\_flat\_spec\_norm.fits}). The extraction and data format is described in Section~\ref{section:extraction_data_format}
 
+\subsubsection{Extracting the science data}
+\paragraph{Files in folder given in parameter path\_rv\_ceres (standard: ceres\_rv\_output/}
+This step is only done, if the Ceres pipeline is installed and \verb|path_ceres| is set correctly to the base folder of Ceres and the sub-folders \textit{utils/Correlation}, \textit{utils/GLOBALutils}, \textit{utils/OptExtract}, and \textit{utils/CCF} exist.
+
+\begin{description}
+  \item[*\_$<$mask$>$.pdf:] Cross-correlation function between object spectrum and the template.
+  \item[pkl-files:] Data used to plot the cross-correlation function in the python-pickle format.
+  \item[stellar\_pars.txt-files:] Stellar parameters of the object: $T_{eff}$, $\log g$, $Z$, $v\sin i$, $vel0$
+\end{description}
+
+\paragraph{Files and folders in folder given in parameter path\_csv\_terra (standard: }
+Work in progress
 
 \newpage
 \section{Seting up the pipeline}

@@ -9,7 +9,7 @@ import astropy.coordinates as astcoords
 import astropy.units as astunits
 import astropy.constants as astconst
 import matplotlib	# To avoid crashing when ssh into Narit using putty
-matplotlib.use('agg')	# To avoid crashing when ssh into Narit using putty
+#matplotlib.use('agg')	# To avoid crashing when ssh into Narit using putty, however this means plots are not shown (test when working in front of uhppc30)
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import os
@@ -34,8 +34,6 @@ if sys.version_info[0] < 3:
 else:
     import tkinter as Tk
 import plot_img_spec
-if os.path.exists(os.path.dirname(os.path.abspath(__file__))+'/find_rv.py') == True:
-    import find_rv
 import psutil
 import ephem
 from math import radians as rad
@@ -280,7 +278,7 @@ def textfileargs(params, textfile=None):
         logger(emsg + emsg2 + ' must be one of the following: left, l, right, r, center, c')
     
     for entry in params.keys():
-        if entry.find('path') <> -1:
+        if entry.find('path_') <> -1 or entry.find('_path') <> -1:
             params[entry] = (params[entry]+'/').replace('//', '/')              # Add a / at the end in case the user didn't
     
     # deal with lists of raw data filenames -> add path
@@ -292,15 +290,15 @@ def textfileargs(params, textfile=None):
         for i in range(len(params[entry])):
             params[entry][i] = params['raw_data_path'] + params[entry][i]
     
-    # deal with result filenames/folders -> add path
-    filenames = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
+    # deal with result filenames/folders -> add result_path
+    filenames = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_csv_terra']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
     for entry in params.keys():
-        if (entry.find('master_') == 0 or entry.find('background_') == 0) and entry.find('_filename') > 0:
+        if (entry.find('master_') == 0 or entry.find('background_') == 0) and entry.find('_filename') > 0:      # Put these files also into the result path
             filenames.append(entry)
     for entry in filenames:
         params[entry] = params['result_path'] + params[entry]
         
-    # deal with logging filenames/folders -> add path
+    # deal with logging filenames/folders -> add logging_path
     filenames = []
     for entry in params.keys():
         if entry.find('logging_') == 0 and entry.find('logging_path') == -1:
@@ -309,7 +307,7 @@ def textfileargs(params, textfile=None):
         params[entry] = params['logging_path'] + params[entry]
     
     # deal with full filenames -> nothing to do
-    filenames = ['badpx_mask_filename', 'original_master_traces_filename']
+    filenames = ['badpx_mask_filename', 'original_master_traces_filename', 'terra_jar_file']
     
     # deal with paths, create folders
     for entry in params.keys():
@@ -319,7 +317,6 @@ def textfileargs(params, textfile=None):
                     os.makedirs(params[entry])
                 except:
                     logger('Warn: Cant create directory {0}'.format(params[entry]))
-    
     
     return params
 
@@ -370,7 +367,7 @@ def add_text_to_file(text, filename):
     if exists == False:
         add_text_file(text, filename)
         
-def convert_readfile(input_list, textformat, delimiter='\t', replaces=[]):
+def convert_readfile(input_list, textformat, delimiter='\t', replaces=[], ignorelines=[]):
     """
     Can be used convert a read table into entries with the correct format. E.g integers, floats
         Ignories the lines which have less entries than entries in textformat
@@ -378,10 +375,29 @@ def convert_readfile(input_list, textformat, delimiter='\t', replaces=[]):
     :param textformat: 1d list or array of formats, e.g. [str, str, int, float, float]
     :param delimiter: string, used to split each line into the eleements
     :param replaces: 1d list or array of strings, contains the strings which should be replaced by ''
+    :param ignorelines: List of strings and/or lists. A list within ignorelines needs to consist of a string and the maximum position this string can be found.
+                        If the string is found before the position, the entry of the input list is ignored
     :retrun result_list: 2d list with numbers or strings, formated acording to textformat
     """
     result_list = []
     for entry in input_list:
+        notuse = False
+        for ignore in ignorelines:
+            if type(ignore) == str:
+                ignore_str = ignore
+                ignore_pos = 1E10
+            elif type(ignore) == list:
+                if len(ignore) <> 2:
+                    logger('Error: Programming error: ignorelines which where hand over to convert_readfile are wrong. It has to be a list consisting of strings and/or 2-entry lists of string and integer. Please check ignorelines: {0}'.format(ignorelines))
+                ignore_str = ignore[0]
+                ignore_pos = ignore[1]
+            else:
+                logger('Error: Programming error: ignorelines which where hand over to convert_readfile are wrong. It has to be a list consisting of strings and/or 2-entry lists of string and integer. Please check ignorelines: {0}'.format(ignorelines))
+	    if entry.find(ignore_str) <= ignore_pos and entry.find(ignore_str) <> -1:
+                notuse = True
+                break
+        if notuse:
+            continue
         for replce in replaces:
             entry = entry.replace(replce,'')
         entry = entry.split(delimiter)
@@ -711,6 +727,9 @@ def save_im_fits(params, im, im_head, filename):
     :param im_head: header of the 2d array
     :param filename: filename in which to save the fits file
     """
+    if not os.path.exists(filename.rsplit('/',1)[0]):
+        logger('Error: Folder to save {0} does not exists.'.format(filename))
+        
     im = rotate_flip_frame(im, params, invert=True)
     #im = get_minimum_data_type(im, allow_unsigned=False)   #That doen't make the fits files smaller for uint16, int16, or float32. Additionally, plotting a file with uint16 or int16 with ds9 or gaia doesn't show the data correctly
     fits.writeto(filename, im, im_head, overwrite=True)
@@ -805,6 +824,9 @@ def save_fits_width(pfits, xlows, xhighs, widths, filename):
     :param widths: 2d list, length same as number of orders, each entry contains left border, right border, and Gaussian width of the lines, as estimated in the master flat
     :param filename: string, location and file name of the file containing the polynomial fits
     """
+    if not os.path.exists(filename.rsplit('/',1)[0]):
+        logger('Error: Folder to save {0} does not exists.'.format(filename))
+        
     data = []
     temp = filename.rsplit('.',1)
     if temp[1] not in ['fit', 'fits']:
@@ -888,6 +910,9 @@ def save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_ar
                                         sorted by the brightest to faintest (in spectrum from which the solution is derived) and 0 to make into an array
     :param filename: string, location and file name of the file
     """
+    if not os.path.exists(filename.rsplit('/',1)[0]):
+        logger('Error: Folder to save {0} does not exists.'.format(filename))
+    
     data = []
     
     # Loop around each order and plot fits
@@ -954,6 +979,9 @@ def save_multispec(data, fname, head, bitpix='-32'):
     :param head: header, which should be written to the fits file
     :param bitpix: Precission in which the data should be stored
     """
+    if not os.path.exists(fname.rsplit('/',1)[0]):
+        logger('Error: Folder to save {0} does not exists.'.format(filename))
+        
     fname = fname.replace('.npy', '')   
     fname = fname.replace('.fits', '')
     fname = fname.replace('.fit', '')
@@ -2643,13 +2671,15 @@ def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
         logger('Info The faintest {0} of {1} entries in the arc reference file {2} will not be used '.format(arcs[0]-reference_catalog.shape[0], arcs[0], filename ))
     return reference_catalog, reference_names
 
-def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, objname):
+def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, objname, maxshift=2.5, in_shift=0):
     """
     Determines the pixelshift between the current arc lines and the wavelength solution
     Two ways for a wavelength shift can happen:
-        1: The CCD moves -> all ThAr lines are moved by the same pixel distance -> this was implemented from the beginning
+        1: The CCD moves -> all ThAr lines are moved by the same pixel distance -> this was implemented from the beginning -> This implemented
         2: The light hits the grating at a different position and passes through different are of the lens -> Pixelshift depends on wavelength, pixel
             maybe replace by a cross correlation between arc spectra: x1, y1 from wavelength solution, x2, y2 from the current file -> y2'(x) = y1(x+dx)*a+b so that y2 and y2' match best
+        3: Re-fit the wavelength solution each time -> replace the lines that have been identified in this aspectra
+            if not enough lines available -> linear shift (method 1)
     :param aspectra: spectrum of the reference orders
     :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :param wavelength_solution_arclines: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
@@ -2661,15 +2691,13 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
     #logger('Step: Finding the wavelength shift for this exposure')
-    if np.max(wavelength_solution[:,-1]) < 100 or False:     # pseudo solution
-        return copy.deepcopy(wavelength_solution)               # No shift is necessary
+    if np.max(wavelength_solution[:,-1]) < 100:                 # pseudo solution, wavelength of the central pixel is < 100 Angstrom
+        return copy.deepcopy(wavelength_solution), 0.               # No shift is necessary
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0 and np.nansum(aspectra) == 0:         # science and calibration traces are at the same position and it's not the calibration spectrum
-        wavelength_solution_shift = shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, objname)
-        return wavelength_solution_shift
+        wavelength_solution_shift, shift = shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, objname)
+        return wavelength_solution_shift, shift
 
     FWHM = 3.5
-    maxshift = 2.5
-    in_shift = 0       #0 
     ratio_lines_identified = 0.15       # if more than ratio_lines_identified of the checked_arc_lines has been identified, then a sigma_clipping will be applied. If less than this number of lines remain after sigma clipping, then the assumption is, that the calibration fiber wasn't used and therefore no wavelength shift is applied
     # In each order get the approx pixel of each reference line, fit a gaussian against the position, calculate the wavelength for the gaussian center, compare the wavelength of the line center with the reference line wavelength
     aspectra = np.array(aspectra)
@@ -2681,13 +2709,14 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
         warr = np.polyval(wavelength_solution[order_index,2:], xarr-wavelength_solution[order_index,1])                 # Wavelength of each pixel in the order
         for arcline in wavelength_solution_arclines[order_index]:
             ref_line_index = np.argmin(np.abs( reference_catalog[:,0] - arcline ))
-            if abs( reference_catalog[ref_line_index,0] - arcline ) > 0.0001:           # check that it is in the reference catalog, allowing for uncertainty
+            if abs( reference_catalog[ref_line_index,0] - arcline ) > 0.0001:           # check that it is in the reference catalog, allowing for uncertainty; catches also zeros used to fill the array
                 continue                                                                # it's not in the reference catalog
             diff = np.abs(warr-reference_catalog[ref_line_index,0])                     # Diff in wavelengths
             if min(diff) <= wavelength_solution[order_index,-2]*maxshift:               # Distance should be less than 2.5 px
                 checked_arc_lines += 1
                 pos = np.argmin(diff)                                               # Position of the line in the array
-                range_arr = range( max(0,pos-int(FWHM*3)), min(ass[1],pos+int(FWHM*3)+1) )     # Range to search for the arc line
+                range_arr = range( max(0,pos+in_shift-int(FWHM*3)), min(ass[1],pos+in_shift+int(FWHM*3)+1) )     # Range to search for the arc line
+                #plot_img_spec.plot_points([xarr[range_arr]],[aspectra[order_index,range_arr]],[str(pos)],'path',show=True, x_title='Pixel', y_title='Flux', title=str(reference_catalog[ref_line_index,0]) )
                 #print range_arr, xarr, aspectra.shape, order_index
                 popt = centroid_order(xarr[range_arr],aspectra[order_index,range_arr], pos+in_shift, FWHM*3, significance=3.5)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
                 if popt[1] == 0 or popt[2] > FWHM*1.5:
@@ -2734,7 +2763,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     #wavelength_solution_new[:,1] -= shift_avg                       # shift the central pixel, - sign is right, tested before 19/9/2018
     wavelength_solution_new[:,1] += shift_avg                       # shift the central pixel, + sign is right, tested on 19/9/2018
     
-    return wavelength_solution_new
+    return wavelength_solution_new, shift_avg
     
     """ old and wrong
     wavelength_solution_new = []
@@ -2755,8 +2784,8 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
     all_shifts = read_text_file(params['master_wavelengths_shift_filename'], no_empty_lines=True)
     all_shifts = convert_readfile(all_shifts, [float, float, float], delimiter='\t', replaces=['\n'])       # obsdate_float, shift_avg, shift_std, can contain duplicate obsdate_float (last one is the reliable one)
     if len(all_shifts) == 0:
-        logger('Warn: No pixel-shift or the wavelength solution is available.')
-        return copy.deepcopy(wavelength_solution)               # No shift is possible
+        logger('Warn: No pixel-shift for the wavelength solution is available.')
+        return copy.deepcopy(wavelength_solution), 0.               # No shift is possible
     all_shifts = np.array(all_shifts)
     shifts = []
     for diff_array in [obsdate_float - all_shifts[:,0], all_shifts[:,0] - obsdate_float]:           # difference in two different directions
@@ -2770,17 +2799,17 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
     weight /= np.nansum(weight)
     weight = 1 - weight
     shift_avg = np.average( shifts[:,1], weights=weight )           # Tested, will work fine for obsdate in range(all_shifts), but will fail for extrapolation. Maybe it's necessary to replace this by a linear fit?
-    logger('Info: The shift between the wavelength solution and the current file {7} (center of exposure is {1}) is {0} px ({6} km/s). The stored shifts {2} ({3}) and {4} ({5}) were used.'.format(\
+    logger('Info: The shift between the wavelength solution and the current file {7} (center of exposure is {1}) is {0} px ({6} km/s). The stored shifts {2} ({3}) and {4} ({5}) from file {8} were used.'.format(\
                         round(shift_avg,4), datetime.datetime.utcfromtimestamp(obsdate_float).strftime('%Y-%m-%d %H:%M:%S'), 
                         round(shifts[0,1],4), datetime.datetime.utcfromtimestamp(shifts[0,0]).strftime('%Y-%m-%d %H:%M:%S'),
                         round(shifts[-1,1],4), datetime.datetime.utcfromtimestamp(shifts[-1,0]).strftime('%Y-%m-%d %H:%M:%S'),
-                        round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), objname ) )
+                        round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), objname, params['master_wavelengths_shift_filename'] ) )
 
     wavelength_solution_new = copy.deepcopy(wavelength_solution)
     #wavelength_solution_new[:,1] -= shift_avg                       # shift the central pixel, - sign is right, tested before 19/9/2018
     wavelength_solution_new[:,1] += shift_avg                       # shift the central pixel, + sign is right, tested on 19/9/2018
     
-    return wavelength_solution_new
+    return wavelength_solution_new, shift_avg
 
 def create_wavelengths_from_solution(wavelength_solution, spectra):
     """
@@ -2992,7 +3021,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     
     #shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces
     aspectra, agood_px_mask = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
-    wavelength_solution_shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
+    wavelength_solution_shift, shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
                                                               reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, objname)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, aspectra)
     im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
@@ -3001,6 +3030,49 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     im_head['Comment'] = ' 2: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
     ceres_spec = np.array([wavelengths, aspectra, agood_px_mask])
     save_multispec(ceres_spec, params['path_extraction']+im_name, im_head, bitpix=params['extracted_bitpix'])
+
+def get_possible_object_names(filename, replacements=['_arc','arc', '_thar','thar', '_une','une']):
+    """
+    Analyses the filename in order to find the possible Name of the Object (for exampled stored in parameter object_file
+    The filename is subsequently stripped from the "_" or "-" separated entings
+    :param filename: string, filename with removed path, file ending, and \n
+    :param replacements: list of strings with entries to be removed from the filename
+    return obnames: list of strings with possible object names
+    """
+    obnames = []
+    obname = filename + '-'                   # Have at least one run
+    while obname.find('_') <> -1 or obname.find('-') <> -1:
+        for splitter in ['-', '_']:
+            obname = obname.rsplit(splitter, 1)
+            if len(obname) == 1:            # Splitter isn't part of filename anymore
+                obname = obname[0]          # remove the list from it
+                continue
+            for i in range(5):              # Try to extract different information from the filename
+                if i == 0:
+                    obnametemp = obname[1]                      # check what will be stripped away in case the filename is like "unuseful_objectname-rest
+                if (( i == 1 or i == 3 ) and obname[0].find('_') == -1) or (( i == 2 or i == 3 ) and obname[0].find('-') == -1):
+                    continue                                    # if nothing has to be replaced, then running the step would be a waste of time
+                if i == 1:
+                    obnametemp = obname[0].replace('_','')      # in case the object name has a "_" in the name, but the object in the object_file doesn't
+                if i == 2:
+                    obnametemp = obname[0].replace('-','')      # in case the object name has a "-" in the name, but the object in the object_file doesn't
+                if i == 3:
+                    obnametemp = obname[0].replace('-','').replace('_','')  # in case the object name has both a "-" and "_" in the name, but the object in the object_file doesn't
+                if i == 4:
+                    obnametemp = obname[0]                      # use the front bit of the object name without any modification
+                for rplc in replacements:               # Ignore everything that has to do with calibration
+                    posi = obnametemp.lower().find(rplc)
+                    if posi + len(rplc) == len(obnametemp) and posi <> -1:           # the searchtext is at the end of the filename
+                        obnametemp = obnametemp[:posi]              # get rid of the Arc in the filename
+                        break
+                if i == 0 and len(obnametemp) < 5:
+                    continue
+                if obnametemp not in obnames:
+                    obnames.append(obnametemp)
+                if i == 4:                            # Use the stripped filename as new filename
+                    obname = obnametemp
+                    
+    return obnames
 
 def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace):
     """
@@ -3021,20 +3093,10 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
     # Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
     obname = im_name.split('/')    # get rid of the path
-    obname = obname[-1].split('-')  # remove the numbering and exposure time from the filename
-    obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
-    obname = obname.replace('\n','')
-    obnames = []
-    obname += '_'
-    while obname.find('_') <> -1:
-        obname = obname.rsplit('_', 1)
-        obname = obname[0]
-        for rplc in ['_arc','arc', '_thar','thar', '_une','une']:
-            posi = obname.lower().find(rplc)
-            if posi + len(rplc) == len(obname) and posi <> -1:           # the searchtext is at the end of the filename
-                obname = obname[:posi]              # get rid of the Arc in the filename
-                break
-        obnames.append(obname)
+    obname = obname[-1].replace('\n','')
+    #not necessary anymore obname = obname.split('-')  # remove the numbering and exposure time from the filename
+    #not necessary anymore obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
+    obnames = get_possible_object_names(obname)
     
     shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces
     spectra, good_px_mask = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift)#, var='prec')
@@ -3042,10 +3104,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         aspectra, agood_px_mask = spectra*0, copy.copy(good_px_mask)
     else:
         aspectra, agood_px_mask = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
-    #px=2           # Remove some pixel in order to test the shift_wavelength_solution
-    #aspectra, spectra, flat_spec_norm, good_px_mask = aspectra[:,px:], spectra[:,px:], flat_spec_norm[:,:,px:], good_px_mask[:,px:]
-    #print wavelength_solution[0]
-    wavelength_solution_shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
+    wavelength_solution_shift, shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
                                                               reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, im_name)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, spectra)
     wavelengths_vac = wavelength_air_to_vacuum(wavelengths)                             # change into vacuum wavelengths
@@ -3065,7 +3124,11 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     
     # Get the baycentric velocity
     params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, params['object_file'])       # obnames becomes the single entry which matched entry in params['object_file']
-    if np.max(wavelength_solution[:,-1]) > 100 and not (im_name.lower().find('flat') in [1,2,3,4,5]) and os.path.exists(os.path.dirname(os.path.abspath(__file__))+'/find_rv.py') == True:  # if not pseudo-solution and not flat
+    
+    # Do the Ceres-pipeline Radial velocity analysis    
+    if np.max(wavelength_solution[:,-1]) > 100 and not (im_name.lower().find('flat') in [1,2,3,4,5]) and os.path.exists(params['path_ceres']) == True \
+            and os.path.exists(params['path_ceres']+'utils/Correlation') and os.path.exists(params['path_ceres']+'utils/GLOBALutils') \
+            and os.path.exists(params['path_ceres']+'utils/OptExtract') and os.path.exists(params['path_ceres']+'utils/CCF'):           # if not pseudo-solution and not flat and necessary files exist
         """
         Ceres mask in /home/ronny/software/ceres-master/data/xc_masks/ contain only limited wavelength range (+ additional gaps):
         G2: 3751 to 6798, 2625 data points/lines
@@ -3073,7 +3136,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         M2: 4401 to 6862, 9493 data points/lines
         Given in the mask is the lower and the higher end of the line, and the weight
         """
-        RV, RVerr2, BS, BSerr = find_rv.rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], params['object_file'], mephem)
+        RV, RVerr2, BS, BSerr = rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], params['object_file'], mephem)
         # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf (no, causes 83.15 km/s shift, < 5m/s is between the different models)
         logger('Info: The radial velocity (including barycentric correction) for {0} gives: RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s'.format(\
                                     im_name, round(RV+bcvel_baryc,4), round(RVerr2,4), round(BS,4), round(BSerr,4), round(bcvel_baryc,4) ))
@@ -3082,25 +3145,31 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     
     # Correct wavelength by barycentric velocity
     wavelengths_bary = wavelengths * (1 + bcvel_baryc/(Constants.c/1000.) )
-
+    
+    im_head_bluefirst = copy.copy(im_head)
     im_head = add_specinfo_head(spectra, im_head)
+    im_head_bluefirst = add_specinfo_head(spectra[::-1,:], im_head_bluefirst)
     im_head_wave, im_head_weight = copy.copy(im_head), copy.copy(im_head)
     im_head_harps_format = copy.copy(im_head)
     im_head_iraf_format = copy.copy(im_head)
+    im_head_iraf_format_bluefirst = copy.copy(im_head_bluefirst)
     
     ## Save in a easier way
     # Single files
     im_head_wave['Comment'] = 'Contains the wavelength per order and exctracted pixel for file {0}'.format(im_name+'_extr/_blaze')
     im_head_weight['Comment'] = 'Contains the weights per order and exctracted pixel for file {0}'.format(im_name+'_extr/_blaze')
     im_head_iraf_format = wavelength_solution_iraf(params, im_head_iraf_format, wavelengths, wavelength_solution_shift, norder=params['polynom_order_traces'][-1]+2)
+    im_head_iraf_format_bluefirst = wavelength_solution_iraf(params, im_head_iraf_format_bluefirst, wavelengths[::-1,:], wavelength_solution_shift[::-1,:], norder=params['polynom_order_traces'][-1]+2)
     save_multispec(spectra,                         params['path_extraction_single']+im_name+'_extr', im_head_iraf_format, bitpix=params['extracted_bitpix'])
     save_multispec(fspectra,                        params['path_extraction_single']+im_name+'_blaze', im_head_iraf_format, bitpix=params['extracted_bitpix'])
     save_multispec(wavelengths,                     params['path_extraction_single']+im_name+'_wave', im_head_wave, bitpix=params['extracted_bitpix'])
     save_multispec(good_px_mask* flat_spec_norm[1], params['path_extraction_single']+im_name+'_weight', im_head_weight, bitpix=params['extracted_bitpix'])  # Weight shouldn't be the espectra, the flat provides a smoother function
+    save_multispec(spectra[::-1,:],                 params['path_extraction_single']+im_name+'_extr_bluefirst',  im_head_iraf_format_bluefirst, bitpix=params['extracted_bitpix'])
+    save_multispec(fspectra[::-1,:],                params['path_extraction_single']+im_name+'_blaze_bluefirst', im_head_iraf_format_bluefirst, bitpix=params['extracted_bitpix'])
     
     # CSV file for terra
     fname = obsdate.strftime('%Y-%m-%d%H%M%S')
-    save_spec_csv(cspectra, wavelengths_bary, good_px_mask, params['csv_path']+fname)
+    save_spec_csv(cspectra, wavelengths_bary, good_px_mask, params['path_csv_terra']+fname)
     
     # Harps format
     im_head_harps_format = wavelength_solution_harps(params, im_head_harps_format, wavelengths_bary)
@@ -3131,11 +3200,14 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         
 def save_spec_csv(spec, wavelengths, good_px_mask, fname):
     """
-    Save the spectra in a cvs file to be compatible with Terra. The files need to have the form:
+    Save the spectra in a csv file to be compatible with Terra. The files need to have the form:
     ONUM,WAVELENGTH (in Angstrongs!),FLUX (arbitrary units, normalization to order each mean recommended).
     Note: all orders must of of the SAME LENGTH
     [email from Guillem Anglada, 18/10/2018 12:25
     """
+    if not os.path.exists(fname.rsplit('/',1)[0]):
+        logger('Error: Folder to save {0} does not exists.'.format(filename))
+        
     specs = spec.shape
     spec_cor = spec * good_px_mask
     spec_cor[np.isnan(spec_cor)] = 0
@@ -4792,7 +4864,7 @@ def statistics_arc_reference_lines(data, positions, reference_names, wavelength_
                 result.append([ order, cenwave, minwave, maxwave, maxwave-minwave, wavelength_solution[order,-2], refname, len(data_o[index_r,positions[2]]), 
                                 np.average(data_o[index_r,positions[2]]), std, min_refline, max_refline, range_refline ])
                 #print result[-1]
-
+    # Adding the global information for each type of line (ThI, ArII, ...)
     for refname in uniq_refnames:
         index_r = []
         for i,entry in enumerate(data[:,positions[1]].astype(int)):
@@ -4908,16 +4980,21 @@ def read_fit_wavelength_solution(params, filename, im):
             arc_lines_wavelength = np.delete(arc_lines_wavelength, arc_line_res.argmax(), 0)        # Delete the least matching line
             cen_pxs = np.delete(cen_pxs, arc_line_res.argmax())                                     # Apply the same correction
         if arc_lines_wavelength.shape[0] <= polynom_order_trace*polynom_order_intertrace:
-            logger('Error: The solution seems unphysical, at least {0} lines should be used (degrees of freedom)'.format(polynom_order_trace*polynom_order_intertrace+1))
+            text = 'Error: The solution seems unphysical, at least {0} lines should be used (degrees of freedom). Please add more lines to {1}, or decrease polynom_order_traces or polynom_order_intertraces'
+            logger(text.format(polynom_order_trace*polynom_order_intertrace+1, filename))
         
         # Find the new order_offset
         order_offset_old = int(order_offset)
         cenwave = polynomial_value_2d(orders*0, 1.0/(orders+order_offset_old), polynom_order_trace, polynom_order_intertrace, poly2d_params)    #old order_offset at cen_px
         order_offset = find_order_offset(orders, cenwave)
         if order_offset_old <> order_offset:            # 
-            logger('Warn: The real orders are different from the ones given in {0} (column 2). The old order offset was {2}, the new order offset is {1}. The new real order offset will be used'\
-                    .format(filename, order_offset, order_offset_old))
-            #order_offset = order_offset_old                 # only for testing!!!
+            text1 = 'The new real order offset will be used'
+            if np.min(np.abs( (orders+order_offset) )) < 10:             # (orders+order_offset) should never be 0
+                text1 = 'The new order offset seems unphysical and will not be used.'
+            logger('Warn: The real orders are different from the ones given in {0} (column 2). The old order offset was {2}, the new order offset is {1}. {3}'\
+                    .format(filename, order_offset, order_offset_old, text1))
+            if np.min(np.abs( (orders+order_offset) )) < 10:             # (orders+order_offset) should never be 0
+                order_offset = order_offset_old
         else:
             # The real center from the fit, ignoring the offset
             cen_px, p_cen_px = find_real_center_wavelength_solution(order_offset, orders, cenwave, cen_px, polynom_order_trace, polynom_order_intertrace, poly2d_params)
@@ -5653,15 +5730,26 @@ def get_barycent_cor(params, im_head, obnames, reffile):
             mephem.compute(gobs)
             sephem    = ephem.Sun()
             sephem.compute(gobs)
-            if obnames[0].lower().find('sun') == 0:
-                params['ra']          = sephem.ra
-                params['dec']         = sephem.dec
-                source_radec = 'The object coordinates are derived from the calculated solar ephermeris.'
-            elif obnames[0].lower().find('moon') == 0:
-                params['ra']          = mephem.ra
-                params['dec']         = mephem.dec
-                source_radec = 'The object coordinates are derived from the calculated lunar ephermeris.'
-            else:
+            jephem    = ephem.Jupiter()
+            jephem.compute(gobs)
+            params['ra'] = -999
+            for obname in obnames:
+                if obname.lower().find('sun') == 0:
+                    params['ra']          = sephem.ra
+                    params['dec']         = sephem.dec
+                    source_radec = 'The object coordinates are derived from the calculated solar ephermeris.'
+                    break
+                elif obname.lower().find('moon') == 0:
+                    params['ra']          = mephem.ra
+                    params['dec']         = mephem.dec
+                    source_radec = 'The object coordinates are derived from the calculated lunar ephermeris.'
+                    break
+                elif obname.lower().find('jupiter') == 0:
+                    params['ra']          = jephem.ra
+                    params['dec']         = jephem.dec
+                    source_radec = 'The object coordinates are derived from the calculated Jupiters ephermeris.'
+                    break
+            if params['ra'] == -999:
                 params['ra']          = mephem.ra       # To fill in the parameter, might be overwritten later by [0, ra_keys, 'ra']
                 params['dec']         = mephem.dec      # To fill in the parameter, might be overwritten later by [0, dec_keys, 'dec']
                 source_radec = 'Warn: The object coordinates were made up!'
@@ -5709,7 +5797,7 @@ def get_barycent_cor(params, im_head, obnames, reffile):
 
     logger(('Info: Using the following data for object name(s) {10}, Observatory site {9}, mid exposure MJD {11}: '+\
                     'altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}. {8} {6} '+\
-                    'This leads to a barycentric velocity of {7} km/s. and a BJD of {12}').format(params['altitude'], params['latitude'], params['longitude'], 
+                    'This leads to a barycentric velocity of {7} km/s. and a mid-exposure BJD of {12}').format(params['altitude'], params['latitude'], params['longitude'], 
                          round(ra,6), round(dec,6), params['epoch'], source_radec, round(bcvel_baryc,4), source_obs, 
                          params['site'], str(obnames).replace("'","").replace('"',''), mjd, round(bjd,5) ))
     
@@ -5784,7 +5872,7 @@ def jd_corr(mjd, ra, dec, epoch, lat, lon, jd_type='bjd'):
 
     return new_jd.jd            # Return as float-array
 
-def find_RVshift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_sol_2, wave_sol_lines_2, spectra):
+def find_shift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_sol_2, wave_sol_lines_2, spectra, names=['first','second']):     # Doesn't do the job as expected, it's a pixel shift, not an RV shift
     """
     :param wave_sol_1, wave_sol_2: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :param wave_sol_lines_1, wave_sol_lines_2: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
@@ -5806,24 +5894,358 @@ def find_RVshift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave
         catalog_lines3 = list( set(catalog_lines1) & set(catalog_lines2) )      # overlapping entries
         for [i, catalog_lines] in [ [0, catalog_lines3], [1, catalog_lines1], [2, catalog_lines2] ]:    # use the different catalogs
             for catalog_line in catalog_lines:
+                posi = [0, 0]
                 for [j, wavelengths] in [ [0, wavelengths1], [1, wavelengths2] ]:                       # use both wavelength solutions
+                    diff = catalog_line - wavelengths[order,:]
+                    pos = np.argmin(np.abs(diff))                                                       # closest full pixel to the catalog line
+                    temp = wavelengths[ order, max(0,pos-1):min(pos+1,wavelengths.shape[1])+1 ]
+                    res = (temp[-1] - temp[0]) / (len(temp) - 1)                                        # resolution around the pixel
+                    posi[j] = pos + diff[pos]/res                                                       # fraction of the pixel
+                    #print res, pos, posi[j], i, j, len(posi), len(diff)
+                    """ compares dlamba/lambda -> RV -> big scatter
                     if (i == 1 and j == 1) or (i == 2 and j == 0):                                      # don't apply catalog lines from the first solution to the second solution
                         continue
                     diff = np.abs(catalog_line - wavelengths[order,:])
                     pos = np.argmin(diff)                                 # closest pixel
                     rel_diff = 2. * (wavelengths1[order,pos] - wavelengths2[order,pos]) / (wavelengths1[order,pos] + wavelengths2[order,pos])
-                    result.append([ rel_diff,i,j,order,catalog_line ])
+                    result.append([ rel_diff,i,j,order,catalog_line,pos ])
+                    """
                     #print rel_diff,i,j,order,catalog_line
+                result.append([ posi[1]-posi[0], i, 0, order, catalog_line, np.mean(posi) ])
     result = np.array(result)
-    good_values = range(len(result))
-    print 'median, average, std:',np.median(result[good_values,0]), np.mean(result[good_values,0]), np.std(result[good_values,0], ddof=1),
-    for pctl in [1,5,10,20]:
-        temp = percentile_list(result[good_values,0], pctl/100.)
-        print 'pctl, mean, std:', pctl, np.mean(temp), np.std(temp, ddof=1),
-    print ""
+    """for i in range(10):
+        if i==0:
+            good_values = range(len(result))        # all data
+        if i==1:
+            good_values = result[:,1] == 0          # only same lines in both solutions
+        if i==2:
+            good_values = result[:,1] == 1          # lines of solution1
+        if i==3:
+            good_values = result[:,1] == 2          # lines of solution2
+        if i==4:
+            good_values = (result[:,1] == 0) & (result[:,5] < 500)          # only same lines in both solutions and left side 
+        if i==5:
+            good_values = (result[:,1] == 0) & (result[:,5] > 1500)          # only same lines in both solutions and right side 
+        if i==6:
+            good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300)          # only same lines in both solutions and middle
+        if i==7:
+            good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300) & (result[:,3] < 20)          # only same lines in both solutions and middle and red orders
+        if i==8:
+            good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300) & (result[:,3] > 60)          # only same lines in both solutions and middle and blue orders
+        if i==9:
+            good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300) & (result[:,3] > 30) & (result[:,3] < 50)         # only same lines in both solutions and middle and middle orders
+        print 'i, size, median, average, std:', i, result[good_values,0].shape, np.median(result[good_values,0]), np.mean(result[good_values,0]), np.std(result[good_values,0], ddof=1),
+        for pctl in [1,5,10,20]:
+            temp = percentile_list(result[good_values,0], pctl/100.)
+            print '\tpctl, size, median, mean, std:', pctl, len(temp), np.median(temp), np.mean(temp), np.std(temp, ddof=1),
+        print "" """
+    if np.sum(result[:,1] == 0) >= 0.1* result.shape[0] and np.sum(result[:,1] == 0) >= 300:        # enough data
+        good_values = result[:,1] == 0          # only same lines in both solutions
+        text = 'The {0} overlapping identified lines between both solutions have been used.'.format(np.sum(good_values) )
+    else:
+        good_values = result[:,1] <> -1         # all data, means the overlapping lines have twice the weight
+        text = 'All available lines ({0}) been used, the overlapping lines weighted double.'.format(np.sum(good_values) )
+    shift = np.median(result[good_values,0])
+    shift_err = np.std(result[good_values,0], ddof=1)
+    logger('Info: The shift between the two wavelength solutions ({4} - {3}) is {0} +/- {1} pixel. {2}'.format( round(shift,4), round(shift_err,4), text, names[0], names[1] ))
+    
+    return shift, shift_err
 
 
+def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem):
+    base = params['path_ceres']
+    # Import the routines from Ceres:
+    sys.path.append(base+"utils/Correlation")
+    sys.path.append(base+"utils/GLOBALutils")
+    sys.path.append(base+"utils/OptExtract")    # for Marsh, at least
+    sys.path.append(base+"utils/CCF")           # needed by GLOBALutils.py
+    import GLOBALutils
+    import correlation
+    # Import other stuff
+    import statsmodels.api as sm
+    lowess = sm.nonparametric.lowess
+    import pickle
 
+    def get_spec(spectra, waves, cen_wave, range_px):
+        """
+        :param spectra: 1d or 2d array of floats with the spectral data
+        :param waves: same format as spectra, corresponding wavelengths
+        :param cen_wave: wave_length to get the spectra around
+        :param range_px: how many pixel around that wavelength
+        :return spec, waves: returns the spectra and the wavelengths of the area specified
+        """
+        if len(spectra.shape) < 2:                      # make into a 2d spectrum, if necessary
+            spectra = spectra.reshape(1, spectra.shape[0])
+            waves = waves.reshape(1, waves.shape[0])
+        wavediff = np.nanmax( np.abs( waves[:,1:] - waves[:,:-1] ))     # maximum wavelengths difference between consecutive pixel
+        diff = waves - cen_wave
+        pos = np.where( np.abs(diff) <= wavediff )      # gives a 2d array for the positions (order, px)
+        diffp = np.abs(pos[1] - spectra.shape[1]/2)     # what is the most central px
+        for dummy in np.unique(pos[0]):                 # unique ignores if wavelength is not covered in the spectrum
+            pos2 = np.argmin(diffp)                     # what is the most central pixel
+            order, px = pos[0][pos2], pos[1][pos2]
+            spec = spectra[order, max(0,px-range_px) : min(spectra.shape[1], px+range_px+1) ]
+            if len( spec[~np.isnan(spec)] ) == 0:           # no spectrum for this data
+                pos[1][pos[0] == order] = 1E9               # -> check the others orders
+                diffp = np.abs(pos[1] - spectra.shape[1]/2)
+            else:
+                #print spec, waves[order, max(0,px-range_px) : min(spectra.shape[1], px+range_px+1) ]
+                return spec, waves[order, max(0,px-range_px) : min(spectra.shape[1], px+range_px+1) ]
+    
+        return [], []                                      # everything went wrong
+
+    specs = spec.shape
+    spec = np.vstack(( spec, np.zeros([11-specs[0], specs[1], specs[2]]) ))
+    spec[7:11,:,:] = np.nan
+    lbary_ltopo = 1
+    npools = 1
+    refvel = 0
+    know_moon = False
+    here_moon = False
+    models_path = base + 'data/COELHO_MODELS/R_40000b/' # "/home/ronny/software/ceres-master/data/COELHO_MODELS/R_40000b/"
+    #dirout = './'          # replaced by params['path_rv_ceres']
+    fsim = fitsfile
+    RESI = 120000.
+    force_stellar_pars = False
+    
+    
+    #ron1,gain1 = h[1].header['HIERARCH ESO DET OUT1 RON'],h[1].header['HIERARCH ESO DET OUT1 GAIN']
+    #ron2,gain2 = h[2].header['HIERARCH ESO DET OUT1 RON'],h[2].header['HIERARCH ESO DET OUT1 GAIN']
+    #halfcounts = h[0].header['HIERARCH ESO INS DET1 TMMEAN']
+
+    """ Data description of the file
+    0: wavelength for each order and pixel'
+    1: extracted spectrum'
+    2: measure of error (photon noise, read noise)'
+    3: flat corrected spectrum'
+    4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_orders)
+    5: continuum normalised spectrum'
+    6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_orders)
+    7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
+    8: spectrum of the emission line lamp'
+    """
+    for order in range(spec.shape[1]):
+        L  = np.where( (spec[1,order,:] != 0) & (~np.isnan(spec[1,order,:])) )              # good values
+        #ratio              = np.polyval(ccoefs[order],spec[0,order,:][L])*Rnorms[order]
+        np.warnings.filterwarnings('ignore')
+        ratio = spec[1,order,:][L]/  spec[5,order,:][L]                                     # ratio between extracted spectrum and continuum normalised spectrum -> blaze function, cancels absorption lines
+        np.warnings.resetwarnings()
+        spec[7,order,:][L] = ratio
+        #spec[8,order,:][L] = spec[6,order,:][L]                                             # error continuum (first guess), but not good. #sn_order=8
+        spec[8,order,:][L] = spec[2,order,:][L]                                             # error of the extracted data, depending on what is used, the RV changes by few 100 km/s -> > several \AA
+        #spec[8,order,:][L] = ratio * R_flat_ob_n[order,1,:][L] / np.sqrt( ratio * R_flat_ob_n[order,1,:][L] / gain2 + (ron2/gain2)**2 )        # something like S/N -> used as this by XCor
+        #spl           = scipy.interpolate.splrep(np.arange(WavSol.shape[0]), WavSol,k=3)
+        #dlambda_dx    = scipy.interpolate.splev(np.arange(WavSol.shape[0]), spl, der=1)
+        #NN            = np.average(dlambda_dx)
+        #dlambda_dx    /= NN
+        np.warnings.filterwarnings('ignore')
+        LL = np.where(spec[5,order,:] > 1 + 10. / scipy.signal.medfilt(spec[8,order,:],21))[0]          # remove emission lines and cosmics
+        np.warnings.resetwarnings()
+        spec[5,order,LL] = 1.
+        spec[9,order,:][L] = spec[5,order,:][L]# * (dlambda_dx[L] ** 1)         # used for the analysis in XCor (spec_order=9, iv_order=10)
+        spec[10,order,:][L] = spec[2,order,:][L]# / (dlambda_dx[L] ** 2)        # used for the analysis in XCor (spec_order=9, iv_order=10)
+    #plot_img_spec.plot_spectra_UI(np.array([spec]))
+    T_eff, logg, Z, vsini, vel0 = 5777, 4.4374, 0.0134, 2, 0
+    if True:  
+        if np.nanmax(spec[0,:,:], axis=None) > 5500:       # only run for wavelengths bigger than 5500A, as otherwise problems in correlation.CCF
+            #pars_file = params['path_rv_ceres'] + fsim.split('/')[-1][:-4]+'_stellar_pars.txt'
+            pars_file = params['path_rv_ceres'] + obname+'_stellar_pars.txt'                  # same stellar parameters for same object
+            pars_file = params['path_rv_ceres'] + fsim+'_stellar_pars.txt'                    # calculate stellar parameters for each spectrum
+
+            if os.access(pars_file,os.F_OK) == False or force_stellar_pars:
+                Rx = np.around(1./np.sqrt(1./40000.**2 - 1./RESI**2))
+                spec2 = spec.copy()
+                for i in tqdm(range(spec.shape[1]), desc="Step: Estimating atmospheric parameters"):
+                    IJ = np.where(spec[5,i]!=0.)[0]
+                    spec2[5,i,IJ] = GLOBALutils.convolve(spec[0,i,IJ],spec[5,i,IJ],Rx)
+                try:
+                    T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils/Correlation/')     # Fails, because our spectrum doesn't cover the hard coded wavelength
+                    line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
+                    f = open(pars_file,'w')
+                    f.write(line)
+                    f.close()
+                    loadtxt = ''
+                except:
+                    loadtxt = 'Warn: could not determine the stelar parameters. This is probably caused because of the availble wavelength range. Do not worry about it'
+                    logger(loadtxt)
+            else:
+                T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
+                loadtxt = ' (Atmospheric parameters loaded from file {0})'.format(pars_file)
+            if loadtxt.find('Warn') <> 0:
+                logger('Info: Using the following atmosperic parameters for T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4}{0}'.format(loadtxt, T_eff, logg, Z, vsini, vel0))
+        
+        print "\t\tRadial Velocity analysis:"
+        # assign mask
+        #   obname is the name of the object
+        #   reffile is a reference file: reffile = dirin+'reffile.txt' -> this file doesn't exist
+        sp_type, mask = GLOBALutils.get_mask_reffile(obname,reffile=reffile,base=base+'data/xc_masks/')
+        print "\t\t\tWill use",sp_type,"mask for CCF."
+
+        # Read in mask
+        ml, mh, weight = np.loadtxt(mask,unpack=True)
+        ml_v = GLOBALutils.ToVacuum( ml )
+        mh_v = GLOBALutils.ToVacuum( mh )
+        av_m = 0.5*( ml_v + mh_v )
+        mask_hw_kms = (GLOBALutils.Constants.c/1e3) * 0.5*(mh_v - ml_v) / av_m
+
+        disp = GLOBALutils.get_disp(obname, reffile=reffile)        # disp is "velocity width in km/s that is used to broaden the lines of the binary mask. It should be similar to the standard deviation of the Gaussian that is fitted to the CCF."
+        if disp == 0:
+            known_sigma = False
+            if vsini != -999 and vsini != 0.:
+                disp = vsini
+            else:
+                disp = 3.
+        else:
+            known_sigma = True
+
+        mask_hw_wide = av_m * disp / (GLOBALutils.Constants.c/1.0e3)
+        ml_v = av_m - mask_hw_wide
+        mh_v = av_m + mask_hw_wide 
+
+        print '\t\t\tComputing the CCF...'
+        cond = True
+
+        if sp_type == 'M5':
+            moon_sig = 4.5
+        elif sp_type == 'K5':
+            moon_sig = 4.2
+        else:
+            moon_sig = 4.0
+
+        while (cond):
+            # first rough correlation to find the minimum
+            #   spec: spectrum in the form [data type, orders, pixel]
+            #   ml_v, mh_v: masks 
+            #   lbary_ltopo = 1.0 + res['frac'][0]
+            vels, xc_full, sn, nlines_ccf, W_ccf = \
+                    GLOBALutils.XCor(spec, ml_v, mh_v, weight,\
+                    0, lbary_ltopo, vel_width=300, vel_step=3,\
+                    spec_order=9, iv_order=10, sn_order=8, max_vel_rough=300)
+            
+            # W_ccf is a weigth
+            
+            xc_av = GLOBALutils.Average_CCF(xc_full, sn, sn_min=3.0, Simple=True, W=W_ccf)
+            #print 'xc_av, vels, xc_full, sn, nlines_ccf, W_ccf',xc_av, vels, xc_full, sn, nlines_ccf, W_ccf
+            
+            # Normalize the continuum of the CCF robustly with lowess     
+            yy = scipy.signal.medfilt(xc_av,11)
+            pred = lowess(yy, vels,frac=0.4,it=10,return_sorted=False)
+            tck1 = scipy.interpolate.splrep(vels,pred,k=1)
+            xc_av_orig = xc_av.copy()
+            xc_av /= pred
+            vel0_xc = vels[ np.argmin( xc_av ) ] 
+                
+            rvels, rxc_av, rpred, rxc_av_orig, rvel0_xc = \
+                    vels.copy(), xc_av.copy(), pred.copy(),\
+                    xc_av_orig.copy(), vel0_xc
+
+            xc_av_rough = xc_av
+            vels_rough  = vels
+                
+            vel_width = np.maximum( 20.0, 6*disp )                      # Adjusted in order to avoid crashes because of unphysical disp
+            #print vel_width, disp, vsini       # problem with vel_width, due to disp, due to p1gau below
+            vels, xc_full, sn, nlines_ccf, W_ccf =\
+                    GLOBALutils.XCor(spec, ml_v, mh_v, weight,\
+                    vel0_xc, lbary_ltopo, vel_width=vel_width,\
+                    vel_step=0.1, spec_order=9, iv_order=10, sn_order=8,max_vel_rough=300)
+
+            xc_av = GLOBALutils.Average_CCF(xc_full, sn, sn_min=3.0, Simple=True, W=W_ccf)
+            pred = scipy.interpolate.splev(vels,tck1)
+            xc_av /= pred
+            #print 'min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig', min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig
+            if max(np.abs(xc_av)) > 10:
+                logger('Warn: stopped RV fit because of too big absolute value in xc_av: min(xc_av) = {0} , max(xc_av) = {1} , len(xc_av) = {2}'.format(min(xc_av),max(xc_av),len(xc_av)))
+                return -999.0, 999.0, -999.0, 999.0
+            p1,XCmodel,p1gau,XCmodelgau,Ls2 = \
+                    GLOBALutils.XC_Final_Fit( vels, xc_av, sigma_res = 4,\
+                     horder=8, moonv=refvel, moons=moon_sig, moon=False)
+            #print 'plgau 345', p1gau
+
+            moonmatters = False
+            if (know_moon and here_moon):
+                moonmatters = True
+                ismoon = True
+                confused = False
+                p1_m,XCmodel_m,p1gau_m,XCmodelgau_m,Ls2_m = GLOBALutils.XC_Final_Fit( vels, xc_av, \
+                sigma_res = 4, horder=8, moonv = refvel, moons = moon_sig, moon = True)
+                moon_flag = 1
+            else:
+                confused = False
+                ismoon = False
+                p1_m,XCmodel_m,p1gau_m,XCmodelgau_m,Ls2_m = p1,XCmodel,p1gau,XCmodelgau,Ls2
+                moon_flag = 0
+
+            bspan = GLOBALutils.calc_bss(vels,xc_av)
+            SP = bspan[0]
+            
+            if (not known_sigma):
+                disp = np.floor(p1gau[2])
+                if (disp < 3.0): 
+                    disp = 3.0
+                mask_hw_wide = av_m * disp / (GLOBALutils.Constants.c/1.0e3)
+                ml_v = av_m - mask_hw_wide
+                mh_v = av_m + mask_hw_wide            
+                known_sigma = True
+            else:
+                cond = False
+                
+            if p1gau[2] > 1E3:
+                cond = False
+                
+        xc_dict = {'vels':vels,'xc_av':xc_av,'XCmodelgau':XCmodelgau,'Ls2':Ls2,'refvel':refvel,\
+               'rvels':rvels,'rxc_av':rxc_av,'rpred':rpred,'rxc_av_orig':rxc_av_orig,\
+               'rvel0_xc':rvel0_xc,'xc_full':xc_full, 'p1':p1, 'sn':sn, 'p1gau':p1gau,\
+               'p1_m':p1_m,'XCmodel_m':XCmodel_m,'p1gau_m':p1gau_m,'Ls2_m':Ls2_m,\
+               'XCmodelgau_m':XCmodelgau_m}
+
+        #moon_dict = {'moonmatters':moonmatters,'moon_state':moon_state,'moonsep':moonsep,\
+        #     'lunation':lunation,'mephem':mephem,'texp':im_head['EXPTIME']}
+        moon_dict = {'moonmatters':moonmatters,'moon_state':'dummy','moonsep':0,\
+             'lunation':0,'mephem':mephem,'texp':0}
+
+        #pkl_xc = params['path_rv_ceres'] + fsim.split('/')[-1][:-4]+obname+'_XC_'+sp_type+'.pkl'
+        pkl_xc = params['path_rv_ceres'] + fsim+'_XC_'+sp_type+'.pkl'      # without filename ending
+        pickle.dump( xc_dict, open( pkl_xc, 'w' ) )
+
+        #ccf_pdf = params['logging_path'] + fsim.split('/')[-1][:-4] + obname + '_XCs_' + sp_type + '.pdf'       # dirout + 'logging/'
+        #ccf_pdf = params['logging_path'] + fsim + '_XCs_' + sp_type + '.pdf'       # without filename ending
+        ccf_pdf = params['path_rv_ceres'] + fsim + '_XCs_' + sp_type + '.pdf'             # without filename ending
+        GLOBALutils.plot_CCF(xc_dict,moon_dict,path=ccf_pdf)
+
+        #SNR_5130 = np.median(spec[8,28,1900:2101] ) This wavelength is not covered in exohspec
+        #SNR_5130 = np.nanmedian(spec[8,0,1900:2101] ) # Set to order 20 artificially
+        SNR_5130 = np.nan
+        for cen_wave in [5130,6200,4000,7300,3000,8400,9500]:       # try different wavelengths in case one is not covered
+            subspec, wave = get_spec(spec[8,:,:], spec[0,:,:], cen_wave, 100)
+            if len(subspec) > 0:
+                SNR_5130 = np.nanmedian(subspec)       # 5130 shows significant absorption lines
+                break
+            logger('Warn: The spectra around the wavelength of {0} Angstrom is not covered'.format(cen_wave))
+        
+        B,A = -0.00257864,0.07765779            # from Monte Carlo Simulation, different for each instrument
+        B,A = 0.005, 0.2
+        #print SNR_5130
+        RVerr  =  B + ( 1.6 + 0.2 * p1gau[2] ) * A / np.round(SNR_5130)
+        depth_fact = 1. + p1gau[0]/(p1gau[2]*np.sqrt(2*np.pi))
+        if depth_fact < 0.6:
+            depth_fact = 0.6
+        depth_fact = (1 - 0.6) / (1 - depth_fact)
+        RVerr *= depth_fact
+        #print RVerr, depth_fact, p1gau, SNR_5130
+        if RVerr < 0.002:
+            RVerr = .002
+
+        B,A = -0.00348879, 0.10220848
+        BSerr = B + ( 1.6 + 0.2 * p1gau[2] ) * A / np.round(SNR_5130)
+        if BSerr<0.002:
+            BSerr = .002
+
+        RV     = np.around(p1gau_m[1],4)  
+        BS     = np.around(SP,4)   
+        RVerr2 = np.around(RVerr,4)
+        BSerr  = np.around(BSerr,4)
+
+        return RV, RVerr2, BS, BSerr
 
 
 

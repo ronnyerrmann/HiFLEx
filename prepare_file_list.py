@@ -104,8 +104,8 @@ if __name__ == "__main__":
                 fiber1, fiber2 = 'bias', 'bias'
             if fnlow.find('dark') >= 0:                     # hardcoded: Dark
                 fiber1, fiber2 = 'dark', 'dark'
-            posi  = [fnlow.find('flat') , fnlow.find('whli') ]      # hardcoded: White light (Tungston) spectrum in science fiber
-            posi2 = [fnlow.find('flat2'), fnlow.find('whli2')]      # hardcoded: White light (Tungston) spectrum in calibration fiber
+            posi  = [fnlow.find('flat') , fnlow.find('whli') , fnlow.find('tung') ]      # hardcoded: White light (Tungston) spectrum in science fiber
+            posi2 = [fnlow.find('flat2'), fnlow.find('whli2'), fnlow.find('tung2')]      # hardcoded: White light (Tungston) spectrum in calibration fiber
             for i in range(len(posi)):
                 if posi2[i] >= 0:
                     fiber2 = 'cont'
@@ -121,8 +121,8 @@ if __name__ == "__main__":
                         fiber1, fiber2 = 'rflat', 'rflat'
                     else:
                         fiber1, fiber2 = 'cont', 'cont'
-            posi  = [fnlow.find('arc') , fnlow.find('thar') , fnlow.find('une') ]        # hardcoded: emission line spectrum in calibration fiber
-            posi2 = [fnlow.find('arc2'), fnlow.find('thar2'), fnlow.find('une2')]        # hardcoded: emission line spectrum in science fiber
+            posi  = [fnlow.find('arc') , fnlow.find('thar') , fnlow.find('th_ar') , fnlow.find('une') ]        # hardcoded: emission line spectrum in calibration fiber
+            posi2 = [fnlow.find('arc2'), fnlow.find('thar2'), fnlow.find('th_ar2'), fnlow.find('une2')]        # hardcoded: emission line spectrum in science fiber
             for i in range(len(posi)):
                 if posi2[i] >= 0:
                     fiber1 = 'wave'
@@ -142,7 +142,7 @@ if __name__ == "__main__":
                 if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace2']:
                     fiber1, fiber2 = 'wave', 'wave'
             if (fnlow.find('/arc') == -1 and fnlow.find('/thar') == -1 and fnlow.find('/une') == -1) and \
-                        not (fnlow.find('arc') == 0 or fnlow.find('thar') == 0 or fnlow.find('une') == 0) and \
+                        not (fnlow.find('arc') == 0 or fnlow.find('thar') == 0 or fnlow.find('th_ar') == 0 or fnlow.find('une') == 0) and \
                         fiber1 not in ['rflat', 'cont', 'dark', 'bias', 'wave']:
                 fiber1 = 'science'
                 if fnlow.find('harps') <> -1:
@@ -201,7 +201,7 @@ if __name__ == "__main__":
     for entry in file_list:
         file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], entry[4], entry[5] ))
     file.close()
-    if 'nocheck' not in sys.argv or '-nocheck' not in sys.argv or '--nocheck' not in sys.argv:
+    if not ('nocheck' in sys.argv or '-nocheck' in sys.argv or '--nocheck' in sys.argv):
         start = time.time()
         rtn = os.system('{1} {0}'.format(params['raw_data_file_list'], params['editor'] ))
         if rtn <> 0 or time.time()-start < 10:
@@ -209,7 +209,7 @@ if __name__ == "__main__":
             raw_input('To continue please press Enter\t\t')
     time.sleep(1)
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
-    file_list = convert_readfile(file_list, [str, str, str, float, float], delimiter='\t', replaces=['\n',' '])
+    file_list = convert_readfile(file_list, [str, str, str, float, float], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
     
     file_list = sorted(file_list, key=operator.itemgetter(1,2,3,0))
     # Check what data is available
@@ -272,8 +272,8 @@ if __name__ == "__main__":
     warn = []
     pos_params = ['bias', 'rflat' ]
     for entry in file_list:                                         # Extraction is set up below
-        if entry[0].find('#') <> -1:        # comment # found
-            continue
+        #if entry[0].find('#') <> -1:        # comment # found
+        #    continue
         param = ''
         for par in pos_params:
             if entry[1] == par and entry[2] == par:                 # Fiber1 and Fiber2

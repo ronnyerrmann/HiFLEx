@@ -26,7 +26,8 @@ GUI = False
 raw_data_path           = /local/home/ronny/data_EXOhSPEC/20190205/
 
 
-# subframe: gives the size in x (dispersion axis) and y (cross-dispersion axis), and the starting coordinates in x and y in case only a subframe should be used. Is applied before roation. Needed when reading files
+# subframe: gives the size in x (dispersion axis) and y (cross-dispersion axis), and the starting coordinates in x and y in case only a subframe should be used.
+#           The numbering of the pixel starts with zero. Is applied before roation. Needed when reading files
 #           possible formats: can be empty, or
 #                             [4250,2838,0,0], or
 #                             4250,2838,0,0
@@ -38,6 +39,7 @@ raw_data_path           = /local/home/ronny/data_EXOhSPEC/20190205/
 # for HARPS:            subframe        = [4096,2048,0,50]
 # for MRES:             subframe        = [1201,511,380,0]
 # for Photometrics:     subframe        = [2048,2048,0,0]
+# for Narit:            subframe        = [1648,1236,0,0]
 subframe        = [2048,2048,0,0]
 
 # To extract the data correctly, the frame should be rotated in the way, that traces (dispersion axis) are along vertical direction
@@ -71,6 +73,7 @@ update_widths = False
 # bin_search_apertures: Search the apertures of the orders in a binned image. The first value gives the binning along one order (vertical axis, dispersion axis)
 #                    and the second value the binning perpendicular to the orders (horizontal, cross-dispersion axis). 
 #                    Heavy binning along the dispersion axis is possible in this step, while binning in cross-dispersion needs to be significantly smaller than the minimum separation between orders.
+#                    The area binned together must not contain more background pixel than pixels on which the traces fall, as the median will make the traces disappear otherwise.
 # for QSI:              bin_search_apertures = 20,5
 # for Moravian, SBIG:   bin_search_apertures = 20,4
 # for HARPS:            bin_search_apertures = 20,2
@@ -86,7 +89,7 @@ width_percentile        = 05
 ## To determine the background
 # background_width_multiplier defines the area which is excluded for determining the background. It has the same settings as extraction_width_multiplier.
 # The first value is for the science and the second for the calibration traces
-background_width_multiplier = [2, 0.5]
+background_width_multiplier = [1.5, 0.5]
 # polynom_bck defines the orders for a 2d polynomial that is fitted to the background. The first value is for dispersion and the second for cross-dispersion direction.
 polynom_bck = [4, 4]
 
@@ -223,7 +226,8 @@ editor                  = gedit
 
 ## Result storage information:
 #-----------------------------
-# The folder where the result data is stored
+# The folder where the result data is stored. Use the dot (".") for the current folder. The folders given in the following parameters will be created under result_path folder:
+#               path_extraction, path_extraction_single, path_reduced, path_rv_ceres, path_csv_terra, logging_path
 result_path = .
 
 # In the reduced images mark pixels above max_good_value as saturated
@@ -232,12 +236,9 @@ result_path = .
 # all others:   max_good_value = 63000
 max_good_value  = 63000
 
-# csv files for Terra:
-csv_path   = Object1/data/
-
 ## extracted data:
 #-----------------
-# path for the extracted data (ceres format / single files for extracted spectrum and wavelength)
+# path for the extracted data (ceres format / single files for extracted spectrum and wavelength). path_extraction and path_extraction_single will be relative to the result_path.
 path_extraction             = extracted
 path_extraction_single      = extracted/single
 # BITPIX of the extracted fits-file (-32, -64, everything else: -64)
@@ -245,7 +246,7 @@ extracted_bitpix            = -32
 
 ## reduced images:
 #-----------------
-# The reduced images can be saved, if a path instead of "NA" is given path_reduced
+# The reduced images can be saved, if a path instead of "NA" is given path_reduced. path_reduced will be relative to the result_path.
 path_reduced                = reduced_images
 path_reduced                = NA
 
@@ -264,11 +265,24 @@ background_px_filename          = background_px.fits
 # master file for the background correction. Created by reduction_day.py
 background_filename             = background.fits
 
-# RV analysis
-path_rv                         = rv_output
+## RV analysis:
+#--------------
+# Using the Ceres pipeline to do a cross-correlation. Needs to point to the base folder of Ceres. 
+#       If path_ceres does not exist on the machine, then no radial velocity analysis using this method will be used.
+# path_rv is used to store the results from the Ceres pipeline. path_rv will be relative to the result_path.
+path_ceres                      = /home/exohspec/software/ceres-master/
+path_ceres                      = /home/ronny/software/ceres-master/
+# Output of the Ceres cross-correlation
+path_rv_ceres                   = ceres_rv_output
+# Using the Terra pipeline to create a template spectrum and then use that template to do the radial velocity analysis. Need to point to the PRV.jar file.
+#       If terra_jar_file does not exist on the machine, then no radial velocity analysis using this method will be used.
+terra_jar_file                  = /home/ronny/software/terra/PRV.jar
+# csv files for Terra. path_csv_terra will be relative to the result_path.
+path_csv_terra                  = Object1/data/
 
 ## Logging:
 #----------
+# logging_path will be relative to the result_path and all parameters starting with "logging_" will be stored in logging_path.
 logging_path                        = logging
 logging_trace1_binned               = mstr_trace1_binned.fits
 logging_traces_binned               = sci_trace1_binned.fits
