@@ -58,9 +58,10 @@
  \item \verb|extraction_width_multiplier = 1|, \verb|arcextraction_width_multiplier = 1| \verb|width_percentile = 05|, and \verb|extracted_bitpix = -32| are standard now.
 \end{itemize}
 
-\subsection*{v0.4.0}
+\subsection*{v0.4.0 (in preparation)}
 \begin{itemize}\setlength\itemsep{0em}
   \item Included the comparison between the wavelength solutions in science and calibration fiber.
+  \item Improved radial velocity analysis using Terra.
   \item Renamed \verb|arc_l| and \verb|arc_s| into \verb|cal2_l| and \verb|cal2_s|.
   \item Better way of getting the object name from the filename.
   \item Added parameter \verb|path_ceres| to conf.txt.
@@ -172,6 +173,21 @@ tar -xzvf v*.tar.gz
 \end{description}
 
 When running the scripts for the first time, python will create a new file called \verb|<filename>.pyc| for some of the files (compiled script). No harm will be done in removing or keeping the files.
+
+\subsection{External packages for Radial velocity analysis (optional)}
+The pipeline creates extracted spectra in different formats, which then can be further analysed using available software. Additionally the pipeline can use available packages to find the radial velocity of the object. Below are described the requirements of the external software.
+
+\subsubsection{Ceres Pipeline}
+Authors: Rafael Brahm, Andr{\'e}s Jord{\'a}n, N{\'e}stor Espinoza. If you make use of the Radial Velocity analysis from the Ceres , please cite Brahm et al 2017\footnote{\url{https://ui.adsabs.harvard.edu/\#abs/2017PASP..129c4002B/abstract}}.
+
+The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres} (``Clone or Download''-button) and then unpacked. TO make it work, please follow the Installation section in the README.md file on\\ \url{https://github.com/rabrahm/ceres} .
+
+
+\subsubsection{Terra}
+Terra can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view} . It only has to be extracted. To check that all dependencies are installed on the system one can run.
+\begin{lstlisting}[style=base]
+java -jar <path to terra>/terra/PRV.jar
+\end{lstlisting}
 
 
 \subsection{General information about the way the pipeline works}
@@ -392,7 +408,7 @@ If the message \verb|get_ut1_offset: requested mjd is beyond end of IERS file| a
 
 \subsubsection{Creating a list of objects}
 \label{Section:create_object_list_file}
-If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file must contain one line per object. For each object the following tab-separated values need to be given:
+If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_path| (the first one has higher priority). The file must contain one line per object. For each object the following tab-separated values need to be given:
 \begin{enumerate}\setlength\itemsep{0em}
  \item Object name (the filename should start with the object name in order to be used)
  \item RA (hh:mm:ss.ss or as one number in degrees)
@@ -401,7 +417,7 @@ If the coordinates of the object are not stored in the fits header, then they ca
  \item PM DEC (arcsec/year, can be 0 in the most cases)
  \item Epoch of the coordinates (only the number, e.g. 2000 or 2015.5)
  \item Enable/Disable flag (1 for enabled)
- \item Mask to use. At the moment G2, K2, or M2 are possible options. Can be empty
+ \item Mask to use. At the moment G2, K5, or M2 are possible options. Can be empty
  \item Velocity width to broaden the lines of the binary mask
 \end{enumerate}
 
@@ -452,9 +468,8 @@ All the files are 2D arrays with the order/aperture as first and number of pixel
  \item[raw-data filename + \_weight] Mask with good areas of the spectrum.
 \end{description}
 
-\subsubsection{Object1/data/YYYY-MM-DDHHMMSS.cvs files}
-The data in here is used in order to measure RV with Terra (\url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}). Tha barycentric corrected wavelength solution and the continuum corrected spectrum (multiplied by the bad-pixel mask) are used. 
-(work in progress)
+\subsubsection{path\_csv\_terra + $<$object name$>$ + /data/YYYY-MM-DDHHMMSS.cvs files}
+The data in here is used in order to measure RV with Terra (\url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}). The barycentric corrected wavelength solution and the continuum corrected spectrum (multiplied by the bad-pixel mask) are used. See \ref{Section:files_folders_csv_for_terra} for more information.
 
 \subsection{Results from the pipeline}
 \subsubsection{Preparing the data for one night}
@@ -567,7 +582,7 @@ The last lines give the information for all apertures. Columns, for which no use
 
 \vspace{0.5em}\noindent \textbf{Step 5:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \textit{master\_flat\_spec\_norm.fits}). The extraction and data format is described in Section~\ref{section:extraction_data_format}
 
-\subsubsection{Extracting the science data}
+\subsubsection{Extracting the science data and radial velocity analysis}
 \paragraph{Files in folder given in parameter path\_rv\_ceres (standard: ceres\_rv\_output/}
 This step is only done, if the Ceres pipeline is installed and \verb|path_ceres| is set correctly to the base folder of Ceres and the sub-folders \textit{utils/Correlation}, \textit{utils/GLOBALutils}, \textit{utils/OptExtract}, and \textit{utils/CCF} exist.
 
@@ -577,8 +592,11 @@ This step is only done, if the Ceres pipeline is installed and \verb|path_ceres|
   \item[stellar\_pars.txt-files:] Stellar parameters of the object: $T_{eff}$, $\log g$, $Z$, $v\sin i$, $vel0$
 \end{description}
 
-\paragraph{Files and folders in folder given in parameter path\_csv\_terra (standard: }
-Work in progress
+\paragraph{Files and folders in folder given in parameter path\_csv\_terra (standard: terra\_rv\_data}
+\label{Section:files_folders_csv_for_terra}
+The data of the individual objects are stored in this folder in the subfolder \textit{object name + /data/}. If Terra is installed and \verb|terra_jar_file| is set correctly to the Terra \textit{PRV.jar}-file, then Terra will be run on each \textit{object name} within the folder. The results of the radial velocity analysis will be stored in \textit{object name + /results/synthetic.rv}.
+
+It is possible to include the information from previous nights of the same object by linking or copying the \textit{.csv}-files into the corresponding \textit{data/}-folders and rerunning \verb|python <path to scripts>/reduction_day.py|. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
 
 \newpage
 \section{Seting up the pipeline}
@@ -844,7 +862,7 @@ The testing of the pipeline was done for the MRES data taken on 2018-11-27.
 
 \appendix
 
-\section{Module dependencies if not using Anaconda}
+\section{Module dependencies if not using Anaconda (needs update)}
 \label{section:module_dependency}
 \noindent This program relies on the following modules in python 2.7
 
@@ -883,7 +901,6 @@ The testing of the pipeline was done for the MRES data taken on 2018-11-27.
 
 
 \newpage
-\appendix
 \section{Short introduction to reduction of CCD images}
 
 The data stored in CCD images is affected by the physical parameters of the individual pixels and way the readout electronics work. Therefore each scientific frame needs to be corrected (pixel by pixel) with the formula:

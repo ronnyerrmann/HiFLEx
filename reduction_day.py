@@ -358,13 +358,27 @@ if __name__ == "__main__":
     logger('Info: Finished extraction of the science frames. The extracted {0}/*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. Th last entry is the spectrum of the calibration fiber.'.format(params['path_extraction']))
     
     # Do the Terra RVs
-    os.system('echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       Object1/" > astrocatalog.example')
-    if os.path.isfile(params['terra_jar_file']) == True:
-        os.system('java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] ) )
-        os.system('gedit Object1/results/synthetic.rv &')
+    if os.path.isfile(params['terra_jar_file']) == True and os.path.exists(params['path_csv_terra']):
+        for root, dirs, files in os.walk(params['path_csv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
+            for file in files:
+                if file.endswith('.csv'):                       # has the file the correct ending?
+                    filename = os.path.join(root, file).replace(params['path_csv_terra'],'')                # Only relative folder and filename
+                    obj_name = filename.split('/')[0]
+                    if obj_name not in obj_names:
+                        obj_names.append(obj_name)
+        os.chdir(params['path_csv_terra'])
+        for obj_name in obj_names:
+            os.system('rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}/" > astrocatalog.example'.format(obj_name))
+            os.system('java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] ) )
+            #os.system('gedit {0}/results/synthetic.rv &'.format(obj_name))
         
         
-""" Gnuplot analysis of part of the RV data:
+""" ######### Analysis with terra
+echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD82885/" > astrocatalog.example
+java -jar /home/ronny/software/terra/PRV.jar -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV 55
+cat HD82885/results/synthetic.rv
+
+############# Gnuplot analysis of part of the RV data:
 f(x) = a2*x**2 + a1*x + a0; a2=0; a1=1; a0=0; fit f(x) 'data_1208' us 1:2 via a2,a1,a0
 plot 'data_1208' us 1:2 , f(x)
 

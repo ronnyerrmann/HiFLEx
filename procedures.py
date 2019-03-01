@@ -291,7 +291,7 @@ def textfileargs(params, textfile=None):
             params[entry][i] = params['raw_data_path'] + params[entry][i]
     
     # deal with result filenames/folders -> add result_path
-    filenames = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_csv_terra']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
+    filenames = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_csv_terra', 'object_file']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
     for entry in params.keys():
         if (entry.find('master_') == 0 or entry.find('background_') == 0) and entry.find('_filename') > 0:      # Put these files also into the result path
             filenames.append(entry)
@@ -3039,7 +3039,8 @@ def get_possible_object_names(filename, replacements=['_arc','arc', '_thar','tha
     :param replacements: list of strings with entries to be removed from the filename
     return obnames: list of strings with possible object names
     """
-    obnames = []
+    first_entry = filename.replace('-','_').split('_')      # most likely object is without any _ and -
+    obnames = [first_entry[0]]
     obname = filename + '-'                   # Have at least one run
     while obname.find('_') <> -1 or obname.find('-') <> -1:
         for splitter in ['-', '_']:
@@ -3122,6 +3123,11 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     ceres_spec = np.array([wavelengths_vac, spectra, espectra, fspectra, efspectra, cspectra, sn_cont, good_px_mask, aspectra])
     ceres_spec = clip_noise(ceres_spec)
     
+    # Change the path to the object_file to the result_path, if necessary
+    if not os.path.isfile(params['object_file']) and os.path.isfile( params['object_file'].replace(params['result_path'], params['raw_data_path']) ):
+        #shutil.copy2( params['object_file'].replace(params['result_path'], params['raw_data_path']), params['result_path'])         # Copies the file from the raw_data_path to the result_path, keeping the metadata
+        params['object_file'] = params['object_file'].replace(params['result_path'], params['raw_data_path'])
+
     # Get the baycentric velocity
     params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, params['object_file'])       # obnames becomes the single entry which matched entry in params['object_file']
     
@@ -3169,7 +3175,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     
     # CSV file for terra
     fname = obsdate.strftime('%Y-%m-%d%H%M%S')
-    save_spec_csv(cspectra, wavelengths_bary, good_px_mask, params['path_csv_terra']+fname)
+    save_spec_csv(cspectra, wavelengths_bary, good_px_mask, params['path_csv_terra']+obnames[0]+'/data/'+fname)
     
     # Harps format
     im_head_harps_format = wavelength_solution_harps(params, im_head_harps_format, wavelengths_bary)
@@ -3197,7 +3203,9 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     im_head['Comment'] = ' 7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
     im_head['Comment'] = ' 8: spectrum of the emission line lamp'
     save_multispec(ceres_spec, params['path_extraction']+im_name, im_head, bitpix=params['extracted_bitpix'])
-        
+    
+    return obnames[0]
+    
 def save_spec_csv(spec, wavelengths, good_px_mask, fname):
     """
     Save the spectra in a csv file to be compatible with Terra. The files need to have the form:
@@ -3206,7 +3214,10 @@ def save_spec_csv(spec, wavelengths, good_px_mask, fname):
     [email from Guillem Anglada, 18/10/2018 12:25
     """
     if not os.path.exists(fname.rsplit('/',1)[0]):
-        logger('Error: Folder to save {0} does not exists.'.format(filename))
+        try:
+            os.makedirs(fname.rsplit('/',1)[0])
+        except:
+            logger('Error: Folder to save {0} does not exists and cannot be created.'.format(filename))
         
     specs = spec.shape
     spec_cor = spec * good_px_mask
@@ -5599,7 +5610,7 @@ def getcoords(obnames,mjd,filen='coords.txt'):               # from CERES, modif
             line = line[:-1].replace('\t',',')
             cos = line.split(',')
             for obname in obnames:
-                if cos[0]==obname and int(cos[6])==1:
+                if cos[0].lower() == obname.lower() and int(cos[6])==1:
                     #print "matched"
                     if cos[1].find(':') > 0 or cos[1].find(' ') > 0:
                         cos[1] = cos[1].replace(' ',':')
@@ -6078,7 +6089,7 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem):
         # assign mask
         #   obname is the name of the object
         #   reffile is a reference file: reffile = dirin+'reffile.txt' -> this file doesn't exist
-        sp_type, mask = GLOBALutils.get_mask_reffile(obname,reffile=reffile,base=base+'data/xc_masks/')
+        sp_type, mask = GLOBALutils.get_mask_reffile(obname,reffile=reffile,base=base+'data/xc_masks/')     # !!! Warn: upper and lower case matters
         print "\t\t\tWill use",sp_type,"mask for CCF."
 
         # Read in mask
@@ -6088,7 +6099,7 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem):
         av_m = 0.5*( ml_v + mh_v )
         mask_hw_kms = (GLOBALutils.Constants.c/1e3) * 0.5*(mh_v - ml_v) / av_m
 
-        disp = GLOBALutils.get_disp(obname, reffile=reffile)        # disp is "velocity width in km/s that is used to broaden the lines of the binary mask. It should be similar to the standard deviation of the Gaussian that is fitted to the CCF."
+        disp = GLOBALutils.get_disp(obname, reffile=reffile)        # !!! Warn: upper and lower case matters disp is "velocity width in km/s that is used to broaden the lines of the binary mask. It should be similar to the standard deviation of the Gaussian that is fitted to the CCF."
         if disp == 0:
             known_sigma = False
             if vsini != -999 and vsini != 0.:
