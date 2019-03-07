@@ -21,6 +21,7 @@ params = textfileargs(params, CONFIGFILE)
 if __name__ == "__main__":
     logger('Info: Starting routines for a new night of data, including: shift orders, find background, find arc orders, create wavelength solution, and create normalised extracted flat')
     log_params(params)
+    params['extract_wavecal'] = False
     
     # create the median combined files
     im_trace1, im_trace1_head = create_image_general(params, 'trace1')
@@ -137,7 +138,8 @@ if __name__ == "__main__":
     update_calibration_memory('sci_trace',[sci_tr_poly, xlows, xhighs, widths])         # Apertures might be shifted before extraction -> this would also affect the localbackground
     update_calibration_memory('cal_trace',[cal_tr_poly, axlows, axhighs, awidths])
     
-    two_solutions = False
+    # Do the wavelength solution stuff: Find for calibration fiber (and for science fiber if necessary, in this case some comparison between the solutions is necessay
+    params['two_solutions'] = False
     for calib in [ ['','cal2'], ['_sci','cal1'] ]:
         # first entry is the standard wavelength solution
         # second entry is for finding the wavelength solution in a bifurcated fiber
@@ -153,8 +155,10 @@ if __name__ == "__main__":
         # Create the wavelength solution for the night
         if params['original_master_wavelensolution_filename'].lower() <> 'pseudo':                  # Create the master files
             im_cal_l, im_arclhead = create_image_general(params, calib[1]+'_l')
-            im_cal_s, im_arcshead = create_image_general(params, calib[1]+'_s')
-            cal_l_spec, good_px_mask_l = extract_orders(params, im_cal_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
+            if calib[1] == 'cal2':
+                cal_l_spec, good_px_mask_l = extract_orders(params, im_cal_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
+            else:
+                cal_l_spec, good_px_mask_l = extract_orders(params, im_cal_l, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'])
         if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']) == True:
             logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution'+calib[0]+'_filename']))
             wavelength_solution, wavelength_solution_arclines = read_wavelength_solution_from_fits(params['master_wavelensolution'+calib[0]+'_filename'])
@@ -162,7 +166,11 @@ if __name__ == "__main__":
             logger('Warning: Using a pseudo solution for the wavelength (1 step per px)')
             wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(sci_tr_poly.shape[0])
         else:
-            cal_s_spec, good_px_mask_s = extract_orders(params, im_cal_s, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
+            im_cal_s, im_arcshead = create_image_general(params, calib[1]+'_s')
+            if calib[1] == 'cal2':
+                cal_s_spec, good_px_mask_s = extract_orders(params, im_cal_s, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
+            else:
+                cal_s_spec, good_px_mask_s = extract_orders(params, im_cal_s, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'])
             # Begin: This bit is not necessary once the procedure has been written
             im_name = 'master_'+calib[1]+'_long'
             if 'master_'+calib[1]+'_l_filename' in params.keys():
@@ -176,15 +184,16 @@ if __name__ == "__main__":
             save_multispec([cal_s_spec, cal_s_spec, cal_s_spec, cal_s_spec], params['path_extraction']+im_name, im_arcshead)
             
             # Identify the Emission lines
-            if os.path.isfile(params['logging_found_arc_lines']+calib[0]) == True:
-                logger('Info: List of the identified emission lines already exists. Using the information from file: {0}'.format(params['logging_found_arc_lines']+calib[0] ))
-                arc_lines_px_txt = read_text_file(params['logging_found_arc_lines']+calib[0], no_empty_lines=True)              # list of strings, first entry is header 
+            fname = params['logging_found_arc_lines'].replace('.txt','')+calib[0]+'.txt'
+            if os.path.isfile(fname) == True:
+                logger('Info: List of the identified emission lines already exists. Using the information from file: {0}'.format(fname ))
+                arc_lines_px_txt = read_text_file(fname, no_empty_lines=True)              # list of strings, first entry is header 
                 arc_lines_px = np.array( convert_readfile(arc_lines_px_txt[1:], [int, float, float, float], delimiter='\t', replaces=['\n',' ']) )
             else:
                 arc_lines_px = identify_lines(params, cal_l_spec, cal_s_spec, good_px_mask_l, good_px_mask_s)
-                logger('Info: Identified {0} lines in the arc spectrum. These lines are stored in file {1}'.format(len(arc_lines_px), params['logging_found_arc_lines']+calib[0] ))
+                logger('Info: Identified {0} lines in the arc spectrum. These lines are stored in file {1}'.format(len(arc_lines_px), fname ))
                 printarrayformat = ['%1.1i', '%3.2f', '%3.2f', '%3.1f']
-                logger('order\tpixel\twidth\theight of the line', show=False, printarrayformat=printarrayformat, printarray=arc_lines_px, logfile=params['logging_found_arc_lines']+calib[0])
+                logger('order\tpixel\twidth\theight of the line', show=False, printarrayformat=printarrayformat, printarray=arc_lines_px, logfile=fname)
     
             if calib[1] == 'cal2':          # for the calibration fiber
                 if os.path.isfile(params['original_master_wavelensolution_filename']) == False:                                                         # Create a new solution
@@ -218,18 +227,23 @@ if __name__ == "__main__":
             plot_wavelength_solution_form(params['logging_wavelength_solution_form'], axlows, axhighs, wavelength_solution)
             plot_wavelength_solution_spectrum(cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
             plot_wavelength_solution_image(im_cal_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
+        obsdate, obsdate_float = get_obsdate(params, im_arclhead)               # in UTC, mid of the exposure
         if calib[1] == 'cal2':          # for the calibration fiber
             wavelength_solution_cal, wavelength_solution_arclines_cal = copy.deepcopy(wavelength_solution), copy.deepcopy(wavelength_solution_arclines)
             params['wavelength_solution_type'] = 'cal-fiber'
             cal2_l_spec = copy.deepcopy(cal_l_spec)
+            im_arc2lhead = copy.copy(im_arclhead)
+            add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_float, 0, 0, 'cal'), params['master_wavelengths_shift_filename'] )
         else:
             wavelength_solution_sci, wavelength_solution_arclines_sci = copy.deepcopy(wavelength_solution), copy.deepcopy(wavelength_solution_arclines)
             params['wavelength_solution_type'] = 'sci-fiber'
             cal1_l_spec = copy.deepcopy(cal_l_spec)
-            two_solutions = True
-    
+            im_arc1lhead = copy.copy(im_arclhead)
+            add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_float, 0, 0, 'sci'), params['master_wavelengths_shift_filename'] )
+            params['two_solutions'] = True
+
     # Use the better wavelength solution: should be the one of the science fiber (wavelength_solution_sci), but if calibration fiber is better, then use calibration fiber
-    if two_solutions:       # solutions for both fibers
+    if params['two_solutions']:       # solutions for both fibers
         if len(wavelength_solution_arclines_cal[wavelength_solution_arclines_cal > 100]) > 2* len(wavelength_solution_arclines_sci[wavelength_solution_arclines_sci > 100]):
             # if twice as many lines were identified (should also check that the residuals are not worse, but this is difficult as solution might have been loaded from file
             wavelength_solution, wavelength_solution_arclines = wavelength_solution_cal, wavelength_solution_arclines_cal           # Put the calibration fiber wavelength solution back as main solution
@@ -237,35 +251,51 @@ if __name__ == "__main__":
             logger('Info: Using the calibration fiber wavelength solution (first solution) as master wavelength solution, as this solution seems to be better')
         else:
             logger('Info: Using the science fiber wavelength solution (second solution) as master wavelength solution')
-
-            
-    # Compare the radial velocity shift between the two wavelength solution, if using a bifurcated fiber -> this is wrong
-    #rv_shift, rv_schift_err = 0., 0.
-    #if two_solutions:
-    #    rv_shift, rv_schift_err = find_RVshift_between_wavelength_solutions(wavelength_solution_cal, wavelength_solution_arclines_cal, wavelength_solution_sci, wavelength_solution_arclines_sci, 
-    #                                                                        np.zeros((wavelength_solution_cal.shape[0],im_trace1.shape[0])) )
     
     # Find the pixel-shift between the two solutions
-    # Possibilities: 
-    #   - science fiber wavelength solution vs. calibration fiber wavelength solution
-    #   - shift between science and calibration fiber arc lines
-    #   - shift in the calibration fibers arc lines (old)
-    master_shift = 0
-    if two_solutions:
+    params['master_shift'] = 0
+    if params['two_solutions']:
+        params['extract_wavecal'] = True
+        if wavelength_solution_cal.shape[0] <> wavelength_solution_sci.shape[0]:
+            logger('Error: The number of traces for the science ({0}) and calibration ({1}) wavelength solution differ. Please delete the wrong, old file ({2} or {3}'.format(\
+                        wavelength_solution_sci.shape[0], wavelength_solution_cal.shape[0], params['master_wavelensolution_sci_filename'], params['master_wavelensolution_filename'] ))
         shift, shift_err = find_shift_between_wavelength_solutions(wavelength_solution_cal, wavelength_solution_arclines_cal, wavelength_solution_sci, wavelength_solution_arclines_sci, 
                                                                             np.zeros((wavelength_solution_cal.shape[0],im_trace1.shape[0])), ['calibration fiber','science fiber'] )
+        # shift is positive if lines in science are right of lines in calibration
+        """if params['wavelength_solution_type'] == 'sci-fiber':
+            steps = ['cal-fiber']           # first do it for the not wavelength solution
+        else:
+            steps = ['sci-fiber']           # first do it for the not wavelength solution
+        steps.append(params['wavelength_solution_type'])
+        """
         if params['wavelength_solution_type'] == 'sci-fiber':
             aspectra = cal2_l_spec
-            im_name = 'long_exposure_wavelength_solution_calibration_fiber'
+            im_arclhead = im_arc2lhead
+            im_name = 'long_exposure_emision_lamp_calibration_fiber'
+            shift = -shift                          # reverse, as opposite to find_shift_between_wavelength_solutions
         else:
             aspectra = cal1_l_spec
-            im_name = 'long_exposure_wavelength_solution_science_fiber'
-            shift = -shift                          # reverse, as opposite to find_shift_between_wavelength_solutions
-        obsdate_float = 0
-        
-        dummy_shift_wavesoln, master_shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
-                                                              reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, im_name, maxshift=max(2,2*shift_err), in_shift=int(shift) )
+            im_arclhead = im_arc1lhead
+            im_name = 'long_exposure_emision_lamp_science_fiber'
+        obsdate, obsdate_float = get_obsdate(params, im_arclhead)               # in UTC, mid of the exposure
 
+        dummy_shift_wavesoln, master_shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
+                                                              reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, im_name, maxshift=max(2,2*shift_err), in_shift=shift )
+        # master shift gives the shift from the wavelength_solution to the aspectra
+        params['master_shift'] = master_shift
+        print "0:params['master_shift']", params['master_shift']
+        """ # Comparing the shifted solution with the original wavelength solution -> shifts in either direction, depending on polynomial, maximum shift: -> 0.025 \AA shift at 4880 -> 1.5 km/s
+        wsci = create_wavelengths_from_solution(wavelength_solution_sci, cal2_l_spec)
+        wcal = create_wavelengths_from_solution(wavelength_solution_cal, cal2_l_spec)
+        wshift = create_wavelengths_from_solution(dummy_shift_wavesoln, cal2_l_spec)
+        save_multispec([wsci, cal1_l_spec], 'fib1_wsci.fits', im_arclhead, bitpix=params['extracted_bitpix'])
+        save_multispec([wsci, cal2_l_spec], 'fib2_wsci.fits', im_arclhead, bitpix=params['extracted_bitpix'])
+        save_multispec([wcal, cal1_l_spec], 'fib1_wcal.fits', im_arclhead, bitpix=params['extracted_bitpix'])
+        save_multispec([wcal, cal2_l_spec], 'fib2_wcal.fits', im_arclhead, bitpix=params['extracted_bitpix'])
+        save_multispec([wshift, cal1_l_spec], 'fib1_wshift.fits', im_arclhead, bitpix=params['extracted_bitpix'])
+        save_multispec([wshift, cal2_l_spec], 'fib2_wshift.fits', im_arclhead, bitpix=params['extracted_bitpix'])
+        #"""
+    params['extract_wavecal'] = False
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if wavelength_solution.shape[0] <> sci_tr_poly.shape[0]:
         print 'im_trace1.shape', im_trace1.shape
@@ -295,35 +325,40 @@ if __name__ == "__main__":
         save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, flatarc_spec], params['master_flat_spec_norm_filename'], im_flatarc_head)
         #save_im_fits(params, flat_spec_norm, im_sflat_head, params['master_flat_spec_norm_filename'])
     
-    log_params(params)
     logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the loging directory {0}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?\n'.format(params['logging_path']))
     
     obj_names = []
     extractions = []
-    wavelengthcals = []
+    wavelengthcals_cal, wavelengthcals_sci = [], []
     for entry in params.keys():
         if entry.find('extract') >= 0 and entry.find('_rawfiles') >= 0:
             extractions.append(entry.replace('_rawfiles',''))
-        if entry.find('wavelengthcal') >= 0 and entry.find('_rawfiles') >= 0:
-            wavelengthcals.append(entry.replace('_rawfiles',''))
-    if len(extractions) == 0:                                               # no extractions to do
-        exit(0)
+        if entry.find('wavelengthcal2') >= 0 and entry.find('_rawfiles') >= 0:
+            wavelengthcals_sci.append(entry.replace('_rawfiles',''))
+        elif entry.find('wavelengthcal') >= 0 and entry.find('_rawfiles') >= 0:
+            wavelengthcals_cal.append(entry.replace('_rawfiles',''))
     flat_spec_norm = np.array(fits.getdata(params['master_flat_spec_norm_filename']))           # read it again, as the file is different than the data above
-    if params['arcshift_side'] == 0:                                            # no calibration spectrum at the same time
+    if ( params['arcshift_side'] == 0 or params['two_solutions'] ) and len(wavelengthcals_cal)+len(wavelengthcals_sci) > 0:         # no calibration spectrum at the same time
         logger('Info: Starting to extract wavelength calibrations')
-        for wavelengthcal in wavelengthcals:
-            for im_name_full in params[wavelengthcal+'_rawfiles']:
-                im_name = im_name_full.rsplit('/')
-                im_name = im_name[-1].rsplit('.',1)         # remove the file ending
-                im_name = im_name[0]
-                im_name_wc = im_name+'_wavecal'
-                if os.path.isfile(params['path_extraction']+im_name_wc+'.fits'):
-                    logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name_wc, params['path_extraction']))
-                    continue
-                params['calibs'] = params[wavelengthcal+'_calibs_create']
-                im, im_head = read_file_calibration(params, im_name_full)
-                extraction_wavelengthcal(params, im, im_name_wc, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
+        params['extract_wavecal'] = True
+        for [wavelengthcals,fib] in [ [wavelengthcals_cal,'cal'], [wavelengthcals_sci,'sci'] ]:
+            for wavelengthcal in wavelengthcals:
+                for im_name_full in params[wavelengthcal+'_rawfiles']:
+                    # !!! Posible improvement: combine a few files if they are taken close to each other
+                    im_name = im_name_full.rsplit('/')
+                    im_name = im_name[-1].rsplit('.',1)         # remove the file ending
+                    im_name = im_name[0]
+                    im_name_wc = im_name+'_wave'+fib
+                    if os.path.isfile(params['path_extraction']+im_name_wc+'.fits'):
+                        logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name_wc, params['path_extraction']))
+                        continue
+                    params['calibs'] = params[wavelengthcal+'_calibs_create']
+                    im, im_head = read_file_calibration(params, im_name_full)
+                    extraction_wavelengthcal(params, im, im_name_wc, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
                                                     wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1, im_name)
+    params['extract_wavecal'] = False
+    if len(extractions) == 0:                                               # no extractions to do
+        logger('Error: Nothing to extract.')
     logger('Info: Starting to extract spectra')
     for extraction in extractions:
         if  extraction.find('extract_combine') == -1:     # Single file extraction
@@ -357,6 +392,8 @@ if __name__ == "__main__":
     
     logger('Info: Finished extraction of the science frames. The extracted {0}/*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. Th last entry is the spectrum of the calibration fiber.'.format(params['path_extraction']))
     
+    log_params(params)
+        
     # Do the Terra RVs
     if os.path.isfile(params['terra_jar_file']) == True and os.path.exists(params['path_csv_terra']):
         for root, dirs, files in os.walk(params['path_csv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
@@ -369,14 +406,17 @@ if __name__ == "__main__":
         os.chdir(params['path_csv_terra'])
         for obj_name in obj_names:
             os.system('rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}/" > astrocatalog.example'.format(obj_name))
-            os.system('java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] ) )
+            #os.system('java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] ) )
+            print 'Warn: Terra commented out'
             #os.system('gedit {0}/results/synthetic.rv &'.format(obj_name))
-        
+        print('\n\nInfo: Finished the Terra analysis. Some errors reported by Terra are expected. The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_csv_terra']))
         
 """ ######### Analysis with terra
-echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD82885/" > astrocatalog.example
+rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD82885/" > astrocatalog.example
+rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD42807/" > astrocatalog.example
+rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD140538/" > astrocatalog.example
 java -jar /home/ronny/software/terra/PRV.jar -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV 55
-cat HD82885/results/synthetic.rv
+cat HD*/results/synthetic.rv
 
 ############# Gnuplot analysis of part of the RV data:
 f(x) = a2*x**2 + a1*x + a0; a2=0; a1=1; a0=0; fit f(x) 'data_1208' us 1:2 via a2,a1,a0

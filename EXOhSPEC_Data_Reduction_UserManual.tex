@@ -238,11 +238,11 @@ java -jar <path to terra>/terra/PRV.jar
   \end{description}
   \item[2.] Determining the shift of the science traces compared to the previous solution (e.g. previous day). If the instrument was not touched, the shift should be small and constant ($\rightarrow$~Fig.~\ref{figure_apertures_in_master_flat}). If the file for the previous solution does not exist, or if a big deviation to the previous solution has been found, then another step will be executed:
   \begin{itemize}
-    \item[2a.] Finding the traces of all science orders. First in a heavily binned image (20,5) to find the traces, and then in a slightly binned image (only few pixel in dispersion direction) where the position is redefined.
+    \item[2a.] Finding the traces of all science orders. First in a heavily binned image (e.g. 20,5) to find the traces, and then in a slightly binned image (only few pixel in dispersion direction) where the position is redefined.
   \end{itemize}
 % not useful  \item[3.] Creating a map of the leaking light between the science orders (background map).
   \item[3.] (for bifurcated fiber spectrographs) Finding the traces of the calibration orders by searching for the shift between each order in the trace1 and trace2 file ($\rightarrow$~Fig.~\ref{figure_arcapertures_in_master_arc}). 
-  \item[4.] Create the wavelength solution for the night on the calibration fiber spectra (and maybe the science fiber spectra). ($\rightarrow$~Fig.~\ref{figure_arc_line_identification_positions} and \ref{figure_arc_line_identification_residuals}). This is based on the solution of the previous data set, which is adjusted according to the given parameters.
+  \item[4.] Create the wavelength solution for the night on the calibration fiber spectra (and maybe the science fiber spectra). ($\rightarrow$~Fig.~\ref{figure_arc_line_identification_positions} and \ref{figure_arc_line_identification_residuals}). This is based on the solution of the previous data set, which is adjusted according to the given parameters (see Chapter:~\ref{Section:steps_new_data_set}).
   \item[5.] Extract the flat and normalise it. This is used for the blaze correction.
   \item[6a.] (for single fiber spectrographs) Measure the instrumental drift in emission line spectra to calibrate the wavelength solution.
   \item[6b.] (if applicable: find the radial velocity drift between the wavelength solutions of calibration and science fiber)
@@ -268,16 +268,17 @@ java -jar <path to terra>/terra/PRV.jar
 To get the best results, the following data should be taken (all filenames are case-insensitive). \textbf{No spaces are allowed in the file names.}
 \begin{itemize}
   \item \textit{true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{rflat} for automatic processing.
-  \item Flat (11x, white light source through the science fiber), with the filename containing \textbf{sflat} or \textbf{whli}. The calibration fiber should be dark for this data.
-  \item Arc (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc}, \textbf{ThAr}, or \textbf{UNe} and the science fiber should be dark for this data.
+  \item Flat (11x, white light source through the science fiber), with the filename containing \textbf{sflat}, \textbf{tung}, or \textbf{whli}. The calibration fiber should be dark for this data.
+  \item Arc (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc}, \textbf{ThAr}, \textbf{Th\_Ar}, or \textbf{UNe}. Results might be better, if the science fiber is dark.
+  \item (\textit{Only necessary, if the shift in dispersion direction between the fibers of a bifurcated fiber should be measured}): Arc2 (5x, calibration lamp through the science fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc2}, \textbf{ThAr2}, \textbf{Th\_Ar2}, or \textbf{UNe2}.
 %  \item FlatArc (11x, white light source and calibration lamp), the filename should be \textbf{flatarc}, \textbf{sflatThAr}, \textbf{whli-UNe}, or similar.
   \item Bias (11x) and/or Darks (11x, for the exposure time of the true Flat and Flat)% and FlatArc)
   \item Filenames science images: the optimum is to start the filename with the object name (as in reference file given by parameter \verb|object_file|, see Chapter~\ref{Section:create_object_list_file}). However, in order to try to match the object name with entries in the \verb|object_file| the parts of the filename containing ``\_'' and ``-'' are stripped away one by one from the end of the filename.
 \end{itemize}
 
 \subsection{Steps to run the code on a new set of data}
-\label{section:steps_new_data_set}
-\noindent
+\label{Section:steps_new_data_set}
+\noindent The following steps give an overview about the parameters which need to be adjusted when copying the configuration file from one night to the next.
 
 \begin{enumerate}
   \item Create and enter a new folder. This folder will be used for the reduced and extracted data.
@@ -286,18 +287,25 @@ To get the best results, the following data should be taken (all filenames are c
     \item[GUI] : If set to true, this allows manipulation of some parameters in a graphical user interface (GUI) during the runtime of the script. (not tested recently)
     \item[raw\_data\_path] : Folder to the raw data.
     %\item*\_rawfiles] : Replace any filenames, which are different in the current observation
-    %\item[*\_calibs\_create] : Change the calibration steps, which are applied to the raw files before combining them. A list of possible calibrations are given in Section~\ref{section:extraction}.
-    \item[original\_master\_traces\_filename] : Path to the traces of the science orders from the previous day. This file will be the base for finding the traces in the current night ([Step 2] as described in Section~\ref{Section:pipeline_steps_general}). Leave empty if the science orders should be searched without taking the previous solution into account (e.g. after the setup of the spectrograph has changed).
-    \item[original\_master\_arc\_solution\_filename] : Path to the previous wavelength solution. This solution will be used as base for the wavelength solution in the current night. In case of a new setup see Section~\ref{section:create_new_wave_solution}. In case no wavelength solution is required, set it to \verb|pseudo|.
-    \item[\textless type\textgreater\_calibs\_create\_g] : Change the calibrations, which are applied to the CCD images before further processing or extraction for the different file types (e.g. bias, dark, flat, sflat, arc, flatarc, extract, wavelengthcal). A list of possible calibration options is given in Section~\ref{Section:parameters_CCD_proc} below.
-    %In case of a new setup, it can be set to \verb|manual_solution.fits| (or any filename that doesn't exist). The script will then create a new solution from the information given in the file \verb|arc_lines_wavelength.txt|. For a description of the format of this file, check Section~\ref{section:create_new_wave_solution}.
+    %\item[*\_calibs\_create] : Change the calibration steps, which are applied to the raw files before combining them. A list of possible calibrations are given in Chapter~\ref{section:extraction}.
+    \item[original\_master\_traces\_filename] : Path to the traces of the science orders from the previous day. This file will be the base for finding the traces in the current night ([Step 2] as described in Chapter~\ref{Section:pipeline_steps_general}). Leave empty if the science orders should be searched without taking the previous solution into account (e.g. after the setup of the spectrograph has changed slightly). In this case the following parameters should be modified:
+    \begin{description}\setlength\itemsep{0em}
+      \item[order\_offset] It could be that not all or more echelle orders (especially on the red end) will be identified compared to the orders of the night, to which parameter \verb|original_master_wavelensolution_filename| is pointing. The parameter \verb|order_offset| gives the expected range of extra or fewer orders on the red side of the shift.
+      \item[px\_offset] If the setup is touched, the whole spectrum could be moved along the detector in dispersion direction, compared to the previous solution (given in parameter \verb|original_master_wavelensolution_filename|). The parameter \verb|px_offset| gives the expected range and step size of the pixel-shift.
+      \item[px\_offset\_order] Gives the range and step size of a shift per order between the individual orders (e.g. the spectrum is tilted compared to the CCD alignment).
+      \item[resolution\_offset\_pct] Gives the expected change of resolution in percent between the current setup and the previous wavelength solution. The pipeline will test 11 resolutions between 0\% and the value given in parameter \verb|resolution_offset_pct|.
+    \end{description}
+    
+    \item[original\_master\_wavelensolution\_filename] : Path to the previous wavelength solution. This solution will be used as base for the wavelength solution in the current night. In case of a new setup see Chapter~\ref{section:create_new_wave_solution}. In case no wavelength solution is required, set it to \verb|pseudo|.
+    \item[\textless type\textgreater\_calibs\_create\_g] : Change the calibrations, which are applied to the CCD images before further processing or extraction for the different file types (e.g. bias, dark, flat, sflat, arc, flatarc, extract, wavelengthcal). A list of possible calibration options is given in Chapter~\ref{Section:parameters_CCD_proc} below.
+    %In case of a new setup, it can be set to \verb|manual_solution.fits| (or any filename that doesn't exist). The script will then create a new solution from the information given in the file \verb|arc_lines_wavelength.txt|. For a description of the format of this file, check Chapter~\ref{section:create_new_wave_solution}.
   \end{description}
-  \item Run the python script: \\ \verb|python <path to scripts>/prepare_file_list.py| . \\ See Section~\ref{Section:prepare_files} below for more information.
+  \item Run the python script: \\ \verb|python <path to scripts>/prepare_file_list.py| . \\ See Chapter~\ref{Section:prepare_files} below for more information.
   \item Run the python script: \\ \verb|python <path to scripts>/reduction_day.py| .
   \item Check the out in the \verb|logfile|, the images in the logging path, or in results in the extracted files.
 \end{enumerate}
 
-\noindent After checking the results (see Section~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to it's big flexibility. The orders can be removed in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the depending steps of \verb|reduction_day.py| will run again.
+\noindent After checking the results (see Chapter~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to it's big flexibility. The orders can be removed in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the depending steps of \verb|reduction_day.py| will run again.
 
 \subsection{Possible parameters for the CCD processing}
 \label{Section:parameters_CCD_proc}
@@ -455,7 +463,7 @@ This file contains the extracted spectrum without any modification in the same f
 The extracted spectrum is linearised using a wavelength step as given in parameter \verb|wavelength_scale_resolution|. The wavelength spectrum is interpolated by using the weighted mean of the neighbouring data points with the wavelength difference as weights.
 
 \subsubsection{raw-data filename + \_lin\_cont}
-This file contains data in the same form as described in Section~\ref{Section:linearised_spectrum}, only that the continuum corrected data was linearised.
+This file contains data in the same form as described in Chapter~\ref{Section:linearised_spectrum}, only that the continuum corrected data was linearised.
 
 \subsubsection{inside single folder}
 All the files are 2D arrays with the order/aperture as first and number of pixel in second dimension.
@@ -469,12 +477,12 @@ All the files are 2D arrays with the order/aperture as first and number of pixel
 \end{description}
 
 \subsubsection{path\_csv\_terra + $<$object name$>$ + /data/YYYY-MM-DDHHMMSS.cvs files}
-The data in here is used in order to measure RV with Terra (\url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}). The barycentric corrected wavelength solution and the continuum corrected spectrum (multiplied by the bad-pixel mask) are used. See \ref{Section:files_folders_csv_for_terra} for more information.
+The data in here is used in order to measure RV with Terra (\url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}). The barycentric corrected wavelength solution and the continuum corrected spectrum (multiplied by the bad-pixel mask) are used. See Chapter~\ref{Section:files_folders_csv_for_terra} for more information.
 
 \subsection{Results from the pipeline}
 \subsubsection{Preparing the data for one night}
 \label{section:results_pipeline}
-For each of the steps given in Section~\ref{Section:pipeline_steps_general} the following data will be created.
+For each of the steps given in Chapter~\ref{Section:pipeline_steps_general} the following data will be created.
 
 \noindent \textbf{Step 1:} The reduced and combined CCD images will be stored in the folder where the pipeline was run. The file name is \verb|master_<type>.fits|, where \verb|<type>| defines the different image types, e.g. bias, sflat, trace, or arc\_l.
 
@@ -580,7 +588,7 @@ The last lines give the information for all apertures. Columns, for which no use
     \label{figure_arc_line_identification_residuals}}
 \end{figure}
 
-\vspace{0.5em}\noindent \textbf{Step 5:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \textit{master\_flat\_spec\_norm.fits}). The extraction and data format is described in Section~\ref{section:extraction_data_format}
+\vspace{0.5em}\noindent \textbf{Step 5:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \textit{master\_flat\_spec\_norm.fits}). The extraction and data format is described in Chapter~\ref{section:extraction_data_format}
 
 \subsubsection{Extracting the science data and radial velocity analysis}
 \paragraph{Files in folder given in parameter path\_rv\_ceres (standard: ceres\_rv\_output/}
@@ -629,12 +637,12 @@ When setting up a new camera or a new account paths and parameters need to be ad
   \item[raw\_data\_imtyp\_keyword, raw\_data\_imtyp\_*] : Put the correct information for the image type header key here. 
   \item[raw\_data\_exptim\_keyword, raw\_data\_dateobs\_keyword] : Use the right header keywords for the exposure time and the observation date. The format should be \verb|%Y-%m-%dT%H:%M:%S.%f| or\footnote{\url{https://docs.python.org/2/library/datetime.html\#strftime-and-strptime-behavior}} \verb|%Y-%m-%dT%H:%M:%S|. More formats can be added in the procedure \textit{get\_obsdate}.
   \item[raw\_data\_timezone\_cor] In the unlikely case, that the date and time stored in \verb|raw_date_timezone_cor| is not UTC, the time zone correction can be given here. Numbers will be positive east of UTC and negative west of UTC, e.g. +7 for Bangkok time or -10 for Hawaii.
-  \item[standard\_calibs\_create] : Define the standard CCD processing, if necessary (see Section~\ref{Section:parameters_CCD_proc} for options).
-  \item[site, altitude, latitude, longitude] : If the site information is not stored in the header (see Section~\ref{Section:barycentric_correction}), then the information can be stored in the configuration file.
+  \item[standard\_calibs\_create] : Define the standard CCD processing, if necessary (see Chapter~\ref{Section:parameters_CCD_proc} for options).
+  \item[site, altitude, latitude, longitude] : If the site information is not stored in the header (see Chapter~\ref{Section:barycentric_correction}), then the information can be stored in the configuration file.
 %  \item[] : 
 \end{description}
 
-\noindent Further settings are described in Section~\ref{section:steps_new_data_set}.
+\noindent Further settings are described in Chapter~\ref{Section:steps_new_data_set}.
 
 \subsection{Create a bad pixel mask}
 \noindent The bad pixel masked used by the pipeline is fits file which consists of a 2 dimensional image consisting of '1' for good data and '0' for bad pixels. It can be created by the script \verb|create_badpx_mask.py|, but this is script is really work in progress at the moment.
@@ -730,7 +738,7 @@ python extract_single_chip.py
   \item \verb|bin_search_apertures    = 20,2|
   %\item \verb|arcshift_range    = [-12, -20]| (red chip),\\ \verb|arcshift_range  = [-12, -20]| (blue chip)
   \item \verb|arcshift_side           = left|
-  \item \verb|original_master_wavelensolution_filename = master_wavelensolution_manual.fits|. The file \verb|arc_lines_wavelength.txt| needs to be created (Section~\ref{section:create_new_wave_solution}).
+  \item \verb|original_master_wavelensolution_filename = master_wavelensolution_manual.fits|. The file \verb|arc_lines_wavelength.txt| needs to be created (Chapter~\ref{section:create_new_wave_solution}).
   \item \verb|arc_lines_catalog 	  = <path>reference_lines_ThAr-HARPS_Ceres.txt|
   \item \verb|use_catalog_lines 	  = ThI, ArI, ?, NoID, ArII, ThII|
   \item \verb|raw_data_imtyp_keyword  = OBJECT|
@@ -857,6 +865,45 @@ The testing of the pipeline was done for the MRES data taken on 2018-11-27.
   \item \verb|longitude   = 98.48655|
   \item \verb|extracted_bitpix         = -32|
 \end{itemize}
+
+\section{Fixing problems: The results are not as expected}
+In the following Chapters a few ideas of how to check and fix common problems are given. The following standard names are assumed.
+\begin{itemize}\setlength\itemsep{0em}
+  \small
+  \item \verb|logging_path              = logging/|
+  \item \verb|logging_trace1_binned     = mstr_trace1_binned.fits|
+  \item \verb|logging_traces_binned     = sci_trace1_binned.fits|
+  \item \verb|logging_traces_im_binned  = traces_in_master_trace1_binned.png|
+  \item \verb|logging_traces_im         = traces_in_master_trace1.png|
+  \item \verb|logging_find_arc_traces   = arctraces_find.png|
+  \item \verb|logging_arctraces_im      = arctraces_in_master_trace2.png|
+  \item \verb|logging_arc_line_identification_residuals = arc_line_identification_residuals.png|
+  \item \verb|logging_arc_line_identification_spectrum  = arc_line_identification_spectrum.pdf|
+  \item \verb|logging_arc_line_identification_positions = arc_line_identification_positions.png|
+%  \item \verb||
+%  \item \verb||
+%  \item \verb||
+%  \item \verb||
+\end{itemize}
+If you modified the parameters, please use yours instead of the given ones in the following Chapters.
+
+\subsection{Are the traces (of the science fiber) identified correctly?}
+\paragraph{Data to check:}
+\begin{enumerate}
+  \item 
+\end{enumerate}
+
+\paragraph{Possible solutions:}
+
+\subsection{Are the traces (of the calibration fiber) identified correctly?}
+\paragraph{Data to check:}
+
+
+\paragraph{Possible solutions:}
+
+\subsection{Is the wavelength solution correct?}
+
+\subsection{Are the object and telescope coordinates correct, is the handling of time right?}
 
 \newpage
 

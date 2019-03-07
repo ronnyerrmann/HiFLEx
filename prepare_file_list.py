@@ -194,7 +194,8 @@ if __name__ == "__main__":
     file.write('###   - Flags:\n')
     file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n')
     file.write('###             Combination of images before the extraction is possible, please refer to the manual for more information\n')
-    file.write('###        "w", if the spectrum contains wavelength information in case of a spectrograph with single fiber input.\n')
+    file.write('###        "w" or "w2", if the spectrum contains wavelength information (in case of a spectrograph with single fiber input or\n')
+    file.write('###                     to find the time dependent offset between both fibers of a bifurcated fiber).\n')
     file.write('###             Used to mark the files with calibration spectrum taken before or after the science observation.\n')
     file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
     file.write('### -> When finished with the editing, save the file and close the editor \n\n')
@@ -304,7 +305,12 @@ if __name__ == "__main__":
             continue
         entry[5] = entry[5].replace(' ','').split(',')
         for extraction in entry[5]:
-            if extraction.lower().find('w') == 0:       # use this file for wavelength calibration between spectra
+            if extraction.lower().find('w2') == 0:       # use this file for wavelength calibration between spectra
+                param = 'wavelengthcal2'
+                parcal = 'wavelengthcal'
+                conf_data, warn = create_parameters(conf_data, warn, param, param, [parcal], exist_bias, exist_rflat, exp_darks, entry)
+                continue  
+            elif extraction.lower().find('w') == 0:       # use this file for wavelength calibration between spectra
                 param = 'wavelengthcal'
                 conf_data, warn = create_parameters(conf_data, warn, param, param, [param], exist_bias, exist_rflat, exp_darks, entry)
                 continue                        # otherwise Warn from below will be triggered
