@@ -58,7 +58,7 @@
  \item \verb|extraction_width_multiplier = 1|, \verb|arcextraction_width_multiplier = 1| \verb|width_percentile = 05|, and \verb|extracted_bitpix = -32| are standard now.
 \end{itemize}
 
-\subsection*{v0.4.0 (in preparation)}
+\subsection*{v0.4.0}
 \begin{itemize}\setlength\itemsep{0em}
   \item Included the comparison between the wavelength solutions in science and calibration fiber.
   \item Improved radial velocity analysis using Terra.
@@ -152,7 +152,7 @@ conda update --prefix /home/exohspec/anaconda2 anaconda
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/exohspec/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/exohspec/archive/v0.3.2.tar.gz
+wget https://github.com/ronnyerrmann/exohspec/archive/v0.4.0.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
 
@@ -169,7 +169,7 @@ tar -xzvf v*.tar.gz
  \item[remove\_orders.py] If the automatic process identified wrong orders, then this script allows the user to remove them using a GUI.
  \item[create\_badpx\_mask.py] Script to create a bad pixel mask (in testing).
  \item[SSEphem] Necessary folder to calculate barycentric velocity. \textit{(It might be necessary to install the package to have the correct paths.)} 
- \item[ssephem\_update.py] Script to update the SSEphem package (See Section~\ref{Section:update_ssephem}).
+ \item[ssephem\_update.py] Script to update the SSEphem package (See Chapter~\ref{Section:update_ssephem}).
 \end{description}
 
 When running the scripts for the first time, python will create a new file called \verb|<filename>.pyc| for some of the files (compiled script). No harm will be done in removing or keeping the files.
@@ -178,9 +178,9 @@ When running the scripts for the first time, python will create a new file calle
 The pipeline creates extracted spectra in different formats, which then can be further analysed using available software. Additionally the pipeline can use available packages to find the radial velocity of the object. Below are described the requirements of the external software.
 
 \subsubsection{Ceres Pipeline}
-Authors: Rafael Brahm, Andr{\'e}s Jord{\'a}n, N{\'e}stor Espinoza. If you make use of the Radial Velocity analysis from the Ceres , please cite Brahm et al 2017\footnote{\url{https://ui.adsabs.harvard.edu/\#abs/2017PASP..129c4002B/abstract}}.
+Authors: Rafael Brahm, Andr{\'e}s Jord{\'a}n, N{\'e}stor Espinoza. If you make use of the Radial Velocity analysis from the Ceres , please cite Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/\#abs/2017PASP..129c4002B/abstract}}.
 
-The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres} (``Clone or Download''-button) and then unpacked. TO make it work, please follow the Installation section in the README.md file on\\ \url{https://github.com/rabrahm/ceres} .
+The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres} (``Clone or Download''-button)\\ and then unpack the archive. To make it work, please follow the Installation Chapter in the README.md file on\\ \url{https://github.com/rabrahm/ceres} .
 
 
 \subsubsection{Terra}
@@ -188,7 +188,7 @@ Terra can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpw
 \begin{lstlisting}[style=base]
 java -jar <path to terra>/terra/PRV.jar
 \end{lstlisting}
-
+This should produce the entry \textit{*** TERRA v1.8 ***} before failing.
 
 \subsection{General information about the way the pipeline works}
 
@@ -197,7 +197,7 @@ java -jar <path to terra>/terra/PRV.jar
 
 \begin{enumerate}
   \item The script has some hard coded values in the *.py files (normally at the beginning of a procedure). These values can be changed for testing, but usually do not need any changes.
-  \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|), given at the beginning of the python scripts. Some of the parameters in the configuration file need adjustment on a regular basis (see Section~\ref{section:steps_new_data_set}).
+  \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|), given at the beginning of the python scripts. Some of the parameters in the configuration file need adjustment on a regular basis (see Chapter~\ref{Section:steps_new_data_set}).
   \item Furthermore, the pipeline reads the configuration file given in parameter \verb|configfile_fitsfiles| (standard: \verb|fits_conf.txt|), which is automatically created by the pipeline when running \verb|prepare_file_list.py|.
   \item The parameters which are set in the configuration file(s) can be overwritten with a command line input when a python script is started (e.g. \verb|python bla.py argument1=valueX argument2=valueY|).
   \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
@@ -206,8 +206,12 @@ java -jar <path to terra>/terra/PRV.jar
 \subsubsection{Finding further information}
 
 \begin{itemize}
-  \item The pipeline logs the execution of procedures and necessary information in a logfile (standard: \verb|logfile|). Most of this information is also printed into the terminal window.
-  \item All adjustable parameters are logged at the beginning and at the end of the execution of a python script into a logfile (standard: \verb|logfile_params|).
+  \item The pipeline logs the execution of procedures and necessary information in a logfile (standard: \verb|logfile|). Most of this information is also printed into the terminal window. In the logfile, each entry will start similar to 
+  \begin{lstlisting}[style=base]
+20190225160303 - 37448 - 
+  \end{lstlisting}
+  and decodes the current time (YYYYMMDDHHMMSS) of the entry and the PID\footnote{process ID: \url{https://en.wikipedia.org/wiki/Process_identifier}} of the process that created it.
+  \item All adjustable parameters are logged at the beginning and at the end of the execution of a python script into a logfile (standard: \verb|logfile_params|) in the a json\footnote{\url{https://en.wikipedia.org/wiki/JSON\#Example}} format.
   \item Images with the results of some steps can be found in a logging subfolder (standard: \verb|logging|). Some of these images are shown in Figures~\ref{figure_apertures_in_master_flat} to \ref{figure_arc_line_identification_residuals}.
   \item Each parameter is explained in detail in the configuration file.
   \item The input and output parameters of the individual procedures are explained in the file \verb|procedures.py|.
@@ -255,17 +259,18 @@ java -jar <path to terra>/terra/PRV.jar
     \item[e)] Finding the shift between the emission lines in the calibration spectra and the lines used for the wavelength solution (for bifurcated fiber spectrographs) or interpolating the measured drift from step 6. Calculating the wavelength for each pixel in the extracted spectrum.
     \item[f)] Creating the flat corrected spectrum.
     \item[g)] Creating the spectrum with normalised continuum.
-    \item[h)] Perform the radial velocity analysis (cross-correlation with template spectrum).
+    \item[h)] (Optional) Perform the radial velocity analysis (cross-correlation with template spectrum).
     \item[i)] Perform some general measurements which are stored in the header.
     \item[j)] Write the file with all extracted data into the folder given in the parameter \verb|path_extraction| (standard: \textit{extracted}).
     \item[k)] Write subsets of data into different files to create compatibility with other software.
   \end{itemize}
+  \item[8.] (Optional) Perform the radial velocity analysis by building a template spectrum from the observation.
 \end{itemize}
 
-\noindent If the result file of any of the above steps already exist in the folder in which the code is run, then the existing file is read instead of performing the step again in order to safe computational time. If a step needs to run again, the according result file needs to be deleted.
+\noindent If the result file of any of the above steps already exist in the folder in which the code is run, then the existing file is read instead of performing the step again in order to safe computational time. If a step needs to run again, the according result file needs to be deleted. (Further information can be found in Chapter~\ref{Section:Problem_solution}.)
 
 \subsection{Necessary CCD images}
-To get the best results, the following data should be taken (all filenames are case-insensitive). \textbf{No spaces are allowed in the file names.}
+To get the best results, the following data (or more files) should be taken. Please note that all filenames are case-insensitive. \textbf{No spaces are allowed in the file names.}
 \begin{itemize}
   \item \textit{true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{rflat} for automatic processing.
   \item Flat (11x, white light source through the science fiber), with the filename containing \textbf{sflat}, \textbf{tung}, or \textbf{whli}. The calibration fiber should be dark for this data.
@@ -273,7 +278,7 @@ To get the best results, the following data should be taken (all filenames are c
   \item (\textit{Only necessary, if the shift in dispersion direction between the fibers of a bifurcated fiber should be measured}): Arc2 (5x, calibration lamp through the science fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc2}, \textbf{ThAr2}, \textbf{Th\_Ar2}, or \textbf{UNe2}.
 %  \item FlatArc (11x, white light source and calibration lamp), the filename should be \textbf{flatarc}, \textbf{sflatThAr}, \textbf{whli-UNe}, or similar.
   \item Bias (11x) and/or Darks (11x, for the exposure time of the true Flat and Flat)% and FlatArc)
-  \item Filenames science images: the optimum is to start the filename with the object name (as in reference file given by parameter \verb|object_file|, see Chapter~\ref{Section:create_object_list_file}). However, in order to try to match the object name with entries in the \verb|object_file| the parts of the filename containing ``\_'' and ``-'' are stripped away one by one from the end of the filename.
+  \item Science images: It is best to start the filename with the object name (as in reference file given by parameter \verb|object_file|, see Chapter~\ref{Section:create_object_list_file}). However, in order to try to match the object name with entries in the \verb|object_file| the parts of the filename containing ``\_'' and ``-'' are stripped away one by one from the end of the filename.
 \end{itemize}
 
 \subsection{Steps to run the code on a new set of data}
@@ -606,6 +611,9 @@ The data of the individual objects are stored in this folder in the subfolder \t
 
 It is possible to include the information from previous nights of the same object by linking or copying the \textit{.csv}-files into the corresponding \textit{data/}-folders and rerunning \verb|python <path to scripts>/reduction_day.py|. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
 
+% -------------------------------------------------------------------------------------------
+
+
 \newpage
 \section{Seting up the pipeline}
 
@@ -694,8 +702,10 @@ The following options for axis plotting exist:
 %\end{lstlisting}
 
 
-\newpage
+% -------------------------------------------------------------------------------------------
 
+
+\newpage
 \section{Extracting data from other spectrographs}
 
 \subsection{Extracting HARPS data}
@@ -838,8 +848,7 @@ For more information about TERRA please refer to the literature\footnote{\url{ht
 The testing of the pipeline was done for the MRES data taken on 2018-11-27.
 
 \noindent The following replacements/insertions are necessary in the conf.txt file. 
-\begin{itemize}\setlength\itemsep{0em}
-\small
+\begin{itemize}\small\setlength\itemsep{-0.1cm}
   \item \verb|subframe                 = [12091,511,380,0]|
   \item \verb|rotate_frame             = 270|
   %\item \verb|arcextraction_width_multiplier = 1|
@@ -866,10 +875,19 @@ The testing of the pipeline was done for the MRES data taken on 2018-11-27.
   \item \verb|extracted_bitpix         = -32|
 \end{itemize}
 
+
+% -------------------------------------------------------------------------------------------
+
+
+\newpage
 \section{Fixing problems: The results are not as expected}
+\label{Section:Problem_solution}
 In the following Chapters a few ideas of how to check and fix common problems are given. The following standard names are assumed.
-\begin{itemize}\setlength\itemsep{0em}
-  \small
+\begin{itemize}\small\setlength\itemsep{-0.2cm}
+  \item \verb|object_file = object_list.txt|
+  \item \verb|master_trace_sci_filename           = master_traces_sci.fits|
+  \item \verb|master_trace_cal_filename           = master_traces_cal.fits|
+  \item \verb|master_wavelensolution_filename     = master_wavelength.fits|
   \item \verb|logging_path              = logging/|
   \item \verb|logging_trace1_binned     = mstr_trace1_binned.fits|
   \item \verb|logging_traces_binned     = sci_trace1_binned.fits|
@@ -881,15 +899,17 @@ In the following Chapters a few ideas of how to check and fix common problems ar
   \item \verb|logging_arc_line_identification_spectrum  = arc_line_identification_spectrum.pdf|
   \item \verb|logging_arc_line_identification_positions = arc_line_identification_positions.png|
 %  \item \verb||
-%  \item \verb||
-%  \item \verb||
-%  \item \verb||
 \end{itemize}
 If you modified the parameters, please use yours instead of the given ones in the following Chapters.
 
-If parameters are changed while working through the following steps. Some of the already created files need to be removed before the pipeline can re-run with the better settings. In the following chapters, each correction step should name the first value of the following list, that need to be removed. Afterwards \verb|reduction_day.py| can be run again.
+If parameters are changed while working through the following steps. Some of the already created files need to be removed before the pipeline can re-run with the better settings. In the following chapters, each correction step should name the first value of the following list, that need to be removed (error messages because of missing files can be ignored). Afterwards \verb|reduction_day.py| can be run again.
 \begin{lstlisting}[style=base]
-rm master_* logging/sci_trace1_binned.fits master_traces_sci.fits master_traces_cal.fits
+rm master_*
+rm logging/sci_trace1_binned.fits
+rm master_traces_sci.fits
+rm master_traces_cal.fits
+rm master_wavelength*.fits
+rm extracted/*
 \end{lstlisting}
 
 
@@ -900,26 +920,43 @@ rm master_* logging/sci_trace1_binned.fits master_traces_sci.fits master_traces_
   \item If the orders are not running from up to down in the image, the adjust paramter \verb|rotate_frame|.  Remove everything after \textit{master\_*}.
   \item If noise was marked as order, run \verb|remove_orders.py| and remove the wrong orders. All depending calculations will run again.
   \item If orders are missing check \textbf{logging/traces\_in\_master\_trace1\_binned.png}. If the orders are marked there correctly then adjust parameter \verb|bin_adjust_apertures|, so that the echelle orders are well separated and only pixel with similar amount of flux are median combined. Remove everything after \textit{master\_traces\_sci.fits}.
-  \item If orders are missing check \textbf{logging/mstr\_trace1\_binned.fits}. Very likely too heavy binning was used and the orders are not destinguishable or half of the binning area consists of background pixel. Adjust parameter \verb|bin_search_apertures|. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
+  \item If orders are missing check \textbf{logging/mstr\_trace1\_binned.fits}. Very likely, too heavy binning was used and the orders are not destinguishable or half of the binning area consists of background pixel. Adjust parameter \verb|bin_search_apertures|. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
 \end{itemize}
 
 
 \subsection{Are the traces (of the calibration fiber) identified correctly?}
 \begin{itemize}
-  \item bla
+  \item \textbf{logging/arctraces\_in\_master\_trace2.png}: Are the orders identified correctly? If yes, go to next chapter.
+  \item Be sure, that all echelle orders from the science fiber are well separated from the orders of the calibration fiber. If necessary change the orientation of the bifurcated fiber in the setup (angel between bifurcated fiber and cross-disperser). Take new data, start in a new folder.
 \end{itemize}
 
 
 \subsection{Is the wavelength solution correct?}
 \begin{itemize}
-  \item \textbf{logging/arctraces\_in\_master\_trace2.png} (if emission line lamp spectrum): Is the wavelength of the emission lines increasing from up to down?
+  \item \textbf{logging/arctraces\_in\_master\_trace2.png} (if emission line lamp spectrum, otherwise \textbf{logging/arc\_line\_identification\_positions.png} (ignore the written wavelengths)): If the wavelengths of the emission lines is not increasing from up to down along the individual orders or if the redder orders are not on the left side of the image, adjust parameters \verb|rotate_frame| and \verb|flip_frame|. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
+  \item \textbf{logging/arc\_line\_identification\_residuals.png}: If the most dots fall on the x-axis , go to next chapter. If most dots fall on a sinusoidal line, increase the number of orders in parameters \verb|polynom_order_traces| or \verb|polynom_order_intertraces|. Remove everything after \textit{ master\_wavelength*.fits}.
+  \item \textbf{logfile}: search for the (last) line containing:
+  \begin{lstlisting}[style=base]
+ standard deviation of the residuals between the lines and the fit
+  \end{lstlisting}
+  A high number of lines should have been identified to a reasonable precision (compare to a previous night). If all is the case, go to next chapter.
+  \item textbf{logging/arc\_line\_identification\_spectrum.pdf}: The emision lines in the extracted spetrum should match with the brightest lines from the catalogue (red wavelengths, marker lengths is an indication for the brightness). If yes, go to next chapter.
+  \item The lines in the above spectrum are not matching at the borders. Decrease or increase parameter \verb|polynom_order_traces|. Decrease or increase the values in \verb|opt_px_range|. Remove everything after \textit{ master\_wavelength*.fits}.
+  \item The lines are completely off. Compare \textbf{logging/arctraces\_in\_master\_trace2.png} in the current directory and in the directory from where the the original wavelength solution are taken (\verb|original_master_wavelensolution_filename|). Check, that the parameters \verb|order_offset|, \verb|px_offset_order|, and \verb|px_offset_order| are large enough to cover the change between the two nights. Be sure the values are not too big. Remove everything after \textit{master\_wavelength*.fits}.
 \end{itemize}
 
 
 \subsection{Are the object and telescope coordinates correct, is the handling of time right?}
 \begin{itemize}
-  \item bla
+  \item Was the right object used from \textbf{object\_list.txt}?
+  \item Compare the barycentric velocity with other calculators. Are the object and telescope coordinates right? Is the time zone correct? If not, check parameters \verb|raw_data_dateobs_keyword|, \verb|raw_data_timezone_cor|, \verb|site|, \verb|latitude|, and \verb|longitude|.
 \end{itemize}
+
+
+\subsection{Further help}
+If you observe strange behaviour, please contact Ronny. Access to the reduction folder would be preferable.
+
+% -------------------------------------------------------------------------------------------
 
 
 \newpage
@@ -962,6 +999,9 @@ rm master_* logging/sci_trace1_binned.fits master_traces_sci.fits master_traces_
 \end{itemize}
 
 % Other versions may work but these are the ones tested.
+
+
+% -------------------------------------------------------------------------------------------
 
 
 \newpage
