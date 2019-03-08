@@ -405,9 +405,17 @@ if __name__ == "__main__":
                         obj_names.append(obj_name)
         os.chdir(params['path_csv_terra'])
         for obj_name in obj_names:
+            no_RV_names = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
+            do_RV = True
+            for no_RV_name in no_RV_names:
+                if obj_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
+                    do_RV = False
+                    break
+            if not do_RV:
+                continue
             os.system('rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}/" > astrocatalog.example'.format(obj_name))
-            #os.system('java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] ) )
-            print 'Warn: Terra commented out'
+            os.system('java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] ) )
+            #print 'Warn: Terra commented out'
             #os.system('gedit {0}/results/synthetic.rv &'.format(obj_name))
         print('\n\nInfo: Finished the Terra analysis. Some errors reported by Terra are expected. The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_csv_terra']))
         

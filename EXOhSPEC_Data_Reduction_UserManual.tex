@@ -887,23 +887,40 @@ In the following Chapters a few ideas of how to check and fix common problems ar
 \end{itemize}
 If you modified the parameters, please use yours instead of the given ones in the following Chapters.
 
-\subsection{Are the traces (of the science fiber) identified correctly?}
-\paragraph{Data to check:}
-\begin{enumerate}
-  \item 
-\end{enumerate}
+If parameters are changed while working through the following steps. Some of the already created files need to be removed before the pipeline can re-run with the better settings. In the following chapters, each correction step should name the first value of the following list, that need to be removed. Afterwards \verb|reduction_day.py| can be run again.
+\begin{lstlisting}[style=base]
+rm master_* logging/sci_trace1_binned.fits master_traces_sci.fits master_traces_cal.fits
+\end{lstlisting}
 
-\paragraph{Possible solutions:}
+
+\subsection{Are the traces (of the science fiber) identified correctly?}
+\begin{itemize}
+  \item \textbf{logging/traces\_in\_master\_trace1.png}: Are the orders identified correctly? If yes, go to next chapter.
+  \item If a lot of unexposed area is located on the image borders, adjust parameter \verb|subframe| to the correct image set. Remove everything after \textit{master\_*}.
+  \item If the orders are not running from up to down in the image, the adjust paramter \verb|rotate_frame|.  Remove everything after \textit{master\_*}.
+  \item If noise was marked as order, run \verb|remove_orders.py| and remove the wrong orders. All depending calculations will run again.
+  \item If orders are missing check \textbf{logging/traces\_in\_master\_trace1\_binned.png}. If the orders are marked there correctly then adjust parameter \verb|bin_adjust_apertures|, so that the echelle orders are well separated and only pixel with similar amount of flux are median combined. Remove everything after \textit{master\_traces\_sci.fits}.
+  \item If orders are missing check \textbf{logging/mstr\_trace1\_binned.fits}. Very likely too heavy binning was used and the orders are not destinguishable or half of the binning area consists of background pixel. Adjust parameter \verb|bin_search_apertures|. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
+\end{itemize}
+
 
 \subsection{Are the traces (of the calibration fiber) identified correctly?}
-\paragraph{Data to check:}
+\begin{itemize}
+  \item bla
+\end{itemize}
 
-
-\paragraph{Possible solutions:}
 
 \subsection{Is the wavelength solution correct?}
+\begin{itemize}
+  \item \textbf{logging/arctraces\_in\_master\_trace2.png} (if emission line lamp spectrum): Is the wavelength of the emission lines increasing from up to down?
+\end{itemize}
+
 
 \subsection{Are the object and telescope coordinates correct, is the handling of time right?}
+\begin{itemize}
+  \item bla
+\end{itemize}
+
 
 \newpage
 

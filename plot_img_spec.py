@@ -1,14 +1,15 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import os
 import numpy as np
 from astropy.io import fits
 import matplotlib       # To avoid crashing when ssh into Narit using putty
-#matplotlib.use('agg')   # To avoid crashing when ssh into Narit using putty, however this means plots are not shown (test when working in front of uhppc30)
+if not 'DISPLAY' in os.environ:
+    matplotlib.use('agg')   # To avoid crashing when ssh into Narit using putty, however this means plots are not shown (test when working in front of uhppc30)
 import matplotlib.pyplot as plt
 import matplotlib.cm as cmaps
 import matplotlib.colors as colors
-import os
 import sys
 from astropy.table import Table
 from gatspy.periodic import LombScargleFast

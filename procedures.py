@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import os
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
@@ -9,10 +10,10 @@ import astropy.coordinates as astcoords
 import astropy.units as astunits
 import astropy.constants as astconst
 import matplotlib	# To avoid crashing when ssh into Narit using putty
-#matplotlib.use('agg')	# To avoid crashing when ssh into Narit using putty, however this means plots are not shown (test when working in front of uhppc30)
+if not 'DISPLAY' in os.environ:
+    matplotlib.use('agg')	# To avoid crashing when ssh into Narit using putty, however this means plots are not shown (test when working in front of uhppc30)
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-import os
 import sys
 import time
 import datetime
