@@ -30,8 +30,8 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 
-\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: v0.4.0}
-\date{March, 2019}
+\title{User Manual for Data Reduction of the EXOhSPEC Instrument \\ Working version: v0.4.1}
+\date{April, 2019}
 \author{Ronny Errmann, Neil Cook\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -71,6 +71,10 @@
   \item General bug fixing.
 \end{itemize}
 
+\subsection*{v0.4.1}
+\begin{itemize}
+  \item Switched to barycentric correction (radial velocity and BJDTDB) from \url{https://github.com/shbhuk/barycorrpy}.
+\end{itemize}
 % ------------------------------------------------------------------------------
 \newpage
 
@@ -92,7 +96,7 @@ This program is designed to take a fits image file (i.e. a CCD image) and run da
 
 \noindent This program was written to work with modules installed in Anaconda 2 and python 2.7. It is recommended to use an installation of anaconda 2 to use this program (If this is not possible, the whole module dependency is given in Appendix~\ref{section:module_dependency}).
 
-Similar to the CERES pipeline, the SSEphem package (\url{http://www.cv.nrao.edu/~rfisher/Python/py_solar_system.html}) in connection with the SOFA (\url{http://www.iausofa.org/}) functions are used. 
+%Similar to the CERES pipeline, the SSEphem package (\url{http://www.cv.nrao.edu/~rfisher/Python/py_solar_system.html}) in connection with the SOFA (\url{http://www.iausofa.org/}) functions are used. 
 
 % -------------------------------------------------------------------------------------------
 
@@ -121,13 +125,20 @@ After making the change and opening a new terminal, python should point to the f
 \begin{lstlisting}[style=base]
 pip install tqdm
 pip install gatspy
+pip install barycorrpy
 pip install ephem
-pip install jplephem
-pip install de423
 \end{lstlisting}
 %gatspy for lomb scargle
+% For BJD (but not needed anymore):
+%pip install jplephem
+%pip install de423
 
-To use the cross-correlation based on the CERES pipeline the package pyfits is necessary:
+\subsubsection{Manual installation of barycorrpy }
+In case \textit{barycorrpy} is not available using \textit{pip}, please install it by using the instruction of the package: \url{https://github.com/shbhuk/barycorrpy/wiki/1.-Installation}
+Afterwards, please make sure that \verb|import barycorrpy| works in python.
+
+\subsubsection{Install pyfits for radial velocity analysis}
+To use the cross-correlation based radial velocity from the CERES pipeline (see Section~\ref{Section:Explanation_CERES_pipeline}) the package pyfits is necessary:
 \begin{lstlisting}[style=base]
 conda install gsl=2.2.1
 pip install pyfits
@@ -168,8 +179,8 @@ tar -xzvf v*.tar.gz
  \item[plot\_img\_spec.py] This script controls plotting of CCD images, graphs, and the extracted spectra.
  \item[remove\_orders.py] If the automatic process identified wrong orders, then this script allows the user to remove them using a GUI.
  \item[create\_badpx\_mask.py] Script to create a bad pixel mask (in testing).
- \item[SSEphem] Necessary folder to calculate barycentric velocity. \textit{(It might be necessary to install the package to have the correct paths.)} 
- \item[ssephem\_update.py] Script to update the SSEphem package (See Chapter~\ref{Section:update_ssephem}).
+% \item[SSEphem] Necessary folder to calculate barycentric velocity. \textit{(It might be necessary to install the package to have the correct paths.)} 
+% \item[ssephem\_update.py] Script to update the SSEphem package (See Chapter~\ref{Section:update_ssephem}).
 \end{description}
 
 When running the scripts for the first time, python will create a new file called \verb|<filename>.pyc| for some of the files (compiled script). No harm will be done in removing or keeping the files.
@@ -178,6 +189,7 @@ When running the scripts for the first time, python will create a new file calle
 The pipeline creates extracted spectra in different formats, which then can be further analysed using available software. Additionally the pipeline can use available packages to find the radial velocity of the object. Below are described the requirements of the external software.
 
 \subsubsection{Ceres Pipeline}
+\label{Section:Explanation_CERES_pipeline}
 Authors: Rafael Brahm, Andr{\'e}s Jord{\'a}n, N{\'e}stor Espinoza. If you make use of the Radial Velocity analysis from the Ceres , please cite Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/\#abs/2017PASP..129c4002B/abstract}}.
 
 The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres} (``Clone or Download''-button)\\ and then unpack the archive. To make it work, please follow the Installation Chapter in the README.md file on\\ \url{https://github.com/rabrahm/ceres} .
@@ -270,7 +282,7 @@ This should produce the entry \textit{*** TERRA v1.8 ***} before failing.
 \noindent If the result file of any of the above steps already exist in the folder in which the code is run, then the existing file is read instead of performing the step again in order to safe computational time. If a step needs to run again, the according result file needs to be deleted. (Further information can be found in Chapter~\ref{Section:Problem_solution}.)
 
 \subsection{Necessary CCD images}
-To get the best results, the following data (or more files) should be taken. Please note that all filenames are case-insensitive. \textbf{No spaces are allowed in the file names.}
+To get the best results, the following data (or more files) should be taken. Please note that all filenames are case-insensitive. \textbf{No spaces or commas are allowed in the file names.}
 \begin{itemize}
   \item \textit{true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{rflat} for automatic processing.
   \item Flat (11x, white light source through the science fiber), with the filename containing \textbf{sflat}, \textbf{tung}, or \textbf{whli}. The calibration fiber should be dark for this data.
@@ -413,9 +425,9 @@ In order to calculate the barycentric correction the time of the observation (or
  \end{enumerate}
 \end{itemize}
 
-\subsubsection{get\_ut1\_offset: requested mjd is beyond end of IERS file}
-\label{Section:update_ssephem}
-If the message \verb|get_ut1_offset: requested mjd is beyond end of IERS file| appears, the data from Jet Propulsion Laboratory Development Ephemeris is out of date. It can be updated by running \verb|ssephem_update.py|. 
+%\subsubsection{get\_ut1\_offset: requested mjd is beyond end of IERS file}
+%\label{Section:update_ssephem}
+%If the message \verb|get_ut1_offset: requested mjd is beyond end of IERS file| appears, the data from Jet Propulsion Laboratory Development Ephemeris is out of date. It can be updated by running \verb|ssephem_update.py|. 
 
 %\textit{At the moment DE403 is used (the CERES pipeline uses DE403). This can be changed by updating \verb|ssephem_update.py|, \verb|SSEphem/update_ssephem.py| (updating the procedure} SSEphemDownload \textit{, and at the beginning of \verb|procedures.py|.} However, this doesn't seem to have an impact on the resulting barycentric corrections.
 
@@ -426,8 +438,8 @@ If the coordinates of the object are not stored in the fits header, then they ca
  \item Object name (the filename should start with the object name in order to be used)
  \item RA (hh:mm:ss.ss or as one number in degrees)
  \item DEC ($\pm$dd:mm:ss.ss or as one number in degrees)
- \item PM RA (arcsec/year, can be 0 in the most cases)
- \item PM DEC (arcsec/year, can be 0 in the most cases)
+ \item PM RA (mas/year, can be 0 in the most cases)
+ \item PM DEC (mas/year, can be 0 in the most cases)
  \item Epoch of the coordinates (only the number, e.g. 2000 or 2015.5)
  \item Enable/Disable flag (1 for enabled)
  \item Mask to use. At the moment G2, K5, or M2 are possible options. Can be empty
@@ -849,7 +861,7 @@ The testing of the pipeline was done for the MRES data taken on 2018-11-27.
 
 \noindent The following replacements/insertions are necessary in the conf.txt file. 
 \begin{itemize}\small\setlength\itemsep{-0.1cm}
-  \item \verb|subframe                 = [12091,511,380,0]|
+  \item \verb|subframe                 = [1201,511,380,0]|
   \item \verb|rotate_frame             = 270|
   %\item \verb|arcextraction_width_multiplier = 1|
   \item \verb|maxshift                 = 5|
@@ -862,12 +874,12 @@ The testing of the pipeline was done for the MRES data taken on 2018-11-27.
   \item \verb|raw_data_imtyp_flat      = NA|
   \item \verb|raw_data_exptim_keyword  = EXPOSURE|
   \item \verb|raw_data_dateobs_keyword = DATE|
-  \item \verb|arc_calibs_create_g      = subframe|
-  \item \verb|trace1_calibs_create_g   = subframe|
-  \item \verb|trace2_calibs_create_g   = subframe|
-  \item \verb|extract_calibs_create_g  = subframe|
-  \item \verb|flatarc_calibs_create_g  = subframe|
-  \item \verb|wavelengthcal_calibs_create_g = subframe|
+  \item \verb|arc_calibs_create_g      = subframe,bias|
+  \item \verb|trace1_calibs_create_g   = subframe,bias|
+  \item \verb|trace2_calibs_create_g   = subframe,bias|
+  \item \verb|extract_calibs_create_g  = subframe,bias|
+  \item \verb|flatarc_calibs_create_g  = subframe,bias|
+  \item \verb|wavelengthcal_calibs_create_g = subframe,bias|
   \item \verb|site        = TNT|
   \item \verb|altitude    = 2457|
   \item \verb|latitude    = 18.59055|

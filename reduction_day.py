@@ -10,11 +10,6 @@ calimages = dict()  # dictionary for all calibration images
 # location of config file
 CONFIGFILE = 'conf.txt'
 
-# Best solution:
-# Arcs: long exposure and short exposures to have more lines to identify lines
-# Flat: no saturation for tracing and background solution
-# FlatArc: no saturation for the normalised flat
-
 # Start of code
 # deal with arguments from a text file
 params = textfileargs(params, CONFIGFILE)

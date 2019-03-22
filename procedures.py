@@ -38,15 +38,25 @@ import plot_img_spec
 import psutil
 import ephem
 from math import radians as rad
+import barycorrpy
+
+""" only needed for BJD calculation using jplephem and BVC calculation from CERES pipeline
 import jplephem                     # jplehem from the pip install jplehem
 import de423
-
 # SSEphem package http://www.cv.nrao.edu/~rfisher/Python/py_solar_system.html coupled to SOFA http://www.iausofa.org/
+# to clean up: mv SSEphem/ ssephem_update.py old/
 baryc_dir = os.path.dirname(os.path.abspath(__file__))+'/SSEphem/'
 sys.path.append(baryc_dir)
+if not os.path.isfile(baryc_dir+'man_jplephem.py'):
+    os.system('cd {0} && ln jplephem.py man_jplephem.py'.format(baryc_dir))
+    time.sleep(1)
+    if not os.path.isfile(baryc_dir+'man_jplephem.py'):
+        print('Please run in a different termina the following line and then press Enter')
+        print('cd {0} && ln jplephem.py man_jplephem.py'.format(baryc_dir))
+        raw_input('')
 import man_jplephem                 # jplephem in the SSEphem folder
 ephemeris = 'DEc403'        # To use the JPL DE403 ephemerides, https://en.wikipedia.org/wiki/Jet_Propulsion_Laboratory_Development_Ephemeris
-
+"""
 tqdm.monitor_interval = 0   #On the virtual machine at NARIT the code raises an exception otherwise
 
 calimages = dict()  # dictionary for all calibration images used by create_image_general and read_file_calibration
@@ -95,6 +105,8 @@ def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logf
     file.close()
     if message.find('Error') == 0:
         print '\t-> exiting'
+        if 'params' in locals() or 'params' in globals(): 
+            log_params(params) 
         exit(1)
 
 def log_params(params):
@@ -128,6 +140,7 @@ def textfileargs(params, textfile=None):
     
     Please note, the parameters are only lists or single entries. No numpy arrays allowed
     """
+    
     # Set up standard parameters
     params['in_shift'] = -0
     
@@ -162,162 +175,120 @@ def textfileargs(params, textfile=None):
             #        emsg = [key, str(VARIABLES[key])]
             #        print('Command line input not understood for' +
             #              'argument {0} must be {1}'.format(*emsg))
-        elif arg in ['nocheck']:
+        elif arg in ['nocheck', 'prepare']:
             continue        # Do nothing, just prevent the warning below
         else:
             logger('Warn: I dont know how to handle command line argument: {0}'.format(arg))
     params.update(cmdparams)
-    
-    # deal with lists
-    lists = ['subframe', 'arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'use_catalog_lines', 'polynom_order_traces', 
-             'polynom_order_intertraces', 'opt_px_range', 'bin_search_apertures', 'bin_adjust_apertures', 'raw_data_file_endings', 
-             'background_width_multiplier', 'polynom_bck']
-    for entry in params.keys():
-        if entry.find('_rawfiles') > 0 or entry.find('calibs_') > -1:
-            lists.append(entry)
-    for entry in lists:
-        temp = params[entry]
-        for i in ['[', ' ', ']']:
-            temp = temp.replace(i,'')
-        if len(temp) == 0:
-            temp = []
-        else:
-            temp = temp .split(',')
-        params[entry] = temp
-    
-    # deal with lists of integers
-    lists = ['subframe', 'arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
+    list_txt = ['use_catalog_lines', 'raw_data_file_endings']
+    list_int = ['subframe', 'arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck']
-    for entry in lists:
-        if entry not in params.keys():
-            emsg2 = 'Parameter "{0}" '.format(entry)
-            logger(emsg + emsg2 + ' missing')
-        if params[entry] <> ['']:           # only make useful data into integers
-            for i in range(len(params[entry])):
-                try:
-                    params[entry][i] = int(params[entry][i])
-                except:
-                    emsg2 = 'Parameter "{0}" (value of "{1}")'.format(entry, params[entry])
-                    logger(emsg + emsg2 + ' must be a list of integers')
-            
-    # deal with lists of floats
-    lists = ['opt_px_range', 'background_width_multiplier']
-    for entry in lists:
-        if entry not in params.keys():
-            emsg2 = 'Parameter "{0}" '.format(entry)
-            logger(emsg + emsg2 + ' missing')
-        if params[entry] <> ['']:           # only make useful data into floats
-            for i in range(len(params[entry])):
-                try:
-                    params[entry][i] = float(params[entry][i])
-                except:
-                    emsg2 = 'Parameter "{0}" (value of "{1}")'.format(entry, params[entry])
-                    logger(emsg + emsg2 + ' must be a list of floats')
-    
-    # deal with ints
+    list_float = ['opt_px_range', 'background_width_multiplier']
+    list_abs = ['arcshift_range']
     ints = ['polynom_order_apertures', 'rotate_frame']
-    for entry in ints:
-        if entry not in params.keys():
-            emsg2 = 'Parameter "{0}" '.format(entry)
-            logger(emsg + emsg2 + ' missing')
-        try:
-            params[entry] = int(params[entry])
-        except:
-            emsg2 = 'Parameter "{0}" (value of "{1}")'.format(entry, params[entry])
-            logger(emsg + emsg2 + ' must be an integer')
-            
-    # deal with floats
     floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier',
               'resolution_offset_pct', 'diff_pxs', 'maxshift', 'wavelength_scale_resolution', 'width_percentile', 'raw_data_timezone_cor',
-              'altitude', 'latitude', 'longitude']
-    for entry in floats:
-        if entry not in params.keys():
-            emsg2 = 'Parameter "{0}" '.format(entry)
-            logger(emsg + emsg2 + ' missing')
-        try:
-            params[entry] = float(params[entry])
-        except:
-            emsg2 = 'Parameter "{0}" (value of "{1}")'.format(entry, params[entry])
-            logger(emsg + emsg2 + ' must be a float')
-    
-    # deal with True/False:
+              'altitude', 'latitude', 'longitude', 'in_shift']
     bools = ['flip_frame', 'update_widths', 'GUI']
+    sides = ['arcshift_side']
+    results = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_csv_terra', 'object_file']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
+    full_filenames = ['badpx_mask_filename', 'original_master_traces_filename', 'original_master_wavelensolution_filename', 'reference_catalog',
+                'configfile_fitsfiles', 'raw_data_file_list', 'terra_jar_file']    # deal with full filenames -> nothing to do
+    texts = ['editor', 'extracted_bitpix', 'site']      # -> nothing to do
+    list_raw, paths, loggings = [], [], []
+    for entry in params.keys():                         # make the live easier by adding entries automatically to the lists above
+        if entry not in list_txt and (entry.find('_rawfiles') > 0 or entry.find('calibs_') > -1):           # add to the list
+            list_txt.append(entry)
+        if entry not in list_raw and (entry.find('_rawfiles') > 0):
+            list_raw.append(entry)
+        if entry not in paths    and (entry.find('path_') <> -1 or entry.find('_path') <> -1):
+            paths.append(entry)
+        if entry not in results  and ((entry.find('master_') == 0 or entry.find('background_') == 0) and entry.find('_filename') > 0):      # Put these files also into the result path
+            results.append(entry)
+        if entry not in loggings and (entry.find('logging_') == 0 and entry.find('logging_path') == -1):
+            loggings.append(entry)
+        if entry not in texts    and (entry.find('raw_data_imtyp_') == 0 or (entry.find('raw_data_') == 0 and entry.find('_keyword') > 0)):
+            texts.append(entry)
+        if entry not in list_txt and (type(params[entry]) == str):
+            if params[entry].find(',') <> -1:
+                list_txt.append(entry)
+    all_parameters = list(np.unique( list_txt + list_int + list_float + list_abs + ints + floats + bools + sides + results + full_filenames + list_raw + paths + loggings + texts ))
     trues = ['yes', 'true', '1']
-    for entry in bools:
-        if entry not in params.keys():
-            emsg2 = 'Parameter "{0}" '.format(entry)
-            logger(emsg + emsg2 + ' missing')
-        if params[entry].lower() in trues:
-            params[entry] = True
-        else:
-            params[entry] = False
-    
-    """# deal with order direction
-    svar = 'order_direction'
-    sargs = ['h', 'horizontal','v', 'vertical']
-    sargs2 = 'H, h, Horizontal, V, v, or Vertical'
-    params['transpose'] = False
-    if svar in params:
-        if params[svar].lower() not in sargs:
-            emsg2 = '"{0}" (value of "{1}")'.format(svar, params[svar])
-            raise Exception(emsg + emsg2 + ' must contain: ' + sargs2)
-        elif params[svar].lower() in sargs[2:4]:
-            params['transpose'] = True"""
-    
-    # deal with arc orders
-    params['arcshift_range'] = list(np.abs(params['arcshift_range']))
-    svar = 'arcshift_side'
-    if params[svar].lower() in ['left','l']:
-        params[svar] = -1
-    elif params[svar].lower() in ['right','r']:
-        params[svar] = 1
-    elif params[svar].lower() in ['center','c']:
-        params[svar] = 0
-    else:
-        emsg2 = 'Parameter "{0}" (value of "{1}")'.format(svar, params[svar])
-        logger(emsg + emsg2 + ' must be one of the following: left, l, right, r, center, c')
-    
+    falses = ['no', 'false', '0']
+    lefts = ['left','l']
+    rights = ['right','r']
+    centers = ['center','c']
+    undeclared_params = ''
+    # Important settings first, as other things depend on them:
+    for entry in paths:
+        if entry in params.keys():
+            params[entry] = (params[entry]+'/').replace('//', '/')      # Add a / at the end in case the user didn't
+    for entry in results:
+        if entry in params.keys():                                            # deal with result filenames/folders -> add result_path
+            params[entry] = params['result_path'] + params[entry]
+    # All parameters
     for entry in params.keys():
-        if entry.find('path_') <> -1 or entry.find('_path') <> -1:
-            params[entry] = (params[entry]+'/').replace('//', '/')              # Add a / at the end in case the user didn't
-    
-    # deal with lists of raw data filenames -> add path
-    filenlists = []
-    for entry in params.keys():
-        if entry.find('_rawfiles') > 0:
-            filenlists.append(entry)
-    for entry in filenlists:
-        for i in range(len(params[entry])):
-            params[entry][i] = params['raw_data_path'] + params[entry][i]
-    
-    # deal with result filenames/folders -> add result_path
-    filenames = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_csv_terra', 'object_file']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
-    for entry in params.keys():
-        if (entry.find('master_') == 0 or entry.find('background_') == 0) and entry.find('_filename') > 0:      # Put these files also into the result path
-            filenames.append(entry)
-    for entry in filenames:
-        params[entry] = params['result_path'] + params[entry]
-        
-    # deal with logging filenames/folders -> add logging_path
-    filenames = []
-    for entry in params.keys():
-        if entry.find('logging_') == 0 and entry.find('logging_path') == -1:
-            filenames.append(entry)
-    for entry in filenames:
-        params[entry] = params['logging_path'] + params[entry]
-    
-    # deal with full filenames -> nothing to do
-    filenames = ['badpx_mask_filename', 'original_master_traces_filename', 'terra_jar_file']
-    
-    # deal with paths, create folders
-    for entry in params.keys():
-        if entry.find('path') <> -1:
-            if not os.path.exists(params[entry]) and entry <> 'raw_data_path' and params[entry].lower() <> 'na/'and params[entry].lower() <> params['result_path']+'na/':
+        if entry in list_txt+list_int+list_float:
+            temp = params[entry]
+            for i in ['[', ' ', ']']:
+                temp = temp.replace(i,'')
+            if len(temp) == 0:
+                temp = []
+            else:
+                temp = temp .split(',')
+            params[entry] = temp
+        for [list_no, funct, functxt] in [ [list_int, int, 'intergers'], [list_float, float, 'floats'], [list_abs, abs, 'numbers'] ]:
+            if entry in list_no:        # deal with list of integers, floats, abs, numpy array (int and float could be also done with dtype, but then needs to be converted back to list
+                for i in range(len(params[entry])):
+                    try:
+                        params[entry][i] = funct(params[entry][i])
+                    except:
+                        logger(emsg + 'Parameter "{0}" (value of "{1}") must be a list of {2}. Error occured with index {3}.'.format(entry, params[entry], functxt, i))
+        for [ints_floats, funct, functxt] in [ [ints, int, 'intergers'], [floats, float, 'floats'] ]:
+            if entry in ints_floats:    # deal with integers or floats
                 try:
+                    params[entry] = funct(params[entry])
+                except:
+                    logger(emsg + 'Parameter "{0}" (value of "{1}") must be a {2}'.format(entry, params[entry], functxt))
+        if entry in bools:
+            if params[entry].lower() in trues:
+                params[entry] = True
+            elif params[entry].lower() in falses:
+                params[entry] = False
+            else:
+                logger(emsg + 'Parameter "{0}" (value of "{1}") must be any of the following: {2}'.format(entry, params[entry], trues+falses))
+        if entry in sides:
+            if params[entry].lower() in lefts:
+                params[entry] = -1
+            elif params[entry].lower() in rights:
+                params[entry] = 1
+            elif params[entry].lower() in centers:
+                params[entry] = 0
+            else:
+                logger(emsg + 'Parameter "{0}" (value of "{1}") must be one of the following: {2}'.format(entr, params[entry], lefts+rights+centers))
+        if entry in paths:
+            if not os.path.exists(params[entry]) and entry not in ['raw_data_path', 'path_ceres', 'terra_jar_file'] and params[entry].lower() not in ['na/', params['result_path']+'na/', params['result_path']+'/na/']:
+                try:                                                    # Create folders, if necessary
                     os.makedirs(params[entry])
                 except:
-                    logger('Warn: Cant create directory {0}'.format(params[entry]))
-    
+                    logger('Warn: Cannot create directory {0}'.format(params[entry]))
+        if entry in list_raw:                                           # deal with lists of raw data filenames -> add path
+            for i in range(len(params[entry])):
+                params[entry][i] = params['raw_data_path'] + params[entry][i]
+        if entry in loggings:                                           # deal with logging filenames/folders -> add logging_path
+            params[entry] = params['logging_path'] + params[entry]
+        if entry not in all_parameters:
+            undeclared_params += '{0}, '.format(entry)
+
+    overdeclared_params = ''
+    for entry in all_parameters:
+        if entry not in params.keys():
+            overdeclared_params += '{0}, '.format(entry)
+    if len(overdeclared_params) > 0:
+        logger('Warn: The following parameters are expected, but do not appear in the configuration files. : {0}\n\t!!! This is likely to cause problems later !!!'.format(overdeclared_params[:-2]))
+    if len(undeclared_params) > 0:
+        logger('Warn: The following parameters appear in the configuration files, but the programm did not expect them: {0}'.format(undeclared_params[:-2]))
+        
     return params
 
 def update_calibration_memory(key,value):
@@ -371,6 +342,7 @@ def convert_readfile(input_list, textformat, delimiter='\t', replaces=[], ignore
     """
     Can be used convert a read table into entries with the correct format. E.g integers, floats
         Ignories the lines which have less entries than entries in textformat
+        replacements will be done before 
     :param input_list: 1d list or array of strings from a read file
     :param textformat: 1d list or array of formats, e.g. [str, str, int, float, float]
     :param delimiter: string, used to split each line into the eleements
@@ -383,10 +355,10 @@ def convert_readfile(input_list, textformat, delimiter='\t', replaces=[], ignore
     for entry in input_list:
         notuse = False
         for ignore in ignorelines:
-            if type(ignore) == str:
+            if type(ignore) == str:     # only one entry
                 ignore_str = ignore
                 ignore_pos = 1E10
-            elif type(ignore) == list:
+            elif type(ignore) == list:  # list with two entries: string, and position after which the string will be ignored
                 if len(ignore) <> 2:
                     logger('Error: Programming error: ignorelines which where hand over to convert_readfile are wrong. It has to be a list consisting of strings and/or 2-entry lists of string and integer. Please check ignorelines: {0}'.format(ignorelines))
                 ignore_str = ignore[0]
@@ -399,7 +371,14 @@ def convert_readfile(input_list, textformat, delimiter='\t', replaces=[], ignore
         if notuse:
             continue
         for replce in replaces:
-            entry = entry.replace(replce,'')
+            if type(replce) == str:
+                entry = entry.replace(replce,'')
+            elif type(replce) == list:
+                if len(replce) <> 2:
+                    logger('Error: Programming error: replaces which where hand over to convert_readfile are wrong. It has to be a list consisting of strings and/or 2-entry lists of strings. Please check replaces: {0}'.format(replaces))
+                entry = entry.replace(replce[0],replce[1])
+            else:
+                logger('Error: Programming error: replaces which where hand over to convert_readfile are wrong. It has to be a list consisting of strings and/or 2-entry lists of strings. Please check replaces: {0}'.format(replaces))
         entry = entry.split(delimiter)
         if len(entry) < len(textformat):
             continue
@@ -607,7 +586,7 @@ def create_image_general(params, imtype, level=0):
     loaded = False
     if 'master_{0}_filename'.format(imtype) in params.keys():
         if params['master_{0}_filename'.format(imtype)] <> '' and os.path.isfile(params['master_{0}_filename'.format(imtype)]) == True:
-            logger('Info: Using exiting {0}: {1}'.format(imtype,params['master_{0}_filename'.format(imtype)]))
+            logger('Info: Using existing {0}: {1}'.format(imtype,params['master_{0}_filename'.format(imtype)]))
             params['calibs'] = params['calibs_read']
             if '{0}_calibs_read'.format(imtype) in params.keys():
                 params['calibs'] = params['{0}_calibs_read'.format(imtype)]
@@ -1867,11 +1846,12 @@ def find_trace_orders(params, im):
     logger('Info: {0} orders found and traced'.format(traces.shape[0]))
     return traces[:,0], traces[:,1].astype(int), traces[:,2].astype(int)            # polyfits, xlows, xhighs
 
-def adjust_trace_orders(params, im, pfits, xlows, xhighs):
+def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
     """
     Re-traces the position of the orders
     :param params: Dictionary with all the parameters. 'binx', 'biny', 'subframe', and 'polynom_order_apertures' are required
-    :param im: 2d numpy array
+    :param im: 2d numpy array of floats, binned image
+    :param im_unbinned: original image without binning
     :param pfits: list, length same as number of orders, polynomial values
                       (output of np.polyval)
                       i.e. p where:
@@ -1981,7 +1961,7 @@ def adjust_trace_orders(params, im, pfits, xlows, xhighs):
         widths_o[:,2] = widths_o[:,2]*biny - center
         width = [widthleft, widthright, np.nanmean(percentile_list(widths_o[:,3],0.1))]      #average left, right, and gaussian width
         xlows.append(max(0,min(positions[:,0])*binx-5))
-        xhighs.append(min(params['subframe'][0],(max(positions[:,0])+1)*binx+5))
+        xhighs.append(min(im_unbinned.shape[0],(max(positions[:,0])+1)*binx+5))
         widths.append(width)
         avg_shifts.append(np.mean(shifts))
     """traces = np.array(traces)"""
@@ -2004,12 +1984,26 @@ def adjust_width_orders(center, left, right, w_mult):
     right = center + diff * w_mult[1]
     return left, right
 
+def asign_bad_px_value(params, input_value, badpx_mask, im, data_range):
+    """
+    :param input_value: already asigned value for the bad pixel mask
+    :param badpx_mask: n-d array (normally 2d array) of int or float, with 0 to mark the bad pixels
+    :param im: n-d array (normally 2d array) of int or float, image from which the extraction will be done
+    :param data_range: number, list, or array of integers, to mark the extracted area
+    """
+    if np.nanmin(badpx_mask[data_range]) == 0:
+        input_value = 0.2
+    elif np.nanmax(im[data_range]) >= params['max_good_value']:
+        input_value = 0.1
+    
+    return input_value
+
 def no_tqdm(input, desc=''):
     """
     In order to switch between tqdm on and off, this is needed
     """
     return input
-    
+
 def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset = 0, var='fast', plot_tqdm=True):
     """
     Extract the spectra from each of the orders and return in a numpy array
@@ -2023,7 +2017,7 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
                    (wavelength direction) used in each order
     :param xhighs: list, length same as number of orders, the highest x pixel
                    (wavelength direction) used in each order
-    :param widths: 2d list, length same as number of orders, each entry contains left border, right border, and Gaussian width of the lines, as estimated in the master flat,
+    :param widths: (not needed anymore) 2d list, length same as number of orders, each entry contains left border, right border, and Gaussian width of the lines, as estimated in the master flat,
                    not needed anymore because of the new format of pfits, giving the lower and upper border of the trace
     :param w_mult: the space between the lower and upper boundary compared to the center of the traces is adjusted by w_mult
                    (old: w_mult * widths (Gaussian) defines the range on either side of the trace to be extracted)
@@ -2063,15 +2057,12 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
         uppers = np.polyval(pfits[pp, 2, 1:], xarr-pfits[pp, 2, 0]) + offset
         lowers, uppers = adjust_width_orders(yarr, lowers, uppers, [w_mult, w_mult])          # Adjust the width of the orders
         #print pp,np.nanmean(uppers-lowers), np.nanmedian(uppers-lowers), np.nansum(uppers-lowers)
-        if w_mult == 0.0:
+        if w_mult == 0.0:                                                       # only the central full pixel
             order_in_frame = ((yarr[xarr1] <= maxpx) & (yarr[xarr1] >= 0) )     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
             for xrow in xarr1[order_in_frame]:
                 ssum = image[xrow, int(round(yarr[xrow]))]                      # Verified 20190122
                 good_px = 1
-                if badpx_mask[xrow, int(round(yarr[xrow]))] == 0:
-                    good_px = 0.2
-                elif image[xrow, int(round(yarr[xrow]))] >= params['max_good_value']:
-                    good_px = 0.1
+                good_px = asign_bad_px_value(params, good_px, badpx_mask, image, (xrow, int(round(yarr[xrow]))) )
                 ospecs[xrow] = ssum
                 ogood_px_mask[xrow] = good_px  
         elif var == 'prec':         # new solution, better than the one below, tested with many values in excel
@@ -2081,15 +2072,14 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
             uppers[uppers>maxpx+0.5] = maxpx+0.5
             lowersf[lowersf<0] = 0
             uppersf[uppersf>maxpx] = maxpx
-            order_in_frame = ((lowersf[xarr1] <= maxpx) & (uppersf[xarr1] >= 0) & (lowersf[xarr1] <= uppersf[xarr1]) )     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values, ignore also areas where the width of the order is kind of negative
+            order_in_frame = ((lowersf[xarr1] <= maxpx) & (uppersf[xarr1] >= 0) & (lowers[xarr1] <= uppers[xarr1]) )     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values, ignore also areas where the width of the order is kind of negative (however, when extracting narrow orders, this will lead to a problem
             # Loop around x-px, this is necessary, as the number of full pixels between lowersf and uppersf varies 
             for xrow in xarr1[order_in_frame]:
-                ssum = np.sum(image[xrow, lowersf[xrow]:uppersf[xrow]+1])
                 good_px = 1
-                if min(badpx_mask[xrow, lowersf[xrow]:uppersf[xrow]+1]) == 0:
-                    good_px = 0.2
-                elif max(image[xrow, lowersf[xrow]:uppersf[xrow]+1]) >= params['max_good_value']:
-                    good_px = 0.1
+                ssum = 0
+                if lowersf[xrow] <= uppersf[xrow]:
+                    ssum = np.sum(image[xrow, lowersf[xrow]:uppersf[xrow]+1])
+                    good_px = asign_bad_px_value(params, good_px, badpx_mask, image, (xrow, range(lowersf[xrow],uppersf[xrow]+1)) )
                 # Get fractions of pixel from a polynom, if they are not outside the frame borders (spline actes weired between points, when there is an outlier)
                 #if w[2]*w_mult < 0.5:             # There will be no full pixel, which messes up everything
                 if uppers[xrow] - lowers[xrow] < 1.0:       # There will be no full pixel, which messes up everything
@@ -2098,11 +2088,8 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
                     fracpixparam = [[lowers[xrow], 'l'] , [uppers[xrow],'u']]
                 for [borderpos, pos] in fracpixparam:
                     x = np.arange(max(0,np.floor(borderpos-1)), min(maxpx,np.ceil(borderpos+1))+1, dtype=int)
+                    good_px = asign_bad_px_value(params, good_px, badpx_mask, image, (xrow, x) )
                     y = image[xrow, x]
-                    if min(badpx_mask[xrow, x]) == 0:
-                        good_px = 0.2
-                    elif max(y) > params['max_good_value']:
-                        good_px = 0.1
                     weight = 1/(np.abs(x-borderpos)+0.1)**2                   # weight the values so that the data around the fraction of the pixel is used most
                     p = polyfit_adjust_order(x, y, max(1,len(x)-3), w=weight)
                     poly = np.poly1d(p)
@@ -2120,36 +2107,39 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
                 ospecs[xrow] = ssum
                 ogood_px_mask[xrow] = good_px
         else:           # old solution
-            lowersf = (np.round(lowers+.5)).astype(int)                             # Full pixels
-            uppersf = (np.round(uppers-.5)).astype(int)
-            lowersf[lowersf<0] = 0
-            uppersf[uppersf>maxpx] = maxpx
-            order_in_frame = ((lowersf[xarr1] <= maxpx) & (uppersf[xarr1] >= 0) & (lowersf[xarr1] <= uppersf[xarr1]))     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
-            lowersr = (np.round(lowers)).astype(int)
-            uppersr = (np.round(uppers)).astype(int)
+            # +.5/-.5 because if light between pixels 3.5 and 4.5 should be extracted, that would be exactly all light in pixel 4; if light between 3 and 5: 0.5*3 + full px 4 + 0.5*5; between 2.6 and 5.4: 0.9*3 + full px 4 + 0.9*5
+            lowersf = (np.ceil (lowers+.5)).astype(int)                         # Full pixels, round up
+            uppersf = (np.floor(uppers-.5)).astype(int)                         # Full pixels, round down
+            lowersf[lowersf<0] = 0                                              # If the order is at the boundary, only extract until the boundary
+            uppersf[uppersf>maxpx] = maxpx                                      # If the order is at the boundary, only extract until the boundary
+            order_in_frame = ((lowersf[xarr1] <= maxpx) & (uppersf[xarr1] >= 0) & (lowers[xarr1] <= uppers[xarr1]))     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
+            lowersr = (np.round(lowers)).astype(int)                            # left pixel, of which a fraction should be extracted
+            uppersr = (np.round(uppers)).astype(int)                            # right pixel, of which a fraction should be extracted
             # Loop around x-px, this is necessary, as the number of full pixels between lowersf and uppersf varies 
             for xrow in xarr1[order_in_frame]:
-                if lowersf[xrow]>uppersf[xrow]:
-                    print 'When extracting the left border of the order is right of the right border. This should not happen.', pp, xrow, lowersf[xrow], uppersf[xrow]
-                ssum = np.sum(image[xrow, lowersf[xrow]:uppersf[xrow]+1])
                 good_px = 1
-                if min(badpx_mask[xrow, lowersf[xrow]:uppersf[xrow]+1]) == 0:                       # Bad pixel in extracted data
-                    good_px = 0.2
-                elif max(image[xrow, lowersf[xrow]:uppersf[xrow]+1]) >= params['max_good_value']:   # Saturated pixel in extracted data
-                    good_px = 0.1
+                ssum = 0
+                if lowersf[xrow] <= uppersf[xrow]:
+                    ssum = np.sum(image[xrow, lowersf[xrow]:uppersf[xrow]+1])
+                    good_px = asign_bad_px_value(params, good_px, badpx_mask, image, (xrow, range(lowersf[xrow],uppersf[xrow]+1)) )
+                    # Tested on 15/3/19 for individual entries and ranges of entries: image[xrow, lowersf[xrow]:uppersf[xrow]+1] is the same as data_range = (xrow, range(lowersf[xrow],uppersf[xrow]+1)) ; image[data_range]
+                    """if min(badpx_mask[xrow, lowersf[xrow]:uppersf[xrow]+1]) == 0:                       # Bad pixel in extracted data
+                        good_px = 0.2
+                    elif max(image[xrow, lowersf[xrow]:uppersf[xrow]+1]) >= params['max_good_value']:   # Saturated pixel in extracted data
+                        good_px = 0.1"""
+                #print 'xrow, ssum, ...', xrow, ssum, lowers[xrow], uppers[xrow], lowersf[xrow], uppersf[xrow]+1, 
                 # Get fractions of pixel, if they are not outside the frame borders
                 if lowersr[xrow] >= 0:
-                    ssum += image[xrow, lowersr[xrow]]*(0.5-lowers[xrow]%1)
-                    if badpx_mask[xrow, lowersr[xrow]] == 0:
-                        good_px = 0.2
-                    elif image[xrow, lowersr[xrow]] > params['max_good_value']:
-                        good_px = 0.1
-                if uppersr[xrow] <= maxpx:
-                    ssum += image[xrow, uppersr[xrow]]*(uppers[xrow]%1-.5)
-                    if badpx_mask[xrow, uppersr[xrow]] == 0:
-                        good_px = 0.2
-                    elif  image[xrow, uppersr[xrow]] >= params['max_good_value']:
-                        good_px = 0.1
+                    ssum += image[xrow, lowersr[xrow]]*( (1.5 - lowers[xrow]%1)%1 )     # lowers[xrow]%1=[0.5,0.0,0.6,0.4] -> [1.0,1.5,0.9,1.1] -> [.0,.5,.9,.1]
+                    good_px = asign_bad_px_value( params, good_px, badpx_mask, image, (xrow, lowersr[xrow]) )
+                #print 'l',ssum, lowersr[xrow],(1.5 - lowers[xrow]%1)%1,
+                if uppersr[xrow] <= maxpx:      # maxpx is shape-1
+                    ssum += image[xrow, uppersr[xrow]]*( (0.5 + uppers[xrow]%1)%1 )     # uppers[xrow]%1)=[0.5,0.0,0.6,0.4] -> [1.0,0.5,1.1,0.9] -> [.0,.5,.1,.9]
+                    good_px = asign_bad_px_value( params, good_px, badpx_mask, image, (xrow, uppersr[xrow]) )
+                #print 'u', ssum, uppersr[xrow],(0.5 + uppers[xrow]%1)%1
+                if lowersr[xrow] == uppersr[xrow] and lowersr[xrow] >= 0 and uppersr[xrow] <= maxpx:
+                    ssum += image[xrow, lowersr[xrow]]*( - 1 )     # remove the one added too much when using the fractions on the same pixel
+                    #print 'f', ssum, uppersr[xrow],-1
                 ospecs[xrow] = ssum
                 ogood_px_mask[xrow] = good_px
                 #if pp == 57 and xrow == 1350:
@@ -2331,20 +2321,24 @@ def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_
     """
     # Find the maximum shift by using the space between science and calibration orders
     shifts = []
-    shifts.append( np.abs(sci_tr_poly[ :  ,0,-1] - cal_tr_poly[ :  ,0,-1]) )
-    shifts.append( np.abs(sci_tr_poly[1:  ,0,-1] - cal_tr_poly[ :-1,0,-1]) )        # calibration fiber could be left or right of science fiber
-    shifts.append( np.abs(sci_tr_poly[ :-1,0,-1] - cal_tr_poly[1:  ,0,-1]) )        # calibration fiber could be left or right of science fiber
-    if sci_tr_poly.shape[0] > 0:
-        start = 0
-        if sum(shifts[0]) <> 0.0:                                   # don't fit if all values are 0
-            start = 1
-        for i in range(start,len(shifts)):
-            poly = np.polyfit(range(len(shifts[i])), shifts[i], 2)
-            shifts[i] = np.polyval(poly, range(len(shifts[i])) )
-    if sum(shifts[0]) <> 0.0:
-        shift = min( min(shifts[0]), min(shifts[1]), min(shifts[2]) )
-    else:                                                           # when science and calibration at the same position
-        shift = min( min(shifts[1]), min(shifts[2]) )
+    if sci_tr_poly.shape[0] == 1:   # only one order, e.g. when using live_extraction
+        shift = 10 * max(widths[:,2])
+    else:                           # normal case
+        shifts.append( np.abs(sci_tr_poly[ :  ,0,-1] - cal_tr_poly[ :  ,0,-1]) )
+        shifts.append( np.abs(sci_tr_poly[1:  ,0,-1] - cal_tr_poly[ :-1,0,-1]) )        # calibration fiber could be left or right of science fiber
+        shifts.append( np.abs(sci_tr_poly[ :-1,0,-1] - cal_tr_poly[1:  ,0,-1]) )        # calibration fiber could be left or right of science fiber
+        if sci_tr_poly.shape[0] >= 3:
+            start = 0
+            if sum(shifts[0]) <> 0.0:                                   # don't fit if all values are 0
+                start = 1
+            for i in range(start,len(shifts)):
+                poly = np.polyfit(range(len(shifts[i])), shifts[i], 2)
+                shifts[i] = np.polyval(poly, range(len(shifts[i])) )
+        if sum(shifts[0]) <> 0.0:
+            shift = min( min(shifts[0]), min(shifts[1]), min(shifts[2]) )
+        else:                                                           # when science and calibration at the same position
+            shift = min( min(shifts[1]), min(shifts[2]) )
+    shift = min(shift, 20 * max(widths[:,2]))
     range_shifts = [-int(shift/2),int(shift/2)]
     ims1 = im.shape[1]
     #shifts = range(min(range_shifts),max(range_shifts)+1)
@@ -2905,7 +2899,7 @@ def trace_orders(params, im_sflat, im_sflat_head):
     logger('Step: Tracing the orders')
     # Find the traces in a binned file
     if os.path.isfile(params['logging_traces_binned']) == True:
-        logger('Info: Using exiting order file: {0}'.format(params['logging_traces_binned']))
+        logger('Info: Using existing order file: {0}'.format(params['logging_traces_binned']))
         polyfits, xlows, xhighs, dummy = read_fits_width(params['logging_traces_binned'])
     else:
         # make flat smaller: combine px in spatial direction
@@ -2923,7 +2917,7 @@ def trace_orders(params, im_sflat, im_sflat_head):
     # retrace orders in the original image to finetune the orders
     params['binx'], params['biny'] = params['bin_adjust_apertures']
     sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_adjust_apertures'])        # Not saved
-    polyfits, xlows, xhighs, widths = adjust_trace_orders(params, sim_sflat, polyfits, xlows, xhighs)
+    polyfits, xlows, xhighs, widths = adjust_trace_orders(params, sim_sflat, im_sflat, polyfits, xlows, xhighs)
     if params['GUI']:
         logger('Step: Allowing user to remove orders')
         fmask = run_remove_orders_UI(np.log10(im_sflat), polyfits, xlows, xhighs, userinput=params['GUI'])
@@ -3185,7 +3179,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     if not os.path.isfile(params['object_file']) and os.path.isfile( params['object_file'].replace(params['result_path'], params['raw_data_path']) ):
         #shutil.copy2( params['object_file'].replace(params['result_path'], params['raw_data_path']), params['result_path'])         # Copies the file from the raw_data_path to the result_path, keeping the metadata
         params['object_file'] = params['object_file'].replace(params['result_path'], params['raw_data_path'])
-
+    
     # Get the baycentric velocity
     params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, params['object_file'])       # obnames becomes the single entry which matched entry in params['object_file']
     
@@ -5650,7 +5644,7 @@ def iau_cal2jd(IY,IM,ID):               # from CERES, modified
             logger('Error: The month of the observation is not defined: {0}'.format(IM))
     return DJM0, DJM
 
-def getcoords(obnames,mjd,filen='coords.txt'):               # from CERES, modified
+def getcoords_from_file(obnames,mjd,filen='coords.txt'):               # from CERES, heavily modified
     """
     1-  name of the target as specified in the image header.
     2-  right ascension of the target (J2000) with format hh:mm:ss or as float in degrees.
@@ -5664,49 +5658,70 @@ def getcoords(obnames,mjd,filen='coords.txt'):               # from CERES, modif
     old8-  velocity width in km/s that is used to broaden the lines of the binary mask.
         It should be similar to the standard deviation of the Gaussian that is fitted to the CCF.
     """
-    RA,DEC,epoch = 0., 0., 2000.
+    RA0, DEC0, PMRA, PMDEC, epoch = 0., 0., 0., 0., 2000.
     
-    try:
-        # !!! Use read files with split already available
-        f = open(filen,'r')
-        lines = f.readlines()
-        f.close()
-        for line in lines:
-            line = line[:-1].replace('\t',',')
-            cos = line.split(',')
-            for obname in obnames:
-                if cos[0].lower() == obname.lower() and int(cos[6])==1:
-                    #print "matched"
-                    if cos[1].find(':') > 0 or cos[1].find(' ') > 0:
-                        cos[1] = cos[1].replace(' ',':')
-                        cos1 = cos[1].split(':')
+    if not os.path.isfile(filen):
+        logger('Warn: Reference coordinates files {0} does not exist.'.format(filen))
+        return RA0, DEC0, epoch, PMRA, PMDEC, obnames
+    # !!! Use read files with split already available
+    lines_txt = read_text_file(filen, no_empty_lines=True)
+    lines = convert_readfile(lines_txt, [str, str, str, float, float, float, float], delimiter=',', replaces=[['\t',',']])
+    print len(lines_txt), len(lines)
+    if len(lines) < len(lines_txt):
+        logger('Warn: {1} line(s) could not be read in the reference coordinates file: {0}. Please check that columns 4 to 7 (starting counting with 1) are numbers'.format(filen, len(lines_txt)-len(lines) ))
+    found = False
+    for cos in lines:
+        if abs(cos[6]) < 1E-5:         # disabled
+            continue
+        for obname in obnames:
+            if cos[0].lower() == obname.lower() or cos[0].lower().replace('_','') == obname.lower() or cos[0].lower().replace('-','') == obname.lower() or cos[0].lower().replace(' ','') == obname.lower():
+                if cos[1].find(':') > 0 or cos[1].find(' ') > 0:
+                    cos[1] = cos[1].replace(' ',':')
+                    cos1 = cos[1].split(':')
+                    try:
                         RA0 = (float(cos1[0]) + float(cos1[1])/60. + float(cos1[2])/3600.) * 360. / 24.
-                    else:           # Already stored as float (asuming degree)
+                    except:
+                        logger('Warn: Problem with the right ascension of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
+                        break
+                else:           # Already stored as float (asuming degree)
+                    try:
                         RA0 = float(cos[1])
-                    if cos[2].find(':') > 0 or cos[2].find(' ') > 0:
-                        cos[2] = cos[2].replace(' ',':')
-                        cos2 = cos[2].split(':')
+                    except:
+                        logger('Warn: Problem with the right ascension of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
+                        break
+                if cos[2].find(':') > 0 or cos[2].find(' ') > 0:
+                    cos[2] = cos[2].replace(' ',':')
+                    cos2 = cos[2].split(':')
+                    try:
                         DEC0 = np.absolute(float(cos2[0])) + float(cos2[1])/60. + float(cos2[2])/3600.
-                        if cos2[0][0] == '-':       # negative Declination
-                            DEC0 = -DEC0
-                    else:
+                    except:
+                        logger('Warn: Problem with the declination of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
+                        break
+                    if cos2[0][0] == '-':       # negative Declination
+                        DEC0 = -DEC0
+                else:
+                    try:
                         DEC0 = float(cos[2])
-                    PMRA = float(cos[3])/1000.
-                    PMDEC = float(cos[4])/1000.
-                    
-                    mjdepoch = 2451545.0 - 2400000.5 + (float(cos[5]) - 2000.)
+                    except:
+                        logger('Warn: Problem with the declination of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
+                        break
+                PMRA = float(cos[3])    # mas/yr
+                PMDEC = float(cos[4])   # mas/yr
+                
+                """ # Steps to adjust the coordinates to the correct position, not necessary anymore because not using CERES routines to get BCVel and the barycorrpy package takes care of it
+                mjdepoch = 2451545.0 - 2400000.5 + (float(cos[5]) - 2000.)
     
-                    RA  = RA0 + (PMRA/3600.)*(mjd-mjdepoch)/365.
-                    DEC = DEC0 + (PMDEC/3600.)*(mjd-mjdepoch)/365.
-                    obnames = [obname]
-                    break
-            if RA <> 0. or DEC <> 0:
+                RA  = RA0 + (PMRA/1000./3600.)*(mjd-mjdepoch)/365.
+                DEC = DEC0 + (PMDEC/1000./3600.)*(mjd-mjdepoch)/365."""
+                obnames = [obname]
+                found = True
                 break
-    except:
-        logger('Warn: Problem with reference coordinates files: {0}.'.format(filen))
-    return RA, DEC, epoch, obnames
+                
+    if not found:
+        logger('Warn: Object was not found in the reference coordinates file {0}.'.format(filen))
+    return RA0, DEC0, epoch, PMRA, PMDEC, obnames
 
-def JPLR0(lat, altitude):               # from CERES
+def JPLR0(lat, altitude):               # from CERES, not needed anymore
     "the corrections due to earth rotation"
     "this function returns the velocity in m/s, the projected distance of the observatory in the equator axis and in the earth spin axis and \
     also returns the distance from the rotation axis, and the distance from the equator plane to the observatory position"
@@ -5732,7 +5747,7 @@ def JPLR0(lat, altitude):               # from CERES
     R0 = R0*np.sin(abs(geolat))+altitude*np.sin(lat)
     return GeoR,R0
 
-def obspos(longitude,obsradius,R0):               # from CERES
+def obspos(longitude,obsradius,R0):               # from CERES, not needed anymore
     """
         Set the observatory position respect to geocenter in the coordinates(x,y,z)required by jplepem, 
         x to equator/greenwich intersection, 
@@ -5763,7 +5778,9 @@ def get_barycent_cor(params, im_head, obnames, reffile):
     ra_keys         = ['RA']
     dec_keys        = ['DEC']
     epoch_keys      = ['HIERARCH ESO TEL TARG EQUINOX', 'ESO TEL TARG EQUINOX']
-    params['epoch']       = 2000.0
+    pmra_keys       = ['HIERARCH ESO TEL TARG PMA']
+    pmdec_keys      = ['HIERARCH ESO TEL TARG PMD']
+    params['epoch'] = 2000.0
     site_id = -1
     source_obs = 'The site coordinates from the configuration file were used.'
     settings = []
@@ -5771,9 +5788,11 @@ def get_barycent_cor(params, im_head, obnames, reffile):
     settings.append( [site_id, altitude_keys, 'altitude'] )
     settings.append( [site_id, latitude_keys, 'latitude'] )
     settings.append( [site_id, longitude_keys, 'longitude'] )     # Order is important, at this stage 'site', 'altitude', and 'latitude' need to be defined, but 'ra' and 'dec' will be overwritten later
-    settings.append( [0, ra_keys, 'ra'] )
-    settings.append( [0, dec_keys, 'dec'] )
+    settings.append( [0, ra_keys,    'ra'] )
+    settings.append( [0, dec_keys,   'dec'] )
     settings.append( [0, epoch_keys, 'epoch'] )
+    settings.append( [0, pmra_keys,  'pmra'] )
+    settings.append( [0, pmdec_keys, 'pmdec'] )
     for [i, keys, parentr] in settings:
         if parentr == 'longitude':                  # Enough information to calculate the ephemerides of sun and moon.
             gobs = ephem.Observer()  
@@ -5815,7 +5834,12 @@ def get_barycent_cor(params, im_head, obnames, reffile):
         # Overwrite hard coded values with the information from the header
         for entry in keys:
             if entry in im_head.keys():
-                if im_head[entry].replace(' ','') <> "" or parentr not in params.keys():   # only, if the header_key is not empty (or if the the key is missing in params)
+                if parentr not in params.keys():   # only, if the header_key is not empty (or if the the key is missing in params)
+                    params[parentr] = im_head[entry]    # Get the information from the header, overrides the manual values
+                elif type(im_head[entry]) == str:           # Can't replace a float
+                    if im_head[entry].replace(' ','') <> "":
+                        params[parentr] = im_head[entry]    # Get the information from the header, overrides the manual values
+                else:
                     params[parentr] = im_head[entry]    # Get the information from the header, overrides the manual values
                 if parentr == 'ra':                 # Assume that dec is coming from the same source
                     source_radec = 'The object coordinates are derived from the image header.'
@@ -5824,17 +5848,20 @@ def get_barycent_cor(params, im_head, obnames, reffile):
     
     mjd,mjd0 = mjd_fromheader(params, im_head)
     
-    ra2,dec2,epoch,obnames = getcoords(obnames, mjd, filen=reffile)     # obnames will be a list with only one entry: the matching entry 
+    ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, mjd, filen=reffile)     # obnames will be a list with only one entry: the matching entry 
     if ra2 !=0 and dec2 != 0:
         params['ra']  = ra2
         params['dec'] = dec2
         params['epoch'] = epoch
+        params['pmra'] = pmra
+        params['pmdec'] = pmdec
         source_radec = 'The object coordinates are derived from the reference file: {0}.'.format(reffile)
     
     ra, dec = params['ra'], params['dec']
     
     bcvel_baryc, bjd = 0.0, 0.0
     if source_radec <> 'Warn: The object coordinates were made up!':
+        """# Using jplephem from CERES pipeline
         iers          = JPLiers( baryc_dir, mjd-999.0, mjd+999.0 )      # updates the iers.tab file so it contains only 2000 entries
         obsradius, R0 = JPLR0( params['latitude'], params['altitude'])
         obpos         = obspos( params['longitude'], obsradius, R0 )
@@ -5842,29 +5869,51 @@ def get_barycent_cor(params, im_head, obnames, reffile):
         man_jplephem.set_observer_coordinates( obpos[0], obpos[1], obpos[2] )
         res         = man_jplephem.doppler_fraction(ra/15.0, dec, int(mjd), mjd%1, 1, 0.0)
         lbary_ltopo = 1.0 + res['frac'][0]
-        bcvel_baryc = ( lbary_ltopo - 1.0 ) * (Constants.c/1000.)       # c in m/s
+        bcvel_baryc = ( lbary_ltopo - 1.0 ) * (Constants.c/1000.)       # c in m/s"""
         
-        im_head['RA_PIPE'] = (round(ra,6), 'RA in degrees, used to calculated BCV, BJD')
-        im_head['DEC_PIPE'] = (round(dec,6), 'DEC in degrees, used to calculated BCV, BJD')
+        # Using barycorrpy (https://github.com/shbhuk/barycorrpy), pip install barycorrpy
+        site = ''
+        if params['site'] in barycorrpy.EarthLocation.get_site_names():
+            site = params['site']
+        ephemeris2='https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de405.bsp'
+        bcvel_baryc = barycorrpy.get_BC_vel(JDUTC=mjd+mjd0,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
+                           pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)
+        bcvel_baryc = bcvel_baryc[0][0] / 1E3       # in km/s
+        #print "result3", bcvel_baryc
+        #print "result3 RV", bcvel_baryc[0][0]
+        
+        im_head['RA_PIPE'] = (round(ra,6),           'RA in degrees, used to calculated BCV, BJD')
+        im_head['DEC_PIPE'] = (round(dec,6),         'DEC in degrees, used to calculated BCV, BJD')
         im_head['BCV_PIPE'] = (round(bcvel_baryc,4), 'barycentric velocity in km/s')
+        im_head['PMRA_PIP'] = (round(pmra,3),        'proper motion for RA in mas/yr, for BCV, BJD')
+        im_head['PMDEC_PI'] = (round(pmdec,3),       'proper motion for DEC in mas/yr, for BCV, BJD')
         
+        """# Using jplephem
         bjd = jd_corr(mjd, ra, dec, params['epoch'], params['latitude'], params['longitude'], jd_type='bjd')
-        bjd = bjd[0]
-        im_head['BJD_PIPE'] = (round(bjd,5), 'Barycentric corrected JD (BJD_UTC, no leap sec)')     #, add 32.184+N leap seconds after 1961'
+        bjd = bjd[0]"""
+        
+        # Using barycorrpy (https://github.com/shbhuk/barycorrpy), pip install barycorrpy
+        bjdtdb = barycorrpy.utc_tdb.JDUTC_to_BJDTDB(JDUTC=mjd+mjd0,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
+                                        pmdec=params['pmdec'],px=0,rv=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)           # only precise to 0.2s 
+        bjd = bjdtdb[0][0]
+        #print "bjdtdb", bjdtdb
+        #print "bjdtdb0", bjdtdb[0][0]
+        
+        # end test
+        im_head['BJDTDB_P'] = (round(bjd,5), 'Barycentric corrected JD (incl leap sec)')     # without leap seconds: remove 32.184+N leap seconds after 1961'
 
     im_head['JD_PIPE'] = (round(mjd+mjd0,5), 'Julian date')             # MJD = JD - 2400000.5 from http://www.csgnetwork.com/julianmodifdateconv.html
     im_head['MJD_PIPE'] = (round(mjd,5), 'modified Julian data')        # round 5 -> precision is 1 second, timing is not more precise
 
     logger(('Info: Using the following data for object name(s) {10}, Observatory site {9}, mid exposure MJD {11}: '+\
-                    'altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}. {8} {6} '+\
-                    'This leads to a barycentric velocity of {7} km/s. and a mid-exposure BJD of {12}').format(params['altitude'], params['latitude'], params['longitude'], 
+                    'altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}, pmra = {13}, pmdec = {14}. {8} {6} '+\
+                    'This leads to a barycentric velocity of {7} km/s and a mid-exposure BJD-TDB of {12}').format(params['altitude'], params['latitude'], params['longitude'], 
                          round(ra,6), round(dec,6), params['epoch'], source_radec, round(bcvel_baryc,4), source_obs, 
-                         params['site'], str(obnames).replace("'","").replace('"',''), mjd, round(bjd,5) ))
-    
-    
+                         params['site'], str(obnames).replace("'","").replace('"',''), mjd, round(bjd,5), params['pmra'], params['pmdec'] ))
+       
     return params, bcvel_baryc, mephem, obnames, im_head
 
-def JPLiers(path, mjdini, mjdend):                  # from CERES, updates the iers.tab file so it contains only 2000 entries
+def JPLiers(path, mjdini, mjdend):                  # from CERES, updates the iers.tab file so it contains only 2000 entries, # not needed anymore
 	output    = open(path+'iers.tab','w')
 	filename  = path+'finals2000A.data'
 	finaldata = open(filename,'r')
@@ -5884,7 +5933,7 @@ def JPLiers(path, mjdini, mjdend):                  # from CERES, updates the ie
 	output.close()
 	pass
 
-def jd_corr(mjd, ra, dec, epoch, lat, lon, jd_type='bjd'):
+def jd_corr(mjd, ra, dec, epoch, lat, lon, jd_type='bjd'):          # not used anymore
     """
     Return BJD or HJD for input MJD(UTC).
     Adapted from https://mail.python.org/pipermail/astropy/2014-April/002843.html
