@@ -85,7 +85,9 @@
 
 % -------------------------------------------------------------------------------------------
 
-This program is designed to take a fits image file (i.e. a CCD image) and run data reduction steps, extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another), apply the wavelength correction, measure the radial velocity, and perform further calibration steps. 
+This program is designed to take a fits image file (i.e. a CCD image) and run data reduction steps, extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another), apply the wavelength correction, measure the radial velocity, and perform further calibration steps.
+
+If you use the barycentric corrected radial velocities, the barycentric velocity, or the BJDTDB, please cite Kanodia and Wright 2018\footnote{\url{https://iopscience.iop.org/article/10.3847/2515-5172/aaa4b7}}.
 
 % -------------------------------------------------------------------------------------------
 
@@ -171,10 +173,7 @@ tar -xzvf v*.tar.gz
 \begin{description}
  \item[prepare\_file\_list.py] Script to automatically assign the fits files into the corresponding calibration steps.
  \item[reduction\_day.py] Script which needs to be run on each new set of data. It creates the data, which is necessary in order to extract the scientific spectra. Afterwards it extracts the Echelle spectra of the science images.
-%\item[extract.py] Script that extracts the scientific echelle spectra.
-%\item[order\_trace.py] Script that searches for the flat orders in the CCD images.
  \item[procedures.py] Contains all the procedures for the data analysis.
-%%%\item[find\_rv.py] Script that performs the radial velocity analysis.
  \item[tkcanvas.py] Contains the plotting routines to create the user interfaces (UI).
  \item[plot\_img\_spec.py] This script controls plotting of CCD images, graphs, and the extracted spectra.
  \item[remove\_orders.py] If the automatic process identified wrong orders, then this script allows the user to remove them using a GUI.
@@ -284,14 +283,15 @@ This should produce the entry \textit{*** TERRA v1.8 ***} before failing.
 \subsection{Necessary CCD images}
 To get the best results, the following data (or more files) should be taken. Please note that all filenames are case-insensitive. \textbf{No spaces or commas are allowed in the file names.}
 \begin{itemize}
-  \item \textit{true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{rflat} for automatic processing.
+  \item \textit{(optional) true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{rflat} for automatic processing.
   \item Flat (11x, white light source through the science fiber), with the filename containing \textbf{sflat}, \textbf{tung}, or \textbf{whli}. The calibration fiber should be dark for this data.
   \item Arc (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc}, \textbf{ThAr}, \textbf{Th\_Ar}, or \textbf{UNe}. Results might be better, if the science fiber is dark.
   \item (\textit{Only necessary, if the shift in dispersion direction between the fibers of a bifurcated fiber should be measured}): Arc2 (5x, calibration lamp through the science fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc2}, \textbf{ThAr2}, \textbf{Th\_Ar2}, or \textbf{UNe2}.
 %  \item FlatArc (11x, white light source and calibration lamp), the filename should be \textbf{flatarc}, \textbf{sflatThAr}, \textbf{whli-UNe}, or similar.
-  \item Bias (11x) and/or Darks (11x, for the exposure time of the true Flat and Flat)% and FlatArc)
+  \item (optinal) Bias (11x) and/or Darks (11x, for the exposure time of the true Flat and Flat)% and FlatArc)
   \item Science images: It is best to start the filename with the object name (as in reference file given by parameter \verb|object_file|, see Chapter~\ref{Section:create_object_list_file}). However, in order to try to match the object name with entries in the \verb|object_file| the parts of the filename containing ``\_'' and ``-'' are stripped away one by one from the end of the filename.
 \end{itemize}
+The suggestions are for bifurcated fiber input to the spectrograph. If a spectrograph with a single fiber is used, then the same data should be taken using the same fiber (setting parameter \verb|arcshift_side = center| will process the data correctly).
 
 \subsection{Steps to run the code on a new set of data}
 \label{Section:steps_new_data_set}
@@ -436,8 +436,8 @@ In order to calculate the barycentric correction the time of the observation (or
 If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_path| (the first one has higher priority). The file must contain one line per object. For each object the following tab-separated values need to be given:
 \begin{enumerate}\setlength\itemsep{0em}
  \item Object name (the filename should start with the object name in order to be used)
- \item RA (hh:mm:ss.ss or as one number in degrees)
- \item DEC ($\pm$dd:mm:ss.ss or as one number in degrees)
+ \item RA (hh:mm:ss.ss or hh mm ss.ss or as one number in degrees)
+ \item DEC ($\pm$dd:mm:ss.ss or $\pm$dd mm ss.ss or as one number in degrees)
  \item PM RA (mas/year, can be 0 in the most cases)
  \item PM DEC (mas/year, can be 0 in the most cases)
  \item Epoch of the coordinates (only the number, e.g. 2000 or 2015.5)
@@ -631,15 +631,20 @@ It is possible to include the information from previous nights of the same objec
 
 \subsection{Creating a new wavelength solution}
 \label{section:create_new_wave_solution}
-If no previous wavelength solution exist, then wavelengths and pixel need to correlated manually. In this case the parameter \verb|original_master_wavelensolution_filename| needs to point to a file, which does not exist (e.g. \textit{master\_wavelength\_manual.fits}). Then the python scrip can be run normally. It will stop after searching for the lines in the emission line spectra. The order and pixel position of all identified lines are stored in the file given in parameter \verb|logging_found_arc_lines|. This file can be opened and the corresponding wavelengths can be added to some of the lines. I have found that providing 1.5 lines per order is enough for the pipeline to do the rest. The lines should cover as much of the CCD image as possible.
+If no previous wavelength solution exist, then wavelengths and pixel need to correlated manually. In this case the parameter \verb|original_master_wavelensolution_filename| needs to point to a file, which does not exist (e.g. \textit{master\_wavelength\_manual.fits}). Then the python scrip can be run normally. It will perform most of the steps described in Section~\ref{Section:pipeline_steps_general} and stop after searching for the lines in the emission line spectra with the message:
+\begin{lstlisting}[style=base, basicstyle=\small]
+Error: Files for creating the wavelength solution do not exist ...
+\end{lstlisting}
+The order and pixel position of all identified lines are stored in the file given in parameter \verb|logging_found_arc_lines|. This file can be opened (easiest in a spreadsheet application) and the corresponding wavelengths can be added to some of the lines. The lines for each order are sorted by their absolute height. The plots of the extracted spectra, which are stored in the file given in \verb|logging_arc_line_identification_spectrum| (extended by the pipeline with \textit{\_manual.pdf}) can be used for visual guiding. 
+I have found that providing 1.5 lines times number orders is enough for the pipeline to do the rest. The lines should cover as much of the CCD image as possible (e.g. covering most of the lines (inclusive the outermost lines) of every 10th order).
 
-The correlated data needs to be saved into file \verb|arc_lines_wavelength.txt| with the following tab-separated entries:
+The correlated data needs to be saved into file \textit{arc\_lines\_wavelength.txt} (in the working directory) with the following tab-separated entries:
 \begin{itemize}
-  \item Aperture (starting at 0)
-  \item Real order (bigger than 0, usually between 40 and 120)
+  \item Aperture (starting at 0 for the reddest order)
+  \item Real/physical order (bigger than 0, usually between 40 and 120, doesn't have to be exactly the right one)
   \item Pixel
-  \item Wavelength
-  \item (Type of the line (e.g. ThI, NeII) ).
+  \item Wavelength [\AA] (optional, can be also empty if the user wishes to copy the whole file from \verb|logging_found_arc_lines| and only adds wavelengths to some lines)
+  \item (optional: Type of the line (e.g. ThI, NeII) ).
 \end{itemize}
 
 Afterwards the script can run again and will use this data to create a new wavelength solution.
@@ -725,7 +730,7 @@ The following options for axis plotting exist:
 \subsubsection{Getting the data}
 % Ceres observations with HARPS: http://www.eso.org/public/archives/releases/sciencepapers/eso1609/eso1609a.pdf
 % HD 10180: G1V star with 7 planets: http://adsabs.harvard.edu/abs/2011A%26A...528A.112L
-Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of Ceres or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*fits.Z) can be extracted with:
+Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*fits.Z) can be extracted with:
 \begin{lstlisting}[style=base]
 gunzip *
 cat <<EOT > extract_single_chip.py
@@ -795,7 +800,7 @@ The pipeline produces the following files:
   \item[proc/*.fits] The reduced images, in the similar format as produced by the EXOhSPEC pipeline.
 \end{description}
 
-Please note that the CERES pipeline uses both the red and the blue HARPS chip in order to determine the radial velocities (the data of the blue chip can be avoided by changing \verb|spec| into \verb|spec[:,:26,:]| in \verb|harpspipe.py|, lines 1507 and 1530). Furthermore, a cosmic ray correction is applied. The extracted spectra have the same features as when extracting data with the EXOhSPEC pipeline. A wavelength shift (depending on the order) is visible between the spectra. This translates into a RV shift of $\Delta RV \approx 79$\,km/s (independent of order, no instrumental velocity drift were applied to EXOhSPEC).
+Please note that the CERES pipeline uses both the red and the blue HARPS chip in order to determine the radial velocities (the data of the blue chip can be avoided by changing \verb|spec| into \verb|spec[:,:26,:]| in \verb|harpspipe.py|, lines 1507 and 1530). Furthermore, a cosmic ray correction is applied. The extracted spectra have the same features as when extracting data with the EXOhSPEC pipeline.
 
 
 

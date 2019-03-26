@@ -5772,28 +5772,27 @@ def get_barycent_cor(params, im_head, obnames, reffile):
     """
     # Define the header keywords, if available
     site_keys       = ['TELESCOP']
-    altitude_keys   = ['HIERARCH ESO TEL GEOELEV', 'ESO TEL GEOELEV']
+    altitude_keys   = ['HIERARCH ESO TEL GEOELEV', 'ESO TEL GEOELEV']       # HIERARCH will be removed from header keywords in python
     latitude_keys   = ['HIERARCH ESO TEL GEOLAT', 'ESO TEL GEOLAT']
     longitude_keys  = ['HIERARCH ESO TEL GEOLON', 'ESO TEL GEOLON']
     ra_keys         = ['RA']
     dec_keys        = ['DEC']
     epoch_keys      = ['HIERARCH ESO TEL TARG EQUINOX', 'ESO TEL TARG EQUINOX']
-    pmra_keys       = ['HIERARCH ESO TEL TARG PMA']
-    pmdec_keys      = ['HIERARCH ESO TEL TARG PMD']
+    pmra_keys       = ['HIERARCH ESO TEL TARG PMA', 'ESO TEL TARG PMA']
+    pmdec_keys      = ['HIERARCH ESO TEL TARG PMD', 'ESO TEL TARG PMD']
     params['epoch'] = 2000.0
-    site_id = -1
     source_obs = 'The site coordinates from the configuration file were used.'
     settings = []
-    settings.append( [site_id, site_keys, 'site'] )
-    settings.append( [site_id, altitude_keys, 'altitude'] )
-    settings.append( [site_id, latitude_keys, 'latitude'] )
-    settings.append( [site_id, longitude_keys, 'longitude'] )     # Order is important, at this stage 'site', 'altitude', and 'latitude' need to be defined, but 'ra' and 'dec' will be overwritten later
+    settings.append( [0, site_keys, 'site'] )
+    settings.append( [0, altitude_keys, 'altitude'] )
+    settings.append( [0, latitude_keys, 'latitude'] )
+    settings.append( [0, longitude_keys, 'longitude'] )     # Order is important, at this stage 'site', 'altitude', and 'latitude' need to be defined, but 'ra' and 'dec' will be overwritten later
     settings.append( [0, ra_keys,    'ra'] )
     settings.append( [0, dec_keys,   'dec'] )
     settings.append( [0, epoch_keys, 'epoch'] )
     settings.append( [0, pmra_keys,  'pmra'] )
     settings.append( [0, pmdec_keys, 'pmdec'] )
-    for [i, keys, parentr] in settings:
+    for [i, header_key_words, parentr] in settings:
         if parentr == 'longitude':                  # Enough information to calculate the ephemerides of sun and moon.
             gobs = ephem.Observer()  
             gobs.name = copy.copy(params['site'])
@@ -5807,7 +5806,7 @@ def get_barycent_cor(params, im_head, obnames, reffile):
             sephem.compute(gobs)
             jephem    = ephem.Jupiter()
             jephem.compute(gobs)
-            params['ra'] = -999
+            params['ra'] = -999                                             # If not changed this means the object coordinates were made up
             for obname in obnames:
                 if obname.lower().find('sun') == 0:
                     params['ra']          = sephem.ra
@@ -5832,7 +5831,10 @@ def get_barycent_cor(params, im_head, obnames, reffile):
                 params['dec']         = mephem.dec      # To fill in the parameter, might be overwritten later by [0, dec_keys, 'dec']
                 source_radec = 'Warn: The object coordinates were made up!'
         # Overwrite hard coded values with the information from the header
-        for entry in keys:
+        for entry in header_key_words:                  # HIERARCH will be removed from header keywords in python
+            if entry.replace('HIERARCH ','') not in header_key_words:
+                header_key_words.append(entry.replace('HIERARCH ',''))          # header keyword without HIERARCH
+        for entry in header_key_words:
             if entry in im_head.keys():
                 if parentr not in params.keys():   # only, if the header_key is not empty (or if the the key is missing in params)
                     params[parentr] = im_head[entry]    # Get the information from the header, overrides the manual values
@@ -5845,7 +5847,7 @@ def get_barycent_cor(params, im_head, obnames, reffile):
                     source_radec = 'The object coordinates are derived from the image header.'
                 if parentr == 'latitude':           # Assume that latitute is coming from the same source
                     source_obs = 'The site coordinates are derived from the image header.'
-    
+                print 'params[parentr]', params[parentr]
     mjd,mjd0 = mjd_fromheader(params, im_head)
     
     ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, mjd, filen=reffile)     # obnames will be a list with only one entry: the matching entry 
