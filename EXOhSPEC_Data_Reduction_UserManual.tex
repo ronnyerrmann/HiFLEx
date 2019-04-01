@@ -663,24 +663,24 @@ If no previous wavelength solution exist, then wavelengths and pixel need to cor
 \begin{lstlisting}[style=base, basicstyle=\small]
 Error: Files for creating the wavelength solution do not exist ...
 \end{lstlisting}
-The order and pixel position of all identified lines are stored in the file given in parameter \verb|logging_found_arc_lines| (see Table~\ref{Tab:create_wavelength_solution}. This file can be opened (easiest in a spreadsheet application) and the corresponding wavelengths can be added to some of the lines. The lines for each order are sorted by their absolute height, the saturated lines are excluded. The plots of the extracted spectra, which are stored in the file given in \verb|logging_arc_line_identification_spectrum| (extended by the pipeline with \textit{\_manual.pdf}) can be used for visual guiding (for an example see Figure~\ref{Figure:create_wavelength_solution}). 
+The order and pixel position of all identified lines are stored in the file given in parameter \verb|logging_found_arc_lines|. This file can be opened (easiest in a spreadsheet application) and the corresponding wavelengths can be added to some of the lines (see Table~\ref{Tab:create_wavelength_solution}). The lines for each order are sorted by their absolute height, the saturated lines are excluded. The plots of the extracted spectra, which are stored in the file given in \verb|logging_arc_line_identification_spectrum| (extended by the pipeline with \textit{\_manual.pdf}) can be used for visual guiding (for an example see Figure~\ref{Figure:create_wavelength_solution}). 
 Tests have shown that providing about 10 lines every 5 to 10 orders is enough for the pipeline to do the fitting in a good way. However, it is important that the lines cover as much of the CCD image as possible (e.g. covering most of the orders, inclusive the outermost lines of the orders). In case of a completely different setup an iterative approach might be necessary.
 
 \begin{figure} 
   \centering
   \subfloat[Part of a Th-Ar spectrum without a wavelength solution from a medium resolution spectrograph.]
-  {\includegraphics[height=4cm]{./figures/create_wavesol_unknow_spec_MRES_o22}
+  {\includegraphics[height=4.5cm]{./figures/create_wavesol_unknow_spec_MRES_o22}
   }
   \qquad
   \subfloat[Th-Ar spectrum for which the wavelength solution is known from a high-resolution spectrograph. The lines in red are the identified lines, green lines can be ignored.]
-  {\includegraphics[height=4cm]{./figures/create_wavesol_know_spec_UH_o26.png}
+  {\includegraphics[height=4.5cm]{./figures/create_wavesol_know_spec_UH_o26.png}
   }
-  \caption{The emission lines for a short (orange) and a long (blue) exposure time. The left figure covers about the same wavelength range as the Th-Ar spectrum with wavelength solution in the right figure. The right image can be used to correlate pixel-positions and wavelengths in the left spectrum.
+  \caption{The emission lines for a short (orange) and a long (blue) exposure time. The left figure covers about the same wavelength range as the Th-Ar spectrum with known wavelength solution in the right figure. The right image can be used to correlate pixel-positions and wavelengths in the left spectrum (see Table~\ref{Tab:create_wavelength_solution}).
     \label{Figure:create_wavelength_solution}}
 \end{figure}
 
 \begin{table}
-  \caption{Transforming the emission lines found by the pipeline into the file from which the pipeline will create the wavelength solution.}
+  \caption{Transforming the emission lines found by the pipeline into the file from which the pipeline will create the wavelength solution. A plot of the unknown and a reference spectrum can be found in Figure~\ref{Figure:create_wavelength_solution}.}
  \label{Tab:create_wavelength_solution}
   \tiny
   \subfloat[Example of the entry of the file from parameter \textbf{logging\_found\_arc\_lines} for one order.]{
