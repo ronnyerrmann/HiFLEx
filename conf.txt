@@ -51,7 +51,7 @@ subframe        = [2048,2048,0,0]
   # for QSI (both), Photometrics:     rotate_frame = 90
   # for Moravian, SBIG:               rotate_frame = 180 or rotate_frame = 0; flip_frame = True
   # for HARPS:                        rotate_frame = 180
-  # for MRES:		                  rotate_frame = 270
+  # for MRES:                         rotate_frame = 270
   # for Narit:                        rotate_frame = 90, flip_frame = True
 rotate_frame    = 90
 flip_frame      = False
@@ -171,6 +171,9 @@ raw_data_imtyp_trace2   = NA
 raw_data_exptim_keyword = EXPTIME
 raw_data_dateobs_keyword = DATE-OBS
 raw_data_timezone_cor   = 0
+  #  If the header contains one of the keywords given in raw_data_mid_exposure_keys, then that fraction instead of half of the exposure time will be used to calculate the mid-exposure time
+  #     Please note: "HIERARCH" will be removed when python reads the header
+raw_data_mid_exposure_keys = ['HIERARCH ESO INS DET1 TMMEAN', 'ESO INS DET1 TMMEAN']
   # HARPS:
   # raw_data_imtyp_keyword  = OBJECT
   # raw_data_imtyp_bias     = BIAS,BIAS
@@ -210,15 +213,16 @@ altitude    = 30
 latitude    = 51.7534
 longitude   = -0.2401
   
-  #site        = TNT
-  #altitude    = 2457
-  #latitude    = 18.59055
-  #longitude   = 98.48655
+#site        = TNT
+#altitude    = 2457
+#latitude    = 18.59055
+#longitude   = 98.48655
   
   # Define the object coordinates using a file with a list of objects. Needed for barycentric correction and RV calculation. Not necessary if the object information are stored in the header.
   # The file can be located in the raw_data_path or in the result_path (the latter one has higher priority)
   # The file needs to contain the comma separated values (Object name is case sentive for the optional parameters): 
-  # Object name (, RA (hh:mm:ss.ss), DEC (+-dd:mm:ss.ss), PM RA ("/year), PM DEC ("year), Epoch of the coordinates (only the number), Enable/Disable flag (1 for enabled), [optional: Mask (G2,K5,M2), [optional: Velocity width to broaden the lines of the binary mask]]
+  # Object name , RA (hh:mm:ss.ss), DEC (+-dd:mm:ss.ss), PM RA ("/year), PM DEC ("year), Epoch of the coordinates (only the number), Enable/Disable flag (1 for enabled), 
+  #             [optional: Mask (G2,K5,M2), [optional: Velocity width to broaden the lines of the binary mask]]
 object_file = object_list.txt
 
 

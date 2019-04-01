@@ -9,9 +9,9 @@ import astropy.time as asttime
 import astropy.coordinates as astcoords
 import astropy.units as astunits
 import astropy.constants as astconst
-import matplotlib	# To avoid crashing when ssh into Narit using putty
+import matplotlib    # To avoid crashing when ssh into Narit using putty
 if not 'DISPLAY' in os.environ:
-    matplotlib.use('agg')	# To avoid crashing when ssh into Narit using putty, however this means plots are not shown (test when working in front of uhppc30)
+    matplotlib.use('agg')    # To avoid crashing when ssh into Narit using putty, however this means plots are not shown (test when working in front of uhppc30)
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import sys
@@ -90,7 +90,7 @@ def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logf
     :param logfile: filename in which the information will be written
     """
     if show:
-        print message
+        print(message)
     file = open(logfile, 'a')
     file.write('{0} - {1} - {2}\n'.format( time.strftime("%Y%m%d%H%M%S", time.localtime()), os.getpid(), message ))
     if printarrayformat <> [] and printarray <> []:
@@ -101,10 +101,10 @@ def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logf
                 text += printformat%line[i] + '\t'
             file.write(text[:-1]+'\n')
             if show:
-                print text
+                print(text)
     file.close()
     if message.find('Error') == 0:
-        print '\t-> exiting'
+        print('\t-> exiting')
         if 'params' in locals() or 'params' in globals(): 
             log_params(params) 
         exit(1)
@@ -118,10 +118,17 @@ def log_params(params):
 def read_parameterfile(textfile):
     # load text file (remove all white spaces)
     if not os.path.exists(textfile):
-        logger('Error: The parameterfile {0} does not exist -> exit'.format(textfile))
+        logger('Error: The parameterfile {0} does not exist.'.format(textfile))
+    # Extra steps to check that the user didn't make mistakes in the file:
+    data = read_text_file(textfile, no_empty_lines=True)
+    data = convert_readfile(data, [str,str], delimiter='=', replaces=[' '], ignorelines=['#'])
+    for line in data:
+        if len(line) <> 2:
+            logger(('Error: The line in file {0} containing the entries {1} has the wrong format. Expected was "parameter = value(s)" .'+\
+                    'Please check if the "=" sign is there or if a comment "#" is missing.').format(textfile, line))
     data = np.genfromtxt(textfile, dtype=str, comments='#', delimiter='=')
     if data.shape[0] == 0 or len(data.shape) < 2:
-        logger('Error: No values found when reading the parameterfile {0}'.format(textfile))
+        logger('Error: No values found when reading the parameterfile {0}.'.format(textfile))
     keys, values = data[:, 0], data[:, 1]
     for k in range(len(keys)):
         keys[k] = keys[k].replace(' ', '')
@@ -180,7 +187,7 @@ def textfileargs(params, textfile=None):
         else:
             logger('Warn: I dont know how to handle command line argument: {0}'.format(arg))
     params.update(cmdparams)
-    list_txt = ['use_catalog_lines', 'raw_data_file_endings']
+    list_txt = ['use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys']
     list_int = ['subframe', 'arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck']
     list_float = ['opt_px_range', 'background_width_multiplier']
@@ -338,52 +345,79 @@ def add_text_to_file(text, filename):
     if exists == False:
         add_text_file(text, filename)
         
-def convert_readfile(input_list, textformat, delimiter='\t', replaces=[], ignorelines=[]):
+def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignorelines=[]):
     """
     Can be used convert a read table into entries with the correct format. E.g integers, floats
-        Ignories the lines which have less entries than entries in textformat
+        Ignories the lines which have less entries than entries in textformats
         replacements will be done before 
     :param input_list: 1d list or array of strings from a read file
-    :param textformat: 1d list or array of formats, e.g. [str, str, int, float, float]
+    :param textformats: 1d list or array of formats, e.g. [str, str, int, float, float]. 
+                        Individual entries can consist of a list of entries, then the conversion will be done in the order given, e.g. [str, [float, int], [float, '%Y-%m-%dT%H:%M:%S.%f'], float]
+                        If a string is given this will be used to convert it into a datetime object
+                        If a float, int, or str is run on a datetime object, then the datetime object will be converted into a number
     :param delimiter: string, used to split each line into the eleements
     :param replaces: 1d list or array of strings, contains the strings which should be replaced by ''
     :param ignorelines: List of strings and/or lists. A list within ignorelines needs to consist of a string and the maximum position this string can be found.
                         If the string is found before the position, the entry of the input list is ignored
-    :retrun result_list: 2d list with numbers or strings, formated acording to textformat
+    :retrun result_list: 2d list with numbers or strings, formated acording to textformats
     """
+    # Make the textformats, replaces, and ignorelines consistent
+    for index in range(len(textformats)):
+        if type(textformats[index]) <> list:
+            textformats[index] = [textformats[index]]     # convert the single entries into list, e.g. make a list of lists
+    for index in range(len(ignorelines)):
+        error = False
+        if type(ignorelines[index]) == str:     # only one entry
+            ignorelines[index] = [ignorelines[index], 1E10]
+        elif type(ignorelines[index]) == list:  # list with two entries: string, and position after which the string will be ignored
+            if len(ignorelines[index]) <> 2:
+                error = True
+        else:
+            error = True
+        if error:
+            logger('Error: Programming error: ignorelines which where hand over to convert_readfile are wrong. '+\
+                   'It has to be a list consisting of strings and/or 2-entry lists of string and integer. Please check ignorelines: {0}'.format(ignorelines))
+    for index in range(len(replaces)):
+        error = False
+        if type(replaces[index]) == str:     # only one entry
+            replaces[index] = [replaces[index], '']
+        elif type(replaces[index]) == list:  # list with two entries: search-string and replace-string
+            if len(replaces[index]) <> 2:
+                error = True
+        else:
+            error = True
+        if error:
+            logger('Error: Programming error: replaces which where hand over to convert_readfile are wrong. '+\
+                   'It has to be a list consisting of strings and/or 2-entry lists of strings. Please check replaces: {0}'.format(replaces))
+    # Convert the text
     result_list = []
     for entry in input_list:
         notuse = False
         for ignore in ignorelines:
-            if type(ignore) == str:     # only one entry
-                ignore_str = ignore
-                ignore_pos = 1E10
-            elif type(ignore) == list:  # list with two entries: string, and position after which the string will be ignored
-                if len(ignore) <> 2:
-                    logger('Error: Programming error: ignorelines which where hand over to convert_readfile are wrong. It has to be a list consisting of strings and/or 2-entry lists of string and integer. Please check ignorelines: {0}'.format(ignorelines))
-                ignore_str = ignore[0]
-                ignore_pos = ignore[1]
-            else:
-                logger('Error: Programming error: ignorelines which where hand over to convert_readfile are wrong. It has to be a list consisting of strings and/or 2-entry lists of string and integer. Please check ignorelines: {0}'.format(ignorelines))
-	    if entry.find(ignore_str) <= ignore_pos and entry.find(ignore_str) <> -1:
+            if entry.find(ignore[0]) <= ignore[1] and entry.find(ignore[0]) <> -1:
                 notuse = True
                 break
         if notuse:
             continue
         for replce in replaces:
-            if type(replce) == str:
-                entry = entry.replace(replce,'')
-            elif type(replce) == list:
-                if len(replce) <> 2:
-                    logger('Error: Programming error: replaces which where hand over to convert_readfile are wrong. It has to be a list consisting of strings and/or 2-entry lists of strings. Please check replaces: {0}'.format(replaces))
-                entry = entry.replace(replce[0],replce[1])
-            else:
-                logger('Error: Programming error: replaces which where hand over to convert_readfile are wrong. It has to be a list consisting of strings and/or 2-entry lists of strings. Please check replaces: {0}'.format(replaces))
+            entry = entry.replace(replce[0],replce[1])
         entry = entry.split(delimiter)
-        if len(entry) < len(textformat):
+        if len(entry) < len(textformats):
             continue
-        for i in range(len(textformat)):
-            entry[i] = textformat[i](entry[i])
+        for index in range(len(textformats)):
+            for textformat in textformats[index]:
+                if type(textformat) == type:
+                    if type(entry[index]) == datetime.datetime:
+                        epoch = datetime.datetime.utcfromtimestamp(0)
+                        entry[index] = (entry[index] - epoch).total_seconds()         # (obsdate - epoch) is a timedelta
+                    entry[index] = textformat(entry[index])
+                elif type(textformat) == str:
+                    try:
+                        entry[index] = datetime.datetime.strptime(entry[index], textformat)
+                    except:
+                        logger('Error: Cannot convert {0} into a datetime object using the format {1}'.format(entry[index], textformat))
+                else:
+                    logger('Error: Programming error: textformats which where hand over to convert_readfile are wrong. It has to be a type or a string')
         result_list.append(entry)
     return result_list
 
@@ -431,14 +465,15 @@ def warn_images_not_same(ims, names):
     if len(ims) <= 1:
         return
     if len(ims) <> len(names):
-        print 'len(ims) <> len(names), that seems like a coding error'
+        logger('Warn: len(ims) <> len(names), that seems like a coding error.')
     problems = ''
     for i in range(len(ims)-1):
         for j in range(i,len(ims)):
             if ims[i].shape <> ims[j].shape:
                 problems += '\tImage: {0} ({2}) and Image {1} ({3})\n'.format(names[i], names[j], ims[i].shape, ims[j].shape)
     if problems <> '':
-        logger('Error: The following images have not the same size, but should have. This is most likely caused by a missing "subframe" in one of the parameters "calib*". Please check.\n {0}'.format(problems[:-1]) )
+        logger('Error: The following images have not the same size, but should have. '+\
+               'This is most likely caused by a missing "subframe" in one of the parameters "calib*". Please check.\n {0}'.format(problems[:-1]) )
     return
 
 def read_file_calibration(params, filename, level=0):
@@ -451,7 +486,7 @@ def read_file_calibration(params, filename, level=0):
     """
     global calimages
     if os.path.isfile(filename) == False:
-        logger('Error: File {0} is missing'.format(filename))
+        logger('Error: File {0} is missing.'.format(filename))
     im = fits.open(filename)
     #print im.info()
     im_head = im[0].header
@@ -463,7 +498,8 @@ def read_file_calibration(params, filename, level=0):
         elif ims[-1] == 1:
             im = im[:,:,0]
         else:
-            logger('Error: The file is stored in a multi-demensional array, which I do not know how to handle. The size of the image is {0}. This requires a small adjustment to the code in procedure read_file_calibration'.format(ims))
+            logger(('Error: The file is stored in a multi-demensional array, which I do not know how to handle. The size of the image is {0}. '+\
+                    'This requires a small adjustment to the code in procedure read_file_calibration.').format(ims))
         ims = im.shape
     exptime = im_head[params['raw_data_exptim_keyword']]        #saved as float
     logger('Info: image loaded: {0}'.format(filename))
@@ -477,7 +513,7 @@ def read_file_calibration(params, filename, level=0):
             if im.shape <> (subframe[0],subframe[1]):                   # only apply subframe if the file doesn't have the size already
                 im = im[subframe[2]: subframe[0]+subframe[2], subframe[3]: subframe[1]+subframe[3]]
             logger('Info: {1}: subframe applied: {0} ({2})'.format(entry, level, subframe))
-            im_head['redu{0}a'.format(level)] = 'Subframe: {0}'.format(entry)
+            im_head['HIERARCH EXO_PIPE redu{0}a'.format(level)] = 'Subframe: {0}'.format(entry)
         elif entry.lower().find('bias') > -1:
             if entry not in calimages:
                  create_image_general(params, entry, level=level+1)
@@ -508,7 +544,7 @@ def read_file_calibration(params, filename, level=0):
             warn_images_not_same([im, calimages[entry]], [filename,params[entry+'filename']])
             im = im - calimages[entry]*exptime
             logger('Info: {1}: background correction applied: {0}'.format(params[entry], level))
-            im_head['redu{0}e'.format(level)] = 'Background: {0}'.format(params[entry])
+            im_head['HIERARCH EXO_PIPE redu{0}e'.format(level)] = 'Background: {0}'.format(params[entry])
         elif entry.lower().find('badpx_mask') > -1:
             if entry not in calimages:
                 calimages[entry] = read_badpx_mask(params)
@@ -527,7 +563,7 @@ def read_file_calibration(params, filename, level=0):
                 else:
                     im[nonzeroind[0][i],nonzeroind[1][i]] = np.median(section)  #replace bad px with the median of each surrounding area
             logger('Info: {1}: badpx correction applied: {0}'.format(entry, level))
-            im_head['redu{0}f'.format(level)] = 'Bad-pixel-mask: {0}'.format(entry)
+            im_head['HIERARCH EXO_PIPE redu{0}f'.format(level)] = 'Bad-pixel-mask: {0}'.format(entry)
         elif entry.lower().find('localbackground') > -1:
             if 'sci_trace' in calimages.keys() and 'cal_trace' in calimages.keys():
                 logger('Step: Performing the background fit')
@@ -553,9 +589,9 @@ def read_file_calibration(params, filename, level=0):
                 if np.isnan(bck_noise_var):
                     bck_noise_var = -1
                 logger('Info: {1}: background correction applied: {0}'.format(entry, level))
-                im_head['redu{0}f'.format(level)] = 'Background: {0}'.format(entry)
-                im_head['BCKNOISE'] = bck_noise_std
-                im_head['BNOISVAR'] = bck_noise_var             # Background noise variation can be very high, because some light of the traces remains
+                im_head['HIERARCH EXO_PIPE redu{0}f'.format(level)] = 'Background: {0}'.format(entry)
+                im_head['HIERARCH EXO_PIPE BCKNOISE'] = round(bck_noise_std,8)
+                im_head['HIERARCH EXO_PIPE BNOISVAR'] = (round(bck_noise_var,8), 'Variation of noise through image')             # Background noise variation can be very high, because some light of the traces remains
             else:
                 logger('Warn: Could not apply the calibration step {0} because the science and/or calibration traces are not yet known.'.format(entry))
         elif entry.lower().find('combine_sum') > -1 or entry.lower().find('combine_mean') > -1 or entry.lower().find('normalise') > -1:
@@ -565,7 +601,7 @@ def read_file_calibration(params, filename, level=0):
         if logtxt <> [] and headtxt <> []:
             im_median, im_std = int(round(np.median(calimages[entry]))), int(round(np.std(calimages[entry], ddof=1)))
             logger('Info: {4}: {3}: {0} (median={1}, std={2})'.format(entry, im_median, im_std, logtxt[0], level))
-            im_head[headtxt[0]] = '{3}: {0}, median={1}, std={2}'.format(entry, im_median, im_std, headtxt[1])
+            im_head['HIERARCH EXO_PIPE '+headtxt[0]] = '{3}: {0}, median={1}, std={2}'.format(entry, im_median, im_std, headtxt[1])
     #logger('Info: image loaded and processed: {0}'.format(filename))
     if os.path.exists(params['path_reduced']) and params['path_reduced'].lower() <> 'na/':       # Save the reduced image
         fname = filename.rsplit('/',1)
@@ -595,22 +631,24 @@ def create_image_general(params, imtype, level=0):
     if loaded == False:
         if '{0}_calibs_create'.format(imtype) not in params.keys():
             if 'standard_calibs_create' not in params.keys():
-                logger('Error: Missing entry in the configuration file. Neigther "{0}_calibs_create" nor "standard_calibs_create" is given. Please update the configuration file.'.format(imtype))
+                logger('Error: Missing entry in the configuration file. Neigther "{0}_calibs_create" nor "standard_calibs_create" is given. Please update the configuration file(s).'.format(imtype))
             params['{0}_calibs_create'.format(imtype)] = params['standard_calibs_create']
         for i in range(len(params['{0}_calibs_create'.format(imtype)])):                                                                    # make it safe from different user input
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].lower()
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].replace('normaliz', 'normalis')
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].replace('normalisation', 'normalise')
         im, med_fluxes, std_fluxes = [], [], []
-        head_variation = [[params['raw_data_exptim_keyword']], [params['raw_data_dateobs_keyword']], ['JD-HELIO']]
         if '{0}_rawfiles'.format(imtype) not in params.keys():
             logger('Error: The list of raw files for image type {0} is not defined in the configuration. Please check the configuration files.'.format(imtype))
         if len(params['{0}_rawfiles'.format(imtype)]) == 0:
             logger('Error: The list of raw files for image type {0} is empty. Please check the configuration files.'.format(imtype))
         num_imgs = len(params['{0}_rawfiles'.format(imtype)])                # how many images are expected
+        header_updates = np.zeros((num_imgs,2))
         for im_index, imf in enumerate(params['{0}_rawfiles'.format(imtype)]):                   # Only works for maximum 40 images on neils machine
-            params['calibs'] = params['{0}_calibs_create'.format(imtype)]   #get's overwritten when other files are being read
+            params['calibs'] = params['{0}_calibs_create'.format(imtype)]       # get's overwritten when other files are being read
             img, im_head = read_file_calibration(params, imf, level=level)
+            obsdate, obsdate_float, exposure_time = get_obsdate(params, im_head)    # unix_timestamp of mid exposure time
+            header_updates[im_index,:] = [exposure_time, obsdate_float]
             med_flux = np.median(img, axis=None)
             med_fluxes.append(med_flux)
             std_fluxes.append(np.std(img, axis=None, ddof=1))
@@ -619,7 +657,7 @@ def create_image_general(params, imtype, level=0):
             if im == []:                                                # Initiate the array with correct precission to avoid swapping
                 if num_imgs * np.prod(img.shape) * 2 > mem[1] * 0.49:
                     prec = np.float16
-                    logger('Warn: The ammount of pictures will most likely cause swapping')
+                    logger('Warn: The ammount of pictures will most likely cause swapping, which might cause the system to become unresponsive.')
                 elif num_imgs * np.prod(img.shape) * 4 > mem[1] * 0.49:
                     prec = np.float16  
                 elif num_imgs * np.prod(img.shape) * 8 > mem[1] * 0.49:
@@ -630,33 +668,35 @@ def create_image_general(params, imtype, level=0):
                 im = np.zeros( (num_imgs, img.shape[0], img.shape[1]) ).astype(prec)
                 #print 'Created:', im.dtype, im.itemsize, im.nbytes, sys.getsizeof(im), im.nbytes/7979408000., mem
             im[im_index,:,:] = img
-            for i in range(len(head_variation)):
-                value = 0
-                if head_variation[i][0] in im_head.keys():
-                    value = im_head[head_variation[i][0]]
-                head_variation[i].append(value)
             #print im.dtype, im.itemsize, im.nbytes, sys.getsizeof(im), im.nbytes/7979408000.
         for i in range(len(med_fluxes)):
-            im_head['NORM_{0}'.format(i)] = med_fluxes[i]
+            im_head['HIERARCH EXO_PIPE NORM_{0}'.format(i)] = med_fluxes[i]
         for i in range(len(std_fluxes)):
-            im_head['STDV_{0}'.format(i)] = std_fluxes[i]
+            im_head['HIERARCH EXO_PIPE STDV_{0}'.format(i)] = std_fluxes[i]
         if 'combine_mean' in params['{0}_calibs_create'.format(imtype)]:
             im = combine_sum(im)/len(im)
-            im_head['redu07'] = 'Average of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
-            im_head[params['raw_data_exptim_keyword']] = sum(head_variation[0][1:])
+            im_head['HIERARCH EXO_PIPE redu07'] = 'Average of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
+            exposure_time = np.mean(header_updates[:,0])                     # Average of the exposure times
         elif 'combine_sum' in params['{0}_calibs_create'.format(imtype)]:
             im = combine_sum(im)
-            im_head['redu07'] = 'Sum of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
-            im_head[params['raw_data_exptim_keyword']] = sum(head_variation[0][1:])
-        else:
+            im_head['HIERARCH EXO_PIPE redu07'] = 'Sum of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
+            exposure_time = np.sum(header_updates[:,0])                      # Sum of the exposure times
+        else:           # Median combine
             im = combine_median(im)
-            im_head['redu07'] = 'Median of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
+            im_head['HIERARCH EXO_PIPE redu07'] = 'Median of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
+            exposure_time = np.median(header_updates[:,0])                   # Median of the exposure times
         if 'normalise' in params['{0}_calibs_create'.format(imtype)]:
             norm_factor = np.median(med_fluxes)
             im = im * norm_factor
-            im_head['NORM_MED'] = norm_factor
-        im_head['JD-HELIO'] = np.mean(head_variation[2][1:])
-        im_head[params['raw_data_dateobs_keyword']] = min(head_variation[1][1:])
+            im_head['HIERARCH EXO_PIPE NORM_MED'] = norm_factor
+        im_head['HIERARCH EXO_PIPE '+params['raw_data_dateobs_keyword']] = datetime.datetime.utcfromtimestamp(np.median(header_updates[:,1])).strftime('%Y-%m-%dT%H:%M:%S.%f')
+        im_head['HIERARCH EXO_PIPE '+params['raw_data_exptim_keyword']] = exposure_time
+        first, last = np.argmin(header_updates[:,1]), np.argmax(header_updates[:,1])
+        first = header_updates[first,1]-header_updates[first,0]/2.
+        last  = header_updates[last, 1]+header_updates[last, 0]/2.
+        im_head['HIERARCH EXO_PIPE BEGIN FIRST'] = datetime.datetime.utcfromtimestamp(first).strftime('%Y-%m-%dT%H:%M:%S.%f')
+        im_head['HIERARCH EXO_PIPE END LAST']    = datetime.datetime.utcfromtimestamp(last ).strftime('%Y-%m-%dT%H:%M:%S.%f')
+        im_head['HIERARCH EXO_PIPE EXP_RANGE']   = (last - first, 'sec, from BEGIN to END')
         if 'master_{0}_filename'.format(imtype) in params.keys():
             if params['master_{0}_filename'.format(imtype)] <> '':
                 save_im_fits(params, im, im_head,  params['master_{0}_filename'.format(imtype)])
@@ -744,7 +784,7 @@ def read_fits_width(filename):
     """
     # convert to astropy table
     if os.path.isfile(filename) == False:
-        logger('Error: File {0} is missing'.format(filename))
+        logger('Error: File {0} is missing.'.format(filename))
     atable = Table.read(filename)
     orders = np.array(atable['Order'], dtype=int)
     
@@ -950,12 +990,12 @@ def read_wavelength_solution_from_fits(filename):
     logger('Info: Master file for arc solution read: {0}'.format(filename))
     return np.array(wavelength_solution), np.array(wavelength_solution_arclines)
 
-def save_multispec(data, fname, head, bitpix='-32'):
+def save_multispec(data, fname, im_head, bitpix='-32'):
     """
     Saves a n-d array into a fits file
     :param data: n-d array of data or list of arrays
     :param fname: filename in which the data should be written. The filename will end in .fits
-    :param head: header, which should be written to the fits file
+    :param im_head: header, which should be written to the fits file
     :param bitpix: Precission in which the data should be stored
     """
     if len(fname.rsplit('/',1)) == 1:
@@ -968,12 +1008,12 @@ def save_multispec(data, fname, head, bitpix='-32'):
     fname = fname.replace('.fit', '')
     if bitpix in ['-32', -32]:
         # relative difference is less than 1E-6 of the wavelength/flux value compared to float64, only needs half the size
-        hdu = fits.PrimaryHDU(np.array(data).astype(np.float32), header=head)
+        hdu = fits.PrimaryHDU(np.array(data).astype(np.float32), header=im_head)
     elif bitpix in ['-64', -64]:
-        hdu = fits.PrimaryHDU(np.array(data).astype(np.float64), header=head)
+        hdu = fits.PrimaryHDU(np.array(data).astype(np.float64), header=im_head)
     else:
         logger('Warn: The bitpix parameter ({0}) is unknown, using the data suggested one ({1})'.format(bitpix,hdu.header['BITPIX']))
-        hdu = fits.PrimaryHDU(np.array(data), header=head)
+        hdu = fits.PrimaryHDU(np.array(data), header=im_head)
         
     hdu.writeto(fname+'.fits', overwrite=True)    # as .fits # clobber=True was used earlier
     
@@ -1104,7 +1144,7 @@ def percentile_list(data, prcentl):
     :return data: sorted list without the highest and smallest values, and without NaNs
     """
     if prcentl < 0 or prcentl > 0.5:
-        print 'Warn: Percentile must be in the range [0,0.5]'
+        print('Warn: Percentile must be in the range [0,0.5]')
     data = data[~np.isnan(data)]
     data = sorted(data)
     length = len(data)
@@ -1477,7 +1517,7 @@ def centroid_order(x, y, center, width, significance=3, blended_gauss=False, bug
                 significant = True
                 break
             elif bugfix:
-                print 'Gauss not significant', p0,bounds, stdfit, border_sub
+                print('Gauss not significant', p0,bounds, stdfit, border_sub)
                 plot_img_spec.plot_spectra(np.array([x,x]),np.array([y,oneD_gauss(x,popt)]),['data','fit'], ['savepaths'], True, [0.06,0.92,0.95,0.06, 1.0,1.01], 
                                            'No significant fit, stdlin={0}, stdGauss={1}, height={2}, needed significance={3}'.format(stdlin,stdfit,popt[0],significance))
         else:
@@ -1498,11 +1538,11 @@ def centroid_order(x, y, center, width, significance=3, blended_gauss=False, bug
                 significant = True
                 popts.shape = ( (len(popts)/4, 4) )
                 for popt in popts:
-                    print popt
+                    print(popt)
                     oneD_gauss( x[range_data], popt )
                 break
             elif bugfix:
-                print 'Gauss not significant', p0,bounds, stdfit, border_sub
+                print('Gauss not significant', p0,bounds, stdfit, border_sub)
                 plot_img_spec.plot_spectra(np.array([x,x]),np.array([y,oneD_blended_gauss( x, popts)]),['data','fit'], ['savepaths'], True, [0.06,0.92,0.95,0.06, 1.0,1.01], 
                                            'No significant fit, stdlin={0}, stdGauss={1}, height={2}, needed significance={3}'.format(stdlin,stdfit,popt[0],significance))
             
@@ -1569,7 +1609,7 @@ def find_center(imslice, oldcenter, x, maxFWHM, border_pctl=0, significance=3.0,
             rightmin = min(len(imslice)-1, rightmin+1)
         sub_slice = imslice[leftmin:rightmin+1]
         if len(range(leftmin,rightmin+1)) <> len(sub_slice):
-            print 'Error, not same length', x, oldcenter, len(imslice), leftmin, rightmin
+            print('Error: not same length', x, oldcenter, len(imslice), leftmin, rightmin)
         for border in [0,1]:
             popt = centroid_order(range(leftmin+border,rightmin+1-border), sub_slice[border:len(sub_slice)-border], center, width, significance=significance, bugfix=bugfix)
             if popt[2] > 0:                 # run the second fit only when the first fails
@@ -1714,7 +1754,7 @@ def find_trace_orders(params, im):
             if pos_max[1] >= 2000 and pos_max[1] <= 260:            # bugfixing
                 if not ( width <> 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0 and abs(center-oldcenter)<maxshift*2) ) ):
                     find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.5, bugfix=True)
-                print pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions)
+                #print(pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions))
             if width <> 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0 and abs(center-oldcenter)<maxshift*2) ):        #first entry can be further off
                 if im_traces[i,min(ims[1]-1,int(center))] <> 0 or im_traces[i,min(ims[1]-1,int(center+1))] <> 0:        # this order shouldn't cross another order
                     order_overlap = True
@@ -1756,7 +1796,7 @@ def find_trace_orders(params, im):
             if pos_max[1] >= 2000 and pos_max[1] <= 260:            # bugfixing
                 if not ( width <> 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0and abs(center-oldcenter)<maxshift*2) ) ):
                     find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.5, bugfix=True)
-                print pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions), len(expected_positions), last_trustworth_position
+                print(pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions), len(expected_positions), last_trustworth_position)
             if width <> 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0and abs(center-oldcenter)<maxshift*2) ):
                 if im_traces[i,min(ims[1]-1,int(center))] <> 0 or im_traces[i,min(ims[1]-1,int(center+1))] <> 0 or order_overlap == True:
                     order_overlap = True
@@ -1841,8 +1881,11 @@ def find_trace_orders(params, im):
                 traces[order, 3] = np.polyval(pfs[1:], traces[order, 2] - pfs[0])
     traces = np.array(sorted(traces, key=operator.itemgetter(3)))
     #plot_img_spec.plot_image(im+im_traces*np.max(im), ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'cleared')
-    if traces.shape[0] < 1:
-        logger('Error: Not enough traces found, only found {0} traces. Please check that the binned image looks as expected.'.format(traces.shape[0]))
+    if traces.shape[0] < 2:
+        logger('Error: Only found {0} traces. Please check that the binned image ({1}) looks as expected.'.format(traces.shape[0], params['logging_trace1_binned'])+\
+               'Please check that the right image was used to search for the traces (e.g. {0}) '.format(params['logging_traces_im_binned'])+\
+               'After you selected different file(s) for parameter "trace1_rawfiles", please run the following command before restarting the pipeline'+\
+               '\nrm {0}'.format( params['master_trace1_filename'] ))
     logger('Info: {0} orders found and traced'.format(traces.shape[0]))
     return traces[:,0], traces[:,1].astype(int), traces[:,2].astype(int)            # polyfits, xlows, xhighs
 
@@ -1965,10 +2008,14 @@ def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
         widths.append(width)
         avg_shifts.append(np.mean(shifts))
     """traces = np.array(traces)"""
+    if len(widths) == 0:
+        logger('Error: When adjusting the traces, all traces were rejected due to poor fit. '+\
+                'Please check the binned image {0}: Is the orientation and the binning right? Are the orders covering at least half of the CCD (in dispersion correction)'.format(params['logging_trace1_binned'])+\
+               'Please check that the right image was used to search for the traces (e.g. {0}) '.format(params['logging_traces_im_binned'])+\
+               'After you selected different file(s) for parameter "trace1_rawfiles", please run the following command before restarting the pipeline'+\
+               '\nrm {0} {1}'.format( params['logging_traces_binned'], params['master_trace1_filename'] ))
     logger('Info: traces of the {0} apertures adjusted. The average shift of the individual apertures was between {1} and {2} pixel between the searching of the traces and this solution. The maximum allowed shift was {3} pixel.'.format(len(centerfit), np.round(np.min(avg_shifts),1), np.round(np.max(avg_shifts),1), np.round(maxshift,1) ))
-    if len(centerfit) == 0:
-        logger('Error: no traces of orders found. Please check the binned image: Is the orientation and the binning right? Are the orders covering at least half of the CCD (in dispersion correction)')
-    """centerfit, xlows, xhighs, widths = np.array(traces[:,0]), np.array(traces[:,2].astype(int)), np.array(traces[:,3].astype(int)), np.array(traces[:,4])"""
+
     return np.array(centerfit), np.array(xlows).astype(int), np.array(xhighs).astype(int), np.array(widths)
 
 def adjust_width_orders(center, left, right, w_mult):
@@ -2103,7 +2150,7 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
                     elif pos == 'b':
                         ssum += polyint(uppers[xrow]) - polyint(lowers[xrow])
                     else:
-                        print 'Programming error around line 2100'
+                        print('Programming error around line 2100')
                 ospecs[xrow] = ssum
                 ogood_px_mask[xrow] = good_px
         else:           # old solution
@@ -2576,7 +2623,7 @@ def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None
                             continue
                     y_data = im_short[order,range_arr]
                     if np.sum(already_found[range_arr]) == 0:           # Only print once in the area
-                        print 'Used the short exposure time to find the centroid of the line in order {1} @ px {0}'.format(pos_real, order)
+                        print('Used the short exposure time to find the centroid of the line in order {1} @ px {0}'.format(pos_real, order))
             # Fit a double Gauss 
             #popts = oneD_blended_gauss
             # fit the gauss, pos_real is the expected center
@@ -3031,30 +3078,48 @@ def get_obsdate(params, im_head):
     
     :return obsdate: datetime.datetime object, containing the the center of the observation (in UTC)
     :return obsdate_float: float, unix timestamp of the mid observation time (in UTC)
+    :return exposure_time: float, exposure time
     """
     obsformats = ['%Y-%m-%dT%H:%M:%S.%f','%Y-%m-%dT%H:%M:%S']           # Put into the parameters
-    exp_fractions = ['HIERARCH ESO INS DET1 TMMEAN', 'ESO INS DET1 TMMEAN']
-    
-    if params['raw_data_dateobs_keyword'] not in im_head.keys():
-        logger('Warn: Cannot find the raw_data_dateobs_keyword = {0} in the header.'.format(params['raw_data_dateobs_keyword'] ))
+    if 'raw_data_mid_exposure_keys' in params.keys():                   # To stay backwards compatible, can be removed a few versions after v0.4.1
+        exp_fraction_keys = params['raw_data_mid_exposure_keys']
+    else:
+        exp_fraction_keys = ['HIERARCH ESO INS DET1 TMMEAN', 'ESO INS DET1 TMMEAN']     # HIERARCH will be removed when python reads the header
+    # Get the obsdate
+    obsdate = -1
+    for header_key in [ 'EXO_PIPE '+params['raw_data_dateobs_keyword'], params['raw_data_dateobs_keyword'] ]:
+        if header_key in im_head.keys():
+            obsdate = im_head[header_key]
+    if obsdate == -1:
+        logger('Warn: Cannot find the raw_data_dateobs_keyword = {0} in the header. Assuming 2000-01-01T00:00:00. This will cause wrong barycentric corrections.'.format(params['raw_data_dateobs_keyword'] ))
+        obsdate = '2000-01-01T00:00:00'
     for obsformat in obsformats:
         try:
-            obsdate = datetime.datetime.strptime(im_head[params['raw_data_dateobs_keyword']], obsformat)      # datetime object
+            obsdate = datetime.datetime.strptime(obsdate, obsformat)      # datetime object
         except:
             continue
-        break
+        break               # Found a working time
     obsdate -= datetime.timedelta(0, 3600*params['raw_data_timezone_cor'])         # days, seconds, then other fields -> add the time zone difference, raw_data_timezone_cor: + for east of UTC, - for west of UTC -> subtract it
     
     fraction = 0.5                                          # mid exposure is half of the exposure time
-    for exp_fraction in exp_fractions:
+    for exp_fraction in exp_fraction_keys:
         if exp_fraction in im_head.keys():                  # Weight of the exposure in header
             fraction = im_head[exp_fraction]                   # replace the fraction of half the exposure time
             break
-    obsdate += datetime.timedelta(0, fraction*im_head[params['raw_data_exptim_keyword']])      # days, seconds, then other fields.
+    # Get the exposure time    
+    exposure_time = -1
+    for header_key in [ 'EXO_PIPE '+params['raw_data_exptim_keyword'], params['raw_data_exptim_keyword'] ]:
+        if header_key in im_head.keys():
+            exposure_time = im_head[header_key]
+    if exposure_time == -1:
+        logger('Warn: Cannot find the raw_data_exptim_keyword = {0} in the header. Assuming 0.'.format(params['raw_data_exptim_keyword'] ))
+        exposure_time = 0
+        
+    obsdate += datetime.timedelta(0, fraction*exposure_time)      # days, seconds, then other fields.
     
     epoch = datetime.datetime.utcfromtimestamp(0)
     obsdate_float = (obsdate - epoch).total_seconds()                                   # (obsdate - epoch) is a timedelta
-    return obsdate, obsdate_float
+    return obsdate, obsdate_float, exposure_time
     
 def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace, objname):
     """
@@ -3062,7 +3127,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     
     """
     shift = 0
-    obsdate, obsdate_float = get_obsdate(params, im_head)               # in UTC, mid of the exposure
+    obsdate, obsdate_float, exposure_time = get_obsdate(params, im_head)               # in UTC, mid of the exposure
     
     #shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces
     if im_name[-8:] == '_wavecal':
@@ -3132,16 +3197,16 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     Extracts the spectra and stores it in a fits file
     
     """
-    if 'BCKNOISE' not in im_head.keys():        # if not already done because localbackground is in parameters
+    if 'EXO_PIPE BCKNOISE' not in im_head.keys():        # if not already done because localbackground is in parameters
         bck_noise_std, bck_noise_var = prepare_measure_background_noise(params, im, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths)
         if np.isnan(bck_noise_var):
             bck_noise_var = -1
-        im_head['BCKNOISE'] = bck_noise_std
-        im_head['BNOISVAR'] = bck_noise_var             # Background noise variation can be very high, because some light of the traces remains
-    if im_head['BCKNOISE'] <= 0 or np.isnan(im_head['BCKNOISE']):
-        logger('Warn: Measured an unphysical background noise in the data: {0}. Set the noise to 1'.format(im_head['BCKNOISE']))
-        im_head['BNOISVAR'] = 1
-    obsdate, obsdate_float = get_obsdate(params, im_head)               # in UTC, mid of the exposure
+        im_head['HIERARCH EXO_PIPE BCKNOISE'] = round(bck_noise_std,8)
+        im_head['HIERARCH EXO_PIPE BNOISVAR'] = (round(bck_noise_var,8), 'Variation of noise through image')             # Background noise variation can be very high, because some light of the traces remains
+    if im_head['EXO_PIPE BCKNOISE'] <= 0 or np.isnan(im_head['EXO_PIPE BCKNOISE']):
+        logger('Warn: Measured an unphysical background noise in the data: {0}. Set the noise to 1'.format(im_head['EXO_PIPE BCKNOISE']))
+        im_head['HIERARCH EXO_PIPE BNOISVAR'] = (1., '1, because of unphysical measurement')
+    obsdate, obsdate_float, exposure_time = get_obsdate(params, im_head)               # in UTC, mid of the exposure
     
     im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
     # Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
@@ -3162,7 +3227,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, spectra)
     wavelengths_vac = wavelength_air_to_vacuum(wavelengths)                             # change into vacuum wavelengths
     
-    espectra = combine_photonnoise_readnoise(spectra, im_head['BCKNOISE'] * np.sqrt(widths[:,2]) )
+    espectra = combine_photonnoise_readnoise(spectra, im_head['EXO_PIPE BCKNOISE'] * np.sqrt(widths[:,2]) )
     fspectra = spectra/flat_spec_norm[2]        # 1: extracted flat, 2: low flux removed
     # Doing a wavelength shift for the flat_spec_norm is probably not necessay, as it's only few pixel
     measure_noise_orders = 12
@@ -3204,8 +3269,8 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf (no, causes 83.15 km/s shift, < 5m/s is between the different models)
         logger('Info: The radial velocity (including barycentric correction) for {0} gives: RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s'.format(\
                                     im_name, round(RV+bcvel_baryc,4), round(RVerr2,4), round(BS,4), round(BSerr,4), round(bcvel_baryc,4) ))
-        im_head['RV_BARY'] = (round(RV+bcvel_baryc),'RV including BCV  (measured RV+BCV)')
-        im_head['RV_ERR'] = round(RVerr2,4)
+        im_head['HIERARCH EXO_PIPE RV_BARY'] = (round(RV+bcvel_baryc),'RV including BCV  (measured RV+BCV)')
+        im_head['HIERARCH EXO_PIPE RV_ERR'] = round(RVerr2,4)
     
     # Correct wavelength by barycentric velocity
     wavelengths_bary = wavelengths * (1 + bcvel_baryc/(Constants.c/1000.) )
@@ -3733,7 +3798,7 @@ def plot_wavelength_solution_image(im, fname, pfits, xlows, xhighs, wavelength_s
     return im_bck1
 """
 
-def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=True):	# not used anymore
+def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=True):    # not used anymore
     fig, frame = plt.subplots(1, 1)
     def plot(frame, im_orig, pfits, xlows, xhighs, widths, w_mult):
         frame.clear()
@@ -3894,7 +3959,7 @@ def correlate_UI(im, order, arc_settings, reference_catalog, reference_names, ad
         except:
             high_limit = 98
         if order < 0 or order > im.shape[0]-1:
-            print 'Warn: order outside the allowed area: 0...{0}'.format(im.shape[0]-1)
+            print('Warn: order outside the allowed area: 0...{0}'.format(im.shape[0]-1))
             order = oldorder
         if order <> oldorder:
             arc_setting = arc_settings[order]
@@ -4044,7 +4109,7 @@ def correlate_px_wave_result_UI(im, arc_lines_wavelength, reference_catalog, arc
         except:
             arc_stretch = 1
         if order < 0 or order > im.shape[0]-1:
-            print 'Warn: order outside the allowed area: 0...{0}'.format(im.shape[0]-1)
+            print('Warn: order outside the allowed area: 0...{0}'.format(im.shape[0]-1))
             order = oldorder
         #print 'order, arc_setting', order, arc_setting
         title = 'Order {0}: identified lines: b [px], catalog lines: r [0.1px, name and wavelength at the botom],\nidentified lines: g [px, wavelength at top]'.format(order)
@@ -4580,7 +4645,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         weights1, weights3 = arc_lines_px_step[:,3], 1/(abs(arc_lines_px_step[:,2]-med_arc_width)+med_arc_width)     # height of the arc line, 1/width of the arc line
         reference_catalog = reference_catalog_full[ reference_catalog_full[:,1] >= np.percentile(reference_catalog_full[:,1], ref_catalog_brigthness[step]) ,:]   # use only the brightest lines
         #print reference_catalog.shape, reference_catalog_full.shape
-        #print step,max_diff_px,px_range,polynom_order_trace,polynom_order_intertrace,len(arc_lines_px_step), len(good_values), reference_catalog.shape
+        #print(step,max_diff_px,px_range,polynom_order_trace,polynom_order_intertrace,len(arc_lines_px_step), len(good_values), reference_catalog.shape)
         for iteration in range(iter_break):
                 cen_pxs = arc_lines_wavelength[:,0] * np.nan
                 for i,order in enumerate(orders):
@@ -4610,7 +4675,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                     weight[arc_lines_wavelength[:,0] == order] /= weight_scale[i]
                 weight=[]
                 #good_values = (arc_lines_wavelength[:, 0] == 35)        #testing
-                #print weight[good_values], medians                      #testing
+                #print(weight[good_values], medians)                      #testing
                 poly2d_params = polynomial_fit_2d_norm(x, y, arc_lines_wavelength[:,2], polynom_order_trace, polynom_order_intertrace, w=weight, w_range=1E5)    # Fit against the available/identified lines
                 # Convert the pixel positions of the found lines into wavelengths
                 cen_pxs = arc_lines_px_step[:,1] * np.nan
@@ -4619,34 +4684,34 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                 x2 = arc_lines_px_step[:,1] - cen_pxs                         # The pixel position of all lines in this step
                 y2 = 1.0/(arc_lines_px_step[:,0]+order_offset)
                 arc_line_wave = polynomial_value_2d(x2, y2, polynom_order_trace, polynom_order_intertrace, poly2d_params)
-                #print len(x2),len(x), px_range, pxdiff, np.sum(arc_lines_px_step[:,0]==26)
-                #print np.vstack([y2,x2,arc_line_wave]).T[arc_lines_px_step[:,0] == 26,:]
+                #print(len(x2),len(x), px_range, pxdiff, np.sum(arc_lines_px_step[:,0]==26))
+                #print(np.vstack([y2,x2,arc_line_wave]).T[arc_lines_px_step[:,0] == 26,:])
                 ## Resolution around the line
                 arc_line_res = np.abs(polynomial_value_2d(x2+1, y2, polynom_order_trace, polynom_order_intertrace, poly2d_params) - \
                                       polynomial_value_2d(x2-1, y2, polynom_order_trace, polynom_order_intertrace, poly2d_params) )/2
                 # Avoid running off the wavelength solution with high orders -> fit linear solution and use it for the outer areas
                 if old_px_range - px_range > 10:    # only use linear solution when more than 10 px more
-                    #print "use linear values"
+                    #print("use linear values")
                     good_values_l = ( arc_lines_px_step[:,1] <= old_px_range+pxdiff + min(100,4*(old_px_range - px_range)) ) & \
                                     ( arc_lines_px_step[:,1] >= old_px_range+pxdiff)   # lines on the left, covered by the old solution
                     good_values_r = ( arc_lines_px_step[:,1] >= specs[1]-old_px_range+pxdiff - min(100,4*(old_px_range - px_range)) ) & \
                                     ( arc_lines_px_step[:,1] <= specs[1]-old_px_range+pxdiff )  # lines on the right, covered by the old solution
-                    #print px_range, old_px_range, np.min(x2[good_values_l]), np.max(x2[good_values_l]), np.min(x2[good_values_r]), np.max(x2[good_values_r]), 'bla', \
+                    #print(px_range, old_px_range, np.min(x2[good_values_l]), np.max(x2[good_values_l]), np.min(x2[good_values_r]), np.max(x2[good_values_r]), 'bla', \
                     #      np.min(arc_lines_px_step[good_values_l,1]), np.max(arc_lines_px_step[good_values_l,1]), np.min(arc_lines_px_step[good_values_r,1]), np.max(arc_lines_px_step[good_values_r,1]), 'ble', \
                     #      np.min(cen_pxs[good_values_l]), np.max(cen_pxs[good_values_l]), np.min(cen_pxs[good_values_r]), np.max(cen_pxs[good_values_r]), 'bli', \
                     #      old_px_range+pxdiff, old_px_range+pxdiff + 2*(old_px_range - px_range), specs[1]-old_px_range+pxdiff - 2*(old_px_range - px_range), specs[1]-old_px_range+pxdiff, 'blu', \
-                    #      specs[1],old_px_range,pxdiff,2*(old_px_range - px_range), 'blo', len(x2),len(good_values_l)
+                    #      specs[1],old_px_range,pxdiff,2*(old_px_range - px_range), 'blo', len(x2),len(good_values_l))
                     if np.sum(good_values_l) > 10:
                         poly2d_params_l = polynomial_fit_2d_norm(x2[good_values_l], y2[good_values_l], arc_line_wave[good_values_l], 1, polynom_order_intertrace)    # linear fit in the outsides of the order
                         good_values_l = ( arc_lines_px_step[:,1] < old_px_range+pxdiff )   # lines on the left, only covered by the new solution
-                        #print np.vstack([ arc_lines_px_step[good_values_l,1], arc_lines_px_step[good_values_l,0], arc_line_wave[good_values_l], 
-                        #                  arc_line_wave[good_values_l] - polynomial_value_2d(x2[good_values_l], y2[good_values_l], 1, polynom_order_intertrace, poly2d_params_l) ]).T
+                        #print(np.vstack([ arc_lines_px_step[good_values_l,1], arc_lines_px_step[good_values_l,0], arc_line_wave[good_values_l], 
+                        #                  arc_line_wave[good_values_l] - polynomial_value_2d(x2[good_values_l], y2[good_values_l], 1, polynom_order_intertrace, poly2d_params_l) ]).T)
                         arc_line_wave[good_values_l] = polynomial_value_2d(x2[good_values_l], y2[good_values_l], 1, polynom_order_intertrace, poly2d_params_l)      # replace the wavelength with the linear fit
                     if np.sum(good_values_r) > 10:
                         poly2d_params_r = polynomial_fit_2d_norm(x2[good_values_r], y2[good_values_r], arc_line_wave[good_values_r], 1, polynom_order_intertrace)    # linear fit in the outsides of the order
                         good_values_r = ( arc_lines_px_step[:,1] > specs[1]-old_px_range+pxdiff )   # lines on the right, only covered by the new solution
-                        #print np.vstack([ arc_lines_px_step[good_values_r,1], arc_lines_px_step[good_values_r,0], arc_line_wave[good_values_r], 
-                        #                  arc_line_wave[good_values_r] - polynomial_value_2d(x2[good_values_r], y2[good_values_r], 1, polynom_order_intertrace, poly2d_params_r) ]).T
+                        #print(np.vstack([ arc_lines_px_step[good_values_r,1], arc_lines_px_step[good_values_r,0], arc_line_wave[good_values_r], 
+                        #                  arc_line_wave[good_values_r] - polynomial_value_2d(x2[good_values_r], y2[good_values_r], 1, polynom_order_intertrace, poly2d_params_r) ]).T )
                         arc_line_wave[good_values_r] = polynomial_value_2d(x2[good_values_r], y2[good_values_r], 1, polynom_order_intertrace, poly2d_params_r)      # replace the wavelength with the linear fit
                     old_px_range = opt_px_range[step]
                     
@@ -4669,7 +4734,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                     # Ignore lines, for which the resolution is unphysical
                     index = np.where( np.abs( 1/(arc_lines_px_step[i,0]+order_offset) - y_lin ) < 0.00001 )[0]      # Find the index of the order in res_cen, orders might be missing
                     if len(index) <> 1:
-                        logger('Error: that should not have happened, check code around line 4300. Index contains {0} entries'.format(len(index)))
+                        logger('Error: that should not have happened, check code around line 4700. Index contains {0} entries'.format(len(index)))
                     index = index[0]                                                    # make the list into an integer
                     if abs(arc_line_res[i] - res_cen[index]) > res_cen[index] * 0.25:   # The variation in one order should be less than 15% (exohspec), 25% MRES
                         #1#print "ignore the line", arc_line_res[i], res_cen[int(arc_lines_px_step[i,0])], arc_lines_px_step[i,0], arc_lines_px_step[i,1]
@@ -4701,7 +4766,10 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                 # arc_lines_wavelength: order, px in spectrum, wavelength in reference catalog, difference in wavelength between wavelength solution and reference line, 
                 #                       3x weights, 1px resolution at that position, index in refence catalog, width of the line
                 if arc_lines_wavelength.shape[0] < 10:
-                    logger('Error: Something went wrong, only {0} lines have been identified'.format(arc_lines_wavelength.shape[0]))
+                    logger('Error: Something went wrong, only {0} lines have been identified. '.format(arc_lines_wavelength.shape[0])+\
+                            'Please compare the positon of orders in the current folder with the folder from which the previous wavelength solution was used. '+\
+                            'If necessary adjust the parameters order_offset, px_offset, px_offset_order, and/or resolution_offset_pct. '+\
+                            'Decreasing the number of orders in the polynomial fit (parameters polynom_order_traces and polynom_order_intertraces) might also help to fix the issue.')
                 goodvalues, p = sigma_clip(np.arange(arc_lines_wavelength.shape[0]), arc_lines_wavelength[:,3], 0, sigma, sigma, repeats=20)    # poly_order=0 to sigma clip around the average
                 arc_lines_wavelength = arc_lines_wavelength[goodvalues,:]
                 cen_px, p_cen_px = find_real_center_wavelength_solution(order_offset, orders, [], cen_px, polynom_order_trace, polynom_order_intertrace, poly2d_params)
@@ -5013,13 +5081,13 @@ def read_fit_wavelength_solution(params, filename, im):
             try:
                 arc_lines_wavelength.append([ int(line[0]), int(line[1]), float(line[2]), float(line[3]),0 ])
             except:
-                print 'Problems to convert to int/float:', line
+                print( 'Problems to convert to int/float:', line )
     file.close()
     if len(arc_lines_wavelength) == 0:
         logger('Error: No useful information was found in {0}. Please make sure the entries in the file contain of the tab-separated values: order (starting at 0), real order, pixel, wavelength'.format(filename))
     arc_lines_wavelength = np.array(arc_lines_wavelength)
     if 0.0 in arc_lines_wavelength[:,1]:
-        logger('Error: The second coloumn (real order) in file {1} was not set correctly as it contains a zero. Please use the real order (from grating equation)'.format(filename))
+        logger('Error: The second coloumn (real order) in file {1} was not set correctly as it contains a zero. Please use the (estimated) real order (from grating equation)'.format(filename))
     orig_lines = arc_lines_wavelength.shape[0]
     
     order_offset = arc_lines_wavelength[:,1] - arc_lines_wavelength[:,0]
@@ -5050,8 +5118,8 @@ def read_fit_wavelength_solution(params, filename, im):
             arc_lines_wavelength = np.delete(arc_lines_wavelength, arc_line_res.argmax(), 0)        # Delete the least matching line
             cen_pxs = np.delete(cen_pxs, arc_line_res.argmax())                                     # Apply the same correction
         if arc_lines_wavelength.shape[0] <= polynom_order_trace*polynom_order_intertrace:
-            text = 'Error: The solution seems unphysical, at least {0} lines should be used (degrees of freedom). Please add more lines to {1}, or decrease polynom_order_traces or polynom_order_intertraces'
-            logger(text.format(polynom_order_trace*polynom_order_intertrace+1, filename))
+            logger(('Error: The solution seems unphysical, at least {0} lines should be used (degrees of freedom). '+\
+                    'Please add more lines to {1}, or decrease polynom_order_traces or polynom_order_intertraces.').format(polynom_order_trace*polynom_order_intertrace+1, filename))
         
         # Find the new order_offset
         order_offset_old = int(order_offset)
@@ -5271,11 +5339,11 @@ def add_specinfo_head(spectra, im_head):
     Add information from the spectra to the header
     """
     spectra = np.array(spectra)
-    im_head['fmin'] = np.nanmin(spectra)
-    im_head['fmax'] = np.nanmax(spectra)
-    im_head['fsum_all'] = np.nansum(spectra, axis=None)
+    im_head['HIERARCH EXO_PIPE fmin'] = (np.nanmin(spectra), 'Minimum Flux per pixel')
+    im_head['HIERARCH EXO_PIPE fmax'] = (np.nanmax(spectra), 'Maximum Flux per pixel')
+    im_head['HIERARCH EXO_PIPE fsum_all'] = (np.nansum(spectra, axis=None), 'Total flux')
     for order in range(spectra.shape[0]):
-        im_head['fsum_{0}'.format('%2.2i'%order)] = np.nansum(spectra[order,:], axis=None)
+        im_head['HIERARCH EXO_PIPE fsum_order {0}'.format('%2.2i'%order)] = np.nansum(spectra[order,:], axis=None)
     
     return im_head
 
@@ -5613,7 +5681,7 @@ def mjd_fromheader(params, head):
     """
     secinday = 24*3600.0
     
-    obsdate, obsdate_float = get_obsdate(params, head)               # in UTC, mid of the exposure
+    obsdate, obsdate_float, exposure_time = get_obsdate(params, head)               # in UTC, mid of the exposure
     mjd0,mjd = iau_cal2jd(obsdate.year, obsdate.month, obsdate.day)
     ut       = obsdate.hour*3600. + obsdate.minute*60. + obsdate.second
     mjd += ut / secinday
@@ -5666,7 +5734,6 @@ def getcoords_from_file(obnames,mjd,filen='coords.txt'):               # from CE
     # !!! Use read files with split already available
     lines_txt = read_text_file(filen, no_empty_lines=True)
     lines = convert_readfile(lines_txt, [str, str, str, float, float, float, float], delimiter=',', replaces=[['\t',',']])
-    print len(lines_txt), len(lines)
     if len(lines) < len(lines_txt):
         logger('Warn: {1} line(s) could not be read in the reference coordinates file: {0}. Please check that columns 4 to 7 (starting counting with 1) are numbers'.format(filen, len(lines_txt)-len(lines) ))
     found = False
@@ -5798,7 +5865,7 @@ def get_barycent_cor(params, im_head, obnames, reffile):
             gobs.name = copy.copy(params['site'])
             gobs.lat  = rad(params['latitude'])     # lat/long in decimal degrees  
             gobs.long = rad(params['longitude'])
-            obsdate, obsdate_float = get_obsdate(params, im_head)               # in UTC, mid of the exposure
+            obsdate, obsdate_float, exposure_time = get_obsdate(params, im_head)               # in UTC, mid of the exposure
             gobs.date = obsdate.strftime('%Y-%m-%d %H:%M:%S')
             mephem    = ephem.Moon()
             mephem.compute(gobs)
@@ -5847,7 +5914,7 @@ def get_barycent_cor(params, im_head, obnames, reffile):
                     source_radec = 'The object coordinates are derived from the image header.'
                 if parentr == 'latitude':           # Assume that latitute is coming from the same source
                     source_obs = 'The site coordinates are derived from the image header.'
-                print 'params[parentr]', params[parentr]
+
     mjd,mjd0 = mjd_fromheader(params, im_head)
     
     ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, mjd, filen=reffile)     # obnames will be a list with only one entry: the matching entry 
@@ -5884,11 +5951,11 @@ def get_barycent_cor(params, im_head, obnames, reffile):
         #print "result3", bcvel_baryc
         #print "result3 RV", bcvel_baryc[0][0]
         
-        im_head['RA_PIPE'] = (round(ra,6),           'RA in degrees, used to calculated BCV, BJD')
-        im_head['DEC_PIPE'] = (round(dec,6),         'DEC in degrees, used to calculated BCV, BJD')
-        im_head['BCV_PIPE'] = (round(bcvel_baryc,4), 'barycentric velocity in km/s')
-        im_head['PMRA_PIP'] = (round(pmra,3),        'proper motion for RA in mas/yr, for BCV, BJD')
-        im_head['PMDEC_PI'] = (round(pmdec,3),       'proper motion for DEC in mas/yr, for BCV, BJD')
+        im_head['HIERARCH EXO_PIPE RA'] = (round(ra,6),           'RA in degrees, used to calculated BCV, BJD')
+        im_head['HIERARCH EXO_PIPE DEC'] = (round(dec,6),         'DEC in degrees, used to calculated BCV, BJD')
+        im_head['HIERARCH EXO_PIPE BCV'] = (round(bcvel_baryc,4), 'barycentric velocity in km/s')
+        im_head['HIERARCH EXO_PIPE PMRA'] = (round(pmra,3),       'proper motion for RA in mas/yr, for BCV, BJD')
+        im_head['HIERARCH EXO_PIPE PMDEC'] = (round(pmdec,3),     'proper motion for DEC in mas/yr, for BCV, BJD')
         
         """# Using jplephem
         bjd = jd_corr(mjd, ra, dec, params['epoch'], params['latitude'], params['longitude'], jd_type='bjd')
@@ -5902,10 +5969,10 @@ def get_barycent_cor(params, im_head, obnames, reffile):
         #print "bjdtdb0", bjdtdb[0][0]
         
         # end test
-        im_head['BJDTDB_P'] = (round(bjd,5), 'Barycentric corrected JD (incl leap sec)')     # without leap seconds: remove 32.184+N leap seconds after 1961'
+        im_head['HIERARCH EXO_PIPE BJDTDB'] = (round(bjd,5), 'Baryc. cor. JD (incl leap seconds)')     # without leap seconds: remove 32.184+N leap seconds after 1961'
 
-    im_head['JD_PIPE'] = (round(mjd+mjd0,5), 'Julian date')             # MJD = JD - 2400000.5 from http://www.csgnetwork.com/julianmodifdateconv.html
-    im_head['MJD_PIPE'] = (round(mjd,5), 'modified Julian data')        # round 5 -> precision is 1 second, timing is not more precise
+    im_head['HIERARCH EXO_PIPE JD'] = (round(mjd+mjd0,5), 'Julian date')             # MJD = JD - 2400000.5 from http://www.csgnetwork.com/julianmodifdateconv.html
+    im_head['HIERARCH EXO_PIPE MJD'] = (round(mjd,5), 'modified Julian data')        # round 5 -> precision is 1 second, timing is not more precise
 
     logger(('Info: Using the following data for object name(s) {10}, Observatory site {9}, mid exposure MJD {11}: '+\
                     'altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}, pmra = {13}, pmdec = {14}. {8} {6} '+\
@@ -5916,24 +5983,24 @@ def get_barycent_cor(params, im_head, obnames, reffile):
     return params, bcvel_baryc, mephem, obnames, im_head
 
 def JPLiers(path, mjdini, mjdend):                  # from CERES, updates the iers.tab file so it contains only 2000 entries, # not needed anymore
-	output    = open(path+'iers.tab','w')
-	filename  = path+'finals2000A.data'
-	finaldata = open(filename,'r')
+    output    = open(path+'iers.tab','w')
+    filename  = path+'finals2000A.data'
+    finaldata = open(filename,'r')
 
-	for line in finaldata:
-		mj = line[7:15]
-		if float(mj) >= float(mjdini) and float(mj) <= float(mjdend) and len(line.split()) > 5:	
-			c1 = line[18:27]
-			c2 = line[37:46]
-			c3 = line[58:68]
-			l  = ' '+mj+' '+c1+' '+c2+' '+c3+' '+'\n'
-			output.write(l)
-			if mj == mjdini+999: print "estoy en el dia D"
-		if float(mj) > float(mjdend):
-			break
-	finaldata.close()
-	output.close()
-	pass
+    for line in finaldata:
+        mj = line[7:15]
+        if float(mj) >= float(mjdini) and float(mj) <= float(mjdend) and len(line.split()) > 5:    
+            c1 = line[18:27]
+            c2 = line[37:46]
+            c3 = line[58:68]
+            l  = ' '+mj+' '+c1+' '+c2+' '+c3+' '+'\n'
+            output.write(l)
+            if mj == mjdini+999: print("estoy en el dia D")
+        if float(mj) > float(mjdend):
+            break
+    finaldata.close()
+    output.close()
+    pass
 
 def jd_corr(mjd, ra, dec, epoch, lat, lon, jd_type='bjd'):          # not used anymore
     """
@@ -6185,12 +6252,12 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem):
             if loadtxt.find('Warn') <> 0:
                 logger('Info: Using the following atmosperic parameters for T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4}{0}'.format(loadtxt, T_eff, logg, Z, vsini, vel0))
         
-        print "\t\tRadial Velocity analysis:"
+        logger('Step: Radial Velocity analysis:')
         # assign mask
         #   obname is the name of the object
         #   reffile is a reference file: reffile = dirin+'reffile.txt' -> this file doesn't exist
         sp_type, mask = GLOBALutils.get_mask_reffile(obname,reffile=reffile,base=base+'data/xc_masks/')     # !!! Warn: upper and lower case matters
-        print "\t\t\tWill use",sp_type,"mask for CCF."
+        logger("Will use",sp_type,"mask for CCF.")
 
         # Read in mask
         ml, mh, weight = np.loadtxt(mask,unpack=True)
@@ -6213,7 +6280,7 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem):
         ml_v = av_m - mask_hw_wide
         mh_v = av_m + mask_hw_wide 
 
-        print '\t\t\tComputing the CCF...'
+        logger('Computing the CCF...')
         cond = True
 
         if sp_type == 'M5':

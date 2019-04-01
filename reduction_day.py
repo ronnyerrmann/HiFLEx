@@ -222,7 +222,7 @@ if __name__ == "__main__":
             plot_wavelength_solution_form(params['logging_wavelength_solution_form'], axlows, axhighs, wavelength_solution)
             plot_wavelength_solution_spectrum(cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
             plot_wavelength_solution_image(im_cal_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
-        obsdate, obsdate_float = get_obsdate(params, im_arclhead)               # in UTC, mid of the exposure
+        obsdate, obsdate_float, exposure_time = get_obsdate(params, im_arclhead)               # in UTC, mid of the exposure
         if calib[1] == 'cal2':          # for the calibration fiber
             wavelength_solution_cal, wavelength_solution_arclines_cal = copy.deepcopy(wavelength_solution), copy.deepcopy(wavelength_solution_arclines)
             params['wavelength_solution_type'] = 'cal-fiber'
@@ -272,7 +272,7 @@ if __name__ == "__main__":
             aspectra = cal1_l_spec
             im_arclhead = im_arc1lhead
             im_name = 'long_exposure_emision_lamp_science_fiber'
-        obsdate, obsdate_float = get_obsdate(params, im_arclhead)               # in UTC, mid of the exposure
+        obsdate, obsdate_float, exposure_time = get_obsdate(params, im_arclhead)               # in UTC, mid of the exposure
 
         dummy_shift_wavesoln, master_shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
                                                               reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, im_name, maxshift=max(2,2*shift_err), in_shift=shift )
@@ -305,7 +305,7 @@ if __name__ == "__main__":
         # The file is read later on purpose
     else:
         logger('Step: Create the normalised flat for the night')
-        obsdate, obsdate_float = get_obsdate(params, im_flatarc_head)
+        obsdate, obsdate_float, exposure_time = get_obsdate(params, im_flatarc_head)
         shift = find_shift_images(params, im_flatarc, im_trace1, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly, extract=True)
         flat_spec, good_px_mask = extract_orders(params, im_flatarc, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='prec', offset=shift)
         flat_spec_norm = flat_spec/np.nanmedian(flat_spec)

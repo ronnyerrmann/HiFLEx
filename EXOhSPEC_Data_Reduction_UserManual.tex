@@ -3,7 +3,7 @@
 \usepackage{listings}              % Only used for this template to display code, can delete
 \usepackage[usenames,dvipsnames,svgnames,table]{xcolor}    %Driver-independent color extensions
 \usepackage[linktocpage=true]{hyperref}            % Extensive support for hypertext in LaTeX
-\usepackage{graphicx}              % Enhanced support for graphics
+\usepackage{graphicx,subfig}              % Enhanced support for graphics
 \usepackage{amsmath}
 
 \newcommand\tab[1][1cm]{\hspace*{#1}}
@@ -72,8 +72,12 @@
 \end{itemize}
 
 \subsection*{v0.4.1}
-\begin{itemize}
+\begin{itemize}\setlength\itemsep{0em}
   \item Switched to barycentric correction (radial velocity and BJDTDB) from \url{https://github.com/shbhuk/barycorrpy}.
+  \item Added parameter \verb|raw_data_mid_exposure_keys| to conf.txt (optional at the moment).
+  \item Time format in the file from parameter \verb|configfile_fitsfiles| created by \verb|prepare_file_list.py| changed.
+  \item Improved Error messages.
+  \item Improvment of the way how the new header values are stored.
 \end{itemize}
 % ------------------------------------------------------------------------------
 \newpage
@@ -104,13 +108,15 @@ If you use the barycentric corrected radial velocities, the barycentric velocity
 
 \subsection{With Anaconda and python 2.7}
 
-\noindent Anaconda can be downloaded from \url{https://www.anaconda.com/download/}. Please select the version for python 2.7. After download it can be installed by running
+\noindent Anaconda can be downloaded from \url{https://www.anaconda.com/distribution/#linux}. Please select the version for python 2.7. After download it can be installed by running
 \begin{lstlisting}[style=base]
 sh Downloads/Anaconda2-5.0.1-Linux-x86_64.sh
 \end{lstlisting}
+%sh Downloads/Anaconda3-2018.12-Linux-x86_64.sh
 (no superuser permissions are needed, the version might need to be changed).
 
-After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
+After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. %
+If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
 \begin{lstlisting}[style=base]
 export PATH="/home/exohspec/anaconda2/bin:$PATH"
 \end{lstlisting}
@@ -161,6 +167,23 @@ Updating anaconda might also solve it:
 conda update --prefix /home/exohspec/anaconda2 anaconda
 \end{lstlisting}
 
+\subsubsection{Upgrading numpy for radial velocity analysis}
+To use the cross-correlation based radial velocity from the CERES pipeline (see Section~\ref{Section:serval_package}) the package numpy needs to be on version 1.13 or newer. To check please run:
+\begin{lstlisting}[style=base]
+pip show numpy
+\end{lstlisting}
+
+Numpy can be upgraded in anaconda using:
+\begin{lstlisting}[style=base]
+pip install numpy --upgrade
+\end{lstlisting}
+
+If the version after the upgrade hasn't change, it might be necessary to run
+\begin{lstlisting}[style=base]
+pip uninstall numpy
+conda update numpy
+\end{lstlisting}
+
 \subsection{Necessary files}
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/exohspec/releases}):
@@ -191,15 +214,19 @@ The pipeline creates extracted spectra in different formats, which then can be f
 \label{Section:Explanation_CERES_pipeline}
 Authors: Rafael Brahm, Andr{\'e}s Jord{\'a}n, N{\'e}stor Espinoza. If you make use of the Radial Velocity analysis from the Ceres , please cite Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/\#abs/2017PASP..129c4002B/abstract}}.
 
-The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres} (``Clone or Download''-button)\\ and then unpack the archive. To make it work, please follow the Installation Chapter in the README.md file on\\ \url{https://github.com/rabrahm/ceres} .
+The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres} (``Clone or Download''-button)\\ and then unpack the archive. To make it work, please follow the Installation Chapter in the README.md file on\\ \url{https://github.com/rabrahm/ceres}~.
 
 
 \subsubsection{Terra}
-Terra can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view} . It only has to be extracted. To check that all dependencies are installed on the system one can run.
+Terra can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}~. It only has to be extracted. To check that all dependencies are installed on the system one can run.
 \begin{lstlisting}[style=base]
 java -jar <path to terra>/terra/PRV.jar
 \end{lstlisting}
 This should produce the entry \textit{*** TERRA v1.8 ***} before failing.
+
+\subsubsection{Serval}
+\label{Section:serval_package}
+To install Serval please follow the instructions as given on\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data.
 
 \subsection{General information about the way the pipeline works}
 
@@ -317,8 +344,8 @@ The suggestions are for bifurcated fiber input to the spectrograph. If a spectro
     \item[\textless type\textgreater\_calibs\_create\_g] : Change the calibrations, which are applied to the CCD images before further processing or extraction for the different file types (e.g. bias, dark, flat, sflat, arc, flatarc, extract, wavelengthcal). A list of possible calibration options is given in Chapter~\ref{Section:parameters_CCD_proc} below.
     %In case of a new setup, it can be set to \verb|manual_solution.fits| (or any filename that doesn't exist). The script will then create a new solution from the information given in the file \verb|arc_lines_wavelength.txt|. For a description of the format of this file, check Chapter~\ref{section:create_new_wave_solution}.
   \end{description}
-  \item Run the python script: \\ \verb|python <path to scripts>/prepare_file_list.py| . \\ See Chapter~\ref{Section:prepare_files} below for more information.
-  \item Run the python script: \\ \verb|python <path to scripts>/reduction_day.py| .
+  \item Run the python script: \\ \verb|python <path to scripts>/prepare_file_list.py|~. \\ See Chapter~\ref{Section:prepare_files} below for more information.
+  \item Run the python script: \\ \verb|python <path to scripts>/reduction_day.py|~.
   \item Check the out in the \verb|logfile|, the images in the logging path, or in results in the extracted files.
 \end{enumerate}
 
@@ -411,17 +438,17 @@ The script \verb|prepare_file_list.py| reads all files in the folder (and subfol
 In order to calculate the barycentric correction the time of the observation (or Julian Date), the pointing on the sky, and the position of the observatory on earth need to be known. These information can be given in different ways. 
 
 \begin{itemize}
- \item The mid-exposure date and time is derived from the image header using the keys given in the parameter \verb|raw_data_dateobs_keyword| and \verb|raw_data_exptim_keyword| (half of the exposure time). The pipeline can handle different standard formats (YYYY-MM-DDThh:mm:ss). If necessary, further formats can be added in the procedure \textit{get\_obsdate}.
+ \item The mid-exposure date and time is derived from the image header using the keys given in the parameters \verb|raw_data_dateobs_keyword| and \verb|raw_data_exptim_keyword| (half of the exposure time, or a different fraction if one of the keys in \verb|raw_data_mid_exposure_keys| exists). The pipeline can handle different standard formats (YYYY-MM-DDThh:mm:ss). If necessary, further formats can be added in the function \textit{get\_obsdate} in \textit{procedures.py}.
  \item The position of the observatory will be extracted from the following sources (using the first available source in the following list:
  \begin{enumerate}\setlength\itemsep{0em}
   \item Reading latitude, longitude, and elevation from the header, using the the header keys defined in the beginning of procedure \textit{get\_barycent\_cor}: site\_keys, altitude\_keys, latitude\_keys, longitude\_keys (the first available entry of each list will be used, if necessary these lists can be extended).
-  \item Using the site coordinates as given in the configuration file.
+  \item Using the site coordinates as given in the configuration file in parameters \verb|altitude|, \verb|latitude|, and \verb|longitude|.
  \end{enumerate}
  \item The pointing of the telescope (RA and DEC) will be derived from the following sources (using the first available source in the following list:
  \begin{enumerate}\setlength\itemsep{0em}
-  \item reading the object coordinates from a list of objects (see Chaper~\ref{Section:create_object_list_file}).
+  \item Reading the object coordinates from a list of objects (see Chaper~\ref{Section:create_object_list_file}).
   \item Reading the object coordinates and epoch from the image header, using the header keys defined in the beginning of procedure \textit{get\_barycent\_cor}: ra\_keys, dec\_keys, epoch\_keys (the first available entry of each list will be used, if necessary these lists can be extended).
-  \item If the object name contains sun or moon, then the coordinates of the sun/moon are calculated for the mid of the observing time.
+  \item If the object name contains sun, moon, or jupiter then the coordinates of the solar system are calculated for the mid of the observing time.
  \end{enumerate}
 \end{itemize}
 
@@ -433,7 +460,7 @@ In order to calculate the barycentric correction the time of the observation (or
 
 \subsubsection{Creating a list of objects}
 \label{Section:create_object_list_file}
-If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_path| (the first one has higher priority). The file must contain one line per object. For each object the following tab-separated values need to be given:
+If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_path| (the first one has higher priority, in case different file exists in the two folders only the first file will be read). The file must contain one line per object. For each object the following tab-separated values need to be given:
 \begin{enumerate}\setlength\itemsep{0em}
  \item Object name (the filename should start with the object name in order to be used)
  \item RA (hh:mm:ss.ss or hh mm ss.ss or as one number in degrees)
@@ -442,10 +469,11 @@ If the coordinates of the object are not stored in the fits header, then they ca
  \item PM DEC (mas/year, can be 0 in the most cases)
  \item Epoch of the coordinates (only the number, e.g. 2000 or 2015.5)
  \item Enable/Disable flag (1 for enabled)
- \item Mask to use. At the moment G2, K5, or M2 are possible options. Can be empty
- \item Velocity width to broaden the lines of the binary mask
+ \item (optinal) Mask to use. At the moment G2, K5, or M2 are possible options. Can be empty.
+ \item (optinal) Velocity width to broaden the lines of the binary mask. Can be empty.
 \end{enumerate}
 
+Please note that the position of Moon, Jupiter, and Sun are calculated by the pipeline using the mid-exposure time. This requires that the filename contains the (case-insensitive) object name. Therefore the object is not required in the object list.
 
 \subsection{Format of the extracted files}
 Different types of extracted files are created. They are described in the following subsections.
@@ -631,12 +659,80 @@ It is possible to include the information from previous nights of the same objec
 
 \subsection{Creating a new wavelength solution}
 \label{section:create_new_wave_solution}
-If no previous wavelength solution exist, then wavelengths and pixel need to correlated manually. In this case the parameter \verb|original_master_wavelensolution_filename| needs to point to a file, which does not exist (e.g. \textit{master\_wavelength\_manual.fits}). Then the python scrip can be run normally. It will perform most of the steps described in Section~\ref{Section:pipeline_steps_general} and stop after searching for the lines in the emission line spectra with the message:
+If no previous wavelength solution exist, then wavelengths and pixel need to correlated manually. In this case the parameter \verb|original_master_wavelensolution_filename| needs to point to a file, which does not exist (e.g. \textit{master\_wavelength\_manual.fits}). Then the python scrip can be run normally. It will perform most of the steps described in Section~\ref{Section:pipeline_steps_general} and stops after searching for the lines in the emission line spectra with the message:
 \begin{lstlisting}[style=base, basicstyle=\small]
 Error: Files for creating the wavelength solution do not exist ...
 \end{lstlisting}
-The order and pixel position of all identified lines are stored in the file given in parameter \verb|logging_found_arc_lines|. This file can be opened (easiest in a spreadsheet application) and the corresponding wavelengths can be added to some of the lines. The lines for each order are sorted by their absolute height. The plots of the extracted spectra, which are stored in the file given in \verb|logging_arc_line_identification_spectrum| (extended by the pipeline with \textit{\_manual.pdf}) can be used for visual guiding. 
-I have found that providing 1.5 lines times number orders is enough for the pipeline to do the rest. The lines should cover as much of the CCD image as possible (e.g. covering most of the lines (inclusive the outermost lines) of every 10th order).
+The order and pixel position of all identified lines are stored in the file given in parameter \verb|logging_found_arc_lines| (see Table~\ref{Tab:create_wavelength_solution}. This file can be opened (easiest in a spreadsheet application) and the corresponding wavelengths can be added to some of the lines. The lines for each order are sorted by their absolute height, the saturated lines are excluded. The plots of the extracted spectra, which are stored in the file given in \verb|logging_arc_line_identification_spectrum| (extended by the pipeline with \textit{\_manual.pdf}) can be used for visual guiding (for an example see Figure~\ref{Figure:create_wavelength_solution}). 
+Tests have shown that providing about 10 lines every 5 to 10 orders is enough for the pipeline to do the fitting in a good way. However, it is important that the lines cover as much of the CCD image as possible (e.g. covering most of the orders, inclusive the outermost lines of the orders). In case of a completely different setup an iterative approach might be necessary.
+
+\begin{figure} 
+  \centering
+  \subfloat[Part of a Th-Ar spectrum without a wavelength solution from a medium resolution spectrograph.]
+  {\includegraphics[height=4cm]{./figures/create_wavesol_unknow_spec_MRES_o22}
+  }
+  \qquad
+  \subfloat[Th-Ar spectrum for which the wavelength solution is known from a high-resolution spectrograph. The lines in red are the identified lines, green lines can be ignored.]
+  {\includegraphics[height=4cm]{./figures/create_wavesol_know_spec_UH_o26.png}
+  }
+  \caption{The emission lines for a short (orange) and a long (blue) exposure time. The left figure covers about the same wavelength range as the Th-Ar spectrum with wavelength solution in the right figure. The right image can be used to correlate pixel-positions and wavelengths in the left spectrum.
+    \label{Figure:create_wavelength_solution}}
+\end{figure}
+
+\begin{table}
+  \caption{Transforming the emission lines found by the pipeline into the file from which the pipeline will create the wavelength solution.}
+ \label{Tab:create_wavelength_solution}
+  \tiny
+  \subfloat[Example of the entry of the file from parameter \textbf{logging\_found\_arc\_lines} for one order.]{
+    \begin{tabular}{r r r r}
+22 & 244.85 & 1.02 & 2336.9 \\
+22 & 419.53 & 1.15 & 2085.9 \\
+22 & 365.86 & 1.09 & 1832.9 \\
+22 & 440.14 & 1.19 & 1571 \\
+22 & 186.32 & 0.93 & 1556.1 \\
+22 & 387.96 & 1.08 & 974.8 \\
+22 & 492.43 & 1.22 & 1013.3 \\
+22 & 334.94 & 1.06 & 658.1 \\
+22 & 173.30 & 1.54 & 505 \\
+22 & 503.78 & 1.23 & 368.8 \\
+22 & 298.19 & 1.04 & 316.3 \\
+22 & 276.35 & 0.95 & 247.6 \\
+22 & 351.78 & 1.09 & 197.2 \\
+22 & 532.12 & 1.06 & 108.5 \\
+22 & 464.67 & 1.14 & 123.7 \\
+22 & 142.64 & 0.95 & 161.1 \\
+22 & 233.87 & 0.87 & 56.7 \\
+22 & 91.77 & 1.16 & 80.8 \\
+22 & 397.14 & 1.18 & 47 \\
+22 & 257.30 & 1.15 & 32.4 \\
+22 & 37.76 & 1 & 76.2 \\
+22 & 73.44 & 0.99 & 50.2 \\
+    \end{tabular}}
+  \qquad
+  \subfloat[Example of \textit{arc\_lines\_wavelength.txt} for one order. Lines without a wavelength can, but don't have to be deleted. The text in the columns with line type and afterwards are optional. Columns have to be spaced by tabulator.]{
+    \begin{tabular}{r r r l l l}
+22 & 47 & 244.85 & 6182.6216 & ThI &  \\
+22 & 47 & 419.53 &           & 6212.719 & blend, not used \\
+22 & 47 & 365.86 & 6203.4924 & Th I &  \\
+22 & 47 & 440.14 & 6215.938  & Ar I &  \\
+22 & 47 & 186.32 & 6172.2775 & Ar II &  \\
+22 & 47 & 387.96 & 6207.22   & ThI &  \\
+22 & 47 & 492.43 & 6224.5271 & ThI & faint blending \\
+22 & 47 & 334.94 & 6198.2226 & ThI &  \\
+22 & 47 & 173.30 &           &  & outside comparison \\
+22 & 47 & 503.78 &           &  &  \\
+22 & 47 & 298.19 & 6191.9052 &  &  \\
+22 & 47 & 276.35 & 6188.125  &  & faint blending \\
+22 & 47 & 351.78 &           &  &  \\
+22 & 47 & 532.12 &           &  &  \\
+22 & 47 & 464.67 &           &  &  \\
+22 & 47 & 142.64 &           &  & outside comparison \\
+22 & 47 & 233.87 & 6180.7049 & Th I &  \\
+22 & 47 & 397.14 & 6208.6872 &  &  \\
+22 & 47 & 257.30 & 6184.7897 &  &  \\
+    \end{tabular}}
+\end{table}
+
 
 The correlated data needs to be saved into file \textit{arc\_lines\_wavelength.txt} (in the working directory) with the following tab-separated entries:
 \begin{itemize}
@@ -1023,6 +1119,8 @@ If you observe strange behaviour, please contact Ronny. Access to the reduction 
 
 \newpage
 \section{Short introduction to reduction of CCD images}
+
+For more information please refer to the literature, e.g. Steve Howell: Handbook of CCD Astronomy (Chapter 3).
 
 The data stored in CCD images is affected by the physical parameters of the individual pixels and way the readout electronics work. Therefore each scientific frame needs to be corrected (pixel by pixel) with the formula:
 \begin{equation}

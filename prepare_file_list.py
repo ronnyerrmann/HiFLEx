@@ -70,7 +70,10 @@ if __name__ == "__main__":
     log_params(params)
     
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
-    file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' '])
+    try:
+        file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' ']) # old way of reading the data, To stay backwards compatible, can be removed in a few versions after v0.4.1
+    except:
+        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])     #new way of storing the data
     
     if os.path.isdir(params['raw_data_path']) == False:
         if os.path.isdir(params['raw_data_path'].replace('ncook','ronny')) == True:
@@ -147,7 +150,8 @@ if __name__ == "__main__":
                 fiber1 = 'science'
                 if fnlow.find('harps') <> -1:
                     fiber2 = 'wave'
-            # Get the exposure time
+            obsdate_tuple, dateobs, exptime = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
+            """# Get the exposure time
             exptime = -1
             if params['raw_data_exptim_keyword'] in im_head.keys():
                 exptime = im_head[params['raw_data_exptim_keyword']]
@@ -174,14 +178,14 @@ if __name__ == "__main__":
                 if found_time:        
                     dateobs = time.mktime(dateobs.timetuple())             #Time in seconds
                 else:
-                    dateobs = 0
+                    dateobs = 0"""
             
             extract = ''
             if fiber1 == 'science':
                 extract = 'e'
             file_list.append([filename, fiber1, fiber2, exptime, dateobs, extract])
             #print file_list[-1]
-    file_list = sorted(file_list, key=operator.itemgetter(1,2,3,0))
+    file_list = sorted(file_list, key=operator.itemgetter(1,2,3,4,0))
     # Save the list, show to user, so the user can disable files, read the list
     file = open(params['raw_data_file_list'],'w')
     file.write('### This file contains the information for all the fits files in the raw_data_path: {0} and it\'s subfolders.\n'.format(params['raw_data_path']))
@@ -190,7 +194,7 @@ if __name__ == "__main__":
     file.write('###   - Type of fiber 1 (science fiber)\n')
     file.write('###   - Type of fiber 2 (calibration fiber)\n')
     file.write('###   - Exposure time in seconds (from the header, if the information is not in the header, then from the filename)\n')
-    file.write('###   - Observation time in Unix timestamp (from header)\n')
+    file.write('###   - Mid-exposure observation time in UTC (from header)\n')
     file.write('###   - Flags:\n')
     file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n')
     file.write('###             Combination of images before the extraction is possible, please refer to the manual for more information\n')
@@ -200,7 +204,7 @@ if __name__ == "__main__":
     file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
     file.write('### -> When finished with the editing, save the file and close the editor \n\n')
     for entry in file_list:
-        file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], entry[4], entry[5] ))
+        file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5] ))
     file.close()
     if not ('nocheck' in sys.argv or '-nocheck' in sys.argv or '--nocheck' in sys.argv):
         start = time.time()
@@ -210,7 +214,7 @@ if __name__ == "__main__":
             raw_input('To continue please press Enter\t\t')
     time.sleep(1)
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
-    file_list = convert_readfile(file_list, [str, str, str, float, float], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
+    file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
     
     file_list = sorted(file_list, key=operator.itemgetter(1,2,3,0))
     # Check what data is available
