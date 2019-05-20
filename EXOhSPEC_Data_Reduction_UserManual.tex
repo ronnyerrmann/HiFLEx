@@ -75,9 +75,11 @@
 \begin{itemize}\setlength\itemsep{0em}
   \item Switched to barycentric correction (radial velocity and BJDTDB) from \url{https://github.com/shbhuk/barycorrpy}.
   \item Added parameter \verb|raw_data_mid_exposure_keys| to conf.txt (optional at the moment).
+  \item Added parameter \verb|path_harpsformat| to conf.txt
   \item Time format in the file from parameter \verb|configfile_fitsfiles| created by \verb|prepare_file_list.py| changed.
+  \item Improved determination of shift between current frame and the reference frame.
   \item Improved Error messages.
-  \item Improvment of the way how the new header values are stored.
+  \item Improvement of the way how the new header values are stored.
 \end{itemize}
 % ------------------------------------------------------------------------------
 \newpage
@@ -116,11 +118,11 @@ sh Downloads/Anaconda2-5.0.1-Linux-x86_64.sh
 (no superuser permissions are needed, the version might need to be changed).
 
 After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. %
-If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
+If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| (check with \verb|echo $0| what environment you are using) add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
 \begin{lstlisting}[style=base]
 export PATH="/home/exohspec/anaconda2/bin:$PATH"
 \end{lstlisting}
-If you use \verb|csh| add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.tcshrc|
+If you use \verb|tcsh| add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.tcshrc|
 \begin{lstlisting}[style=base]
 setenv PATH /home/exohspec/anaconda2/bin\:$PATH
 \end{lstlisting}
@@ -129,7 +131,7 @@ After making the change and opening a new terminal, python should point to the f
 
 \subsubsection{Additional modules}
 
-\noindent Once Anaconda is installed tow other modules are needed (tqdm, gatspy). If Anaconda is installed correctly then pip can be used to install this module
+\noindent Once Anaconda is installed few other modules are needed (tqdm, gatspy). If Anaconda is installed correctly then pip can be used to install this module
 \begin{lstlisting}[style=base]
 pip install tqdm
 pip install gatspy
@@ -184,6 +186,49 @@ pip uninstall numpy
 conda update numpy
 \end{lstlisting}
 
+\subsection{With Anaconda and python 3.7 (in preparation)}
+\textbf{Next thing to \url{https://sebastianraschka.com/Articles/2014_python_2_3_key_diff.html\#returning-iterable-objects-instead-of-lists}, procedures.py after line 2077 needs be done}.
+
+\noindent Anaconda can be downloaded from \url{https://www.anaconda.com/distribution/#linux}. Please select the version for python 3.7. After download it can be installed by running
+\begin{lstlisting}[style=base]
+sh Downloads/Anaconda3-2018.12-Linux-x86_64.sh
+\end{lstlisting}
+(no superuser permissions are needed, the version might need to be changed).
+
+After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. %
+If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| (check with \verb|echo $0| what environment you are using) add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
+\begin{lstlisting}[style=base]
+export PATH="/home/exohspec/anaconda3/bin:$PATH"
+\end{lstlisting}
+If you use \verb|tcsh| add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.tcshrc|
+\begin{lstlisting}[style=base]
+setenv PATH /home/exohspec/anaconda3/bin\:$PATH
+\end{lstlisting}
+
+Please make also sure that the environmental variable \verb|PYTHONPATH| does not point to any python-2.7 folders by checking \verb|echo $PYTHONPATH|~.
+If python-2.7 folders appear, set the \verb|PYTHONPATH| variable only to python-3 folders using 
+\begin{lstlisting}[style=base]
+export PYTHONPATH="<subsection of PYTHONPATH>"
+\end{lstlisting}
+in a bash environment or
+\begin{lstlisting}[style=base]
+setenv PYTHONPATH <subsection of PYTHONPATH>
+\end{lstlisting}
+in a c-shell environment.
+
+After making the change and opening a new terminal, python should point to the file in the Anaconda installation (\verb|which python|) and the path should be set correctly (\verb|echo $PYTHONPATH|).
+
+
+\subsubsection{Additional modules}
+
+\noindent Once Anaconda is installed few other modules are needed (tqdm, gatspy). If Anaconda is installed correctly then pip can be used to install this module
+\begin{lstlisting}[style=base]
+pip install gatspy
+pip install barycorrpy
+pip install ephem
+\end{lstlisting}
+
+
 \subsection{Necessary files}
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/exohspec/releases}):
@@ -226,7 +271,7 @@ This should produce the entry \textit{*** TERRA v1.8 ***} before failing.
 
 \subsubsection{Serval}
 \label{Section:serval_package}
-To install Serval please follow the instructions as given on\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data.
+To install Serval please follow the instructions as given on\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. Serval only works with python~2.7.
 
 \subsection{General information about the way the pipeline works}
 
@@ -433,6 +478,8 @@ The script \verb|prepare_file_list.py| reads all files in the folder (and subfol
     \end{description}
 \end{itemize}
 
+Please note that the flag(s) need to be exactly one tabulator after the Observation time.
+
 \subsection{Necessary information to calculate the barycentric correction}
 \label{Section:barycentric_correction}
 In order to calculate the barycentric correction the time of the observation (or Julian Date), the pointing on the sky, and the position of the observatory on earth need to be known. These information can be given in different ways. 
@@ -460,7 +507,7 @@ In order to calculate the barycentric correction the time of the observation (or
 
 \subsubsection{Creating a list of objects}
 \label{Section:create_object_list_file}
-If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_path| (the first one has higher priority, in case different file exists in the two folders only the first file will be read). The file must contain one line per object. For each object the following tab-separated values need to be given:
+If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_path| (the first one has higher priority, in case different file exists in the two folders only the first file will be read). The file must contain one line per object. For each object the following tab-separated or comma-separated values need to be given (exactly one separator between each column):
 \begin{enumerate}\setlength\itemsep{0em}
  \item Object name (the filename should start with the object name in order to be used)
  \item RA (hh:mm:ss.ss or hh mm ss.ss or as one number in degrees)
@@ -663,7 +710,9 @@ If no previous wavelength solution exist, then wavelengths and pixel need to cor
 \begin{lstlisting}[style=base, basicstyle=\small]
 Error: Files for creating the wavelength solution do not exist ...
 \end{lstlisting}
-The order and pixel position of all identified lines are stored in the file given in parameter \verb|logging_found_arc_lines|. This file can be opened (easiest in a spreadsheet application) and the corresponding wavelengths can be added to some of the lines (see Table~\ref{Tab:create_wavelength_solution}). The lines for each order are sorted by their absolute height, the saturated lines are excluded. The plots of the extracted spectra, which are stored in the file given in \verb|logging_arc_line_identification_spectrum| (extended by the pipeline with \textit{\_manual.pdf}) can be used for visual guiding (for an example see Figure~\ref{Figure:create_wavelength_solution}). 
+The order and pixel position of all identified lines, as well as the width and the height of the Gaussian fit, are stored in the file given in parameter \verb|logging_found_arc_lines| (standard: \textit{logging/arc\_lines\_found.txt}). This file can be opened (easiest in a spreadsheet application) and the corresponding wavelengths can be added to some of the lines (see Table~\ref{Tab:create_wavelength_solution}). The lines for each order are sorted by the highest absolute flux value (this is not the height of the Gaussian fit) of the line, the saturated lines are excluded. Please note that sometimes the side-wing of a saturated line is listed in the found lines, these lines should be ignored as well.
+
+The plots of the extracted spectra, which are stored in the file given in \verb|logging_arc_line_identification_spectrum| (extended by the pipeline with \textit{\_manual.pdf}) can be used for visual guiding (for an example see Figure~\ref{Figure:create_wavelength_solution}). 
 Tests have shown that providing about 10 lines every 5 to 10 orders is enough for the pipeline to do the fitting in a good way. However, it is important that the lines cover as much of the CCD image as possible (e.g. covering most of the orders, inclusive the outermost lines of the orders). In case of a completely different setup an iterative approach might be necessary.
 
 \begin{figure} 
@@ -674,6 +723,7 @@ Tests have shown that providing about 10 lines every 5 to 10 orders is enough fo
   \qquad
   \subfloat[Th-Ar spectrum for which the wavelength solution is known from a high-resolution spectrograph. The lines in red are the identified lines, green lines can be ignored.]
   {\includegraphics[height=4.5cm]{./figures/create_wavesol_know_spec_UH_o26.png}
+  \label{Figure:create_wavelength_solution_identified}  
   }
   \caption{The emission lines for a short (orange) and a long (blue) exposure time. The left figure covers about the same wavelength range as the Th-Ar spectrum with known wavelength solution in the right figure. The right image can be used to correlate pixel-positions and wavelengths in the left spectrum (see Table~\ref{Tab:create_wavelength_solution}).
     \label{Figure:create_wavelength_solution}}
@@ -709,42 +759,68 @@ Tests have shown that providing about 10 lines every 5 to 10 orders is enough fo
 22 & 73.44 & 0.99 & 50.2 \\
     \end{tabular}}
   \qquad
-  \subfloat[Example of \textit{arc\_lines\_wavelength.txt} for one order. Lines without a wavelength can, but don't have to be deleted. The text in the columns with line type and afterwards are optional. Columns have to be spaced by tabulator.]{
-    \begin{tabular}{r r r l l l}
+  \subfloat[Example of \textit{arc\_lines\_wavelength.txt} for one order as seen in a spreadsheet. Lines without a wavelength can, but don't have to be deleted. The text in the columns with line type and following are optional. Columns have to be spaced by exactly one tabulator in the exported txt-file.]{
+    \begin{tabular}{ | r | r | r | l | l | l |}
+\hline
 22 & 47 & 244.85 & 6182.6216 & ThI &  \\
+\hline
 22 & 47 & 419.53 &           & 6212.719 & blend, not used \\
+\hline
 22 & 47 & 365.86 & 6203.4924 & Th I &  \\
+\hline
 22 & 47 & 440.14 & 6215.938  & Ar I &  \\
+\hline
 22 & 47 & 186.32 & 6172.2775 & Ar II &  \\
+\hline
 22 & 47 & 387.96 & 6207.22   & ThI &  \\
+\hline
 22 & 47 & 492.43 & 6224.5271 & ThI & faint blending \\
+\hline
 22 & 47 & 334.94 & 6198.2226 & ThI &  \\
+\hline
 22 & 47 & 173.30 &           &  & outside comparison \\
+\hline
 22 & 47 & 503.78 &           &  &  \\
+\hline
 22 & 47 & 298.19 & 6191.9052 &  &  \\
+\hline
 22 & 47 & 276.35 & 6188.125  &  & faint blending \\
+\hline
 22 & 47 & 351.78 &           &  &  \\
+\hline
 22 & 47 & 532.12 &           &  &  \\
+\hline
 22 & 47 & 464.67 &           &  &  \\
+\hline
 22 & 47 & 142.64 &           &  & outside comparison \\
+\hline
 22 & 47 & 233.87 & 6180.7049 & Th I &  \\
+\hline
 22 & 47 & 397.14 & 6208.6872 &  &  \\
+\hline
 22 & 47 & 257.30 & 6184.7897 &  &  \\
+\hline
     \end{tabular}}
 \end{table}
 
 
-The correlated data needs to be saved into file \textit{arc\_lines\_wavelength.txt} (in the working directory) with the following tab-separated entries:
+The correlated data needs to be saved into file \textit{arc\_lines\_wavelength.txt} (in the working directory) with the following tab-separated entries (exactly one separator between each column):
 \begin{itemize}
   \item Aperture (starting at 0 for the reddest order)
-  \item Real/physical order (bigger than 0, usually between 40 and 120, doesn't have to be exactly the right one)
+  \item Real/physical order from the grating equation (bigger than 0, usually between 40 and 120, doesn't have to be exactly the right one). \textbf{Warn:} the difference between columns 1 (Aperture) and 2 (Real/physical) has to be the same for all lines.
   \item Pixel
   \item Wavelength [\AA] (optional, can be also empty if the user wishes to copy the whole file from \verb|logging_found_arc_lines| and only adds wavelengths to some lines)
   \item (optional: Type of the line (e.g. ThI, NeII) ).
+  \item (optional: Comments ).
 \end{itemize}
 
-Afterwards the script can run again and will use this data to create a new wavelength solution.
-
+Afterwards the script can run again and will use this data to create a new wavelength solution. Afterwards the output or logfile, and the file given in parameter \verb|logging_arc_line_identification_spectrum| (standard: \textit{logging/arc\_line\_identification\_spectrum.pdf}) should be checked. The brightest lines of the reference file should be marked in red with the brightest emission lines of the spectrum (e.g. see Fig.~\ref{Figure:create_wavelength_solution_identified}. If some areas of the spectrum (some orders, or the right or left side of some orders) are not fitted well, please add more lines of the problematic area to \textit{arc\_lines\_wavelength.txt} and remove the following files (if standard names are used) before running the pipeline again:
+\begin{lstlisting}[style=base]
+rm master_wavelength*.fits 
+rm master_flat_spec_norm.fits
+rm extracted/*
+\end{lstlisting}
+You might also want to read Chapter~\ref{Section:FAQ_wavelength_solution}.
 
 \subsection{Setting up a new account or a new camera}
 When setting up a new camera or a new account paths and parameters need to be adjusted. The following list explains necessary changes and how to determine parameters which need to be changed.
@@ -1022,6 +1098,7 @@ rm logging/sci_trace1_binned.fits
 rm master_traces_sci.fits
 rm master_traces_cal.fits
 rm master_wavelength*.fits
+rm master_flat_spec_norm.fits
 rm extracted/*
 \end{lstlisting}
 
@@ -1045,6 +1122,7 @@ rm extracted/*
 
 
 \subsection{Is the wavelength solution correct?}
+\label{Section:FAQ_wavelength_solution}
 \begin{itemize}
   \item \textbf{logging/arctraces\_in\_master\_trace2.png} (if emission line lamp spectrum, otherwise \textbf{logging/arc\_line\_identification\_positions.png} (ignore the written wavelengths)): If the wavelengths of the emission lines is not increasing from up to down along the individual orders or if the redder orders are not on the left side of the image, adjust parameters \verb|rotate_frame| and \verb|flip_frame|. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
   \item \textbf{logging/arc\_line\_identification\_residuals.png}: If the most dots fall on the x-axis , go to next chapter. If most dots fall on a sinusoidal line, increase the number of orders in parameters \verb|polynom_order_traces| or \verb|polynom_order_intertraces|. Remove everything after \textit{ master\_wavelength*.fits}.
@@ -1053,7 +1131,7 @@ rm extracted/*
  standard deviation of the residuals between the lines and the fit
   \end{lstlisting}
   A high number of lines should have been identified to a reasonable precision (compare to a previous night). If all is the case, go to next chapter.
-  \item textbf{logging/arc\_line\_identification\_spectrum.pdf}: The emision lines in the extracted spetrum should match with the brightest lines from the catalogue (red wavelengths, marker lengths is an indication for the brightness). If yes, go to next chapter.
+  \item \textbf{logging/arc\_line\_identification\_spectrum.pdf}: The emision lines in the extracted spectrum should match with the brightest lines from the catalogue (red wavelengths, marker lengths is an indication for the brightness). If yes, go to next chapter.
   \item The lines in the above spectrum are not matching at the borders. Decrease or increase parameter \verb|polynom_order_traces|. Decrease or increase the values in \verb|opt_px_range|. Remove everything after \textit{ master\_wavelength*.fits}.
   \item The lines are completely off. Compare \textbf{logging/arctraces\_in\_master\_trace2.png} in the current directory and in the directory from where the the original wavelength solution are taken (\verb|original_master_wavelensolution_filename|). Check, that the parameters \verb|order_offset|, \verb|px_offset_order|, and \verb|px_offset_order| are large enough to cover the change between the two nights. Be sure the values are not too big. Remove everything after \textit{master\_wavelength*.fits}.
 \end{itemize}
@@ -1065,9 +1143,18 @@ rm extracted/*
   \item Compare the barycentric velocity with other calculators. Are the object and telescope coordinates right? Is the time zone correct? If not, check parameters \verb|raw_data_dateobs_keyword|, \verb|raw_data_timezone_cor|, \verb|site|, \verb|latitude|, and \verb|longitude|.
 \end{itemize}
 
+\subsection{Error message: ``urllib2.URLError: \textless urlopen error timed out\textgreater''}
+When the barycentric correction are done, the python package \textit{barycorrpy} is downloading data from the internet, e.g. for the leap second management. It also calls the package \textit{astropy}, which downloads position files. If the internet connection is not available during the download the pipeline might fail. In this case try to re-run the pipeline again, it might have been just a slip in the internet connection. If it continuously fails you can check that following resources are available in you browser:
+\begin{itemize}
+  \item \url{http://www.astropy.org/astropy-data/coordinates/sites.json}
+  \item \url{http://maia.usno.navy.mil/ser7/finals2000A.all}
+  \item \url{https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de405.bsp}
+  \item \url{http://maia.usno.navy.mil/ser7/tai-utc.dat}
+\end{itemize}
+
 
 \subsection{Further help}
-If you observe strange behaviour, please contact Ronny. Access to the reduction folder would be preferable.
+If you observe strange behaviour, please contact Ronny with a describtion of the problem and the error message. Access to the reduction folder would be preferable.
 
 % -------------------------------------------------------------------------------------------
 

@@ -42,7 +42,7 @@ if __name__ == "__main__":
     os.system('mv {0} {1}/'.format(params['master_trace_sci_filename'], params['folder_original_traces']))
     
     for entry in ['background_filename', 'master_trace_cal_filename', 'master_wavelensolution_filename', 'master_flat_spec_norm_filename', 'logging_path', 'path_extraction']:
-        if os.path.isfile(params[entry]) == True:
+        if os.path.exists(params[entry]):           # Covers folders, links, files
             os.system('mv {0} {1}/'.format(params[entry], params['folder_original_traces']))
     
     # Save the new file and restart the reduction

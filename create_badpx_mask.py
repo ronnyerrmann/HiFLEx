@@ -264,7 +264,7 @@ if __name__ == "__main__":
                 fit = np.polyfit(exptimes[exp_range], im_flats[exp_range,i,j],1)
                 gains[i,j] = fit[0]
                 zerop[i,j] = fit[1]
-        print max_value, np.median(gains), np.median(zerop)
+        print(max_value, np.median(gains), np.median(zerop))
     
     
     if os.path.isfile(params['result_path']+params['gains']) == True and os.path.isfile(params['result_path']+params['zerop']) == True:
@@ -305,7 +305,7 @@ if __name__ == "__main__":
     sigm, badpx = 1., 1
     while badpx > 0:
         badpx = np.sum(abs(gain_diff - average) > sigm * gain_std)
-        print 'With {0} Sigma, {1} pixel would be marked as bad'.format(sigm, badpx)
+        print('With {0} Sigma, {1} pixel would be marked as bad'.format(sigm, badpx))
         sigm +=.5
     
     sigma = float(raw_input('What Sigma to use?\n>> '))
@@ -325,7 +325,7 @@ if __name__ == "__main__":
         else:
             while len(coords)<50:
                 i,j = random.randint(0,params['subframe'][0]), random.randint(0,params['subframe'][1])
-                if badpx_mask[i,j] <> 0:
+                if badpx_mask[i,j] != 0:
                     coords.append([i,j])
         for [i,j] in coords:
             text[0] += '\t%1.1i'%(i+1)

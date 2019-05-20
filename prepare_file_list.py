@@ -107,8 +107,8 @@ if __name__ == "__main__":
                 fiber1, fiber2 = 'bias', 'bias'
             if fnlow.find('dark') >= 0:                     # hardcoded: Dark
                 fiber1, fiber2 = 'dark', 'dark'
-            posi  = [fnlow.find('flat') , fnlow.find('whli') , fnlow.find('tung') ]      # hardcoded: White light (Tungston) spectrum in science fiber
-            posi2 = [fnlow.find('flat2'), fnlow.find('whli2'), fnlow.find('tung2')]      # hardcoded: White light (Tungston) spectrum in calibration fiber
+            posi  = [fnlow.find('flat') , fnlow.find('whli') , fnlow.find('white') , fnlow.find('tung') ]      # hardcoded: White light (Tungston) spectrum in science fiber
+            posi2 = [fnlow.find('flat2'), fnlow.find('whli2'), fnlow.find('white2'), fnlow.find('tung2')]      # hardcoded: White light (Tungston) spectrum in calibration fiber
             for i in range(len(posi)):
                 if posi2[i] >= 0:
                     fiber2 = 'cont'
@@ -124,8 +124,8 @@ if __name__ == "__main__":
                         fiber1, fiber2 = 'rflat', 'rflat'
                     else:
                         fiber1, fiber2 = 'cont', 'cont'
-            posi  = [fnlow.find('arc') , fnlow.find('thar') , fnlow.find('th_ar') , fnlow.find('une') ]        # hardcoded: emission line spectrum in calibration fiber
-            posi2 = [fnlow.find('arc2'), fnlow.find('thar2'), fnlow.find('th_ar2'), fnlow.find('une2')]        # hardcoded: emission line spectrum in science fiber
+            posi  = [fnlow.find('arc') , fnlow.find('thar') , fnlow.find('th_ar') , fnlow.find('thorium') , fnlow.find('une') ]        # hardcoded: emission line spectrum in calibration fiber
+            posi2 = [fnlow.find('arc2'), fnlow.find('thar2'), fnlow.find('th_ar2'), fnlow.find('thorium2'), fnlow.find('une2')]        # hardcoded: emission line spectrum in science fiber
             for i in range(len(posi)):
                 if posi2[i] >= 0:
                     fiber1 = 'wave'
@@ -144,13 +144,13 @@ if __name__ == "__main__":
                     fiber1, fiber2 = 'cont', 'wave'        # for HARPS it is cont, cont
                 if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace2']:
                     fiber1, fiber2 = 'wave', 'wave'
-            if (fnlow.find('/arc') == -1 and fnlow.find('/thar') == -1 and fnlow.find('/une') == -1) and \
-                        not (fnlow.find('arc') == 0 or fnlow.find('thar') == 0 or fnlow.find('th_ar') == 0 or fnlow.find('une') == 0) and \
+            if (fnlow.find('/arc') == -1 and fnlow.find('/thar') == -1  and fnlow.find('/th_ar') == -1  and fnlow.find('/thorium') == -1 and fnlow.find('/une') == -1) and \
+                        not (fnlow.find('arc') == 0 or fnlow.find('thar') == 0 or fnlow.find('th_ar') == 0 or fnlow.find('thorium') == 0 or fnlow.find('une') == 0) and \
                         fiber1 not in ['rflat', 'cont', 'dark', 'bias', 'wave']:
                 fiber1 = 'science'
                 if fnlow.find('harps') <> -1:
                     fiber2 = 'wave'
-            obsdate_tuple, dateobs, exptime = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
+            obsdate_tuple, dateobs, exptime, obsdate_begin, exposure_fraction = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
             """# Get the exposure time
             exptime = -1
             if params['raw_data_exptim_keyword'] in im_head.keys():

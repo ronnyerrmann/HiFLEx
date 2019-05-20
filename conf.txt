@@ -172,8 +172,8 @@ raw_data_exptim_keyword = EXPTIME
 raw_data_dateobs_keyword = DATE-OBS
 raw_data_timezone_cor   = 0
   #  If the header contains one of the keywords given in raw_data_mid_exposure_keys, then that fraction instead of half of the exposure time will be used to calculate the mid-exposure time
-  #     Please note: "HIERARCH" will be removed when python reads the header
-raw_data_mid_exposure_keys = ['HIERARCH ESO INS DET1 TMMEAN', 'ESO INS DET1 TMMEAN']
+  #     Please note: "HIERARCH" will be removed when python reads the header. The first matching keyword will be used
+raw_data_mid_exposure_keys = ['HIERARCH ESO INS DET1 TMMEAN', 'ESO INS DET1 TMMEAN', 'ESO INS DET2 TMMEAN']
   # HARPS:
   # raw_data_imtyp_keyword  = OBJECT
   # raw_data_imtyp_bias     = BIAS,BIAS
@@ -254,9 +254,10 @@ max_good_value  = 63000
 
   ## extracted data:
   #-----------------
-  # path for the extracted data (ceres format / single files for extracted spectrum and wavelength). path_extraction and path_extraction_single will be relative to the result_path.
+  # path for the extracted data (ceres format / single files / HARPS format for extracted spectrum and wavelength). path_extraction and path_extraction_single will be relative to the result_path.
 path_extraction             = extracted
 path_extraction_single      = extracted/single
+path_harpsformat            = extracted/HARPS_format
   # BITPIX of the extracted fits-file (-32, -64, everything else: -64)
 extracted_bitpix            = -32
 

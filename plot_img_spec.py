@@ -118,15 +118,15 @@ def create_plot_marker_linestyle_color(length, linestyle=None, marker=None, colo
         marker = [marker]
     if type(color).__name__ == 'str':           # Make string to list
         color = [color]
-    if linestyle <> None:
+    if linestyle != None:
         for i in range(len(linestyle)):         # replace None by empty string
             if linestyle[i] == None:
                 linestyle[i] = ''
-    if marker <> None:
+    if marker != None:
         for i in range(len(marker)):            # replace None by empty string
             if marker[i] == None:
                 marker[i] = ''
-    if color <> None:                           # user color
+    if color != None:                           # user color
         cycler_plt = plt.cycler(color=color*length)
     else:                                       # No color given
         if 'color' in cycler_ori.by_key():      # user original colors
@@ -310,14 +310,14 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                 if wavelength_plot == 'f':    # make a fft
                     x_axis = np.fft.fftfreq(len(data))
                     data = np.abs(np.fft.fft(data))         # px -> 1/px (dT -> f = 1/dT)
-                    good_values = range(1,len(data)/2)      # 0 contains the sum of the data, and n/2+1 the negative frequencies
+                    good_values = list(range(1,int(len(data)/2)))      # 0 contains the sum of the data, and n/2+1 the negative frequencies
                     data = data * 2 / data.shape[0]
                     data, x_axis = data[good_values], 1/x_axis[good_values]
                 elif wavelength_plot == 'l' or wavelength_plot == 'wl' or wavelength_plot == 'lw':       # http://joseph-long.com/writing/recovering-signals-from-unevenly-sampled-data/
                     nout = 4*len(data) # number of frequency-space points at which to calculate the signal strength (output)
                     # the posible Periods in px scale: 2 to 10% length of the data; in wave-scale: diff between 2 closest to 10% diff between furthest away:
                     period_range = np.array([ 2*np.nanmin(np.abs(x_axis[1:] - x_axis[:-1])), 0.5*(np.nanmax(x_axis)-np.nanmin(x_axis)) ])
-                    freq_range = 1/period_range
+                    freq_range = 1.0 / period_range
                     """model = LombScargleFast().fit(x_axis, data-np.nanmedian(data))
                     df = (max(freq_range) - min(freq_range)) / nout
                     freqs = min(freq_range) + df * np.arange(nout)
@@ -351,7 +351,7 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
             xlabel_text = 'period [Angstrom]'
         else:
             xlabel_text = 'x [px]'
-        if x_range <> (0.0, 1.0) and y_range <> (0.0, 1.0) and old_xlabel_text==xlabel_text and reset_plot=='':
+        if x_range != (0.0, 1.0) and y_range != (0.0, 1.0) and old_xlabel_text==xlabel_text and reset_plot=='':
             plt.axis([x_range[0], x_range[1], y_range[0], y_range[1]])
         else:
             dx = (plot_ranges[1] - plot_ranges[0])*0.01
@@ -497,7 +497,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         filenames = []
         for filename in sys.argv[1:]:
-            if filename.find('plot_') <> -1:
+            if filename.find('plot_') != -1:
                 filenames.append(filename)
     else:
         filenames = ['plot_files.lst']
@@ -505,7 +505,7 @@ if __name__ == "__main__":
         rpath = ''
         files = read_text_file(filename)
         for line in files:
-            if line[0] <> '#':
+            if line[0] != '#':
                 fitsfiles.append([line,0,'sg'])
     
     data_sg = []
@@ -538,7 +538,7 @@ if __name__ == "__main__":
                 imy = np.array(ims['counts'])
                 imx = imx[~np.isnan(imy)]
                 imy = imy[~np.isnan(imy)]
-                print imx.shape,imy.shape,imx, imy
+                print(imx.shape,imy.shape,imx, imy)
                 labels = ''
             else:
                 imx = im[0,:]
@@ -580,15 +580,15 @@ if __name__ == "__main__":
                 #print data_sg.shape
             titel_sg += ',\n{0}'.format(fitsfile[0])
         #print data_sg.shape, data_sg.dtype, data_sg.itemsize, data_sg.nbytes, sys.getsizeof(data_sg), data_sg.nbytes   # size about the size of the fits file
-    if data_sg <> []:
+    if data_sg != []:
         max_orders = 0
         for im in data_sg:
             max_orders = max(max_orders, im.shape[1])
         for i in range(len(data_sg)):
             nr_orders = data_sg[i].shape[1]
             if nr_orders < max_orders:
-                data_sg[i] = np.insert(data_sg[i], range(nr_orders,max_orders),np.zeros(data_sg[i].shape[2]), axis=1)
-        print 'Data read ({0} MB), plotting data now'.format(round(data_sg.nbytes/1024./1024,1))
+                data_sg[i] = np.insert(data_sg[i], list(range(nr_orders,max_orders)), np.zeros(data_sg[i].shape[2]), axis=1)
+        print('Data read ({0} MB), plotting data now'.format(round(data_sg.nbytes/1024./1024,1)) )
         plot_spectra_UI(np.array(data_sg), title=titel_sg[2:])
             
 #no of orders, 3 different values, px
