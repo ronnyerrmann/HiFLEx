@@ -23,25 +23,11 @@
 GUI = False
 
 
-  # The folder where the raw data is stored. All file names given in this section need to be given relative to this path, e.g. with leading subfolder if data is stored in a subfolder
-raw_data_path           = /local/home/ronny/data_EXOhSPEC/20190205/
+  # The folder where the raw data is stored. All file names given in this section need to be given relative to this path, e.g. with leading subfolder if data is stored in a subfolder.
+  #         Please note that NO SPACEs and NO COMMAs are allowed in the path structure
+  #         It is possible to give a list of sources
+raw_data_paths           = /local/home/ronny/data_EXOhSPEC/20190205/
 
-
-  # subframe: gives the size in x (dispersion axis) and y (cross-dispersion axis), and the starting coordinates in x and y in case only a subframe should be used.
-  #           The numbering of the pixel starts with zero. Is applied before roation. Needed when reading files
-  #           possible formats: can be empty, or
-  #                             [4250,2838,0,0], or
-  #                             4250,2838,0,0
-  # for QSI:              subframe        = [4250,2838,0,0]
-  # for QSI:              subframe        = [4250,1600,0,450]
-  # for QSI Bill:         subframe        = [2184,1472,0,0]
-  # for Moravian:         subframe        = [2500,3056,56,0]
-  # for SBIG:             subframe        = [2750,4096,350,0]
-  # for HARPS:            subframe        = [4096,2048,0,50]
-  # for MRES:             subframe        = [1201,511,380,0]
-  # for Photometrics:     subframe        = [2048,2048,0,0]
-  # for Narit:            subframe        = [1648,1236,0,0]
-subframe        = [2048,2048,0,0]
 
   # To extract the data correctly, the frame should be rotated in the way, that traces (dispersion axis) are along vertical direction
   #           with wavelength increasing with increasing pixel number (blue on top). 
@@ -56,21 +42,23 @@ subframe        = [2048,2048,0,0]
 rotate_frame    = 90
 flip_frame      = False
 
-  # extraction_width_multiplier times the average width of the gaussian fit to the traces of the orders defines how many pixel of either side to extract.
-  #         format: float or integer
-  #         if width_percentile < 20 then the *extraction_width_multiplier should probably be 1, otherwise they can be higher
-  #         extraction_width_multiplier is for the science traces, arcextraction_width_multiplier for the calibration traces
-extraction_width_multiplier = 1
-arcextraction_width_multiplier = 1
-  # In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom
-wavelength_scale_resolution = 0.01
 
-  ## Between observations of different nights the positions of the traces along cross-dispersion axis might change. The pipeline will determine the shift
-  # maxshift gives the maximum allowed shift between the current file defined in "master_trace_sci_filename" and the file given in "original_master_traces_filename".
-  #           format: float or integer
-maxshift = 15
-  # Also the width of the traces might change. As the measurements are only done on a subsample of the data, the user needs to decide if the new, less precise widths should be used.
-update_widths = False
+  # subframe: gives the size in x (dispersion axis) and y (cross-dispersion axis), and the starting coordinates in x and y.
+  #           The numbering of the pixel starts with zero.
+  #           possible formats: can be empty, or
+  #                             [4250,2838,0,0], or
+  #                             4250,2838,0,0
+  # for QSI:              subframe        = [4250,2838,0,0]
+  # for QSI:              subframe        = [4250,1600,0,450]
+  # for QSI Bill:         subframe        = [2184,1472,0,0]
+  # for Moravian:         subframe        = [2500,3056,56,0]
+  # for SBIG:             subframe        = [2750,4096,350,0]
+  # for HARPS:            subframe        = [4096,2048,0,50]
+  # for MRES:             subframe        = [1201,511,380,0]
+  # for Photometrics:     subframe        = [2048,2048,0,0]
+  # for Narit:            subframe        = [1648,1236,0,0]
+subframe        = [2048,2048,0,0]
+
 
   ## If the positions of the traces between consecutive observations has changed too much, the orders are searched from scratch and then adjusted.
   # bin_search_apertures: Search the apertures of the orders in a binned image. The first value gives the binning along one order (vertical axis, dispersion axis)
@@ -86,18 +74,23 @@ bin_search_apertures    = 20,2
   #                 format: list of two integers
 bin_adjust_apertures    = 3,1
   # polynom_order_apertures: Order of the polynomial to define the form of the traces along the CCD
-  #                format: integer
+  #                format: integer; standard: 5
 polynom_order_apertures = 5
-  # width_percentile: What part of the height should be used in order to define the width of the orders? width_percentile = 50 coresponds to the FWHM; width_percentile = 5 corresponds to nearly all ligth
+  # width_percentile: At what percentage of the height of the trace should the boundaries (width) of the order be defined? This is important for extraction.
+  #                width_percentile = 50 coresponds to the FWHM; width_percentile = 5 corresponds to nearly all light being used
+  #                format: integer; standard: 5
 width_percentile        = 05
 
+  ## Between observations of different nights the positions of the traces along cross-dispersion axis might change. The pipeline will determine the shift
+  # Path and filename to the file with the previous found positions of the orders.
+  #   If the files don't exist, a solution is created from scratch 
+original_master_traces_filename = /data/ronny/Reduced/2019NA/master_traces_sci.fits
+  # maxshift gives the maximum allowed shift between the current file defined in "master_trace_sci_filename" and the file given in "original_master_traces_filename".
+  #           format: float or integer
+maxshift_orders = 15
+  # Also the width of the traces might change. As the measurements are only done on a subsample of the data, the user needs to decide if the new, less precise widths should be used.
+update_width_orders = False
 
-  ## To determine the background
-  # background_width_multiplier defines the area which is excluded for determining the background. It has the same settings as extraction_width_multiplier.
-  # The first value is for the science and the second for the calibration traces
-background_width_multiplier = [1.5, 0.5]
-  # polynom_bck defines the orders for a 2d polynomial that is fitted to the background. The first value is for dispersion and the second for cross-dispersion direction.
-polynom_bck = [4, 4]
 
   ## Finding the traces of the calibration fiber 
   # arcshift_side: On which side of the science orders are the corresponding calibration orders located. Possible values are 
@@ -107,6 +100,24 @@ polynom_bck = [4, 4]
 arcshift_side = left
   # arcshift_range: Range to search for the shift between the flat traces and arc_traces. This value is determinded by the the script, only in case the process fails the parameter is used.
 arcshift_range  = [25, 60]
+
+
+  ## The following parameter define the adjustments made for the wavelength solution. Thereby the process starts with a rugh wavelength solution and ends with a much better one. 5 steps with 10 iterations each are done
+  # polynom_order_traces: order of a polynomial fit for rough and final solution to fit the wavelength against line position in each order. 
+  #                       For a setup not covering a full order [2,4] should be fine. a final value of 3 is not enough to reflect the position of the lines on the CCD
+  #                       For a setup covering a full order or more than 20 orders [2,5] might be necessary
+  #                 format: list of two integers
+polynom_order_traces = [4,4]
+  # polynom_order_intertrace: order for rough and final solution to fit the parameters of the polynomials between the orders. Normally 2 should be fine
+  #                 format: list of one or two integers
+polynom_order_intertraces = 4
+  # opt_px_range: What fraction around the central pixel of each order should be used to corellate lines in the arc spectrum with the reference spectrum. Normally [0.6, 1.0] is good.
+  #               If the previous solution differs a lot at the edges of the orders, than the first value should be smaller.
+  #               If the previous solution matches nearly exactly the current solution, then both value can be bigger, e.g. [0.8,2]
+opt_px_range = [0.9, 1.0]
+  # diff_pxs: What is the maximum difference between wavelength solution and reference line in order to assigned the lines together.
+  #           A good value is 8px, can be higher as sigma-clipping is performed to get rid of badly assigned lines. The Gaussian width of the emission lines is used in the final asignment
+diff_pxs = 8
 
   ## The following parameters define the search area when finding the new wavelength solution for the night by using an old solution. 
   ##          The smaller the ranges, the faster the calculation, but the less flexible to changes. However, too big values might lead to the wrong local minimum.
@@ -120,34 +131,37 @@ px_offset = [-100, 100, 10]
 px_offset_order = [-1, 1, 1]
   # resultion_offset_pct: Percentage of how much the resolution between the solutions changes. The value is applied in both directions, in total 11 steps will be made. Normally 1 percent should be fine.
 resolution_offset_pct = 1
+  # Path and filename to the file with the previous wavelength solution.
+  #   If the files don't exist, a solution is created from scratch: File pixel_to_wavelength.txt needs to be created in order to create the wavelength solution. 
+  #                                                                        The wavelength solution created from pixel_to_wavelength.txt will be saved in original_master_wavelensolution_filename.
+  #                                                                If no wavelength solution is necessay, it can be set to "pseudo".
+original_master_wavelensolution_filename = /data/ronny/Reduced/20190205/master_wavelength.fits
 
-  ## The following parameter define the adjustments made for the wavelength solution. Thereby the process starts with a rugh wavelength solution and ends with a much better one. 5 steps with 10 iterations each are done
-  # polynom_order_traces: order of a polynomial fit for rough and final solution to fit the wavelength against line position in each order. 
-  #                       For a setup not covering a full order [2,4] should be fine. a final value of 3 is not enough to reflect the position of the lines on the CCD
-  #                       For a setup covering a full order or more than 20 orders [2,5] might be necessary
-polynom_order_traces = [4,4]
-  # polynom_order_intertrace: order for rough and final solution to fit the parameters of the polynomials between the orders. Normally 2 should be fine
-polynom_order_intertraces = 4
-  # opt_px_range: What fraction around the central pixel of each order should be used to corellate lines in the arc spectrum with the reference spectrum. Normally [0.6, 1.0] is good.
-  #               If the previous solution differs a lot at the edges of the orders, than the first value should be smaller.
-  #               If the previous solution matches nearly exactly the current solution, then both value can be bigger, e.g. [0.8,2]
-opt_px_range = [0.9, 1.0]
-  # diff_pxs: What is the maximum difference between wavelength solution and reference line in order to assigned the lines together.
-  #           A good value is 8px, can be higher as sigma-clipping is performed to get rid of badly assigned lines. The Gaussian width of the emission lines is used in the final asignment
-diff_pxs = 8
+
+  ## To determine the background
+  # background_width_multiplier defines the area which is excluded for determining the background. It has the same settings as extraction_width_multiplier/arcextraction_width_multiplier.
+  # The first value is for the science and the second for the calibration traces
+  #                 format: list of two floats
+background_width_multiplier = [1.5, 0.5]
+  # polynom_bck defines the orders for a 2d polynomial that is fitted to the background. The first value is for dispersion and the second for cross-dispersion direction.
+  #                 format: list of two integers
+polynom_bck = [4, 4]
+
+
+  # extraction_width_multiplier times the average width of the gaussian fit to the traces of the orders defines how many pixel of either side to extract.
+  #         format: float or integer
+  #         if width_percentile < 20 then the *extraction_width_multiplier should probably be 1, otherwise they can be higher
+  #         extraction_width_multiplier is for the science traces, arcextraction_width_multiplier for the calibration traces
+extraction_width_multiplier = 1
+arcextraction_width_multiplier = 1
+  # In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom
+wavelength_scale_resolution = 0.01
 
 
   ## general filenames which should be the same for a long time.
   # Path and filename to the badpixel mask. Created by create_badpx_mask.py
 badpx_mask_filename = /data/ronny/Reduced/NA/bad_px_mask.fits
 
-  # Path and filename to the file with the previous found positions of the orders and the previous wavelength solution.
-  #   If the files don't exist, a solution is created from scratch 
-  #       For original_master_wavelensolution_filename this means: File arc_lines_wavelength.txt needs to be created in order to create the wavelength solution. 
-  #                                                                        The wavelength solution created from arc_lines_wavelength.txt will be saved in original_master_wavelensolution_filename.
-  #                                                                If no wavelength solution is necessay, it can set to "pseudo".
-original_master_traces_filename = /data/ronny/Reduced/2019NA/master_traces_sci.fits
-original_master_wavelensolution_filename = /data/ronny/Reduced/20190205/master_wavelength.fits
 
   # Path and filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. The values can be used as given from the NIST database, e.g. 6550.653 \t 140* \t Ne II 
 reference_catalog = /home/ronny/Scripts/exohspec/reference_lines_UNe.txt
@@ -166,7 +180,7 @@ raw_data_imtyp_bias     = Bias Frame
 raw_data_imtyp_dark     = Dark Frame
 raw_data_imtyp_flat     = Flat Frame
 raw_data_imtyp_trace1   = NA
-raw_data_imtyp_flatarc  = NA
+raw_data_imtyp_blaze    = NA
 raw_data_imtyp_trace2   = NA
 raw_data_exptim_keyword = EXPTIME
 raw_data_dateobs_keyword = DATE-OBS
@@ -179,7 +193,7 @@ raw_data_mid_exposure_keys = ['HIERARCH ESO INS DET1 TMMEAN', 'ESO INS DET1 TMME
   # raw_data_imtyp_bias     = BIAS,BIAS
   # raw_data_imtyp_trace1   = LAMP,DARK,TUN
   # raw_data_imtyp_trace2   = WAVE,WAVE,THAR2
-  # raw_data_imtyp_flatarc  = LAMP,LAMP,TUN
+  # raw_data_imtyp_blaze    = LAMP,LAMP,TUN
 
   # For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create gives the information which corrections will be applied before the <filetype>_rawfiles are combined.
   #   Corrections will applied in the order given!
@@ -195,7 +209,7 @@ rflat_calibs_create_g           = subframe, badpx_mask, dark, bias, normalise
 trace1_calibs_create_g          = subframe, badpx_mask, dark, bias
 trace2_calibs_create_g          = [subframe, badpx_mask, dark, bias]
 arc_calibs_create_g             = [subframe, badpx_mask, dark, bias]
-flatarc_calibs_create_g         = [subframe, badpx_mask, dark, bias, rflat, localbackground]
+blazecor_calibs_create_g        = [subframe, badpx_mask, dark, bias, rflat, localbackground]
 extract_calibs_create_g         = [subframe, badpx_mask, dark, bias, rflat, localbackground]
 wavelengthcal_calibs_create_g   = [subframe, badpx_mask]
   # Standard calibrations to be done, if no other information is given
@@ -207,7 +221,8 @@ calibs_read = []
 
   ## Getting oject site and object coordinates to perform barycentric correction. If the values are stored in the header, then the header values are used
   #-------------------------------------------------------------------------------
-  # Define the observatory site. Longitude is measured to the East (comment/uncomment/delete accordingly). Values can be set arbitrarily if the information is stored in the fits-headers:
+  # Define the observatory site. Longitude is measured to the East (comment/uncomment/delete accordingly). 
+  #         Values can be set arbitrarily if the information is stored in the fits-headers (check function get_barycent_cor to add header keywords)
 site        = UH
 altitude    = 30
 latitude    = 51.7534
@@ -219,7 +234,7 @@ longitude   = -0.2401
 #longitude   = 98.48655
   
   # Define the object coordinates using a file with a list of objects. Needed for barycentric correction and RV calculation. Not necessary if the object information are stored in the header.
-  # The file can be located in the raw_data_path or in the result_path (the latter one has higher priority)
+  # The file can be given as full path, or can be located in the result_path or in raw_data_paths  (the first one has higher priority)
   # The file needs to contain the comma separated values (Object name is case sentive for the optional parameters): 
   # Object name , RA (hh:mm:ss.ss), DEC (+-dd:mm:ss.ss), PM RA ("/year), PM DEC ("year), Epoch of the coordinates (only the number), Enable/Disable flag (1 for enabled), 
   #             [optional: Mask (G2,K5,M2), [optional: Velocity width to broaden the lines of the binary mask]]
@@ -273,7 +288,7 @@ path_reduced                = NA
 master_trace_sci_filename           = master_traces_sci.fits
 master_trace_cal_filename           = master_traces_cal.fits
 master_wavelensolution_filename     = master_wavelength.fits
-master_flat_spec_norm_filename      = master_flat_spec_norm.fits
+master_blaze_spec_norm_filename     = master_blaze_spec_norm.fits
 master_wavelengths_shift_filename   = master_wavelengths_shift.txt
 
   # master file for identifiying which pixel contain background. Created by reduction_day.py

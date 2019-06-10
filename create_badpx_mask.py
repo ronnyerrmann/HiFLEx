@@ -48,6 +48,7 @@ get_statistics = []
 # Start of code
 # deal with arguments from a text file
 params = textfileargs(params, CONFIGFILE)
+params['raw_data_path'] = params['raw_data_paths'][0]           # Compatibility after 20190530
 
 def find_stats(im_stats):
     if len(im_stats) == 0:

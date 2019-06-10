@@ -41,9 +41,15 @@ if __name__ == "__main__":
     # Move original data into a sub-folder
     os.system('mv {0} {1}/'.format(params['master_trace_sci_filename'], params['folder_original_traces']))
     
-    for entry in ['background_filename', 'master_trace_cal_filename', 'master_wavelensolution_filename', 'master_flat_spec_norm_filename', 'logging_path', 'path_extraction']:
+    for entry in ['background_filename', 'master_trace_cal_filename', 'master_wavelensolution_filename', 'master_blaze_spec_norm_filename', 'logging_path', 'path_extraction']:
         if os.path.exists(params[entry]):           # Covers folders, links, files
             os.system('mv {0} {1}/'.format(params[entry], params['folder_original_traces']))
+            if entry.find('path_') <> -1 or entry.find('_path') <> -1:
+                if not os.path.exists(params[entry]) and entry not in ['raw_data_paths', 'path_ceres', 'terra_jar_file'] and params[entry].lower() not in ['na/', params['result_path']+'na/', params['result_path']+'/na/']:
+                    try:                                                    # Create folders, if necessary
+                        os.makedirs(params[entry])
+                    except:
+                        logger('Warn: Cannot create directory {0}'.format(params[entry]))
     
     # Save the new file and restart the reduction
     logger('Info: New file with the traces was created. All data depending on this will be moved to the folder {0}, the traces will be written and reduction_day.py will be run'.format(params['folder_original_traces']))

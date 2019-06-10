@@ -211,28 +211,31 @@ def textfileargs(params, textfile=None):
         else:
             logger('Warn: I dont know how to handle command line argument: {0}'.format(arg))
     params.update(cmdparams)
-    list_txt = ['use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys']
-    list_int = ['subframe', 'arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
+    list_txt = ['use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths']
+    list_int = ['arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck']
     list_float = ['opt_px_range', 'background_width_multiplier']
     list_abs = ['arcshift_range']
     ints = ['polynom_order_apertures', 'rotate_frame']
     floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier',
-              'resolution_offset_pct', 'diff_pxs', 'maxshift', 'wavelength_scale_resolution', 'width_percentile', 'raw_data_timezone_cor',
+              'resolution_offset_pct', 'diff_pxs', 'maxshift_orders', 'wavelength_scale_resolution', 'width_percentile', 'raw_data_timezone_cor',
               'altitude', 'latitude', 'longitude', 'in_shift']
-    bools = ['flip_frame', 'update_widths', 'GUI']
+    bools = ['flip_frame', 'update_width_orders', 'GUI']
     sides = ['arcshift_side']
     results = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_csv_terra', 
-               'path_harpsformat', 'object_file']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
+               'path_harpsformat']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
     full_filenames = ['badpx_mask_filename', 'original_master_traces_filename', 'original_master_wavelensolution_filename', 'reference_catalog',
                 'configfile_fitsfiles', 'raw_data_file_list', 'terra_jar_file']    # deal with full filenames -> nothing to do
-    texts = ['editor', 'extracted_bitpix', 'site']      # -> nothing to do
-    list_raw, paths, loggings = [], [], []
+    texts = ['editor', 'extracted_bitpix', 'site', 'object_file']      # -> nothing to do
+    paths, loggings = [], []
+    #list_raw = []              # not necessary anymore
     for entry in params.keys():                         # make the live easier by adding entries automatically to the lists above
+        if entry not in list_int and (entry.find('subframe') >= 0):                                         # add to the list
+            list_int.append(entry)
         if entry not in list_txt and (entry.find('_rawfiles') > 0 or entry.find('calibs_') > -1):           # add to the list
             list_txt.append(entry)
-        if entry not in list_raw and (entry.find('_rawfiles') > 0):
-            list_raw.append(entry)
+        #if entry not in list_raw and (entry.find('_rawfiles') > 0):
+        #    list_raw.append(entry)
         if entry not in paths    and (entry.find('path_') != -1 or entry.find('_path') != -1):
             paths.append(entry)
         if entry not in results  and ((entry.find('master_') == 0 or entry.find('background_') == 0) and entry.find('_filename') > 0):      # Put these files also into the result path
@@ -244,7 +247,7 @@ def textfileargs(params, textfile=None):
         if entry not in list_txt and (type(params[entry]) == str):
             if params[entry].find(',') != -1:
                 list_txt.append(entry)
-    all_parameters = list(np.unique( list_txt + list_int + list_float + list_abs + ints + floats + bools + sides + results + full_filenames + list_raw + paths + loggings + texts ))
+    all_parameters = list(np.unique( list_txt + list_int + list_float + list_abs + ints + floats + bools + sides + results + full_filenames + paths + loggings + texts ))       # + list_raw
     trues = ['yes', 'true', '1']
     falses = ['no', 'false', '0']
     lefts = ['left','l']
@@ -260,14 +263,14 @@ def textfileargs(params, textfile=None):
             params[entry] = params['result_path'] + params[entry]
     # All parameters
     for entry in params.keys():
-        if entry in list_txt+list_int+list_float:
+        if entry in list_txt+list_int+list_float:       # Split the lists
             temp = params[entry]
             for i in ['[', ' ', ']']:
                 temp = temp.replace(i,'')
             if len(temp) == 0:
                 temp = []
             else:
-                temp = temp .split(',')
+                temp = temp.split(',')
             params[entry] = temp
         for [list_no, funct, functxt] in [ [list_int, int, 'intergers'], [list_float, float, 'floats'], [list_abs, abs, 'numbers'] ]:
             if entry in list_no:        # deal with list of integers, floats, abs, numpy array (int and float could be also done with dtype, but then needs to be converted back to list
@@ -298,20 +301,21 @@ def textfileargs(params, textfile=None):
                 params[entry] = 0
             else:
                 logger(emsg + 'Parameter "{0}" (value of "{1}") must be one of the following: {2}'.format(entr, params[entry], lefts+rights+centers))
-        if entry in paths:
-            if not os.path.exists(params[entry]) and entry not in ['raw_data_path', 'path_ceres', 'terra_jar_file'] and params[entry].lower() not in ['na/', params['result_path']+'na/', params['result_path']+'/na/']:
+        if entry in paths:                                              # Create folders
+            if entry in ['raw_data_paths', 'path_ceres', 'terra_jar_file']:         # raw_data_paths is list, hence has to be checked before
+                continue
+            if not os.path.exists(params[entry]) and params[entry].lower() not in ['na/', params['result_path']+'na/', params['result_path']+'/na/']:
                 try:                                                    # Create folders, if necessary
                     os.makedirs(params[entry])
                 except:
                     logger('Warn: Cannot create directory {0}'.format(params[entry]))
-        if entry in list_raw:                                           # deal with lists of raw data filenames -> add path
-            for i in range(len(params[entry])):
-                params[entry][i] = params['raw_data_path'] + params[entry][i]
+        #if entry in list_raw:                                           # deal with lists of raw data filenames -> add path
+        #    for i in range(len(params[entry])):
+        #        params[entry][i] = params['raw_data_path'] + params[entry][i]              # Not necessary anymore
         if entry in loggings:                                           # deal with logging filenames/folders -> add logging_path
             params[entry] = params['logging_path'] + params[entry]
         if entry not in all_parameters:
             undeclared_params += '{0}, '.format(entry)
-
     overdeclared_params = ''
     for entry in all_parameters:
         if entry not in params.keys():
@@ -526,7 +530,7 @@ def read_file_calibration(params, filename, level=0):
             im = im[:,:,0]
         else:
             logger(('Error: The file is stored in a multi-demensional array, which I do not know how to handle. The size of the image is {0}. '+\
-                    'This requires a small adjustment to the code in procedure read_file_calibration.').format(ims))
+                    '\tThis requires a small adjustment to the code in procedure read_file_calibration.').format(ims))
         ims = im.shape
     exptime = im_head[params['raw_data_exptim_keyword']]        #saved as float
     logger('Info: image loaded: {0}'.format(filename))
@@ -1067,17 +1071,25 @@ def rotate_flip_frame(im, params, invert=False):
 
     return im
 
-def bin_im(im, binxy):
+def bin_im(im, binxy, method='median'):
     """
     :param im: 2d numpy array
     :param binxy: list of integers (entries), contains the number of pixel which should be binned into one in x and y direction
     :return: 2d numpy arrays of the image, the number of elements which are not NaN, and of the standard deviation of each combined pixel
     """
+    def bin_im_function(data, method, axis=None):
+        if method == 'median':
+            return np.median(data, axis=axis)    # median binning
+        elif method == 'mean':
+            return np.mean(data, axis=axis)    # averge binning
+        elif method == 'sum':
+            return np.sum(data, axis=axis)    # averge binning
+    
     [binx, biny] = binxy
     ims = im.shape
     if binx <1 or biny <1 or (binx == 1 and biny == 1):
         logger('Warn: no binning possible: {0},{1}'.format(binx,biny))
-        return(im)
+        return im, im*0+1, im*0
     nim, gim, sim = [], [], []
     if binx > 1 and biny > 1:
         for i in range(int((ims[0]+binx-1)/binx)):
@@ -1086,7 +1098,7 @@ def bin_im(im, binxy):
             for j in range(int((ims[1]+biny-1)/biny)):
                 temdata = iline[:,j*biny:min(ims[1],(j+1)*biny)]
                 if np.sum( np.isnan(temdata) ) == 0:
-                    nline.append(np.median(temdata))    # median binning
+                    nline.append(bin_im_function(temdata, method, axis=None))    # binning
                 else:
                     nline.append(np.nan) 
                 gtemp = np.sum( ~np.isnan(temdata) )
@@ -1104,13 +1116,13 @@ def bin_im(im, binxy):
     elif binx > 1:
         for i in range(int((ims[0]+binx-1)/binx)):
             temdata = im[i*binx:min(ims[0],(i+1)*binx),:]
-            nim.append(np.median(temdata,0))
+            nim.append(bin_im_function(temdata, method, axis=0))    # binning
             gim.append(np.sum( ~np.isnan(temdata), axis=0))  # number of the elements not nan
             sim.append(np.nanstd(temdata, ddof=min(1,temdata.shape[0]-1), axis=0))      # standard deviation, if only one column of pixels left, then std with ddof=0
     elif biny > 1:
         for i in range(int((ims[1]+biny-1)/biny)):
             temdata = im[:,i*biny:min(ims[1],(i+1)*biny)]
-            nim.append(np.median(temdata,1))
+            nim.append(bin_im_function(temdata, method, axis=1))    # binning
             gim.append(np.sum( ~np.isnan(temdata), axis=1))  # number of the elements not nan
             sim.append(np.nanstd(temdata, ddof=min(1,temdata.shape[1]-1), axis=1))      # standard deviation
         nim = np.transpose(np.array(nim))
@@ -1219,7 +1231,7 @@ def oneD_blended_gauss(x, parameters, p01=0, p02=0, p03=0, p10=np.nan, p11=np.na
         result += oneD_gauss(x, parameters[i])
     return result
 
-def twoD_Gaussian(x, y, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
+def twoD_Gaussian((x, y), amplitude, xo, yo, sigma_x, sigma_y, theta, offset):          # Changed from "x, y, amplitude,..." to  "(x, y), amplitude,..." on 20190528 after curve fit failed. Does it depend on the scipy version for curve fit?
     """
     Calculates the Gauss in 2 dimensions
     :param (x,y): lists of the x- and y- values for which the Gauss should be calculated
@@ -2275,7 +2287,7 @@ def shift_orders(im, params, sci_tr_poly, xlows, xhighs, oldwidths, in_shift = 0
     """
     Determines the shift in spacial direction between the current flat {im} and an available solution. This is done by fitting the center again
     :param im: 2d numpy array with the flat lines
-    :param params: Dictionary with all the parameters. 'maxshift' is required
+    :param params: Dictionary with all the parameters. 'maxshift_orders' is required
     :param sci_tr_poly: list, length same as number of orders, polynomial values
                       (output of np.polyval)
                       i.e. p where:
@@ -2301,10 +2313,10 @@ def shift_orders(im, params, sci_tr_poly, xlows, xhighs, oldwidths, in_shift = 0
         yarr = np.polyval(sci_tr_poly[i, 0, 1:], xarr-sci_tr_poly[i, 0, 0])+in_shift          #apply input shift
         widths = []
         for j,oldcenter in enumerate(yarr):        #each pixel
-            center, width, leftmin,rightmin = find_center(im[xarr[j],:], int(round(oldcenter)), xarr[j], 2*params['maxshift'], border_pctl=params['width_percentile'], significance=3.0)
+            center, width, leftmin,rightmin = find_center(im[xarr[j],:], int(round(oldcenter)), xarr[j], 2*params['maxshift_orders'], border_pctl=params['width_percentile'], significance=3.0)
             #if width != 0:
             #    print 'i,j,center, width, leftmin,rightmin',i,j,center, width, leftmin,rightmin
-            if width != 0 and abs(center-oldcenter) < params['maxshift']:
+            if width != 0 and abs(center-oldcenter) < params['maxshift_orders']:
                 widths.append([center-leftmin,rightmin-center, width])
                 shifts.append(center-oldcenter)
                 shift_map[max(0,int(xarr[j]-steps/2)):min(im.shape[0],int(xarr[j]+steps/2))+1,i] = center-oldcenter
@@ -2398,6 +2410,58 @@ def measure_background_noise(im):
     std_part = np.std(im, ddof=1, axis=1)
     print std_part.shape ' <- should not be 100. If 100, then axis=0'
     return std_full, np.median(std_part), np.std(std_part, ddof=1) """
+
+def find_shift_images_2d(im, im_ref, shift_range):
+    """
+    Correlates two images against each other
+    :param im:
+    :param im_ref:
+    :param shift_range: 1d list or array with 4 intergers. Gives the range of how to shift the image, first in x, followed by y
+    :return popt: 1d array of 7 floats. The parameters to fit twoD_Gaussian
+    """
+    ims = im.shape
+    if ims != im_ref.shape:
+        logger('Error: Image and comparison image do not have the same dimension: {0} versus {1}'.format(ims, im_ref.shape))
+    data = []
+    shiftxs = range(shift_range[2],shift_range[3]+1)
+    shiftys = range(shift_range[0],shift_range[1]+1)
+    for shiftx in shiftxs:
+        for shifty in shiftys:
+            posx1 = 0      + max(0, shiftx)
+            posx2 = ims[0] - max(0,-shiftx)
+            posy1 = 0      + max(0, shifty)
+            posy2 = ims[1] - max(0,-shifty)
+            data.append([shiftx, shifty, posx2-posx1, posy2-posy1, np.nan])
+    data = np.array(data)
+    minxrange = np.min(data[:,2])   # Smallest image
+    minyrange = np.min(data[:,3])
+    fluxdiff = []
+    for index, [shiftx, shifty, rangex, rangey, dummy] in enumerate(data):
+        posx1 = int( 0      + max(0, shiftx) )
+        posx2 = int( ims[0] - max(0,-shiftx) )
+        posy1 = int( 0      + max(0, shifty) )
+        posy2 = int( ims[1] - max(0,-shifty) )
+        porx1 = int( 0      + max(0,-shiftx) )
+        porx2 = int( ims[0] - max(0, shiftx) )
+        pory1 = int( 0      + max(0,-shifty) )
+        pory2 = int( ims[1] - max(0, shifty) )
+        diffim = im[posx1:posx2, posy1:posy2] - im_ref[porx1:porx2, pory1:pory2]
+        # print('should be the same;', diffim.shape, rangex, rangey)        # Yes, it is :)
+        fluxes = []
+        ims2 = diffim.shape
+        extrax = int(rangex - minxrange)
+        extray = int(rangey - minyrange)
+        for ii in range(extrax + 1):
+            for jj in range(extray + 1):      # For a small shift, the resulting image is bigger than for a big shift -> avoid impact total flux
+                fluxes.append(np.sum(np.abs(diffim[ii:ims2[0]-(extrax-ii), jj:ims2[0]-(extray-jj)])))
+        data[index,4] = -np.median(fluxes)              # using a negative flux, so the minimum becomes a maximum, which only can be handled by the script in order to fit a gaussian
+        #print data[index,0:4], data[index,4]
+    pos_max = data[:,4].argmax()
+    initial_guess = [np.max(data[:,4])-np.min(data[:,4]), data[pos_max,0], data[pos_max,1], 2, 2, 0, np.min(data[:,4])] # amplitude, xo, yo, sigma_x, sigma_y, theta, offset
+    x, y = np.meshgrid(shiftxs, shiftys)
+    popt, pcov = curve_fit(twoD_Gaussian, (x,y), data[:,4], p0=initial_guess)
+    
+    return popt
 
 def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_mult, cal_tr_poly, extract=True):
     """
@@ -3285,12 +3349,17 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     ceres_spec = clip_noise(ceres_spec)
     
     # Change the path to the object_file to the result_path, if necessary
-    if not os.path.isfile(params['object_file']) and os.path.isfile( params['object_file'].replace(params['result_path'], params['raw_data_path']) ):
-        #shutil.copy2( params['object_file'].replace(params['result_path'], params['raw_data_path']), params['result_path'])         # Copies the file from the raw_data_path to the result_path, keeping the metadata
-        params['object_file'] = params['object_file'].replace(params['result_path'], params['raw_data_path'])
+    
+    object_files = [ params['object_file'] ]
+    for entry in [ params['result_path'] ] + params['raw_data_paths']:      # Check also the result and raw data paths for object names
+        object_files.append( entry + params['object_file'] )
+    for object_file in object_files:
+        ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, mjd, filen=object_file, warn_notfound=False)
+        if ra2 !=0 and dec2 != 0:                                           # Found the object
+            break
     
     # Get the baycentric velocity
-    params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, params['object_file'])       # obnames becomes the single entry which matched entry in params['object_file']
+    params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, object_file)       # obnames becomes the single entry which matched entry in params['object_file']
     im_head['HIERARCH EXO_PIPE OBJNAME'] = (obnames[0], 'Used object name')
     
     # Do the Ceres-pipeline Radial velocity analysis 
@@ -3310,7 +3379,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         M2: 4401 to 6862, 9493 data points/lines
         Given in the mask is the lower and the higher end of the line, and the weight
         """
-        RV, RVerr2, BS, BSerr = rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], params['object_file'], mephem)
+        RV, RVerr2, BS, BSerr = rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], object_file, mephem)
         # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf (no, causes 83.15 km/s shift, < 5m/s is between the different models)
         logger('Info: The radial velocity (including barycentric correction) for {0} gives: RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s'.format(\
                                     im_name, round(RV+bcvel_baryc,4), round(RVerr2,4), round(BS,4), round(BSerr,4), round(bcvel_baryc,4) ))
@@ -5825,7 +5894,7 @@ def iau_cal2jd(IY,IM,ID):               # from CERES, modified
             logger('Error: The month of the observation is not defined: {0}'.format(IM))
     return DJM0, DJM
 
-def getcoords_from_file(obnames,mjd,filen='coords.txt'):               # from CERES, heavily modified
+def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True):               # from CERES, heavily modified
     """
     1-  name of the target as specified in the image header.
     2-  right ascension of the target (J2000) with format hh:mm:ss or as float in degrees.
@@ -5841,7 +5910,7 @@ def getcoords_from_file(obnames,mjd,filen='coords.txt'):               # from CE
     """
     RA0, DEC0, PMRA, PMDEC, epoch = 0., 0., 0., 0., 2000.
     
-    if not os.path.isfile(filen):
+    if not os.path.isfile(filen) and warn_notfound:
         logger('Warn: Reference coordinates files {0} does not exist.'.format(filen))
         return RA0, DEC0, epoch, PMRA, PMDEC, obnames
     # !!! Use read files with split already available
@@ -5897,7 +5966,7 @@ def getcoords_from_file(obnames,mjd,filen='coords.txt'):               # from CE
                 found = True
                 break
                 
-    if not found:
+    if not found and warn_notfound:
         logger('Warn: Object was not found in the reference coordinates file {0}.'.format(filen))
     return RA0, DEC0, epoch, PMRA, PMDEC, obnames
 

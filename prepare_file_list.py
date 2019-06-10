@@ -62,24 +62,12 @@ def create_parameters(conf_data, warn, param, textparam, parcals, exist_bias, ex
             text = text[1:]
         conf_data[param+'_calibs_create'] = text
     else:                                                   # Just add the file
-        conf_data[param+'_rawfiles'] += ',' + entry[0]
+        conf_data[param+'_rawfiles'] += ', ' + entry[0]
     return conf_data, warn
 
-if __name__ == "__main__":
-    logger('Info: Preparing a list with the files')
-    log_params(params)
-    
-    file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
-    try:
-        file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' ']) # old way of reading the data, To stay backwards compatible, can be removed in a few versions after v0.4.1
-    except:
-        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])     #new way of storing the data
-    
-    if os.path.isdir(params['raw_data_path']) == False:
-        if os.path.isdir(params['raw_data_path'].replace('ncook','ronny')) == True:
-            params['raw_data_path'] = params['raw_data_path'].replace('ncook','ronny')
-
-    for root, dirs, files in os.walk(params['raw_data_path'], followlinks=True):
+def add_new_rawfiles_file_list(params, file_list=[]):
+    for raw_data_path in params['raw_data_paths']:
+     for root, dirs, files in os.walk(raw_data_path, followlinks=True):
         for file in files:
             matchin_fileending = False                      # has the file the correct ending?
             for fileending in params['raw_data_file_endings']:
@@ -89,9 +77,10 @@ if __name__ == "__main__":
             if not matchin_fileending:
                 continue                                    # wrong file ending
                     
-            filename = os.path.join(root, file).replace(params['raw_data_path'],'')     # Only relative folder and filename
-            if not os.path.exists(params['raw_data_path'] + filename):                  # that should never be a problem
-                continue
+            #filename = os.path.join(root, file).replace(params['raw_data_path'],'')     # Only relative folder and filename
+            #if not os.path.exists(params['raw_data_path'] + filename):                  # that should never be a problem
+            #    continue
+            filename = os.path.join(root, file)                                         # Full folders and filenames
             new = True                                      # is it a new file
             for entry in file_list:
                 if entry[0].find(filename) == 0 or entry[0].find(' '+filename) >= 0 or entry[0].find('#'+filename) >= 0:    # spaces are replaced in convert_readfile, so shouldn't be a problem
@@ -99,7 +88,7 @@ if __name__ == "__main__":
                     break
             if not new:
                 continue                                    # if not new, then no further analysis is needed
-            im_head = fits.getheader(params['raw_data_path'] + filename)
+            im_head = fits.getheader(filename)
             # Identify the image type and find out what the fibers show
             fiber1, fiber2 = 'none', 'none'
             fnlow = filename.lower()
@@ -140,7 +129,7 @@ if __name__ == "__main__":
                     fiber1, fiber2 = 'dark', 'dark'
                 if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace1']:
                     fiber1, fiber2 = 'cont', 'dark'
-                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flatarc']:
+                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_blaze']:
                     fiber1, fiber2 = 'cont', 'wave'        # for HARPS it is cont, cont
                 if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace2']:
                     fiber1, fiber2 = 'wave', 'wave'
@@ -181,57 +170,26 @@ if __name__ == "__main__":
                     dateobs = 0"""
             
             extract = ''
-            if fiber1 == 'science':
-                extract = 'e'
             file_list.append([filename, fiber1, fiber2, exptime, dateobs, extract])
-            #print file_list[-1]
-    file_list = sorted(file_list, key=operator.itemgetter(1,2,3,4,0))
-    # Save the list, show to user, so the user can disable files, read the list
-    file = open(params['raw_data_file_list'],'w')
-    file.write('### This file contains the information for all the fits files in the raw_data_path: {0} and it\'s subfolders.\n'.format(params['raw_data_path']))
-    file.write('### Each line contains the following information, separated by one tab:\n')
-    file.write('###   - Filename relativ to raw_data_path parameter\n')
-    file.write('###   - Type of fiber 1 (science fiber)\n')
-    file.write('###   - Type of fiber 2 (calibration fiber)\n')
-    file.write('###   - Exposure time in seconds (from the header, if the information is not in the header, then from the filename)\n')
-    file.write('###   - Mid-exposure observation time in UTC (from header)\n')
-    file.write('###   - Flags:\n')
-    file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n')
-    file.write('###             Combination of images before the extraction is possible, please refer to the manual for more information\n')
-    file.write('###        "w" or "w2", if the spectrum contains wavelength information (in case of a spectrograph with single fiber input or\n')
-    file.write('###                     to find the time dependent offset between both fibers of a bifurcated fiber).\n')
-    file.write('###             Used to mark the files with calibration spectrum taken before or after the science observation.\n')
-    file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
-    file.write('### -> When finished with the editing, save the file and close the editor \n\n')
-    for entry in file_list:
-        file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5] ))
-    file.close()
-    if not ('nocheck' in sys.argv or '-nocheck' in sys.argv or '--nocheck' in sys.argv):
-        start = time.time()
-        rtn = os.system('{1} {0}'.format(params['raw_data_file_list'], params['editor'] ))
-        if rtn <> 0 or time.time()-start < 10:
-            print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
-            raw_input('To continue please press Enter\t\t')
-    time.sleep(1)
-    file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
-    file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
     
-    file_list = sorted(file_list, key=operator.itemgetter(1,2,3,0))
+    return file_list
+
+def check_raw_files_infos(params, file_list):
     # Check what data is available
     cal2_l_exp, cal2_s_exp, cal1_l_exp, cal1_s_exp = 0, 1E10, 0, 1E10
     arc_fib1 = ''
     sflat_fib2 = 'wave'
-    flatarc_fib2 = 'none'
+    blazecor_fib2 = 'none'
     exist_bias, exist_rflat, exp_darks = False, False, []
     for entry in file_list:
-        if entry[1] == 'cont' and entry[2] == 'none' and flatarc_fib2 <> 'dark':              # use entry[2] == 'wave' for cont only if entry[2] == 'none' not available
+        if entry[1] == 'cont' and entry[2] == 'none' and blazecor_fib2 <> 'dark':              # use entry[2] == 'wave' for cont only if entry[2] == 'none' not available
             sflat_fib2 = 'none'
         if entry[1] == 'cont' and entry[2] == 'dark':              # use entry[2] == 'dark' for cont only if entry[2] == 'none' not available
             sflat_fib2 = 'dark'
         if entry[1] == 'cont' and entry[2] == 'wave':               # use entry[2] == 'none' for arcflat only if entry[2] == 'wave' not available
-            flatarc_fib2 = 'wave'
-        if entry[1] == 'cont' and entry[2] == 'dark' and flatarc_fib2 <> 'wave':   # use entry[2] == 'dark' for flatarc only if entry[2] == 'wave' not available
-            flatarc_fib2 = 'dark'
+            blazecor_fib2 = 'wave'
+        if entry[1] == 'cont' and entry[2] == 'dark' and blazecor_fib2 <> 'wave':   # use entry[2] == 'dark' for blazecor only if entry[2] == 'wave' not available
+            blazecor_fib2 = 'dark'
         if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave') and entry[2] == 'wave':
             cal2_l_exp = max(entry[3], cal2_l_exp)
             cal2_s_exp = min(entry[3], cal2_s_exp)
@@ -252,6 +210,67 @@ if __name__ == "__main__":
                 cal2_l_exp = max(entry[3], cal2_l_exp)
                 cal2_s_exp = min(entry[3], cal2_s_exp)
     
+    params['cal2_l_exp'] = cal2_l_exp
+    params['cal2_s_exp'] = cal2_s_exp
+    params['cal1_l_exp'] = cal1_l_exp
+    params['cal1_s_exp'] = cal1_s_exp
+    params['arc_fib1'] = arc_fib1
+    params['sflat_fib2'] = sflat_fib2
+    params['blazecor_fib2'] = blazecor_fib2
+    params['exist_bias'] = exist_bias
+    params['exist_rflat'] = exist_rflat
+    params['exp_darks'] = exp_darks
+    
+    return params
+    
+def add_extraction_parameters_file_list(params, file_list, start_index):
+    warn = []
+    easy_assignments = []
+    easy_assignments.append(['bias'  , 'bias'                 , 'b' ])       # Bias
+    easy_assignments.append(['dark'  , 'dark'                 , 'd' ])       # Dark
+    easy_assignments.append(['rflat' , 'rflat'                , 'a' ])       # real Flat
+    easy_assignments.append(['cont'  , params['blazecor_fib2'] , 'z' ])       # blaze correction (continuum source)
+    easy_assignments.append(['cont'  , params['sflat_fib2']   , 't1' ])      # trace of the science fiber
+    for index, entry in enumerate(file_list):                                         # Extraction is set up below
+        if index < start_index:                                     # Dont't touch the old files
+            continue
+        param = ''
+        extract = ''
+        for easy_assignment in easy_assignments:
+            if entry[1] == easy_assignment[0] and entry[2] == easy_assignment[1]:                 # Fiber1 and Fiber2
+                extract += easy_assignment[2]+', '
+        if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave' or entry[1] == params['arc_fib1']) and entry[2] == 'wave':               # Fiber1 and Fiber2
+            if params['cal2_l_exp']*0.9 <= entry[3] <= params['cal2_l_exp']*1.1:
+                extract += 'w2l, '
+                extract += 't2, '
+            elif params['cal2_s_exp']*0.9 <= entry[3] <= params['cal2_s_exp']*1.1:                             # In case only one exposure time -> cal2_l is copied in cal2_s
+                extract += 'w2s, '
+        if (entry[2] == 'none' or entry[2] == 'dark' or entry[2] == 'wave') and entry[1] == 'wave' and params['cal1_l_exp'] >= cal1_s_exp:               # wave in science fiber
+            parcal = 'arc'
+            if params['cal1_l_exp']*0.9 <= entry[3] <= params['cal1_l_exp']*1.1:
+                extract += 'w1l, '
+            elif params['cal1_s_exp']*0.9 <= entry[3] <= params['cal1_s_exp']*1.1:                             # In case only one exposure time -> cal1_l is copied in cal1_s
+                extract += 'w1s, '
+        if entry[1] == 'science':
+                extract += 'e, '
+        if len(extract) >=2:
+            extract = extract[:-2]
+        file_list[index][5] = extract
+    
+    return file_list
+
+def create_configuration_file(params, file_list):
+    #cal2_l_exp   = params['cal2_l_exp']
+    #cal2_s_exp   = params['cal2_s_exp']
+    #cal1_l_exp   = params['cal1_l_exp']
+    #cal1_s_exp   = params['cal1_s_exp']
+    #arc_fib1     = params['arc_fib1']
+    #sflat_fib2   = params['sflat_fib2']
+    #blazecor_fib2 = params['blazecor_fib2']
+    exist_bias   = params['exist_bias']
+    exist_rflat  = params['exist_rflat']
+    exp_darks    = params['exp_darks']
+    
     conf_data = dict()
     # Check if master files exist:
     if not exist_rflat:
@@ -264,51 +283,45 @@ if __name__ == "__main__":
         if file.endswith(".fits"):
             filename =os.path.join("", file)
             if filename.find('master_dark') == 0:
-                exposure = filename.replace('master_dark','').replace('s.fits','').replace('p','.')
+                im_head = fits.getheader(filename)
+                obsdate_tuple, dateobs, exptime, obsdate_begin, exposure_fraction = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
+                """exptime = filename.replace('master_dark','').replace('s.fits','').replace('p','.')
                 try:
-                    exposure = float( exposure )
+                    exptime = float( exptime )
                 except:
-                    continue
-                if exposure not in exp_darks:
-                    exp_darks.append(exposure)
-                    conf_data['master_dark{}_filename'.format(exposure)] = filename
+                    continue"""
+                if exptime not in exp_darks:
+                    exp_darks.append(exptime)
+                    conf_data['master_dark{}_filename'.format(exptime)] = filename
     
     # Create the configuartion file
     warn = []
-    pos_params = ['bias', 'rflat' ]
+    easy_assignments = []
+    easy_assignments.append(['b'   , 'bias'    , 'bias'   ])       # Bias
+    easy_assignments.append(['a'   , 'rflat'   , 'rflat'  ])       # real Flat
+    easy_assignments.append(['z'   , 'blazecor' , 'blazecor'])       # blaze correction (continuum source)
+    easy_assignments.append(['t1'  , 'trace1'  , 'trace1' ])       # trace of the science fiber
+    easy_assignments.append(['t2'  , 'trace2'  , 'trace2' ])       # trace of the calibration fiber
+    easy_assignments.append(['w1s' , 'cal1_s'  , 'arc'    ])       # Wavelength calibration
+    easy_assignments.append(['w1l' , 'cal1_l'  , 'arc'    ])       # Wavelength calibration
+    easy_assignments.append(['w2s' , 'cal2_s'  , 'arc'    ])       # Wavelength calibration
+    easy_assignments.append(['w2l' , 'cal2_l'  , 'arc'    ])       # Wavelength calibration
     for entry in file_list:                                         # Extraction is set up below
         #if entry[0].find('#') <> -1:        # comment # found
         #    continue
         param = ''
-        for par in pos_params:
-            if entry[1] == par and entry[2] == par:                 # Fiber1 and Fiber2
-                conf_data, warn = create_parameters(conf_data, warn, par, par, [par], exist_bias, exist_rflat, exp_darks, entry)
-        if entry[1] == 'cont' and entry[2] == flatarc_fib2:         # Fiber1 and Fiber2    , might be overwritten by cont -> later copy cont into flatarc
-            conf_data, warn = create_parameters(conf_data, warn, 'flatarc', 'flatarc', ['flatarc'], exist_bias, exist_rflat, exp_darks, entry)
-        if entry[1] == 'cont' and entry[2] == sflat_fib2:          # Fiber1 and Fiber2
-            conf_data, warn = create_parameters(conf_data, warn, 'trace1', 'trace1', ['trace1'], exist_bias, exist_rflat, exp_darks, entry)
-        if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave' or entry[1] == arc_fib1) and entry[2] == 'wave':               # Fiber1 and Fiber2
-            parcal = 'arc'
-            if entry[3] == cal2_l_exp:
-                conf_data, warn = create_parameters(conf_data, warn, 'cal2_l', 'cal2_l', [parcal], exist_bias, exist_rflat, exp_darks, entry)
-                conf_data, warn = create_parameters(conf_data, warn, 'trace2', 'trace2', ['trace2'], exist_bias, exist_rflat, exp_darks, entry)
-            elif entry[3] == cal2_s_exp:                             # In case only one exposure time -> cal2_l is copied in cal2_s
-                conf_data, warn = create_parameters(conf_data, warn, 'cal2_s', 'cal2_s', [parcal], exist_bias, exist_rflat, exp_darks, entry)
-        if (entry[2] == 'none' or entry[2] == 'dark' or entry[2] == 'wave') and entry[1] == 'wave' and cal1_l_exp >= cal1_s_exp:               # wave in science fiber
-            parcal = 'arc'
-            if entry[3] == cal1_l_exp:
-                conf_data, warn = create_parameters(conf_data, warn, 'cal1_l', 'cal1_l', [parcal], exist_bias, exist_rflat, exp_darks, entry)
-            elif entry[3] == cal1_s_exp:                             # In case only one exposure time -> cal1_l is copied in cal1_s
-                conf_data, warn = create_parameters(conf_data, warn, 'cal1_s', 'cal1_s', [parcal], exist_bias, exist_rflat, exp_darks, entry)
-        if entry[1] == 'dark' and entry[2] == 'dark':               # Fiber1 and Fiber2
+        extract = entry[5].lower().replace(' ','').split(',')
+        for easy_assignment in easy_assignments:
+            if easy_assignment[0] in extract:
+                conf_data, warn = create_parameters(conf_data, warn, easy_assignment[1], easy_assignment[1], [easy_assignment[1]], exist_bias, exist_rflat, exp_darks, entry)
+        if 'd' in extract:               # Fiber1 and Fiber2
             param = 'dark{0}'.format(entry[3])                      # Exposure time
             textparam = param.replace('.','p')+'s'
             parcal = 'dark'
             conf_data, warn = create_parameters(conf_data, warn, param, textparam, [parcal], exist_bias, exist_rflat, exp_darks, entry)
         if entry[5].lower().find('e') == -1 and entry[5].lower().find('w') == -1:          # No extraction and no wavelength calibration
             continue
-        entry[5] = entry[5].replace(' ','').split(',')
-        for extraction in entry[5]:
+        for extraction in entry[5].replace(' ','').split(','):
             if extraction.lower().find('w2') == 0:       # use this file for wavelength calibration between spectra
                 param = 'wavelengthcal2'
                 parcal = 'wavelengthcal'
@@ -318,22 +331,93 @@ if __name__ == "__main__":
                 param = 'wavelengthcal'
                 conf_data, warn = create_parameters(conf_data, warn, param, param, [param], exist_bias, exist_rflat, exp_darks, entry)
                 continue                        # otherwise Warn from below will be triggered
-            if extraction.lower().find('e') <> 0:        # use find as len(extraction) might be 0
-                warn.append('Warn: I dont know what to do with the extraction parameter {0} (it doesnt begin with "e") for file {1}. This spectrum will therefore not be extracted. Please check {2} and run the script again, if you perform changes.'.format(extraction, entry[0], params['raw_data_file_list'] ))
-                continue
-            if extraction.lower().find('c') == 1:            # combine data before extraction
+            #if extraction.lower().find('e') <> 0:        # use find as len(extraction) might be 0
+            #    warn.append('Warn: I dont know what to do with the extraction parameter {0} (it doesnt begin with "e") for file {1}. This spectrum will therefore not be extracted. Please check {2} and run the script again, if you perform changes.'.format(extraction, entry[0], params['raw_data_file_list'] ))
+            #    continue
+            if extraction.lower().find('ec') == 0:            # combine data before extraction
                 param = 'extract_combine'+extraction[2:]
-            else:
+            elif extraction.lower().find('e') == 0:           # just extraction:
                 param = 'extract'+extraction[1:]
             conf_data, warn = create_parameters(conf_data, warn, param, param, [param, 'extract'], exist_bias, exist_rflat, exp_darks, entry)
-    for fiber in [2,1]:
+    for fiber in [2,1]:             # Copy the long exposures into the short exposures, if not available and vice versa
         if 'cal{0}_l_rawfiles'.format(fiber) in conf_data.keys() and 'cal{0}_s_rawfiles'.format(fiber) not in conf_data.keys():
             conf_data['cal{0}_s_rawfiles'.format(fiber)]        = conf_data['cal{0}_l_rawfiles'.format(fiber)]
             conf_data['master_cal{0}_s_filename'.format(fiber)] = conf_data['master_cal{0}_l_filename'.format(fiber)].replace('cal{0}_l'.format(fiber),'cal{0}_s'.format(fiber))
             conf_data['cal{0}_s_calibs_create'.format(fiber)]   = conf_data['cal{0}_l_calibs_create'.format(fiber)]
+        elif 'cal{0}_s_rawfiles'.format(fiber) in conf_data.keys() and 'cal{0}_l_rawfiles'.format(fiber) not in conf_data.keys():
+            conf_data['cal{0}_l_rawfiles'.format(fiber)]        = conf_data['cal{0}_s_rawfiles'.format(fiber)]
+            conf_data['master_cal{0}_l_filename'.format(fiber)] = conf_data['master_cal{0}_s_filename'.format(fiber)].replace('cal{0}_l'.format(fiber),'cal{0}_s'.format(fiber))
+            conf_data['cal{0}_l_calibs_create'.format(fiber)]   = conf_data['cal{0}_s_calibs_create'.format(fiber)]
 
     for entry in warn:
         logger(entry)
+        
+    return conf_data
+
+if __name__ == "__main__":
+    logger('Info: Preparing a list with the files')
+    log_params(params)
+    
+    # get the available list
+    file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
+    try:
+        file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' ']) # old way of reading the data, To stay backwards compatible, can be removed in a few versions after v0.4.1
+    except:
+        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])     #new way of storing the data
+    number_old_entries = len(file_list)
+    
+    # get the new files
+    file_list = add_new_rawfiles_file_list(params, file_list)           # Check for new entries for file_list
+    
+    # analyse the global information
+    params = check_raw_files_infos(params, file_list)
+    
+    # add the configuration to extraction parameters
+    file_list = add_extraction_parameters_file_list(params, file_list, number_old_entries)
+
+    file_list = sorted(file_list, key=operator.itemgetter(4,0))           #itemgetter(1,2,3,4,0)
+    # Save the list, show to user, so the user can disable files, read the list
+    file = open(params['raw_data_file_list'],'w')
+    file.write('### This file contains the information for all the fits files in the raw_data_paths: {0} and its/their subfolders.\n'.format(params['raw_data_paths']))
+    file.write('### Each line contains the following information, separated by one tab:\n')
+    file.write('###   - Fill filename \n')
+    file.write('###   - Type of fiber 1 (science fiber)\n')
+    file.write('###   - Type of fiber 2 (calibration fiber)\n')
+    file.write('###   - Exposure time in seconds (from the header, if the information is not in the header, then from the filename)\n')
+    file.write('###   - Mid-exposure observation time in UTC (from header)\n')
+    file.write('###   - Flags: Mark the files to be used for calibration the data (comma-separated list):\n')
+    file.write('###        "b", Bias.\n')
+    file.write('###        "d", Dark.\n')
+    file.write('###        "a", real Flat of the detector.\n')
+    file.write('###        "z", Spectrum for the blaze correction, e.g. of a continuum source.\n')
+    file.write('###        "t1", Spectrum to find the trace [of the science fiber], e.g. a continuum source.\n')
+    file.write('###        "t2", Spectrum to find the trace of the calibration fiber.\n')
+    file.write('###        "w2l, w2s", Spectruum to find the wavelength solution (long and short exposure time) [of the calibration fiber].\n')
+    file.write('###        "w1l, w1s", Spectruum to find the wavelength solution of the science fiber.\n')
+    file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n')
+    file.write('###             Combination of images before the extraction is possible, please refer to the manual for more information\n')
+    file.write('###        "w" or "w2", if the spectrum contains wavelength information (in case of a spectrograph with single fiber input or\n')
+    file.write('###                     to find the time dependent offset between both fibers of a bifurcated fiber).\n')
+    file.write('###             Used to mark the files with calibration spectrum taken before or after the science observation.\n')
+    file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
+    file.write('### -> When finished with the editing, save the file and close the editor \n\n')
+    for entry in file_list:
+        file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5] ))
+    file.close()
+    if not ('nocheck' in sys.argv or '-nocheck' in sys.argv or '--nocheck' in sys.argv):
+        start = time.time()
+        rtn = os.system('{1} {0}'.format(params['raw_data_file_list'], params['editor'] ))
+        if rtn <> 0 or time.time()-start < 10:
+            print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
+            raw_input('To continue please press Enter\t\t')
+    time.sleep(0.3)
+    file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
+    file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
+    
+    file_list = sorted(file_list, key=operator.itemgetter(4,0))       # itemgetter(1,2,3,0)
+    
+    conf_data = create_configuration_file(params, file_list)
+    
     # Save the results in a conf_data.txt file
     #print json.dumps(conf_data,sort_keys = False, indent = 4)
     file = open(params['configfile_fitsfiles'],'w')

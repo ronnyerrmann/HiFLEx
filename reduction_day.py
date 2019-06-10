@@ -24,7 +24,7 @@ if __name__ == "__main__":
         im_trace2, im_trace2_head = create_image_general(params, 'trace2')
     else:                                                                       # no calibration spectrum at the same time
         im_trace2, im_trace2_head = im_trace1, im_trace1_head
-    #flatarc, cal2_l, cal2_s: at a later step to know the orders for localbackground -> cont1cal2
+    #blazecor, cal2_l, cal2_s: at a later step to know the orders for localbackground -> cont1cal2
     
     # Load the reference catalogue. Note that the Ar I lines are rescaled!
     reference_catalog, reference_names = read_reference_catalog(params['reference_catalog'], params['catalog_file_wavelength_muliplier'], params['use_catalog_lines'])
@@ -51,7 +51,7 @@ if __name__ == "__main__":
         else:
             # update the sci_tr_poly parameters
             sci_tr_poly[:,:,-1] += shift
-            if params['update_widths'] == True:
+            if params['update_width_orders'] == True:
                 for order in range(sci_tr_poly.shape[0]):
                     xarr = list(range(xlows[order], xhighs[order]))
                     center = np.polyval(sci_tr_poly[order, 0, 1:], xarr-sci_tr_poly[order, 0, 0])
@@ -191,13 +191,13 @@ if __name__ == "__main__":
     
             if calib[1] == 'cal2':          # for the calibration fiber
                 if os.path.isfile(params['original_master_wavelensolution_filename']) == False:                                                         # Create a new solution
-                    if os.path.isfile('arc_lines_wavelength.txt') == False:                                                                             # No arc_lines_wavelength.txt available
+                    if os.path.isfile('pixel_to_wavelength.txt') == False:                                                                             # No pixel_to_wavelength.txt available
                         wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(cal_l_spec.shape[0])                      # Create a pseudo solution
                         plot_wavelength_solution_spectrum(cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf', 
                                                       wavelength_solution, wavelength_solution_arclines, np.array([0,1,0]).reshape(1,3), ['dummy'], plot_log=True)     # Plot the spectrum
                         logger('Error: Files for creating the wavelength solution do not exist: {0}, {1}. Please check parameter {2} or create {1}.'.format(\
-                                                params['original_master_wavelensolution_filename'], 'arc_lines_wavelength.txt', 'original_master_wavelensolution_filename'))
-                    wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'arc_lines_wavelength.txt', im_cal_l)         # For a new wavelength solution
+                                                params['original_master_wavelensolution_filename'], 'pixel_to_wavelength.txt', 'original_master_wavelensolution_filename'))
+                    wavelength_solution, wavelength_solution_arclines = read_fit_wavelength_solution(params, 'pixel_to_wavelength.txt', im_cal_l)         # For a new wavelength solution
                     save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_arclines, params['original_master_wavelensolution_filename'])                   # For a new wavelength solution
                     plot_wavelength_solution_form(params['logging_wavelength_solution_form'].replace('.png','')+'_manual.png', axlows, axhighs, wavelength_solution)
                     plot_wavelength_solution_spectrum(cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf', 
@@ -297,7 +297,7 @@ if __name__ == "__main__":
         logger('Error: The number of traces for extraction and for the wavelength calibration do not match. Please remove eighter {0} ({2}) or {1} ({3}) and re-run the script in order to solve.'\
                     .format(params['master_trace_sci_filename'], params['master_wavelensolution_filename'], sci_tr_poly.shape[0], wavelength_solution.shape[0], im_trace1.shape[0]))
     
-    im_flatarc, im_flatarc_head = create_image_general(params, 'flatarc')    # -> cont1cal2
+    im_blazecor, im_blazecor_head = create_image_general(params, 'blazecor')    # -> cont1cal2
     
     # Extract the flat spectrum and normalise it
     if os.path.isfile(params['master_flat_spec_norm_filename']) == True:
@@ -305,19 +305,19 @@ if __name__ == "__main__":
         # The file is read later on purpose
     else:
         logger('Step: Create the normalised flat for the night')
-        obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_flatarc_head)
-        shift = find_shift_images(params, im_flatarc, im_trace1, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly, extract=True)
-        flat_spec, good_px_mask = extract_orders(params, im_flatarc, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='prec', offset=shift)
+        obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_blazecor_head)
+        shift = find_shift_images(params, im_blazecor, im_trace1, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly, extract=True)
+        flat_spec, good_px_mask = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='prec', offset=shift)
         flat_spec_norm = flat_spec/np.nanmedian(flat_spec)
         flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.1)
         if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
-            flatarc_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
+            blazecor_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
         else:
-            flatarc_spec, agood_px_mask = extract_orders(params, im_flatarc, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
-        wavelength_solution_shift, shift = shift_wavelength_solution(params, flatarc_spec, wavelength_solution, wavelength_solution_arclines, 
+            blazecor_spec, agood_px_mask = extract_orders(params, im_blazecor, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
+        wavelength_solution_shift, shift = shift_wavelength_solution(params, blazecor_spec, wavelength_solution, wavelength_solution_arclines, 
                                             reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, params['master_flat_spec_norm_filename'])
-        wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, flatarc_spec)
-        save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, flatarc_spec], params['master_flat_spec_norm_filename'], im_flatarc_head)
+        wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, blazecor_spec)
+        save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, blazecor_spec], params['master_flat_spec_norm_filename'], im_blazecor_head)
         #save_im_fits(params, flat_spec_norm, im_sflat_head, params['master_flat_spec_norm_filename'])
     
     logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the loging directory {0}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?\n'.format(params['logging_path']))

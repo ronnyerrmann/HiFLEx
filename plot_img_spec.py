@@ -162,7 +162,7 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     minx, miny, maxx, maxy = 1e10, 1e10, -1e10, -1e10
     for i in range(len(data_x)):
         if type(data_x[i]) in [np.ndarray, list]:
-            if sum(~np.isnan(data_x[i])) > 0:
+            if sum(~np.isnan(list(data_x[i]))) > 0:
                 minx = min(minx, np.nanmin(data_x[i]) )
                 maxx = max(maxx, np.nanmax(data_x[i]) )
             data_yi = np.array(data_y[i], dtype=float)           # Necessary, because data_y[i][ ~np.isnan(data_y[i]) ] fails, float necessary, otherwise data_yi.dtype will object, which fails np.isnan
