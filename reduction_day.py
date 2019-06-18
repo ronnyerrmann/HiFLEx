@@ -46,7 +46,7 @@ if __name__ == "__main__":
             shift_error = -1
         if shift_error > 1 or shift_error == -1 or abs(shift) > params['maxshift']:
             logger('Warn: The deviation of the shift of the orders seems too big or no previous solution was available, therefore searching for the position of the orders from scratch:')
-            sci_tr_poly, xlows, xhighs, widths = trace_orders(params, im_trace1, im_trace1_head)
+            sci_tr_poly, xlows, xhighs, widths = find_adjust_trace_orders(params, im_trace1, im_trace1_head)
             printresults = True
         else:
             # update the sci_tr_poly parameters
@@ -58,9 +58,11 @@ if __name__ == "__main__":
                     left   = np.polyval(sci_tr_poly[order, 1, 1:], xarr-sci_tr_poly[order, 1, 0])
                     right  = np.polyval(sci_tr_poly[order, 2, 1:], xarr-sci_tr_poly[order, 2, 0])
                     left, right = adjust_width_orders(center, left, right, [widths_new[order,0]/widths[order,0], widths_new[order,1]/widths[order,1] ] )
+                    sci_tr_poly[order, 1, 1:] = np.polyfit(xarr - sci_tr_poly[order, 1, 0], left, len(sci_tr_poly[order, 1, 1:])-1 )
                     sci_tr_poly[order, 2, 1:] = np.polyfit(xarr - sci_tr_poly[order, 2, 0], right, len(sci_tr_poly[order, 2, 1:])-1 )
                 widths = widths_new
                 logger('Info: widths of the traces have been updated')
+            dummy, sci_tr_poly, widths = remove_adjust_orders_UI( scale_image_plot(im_trace1, 'log10'), sci_tr_poly, xlows, xhighs, widths, userinput=params['GUI'], do_adj=True)
             printresults = True
         if printresults:
             # save parameters of the polynoms into a fitsfile (from Neil)
@@ -107,13 +109,7 @@ if __name__ == "__main__":
     else:
         # use im_trace2 for automatic solution
         shifts = arc_shift(params, im_trace2, sci_tr_poly, xlows, xhighs, widths)
-        width_multiplier = 1
-        # check the shift between the original solution and arc using a GUI -> This is outdated as it allows only one value for the shift
-        shift = round(np.median(shifts),2)
-        if params['GUI'] == True:
-            shift_gui, width_multiplier = shift_orders_UI(im_trace2, shift, sci_tr_poly, xlows, xhighs, widths)
-            shifts += shift_gui - shift
-        # update the sci_tr_poly parameters
+        # update the sci_tr_poly parameters and create the cal_tr_poly
         cal_tr_poly = []
         for order in range(sci_tr_poly.shape[0]):
             new_pfit = []
@@ -121,6 +117,10 @@ if __name__ == "__main__":
                 new_pfit.append(list(sci_tr_poly[order, dataset, :-1]) + [sci_tr_poly[order, dataset, -1]+shifts[order]] )
             cal_tr_poly.append(new_pfit)
         cal_tr_poly, awidths, axlows, axhighs = np.array(cal_tr_poly), copy.deepcopy(widths), copy.deepcopy(xlows), copy.deepcopy(xhighs)
+        
+        # check the shift between the original solution and arc using a GUI
+        dummy, cal_tr_poly, awidths = remove_adjust_orders_UI((im_trace2), cal_tr_poly, axlows, axhighs, awidths, shift=0, userinput=params['GUI'], do_adj=True, do_shft=True)
+        
         # save parameters of the polynoms into a fitsfile (from Neil)
         save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_trace_cal_filename'])
         plot_traces_over_image(im_trace2, params['logging_arctraces_im'], cal_tr_poly, axlows, axhighs, awidths)

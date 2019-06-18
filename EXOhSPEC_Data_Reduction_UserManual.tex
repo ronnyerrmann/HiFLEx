@@ -218,11 +218,11 @@ After all the calibration steps have been performed for a given instrument (see 
 \noindent The list below shows all standard CCD calibration options available in the pipeline. The corrections are done on a pixel-by-pixel basis. The steps will be executed in the same order as given here.
 \begin{description}
   \item[subframe] : The subframe as given in the parameter \verb|subframe| will be applied, only a section of the CCD will be used.
-  \item[badpx\_mask] : Apply the bad pixel mask, given in parameter \verb|badpx_mask_filename|. If the file doesn't exist, all pixels are assumed to be good.
+  \item[badpx\_mask] : Apply the bad pixel mask, given in parameter \verb|badpx_mask_filename|. If the file doesn't exist, all pixels are assumed to be good. The file must contain a 2-dimensional image with 1 for good and 0 for bad pixel.
   \item[bias] : Apply a master bias. This can be either a pre-reduced image, or it can be created by the pipeline. %, which will be created from the files given in the parameter \verb|bias_rawfiles| by using the settings given in the parameter \verb|bias_calibs_create|. These two parameters are created automatically by the script \verb|prepare_file_list.py| if bias frames exist in the raw data path.
   \item[dark] : Apply a master dark. A dark with the same exposure time as read from the fits header will be applied. %The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
   \item[rflat] : Apply a master true flat. %The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
-  \item[background] : Applies background correction using the filename given in the parameter \verb|background_filename|.The background image will be scaled by the exposure time of the scientific image, before its subtracted from the scientific image.
+  \item[background] : Applies background correction using the filename given in the parameter \verb|background_filename|. The background image will be scaled by the exposure time of the scientific image, before its subtracted from the scientific image.
   \item[localbackground] : Applies background correction by fitting a 2d polynomial against the current reduced image, excluding the area of the science and calibration traces. The fitted 2d-image is then subtracted from the current image.
 \end{description}
 

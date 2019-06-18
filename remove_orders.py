@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # Remove traces in the GUI
     
     polyfits, xlows, xhighs, widths = read_fits_width(params['master_trace_sci_filename'])
-    fmask = run_remove_orders_UI(np.log10(im_flat), polyfits, xlows, xhighs, userinput=True)
+    fmask, dummy, dummy = remove_adjust_orders_UI( scale_image_plot(im_flat, 'log10'), polyfits, xlows, xhighs, userinput=True, do_rm=True)
     if len(polyfits) == len(polyfits[fmask]):
         logger('Info: No change made, therefore finished removing traces')
         exit(0)

@@ -584,10 +584,10 @@ def read_file_calibration(params, filename, level=0):
             ims =  im.shape
             nonzeroind = np.nonzero(1-calimages[entry])       #find the indexes where the badpx mask is zero
             for i in range(len(nonzeroind[0])):         #find a suitable amound of surrounding pixels
-                for j in range(1,5):
+                for j in range(1,5):                    # try to find it in the surrounding 8, 24, 48, 80, 120 pixel
                     section = im[max(0,nonzeroind[0][i]-j) : min(ims[0],nonzeroind[0][i]+j+1) , max(0,nonzeroind[1][i]-j) : min(ims[1],nonzeroind[1][i]+j+1)]
-                    section = section[section!=0]           #only use areas <> 0
-                    if len(section) >= 2:
+                    section = section[section!=0]           #only use areas <> 0 (exclude bad pixel
+                    if len(section) >= 5:
                         break
                 if len(section) == 0:
                     logger('Warn: cannot replace bad pixel ({0}, {1}) with surrounding area in {2}'.format(nonzeroind[0][i],nonzeroind[1][i],filename))
@@ -2574,7 +2574,7 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
         return np.array(xlows)*0        # All shifts are 0
     sigma = 2.5
     # w_mult = params['arcextraction_width_multiplier']
-    w_mult = 2                                              # Fix it to 2 in order to make the shift independent of the user values
+    w_mult = 1                                              # Fix it to 2 in order to make the shift independent of the user values
     orders = np.arange(pfits.shape[0])
     cen_pos, cen_pos_diff = [], []
     arcshift_range = np.array(params['arcshift_range'])
@@ -3035,7 +3035,7 @@ def find_px_from_wave(wavelength, wl_array, px_array):
     
     return px_array[index], diff
 
-def trace_orders(params, im_sflat, im_sflat_head):
+def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
     """
     Procedure to search and adjust the traces. This was originally a standalone python script.
     :param params: Dictionary with all the parameters.
@@ -3054,7 +3054,8 @@ def trace_orders(params, im_sflat, im_sflat_head):
         polyfits, xlows, xhighs, dummy = read_fits_width(params['logging_traces_binned'])
     else:
         # make flat smaller: combine px in spatial direction
-        params['binx'], params['biny'] = params['bin_search_apertures']
+        params['bin_search_apertures'] = adjust_binning_UI(im_sflat, params['bin_search_apertures'], userinput=params['GUI'])
+        params['binx'], params['biny'] = params['bin_search_apertures']             # Required for find_trace_orders        
         sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_search_apertures'] )
         save_im_fits(params, sim_sflat, im_sflat_head, params['logging_trace1_binned'])
      
@@ -3064,14 +3065,18 @@ def trace_orders(params, im_sflat, im_sflat_head):
         # save parameters of the polynoms into a fitsfile (from Neil)
         save_fits_width(polyfits, xlows, xhighs, [], params['logging_traces_binned'])
         plot_traces_over_image(im_sflat, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
-        
+    if params['GUI']:
+        logger('Step: Allowing user to remove orders')
+        fmask, dummy, dummy = remove_adjust_orders_UI( scale_image_plot(im_sflat, 'log10'), polyfits, xlows, xhighs, userinput=params['GUI'], do_rm=True)
+        polyfits, xlows, xhighs = polyfits[fmask], xlows[fmask], xhighs[fmask]   
     # retrace orders in the original image to finetune the orders
+    params['bin_adjust_apertures'] = adjust_binning_UI(im_sflat, params['bin_adjust_apertures'], userinput=params['GUI'])
     params['binx'], params['biny'] = params['bin_adjust_apertures']
     sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_adjust_apertures'])        # Not saved
     polyfits, xlows, xhighs, widths = adjust_trace_orders(params, sim_sflat, im_sflat, polyfits, xlows, xhighs)
     if params['GUI']:
-        logger('Step: Allowing user to remove orders')
-        fmask = run_remove_orders_UI(np.log10(im_sflat), polyfits, xlows, xhighs, userinput=params['GUI'])
+        logger('Step: Allowing user to remove orders and to adjust the extraction width')
+        fmask, polyfits, widths = remove_adjust_orders_UI( scale_image_plot(im_sflat, 'log10'), polyfits, xlows, xhighs, widths, userinput=params['GUI'], do_rm=True, do_adj=True)
         polyfits, xlows, xhighs, widths = polyfits[fmask], xlows[fmask], xhighs[fmask], widths[fmask]
     # save parameters of the polynoms into a fitsfile (from Neil, width added)
     """
@@ -3645,6 +3650,7 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
     if np.mean(widths, axis=None) == 0 and np.std(widths, axis=None, ddof=1) == 0:
         title += ' The marked width (dashed lines) are shown for an extraction width multiplier of {0}.'.format(w_mult)
     plot_img_spec.plot_image(im, [], pctile=1, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=colorbar)
+    colors = ['r','b','g']*len(pfits)
     for pp, pf in enumerate(pfits):
             if mask[pp] == False:
                 continue
@@ -3654,8 +3660,10 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
                 yarrl = yarr - widths[pp][2]*w_mult
                 yarrr = yarr + widths[pp][2]*w_mult
             else:
-                yarrl = np.polyval(leftfit[pp, 1:], xarr - leftfit[pp, 0]) - widths[pp][0]*(w_mult-1)
-                yarrr = np.polyval(rightfit[pp, 1:], xarr- rightfit[pp, 0]) + widths[pp][1]*(w_mult-1)
+                #yarrl = np.polyval(leftfit[pp, 1:], xarr - leftfit[pp, 0]) - widths[pp][0]*(w_mult-1)
+                #yarrr = np.polyval(rightfit[pp, 1:], xarr- rightfit[pp, 0]) + widths[pp][1]*(w_mult-1)
+                yarrl = np.polyval(leftfit[pp, 1:], xarr - leftfit[pp, 0])
+                yarrr = np.polyval(rightfit[pp, 1:], xarr- rightfit[pp, 0])
                 yarrl, yarrr = adjust_width_orders(yarr, yarrl, yarrr, [w_mult, w_mult])              # Adjust width
             # Take into account the boundaries of the image
             yarr[yarr < 0] = 0
@@ -3670,9 +3678,9 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
             #if pp == 24:
             #    print 'xarr[0],xarr[-1],yarr[0],yarr[-1],yarrl[0],yarrl[-1],yarrr[0],yarrr[-1],pf',xarr[0],xarr[-1],yarr[0],yarr[-1],yarrl[0],yarrl[-1],yarrr[0],yarrr[-1],pf
 
-            frame.plot(yarr, xarr, color='r', linewidth=1)
-            frame.plot(yarrl, xarr, color='r', linewidth=1, linestyle='dashed')
-            frame.plot(yarrr, xarr, color='r', linewidth=1, linestyle='dashed')
+            frame.plot(yarr,  xarr, color=colors[pp], linewidth=1)
+            frame.plot(yarrl, xarr, color=colors[pp], linewidth=1, linestyle='dashed')
+            frame.plot(yarrr, xarr, color=colors[pp], linewidth=1, linestyle='dashed')
             frame.text(ymid, xmid, 'Order{0}'.format(pp),
                        horizontalalignment='center', verticalalignment='center',
                        rotation=90, color='g', zorder=5)
@@ -4015,92 +4023,6 @@ def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=T
     plt.close()
     return im_bck_px, params
 
-def shift_orders_UI(im, in_shift, pfits, xlows, xhighs, widths):
-    w_mult = 1
-    fig, frame = plt.subplots(1, 1)
-    def plot(frame, im, pfits, xlows, xhighs, widths, w_mult):
-        frame.clear()
-        try:
-            w_mult = float(gui3.data['width_multiplier'])
-        except:
-            w_mult = w_mult
-        try:
-            shift = float(gui3.data['shift'])
-        except:
-            shift = in_shift
-        title = ('Determine shifts between science and arc traces')
-        plot_img_spec.plot_image(scale_image_plot(im,'log10'), ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], title, return_frame=True, frame=frame, autotranspose=False, colorbar=False)
-        if widths is None:
-            widths = np.repeat([0], len(pfits))
-        for pp, pf in enumerate(pfits):
-            xarr = np.arange(xlows[pp], xhighs[pp], 1)
-            yarr = np.polyval(pf, xarr) + shift
-            yarrl = yarr - widths[pp][2]*w_mult
-            yarrr = yarr + widths[pp][2]*w_mult
-
-            yarr[yarr < 0] = 0
-            yarr[yarr > len(yarr)] = len(yarr)
-            yarrl[yarrl < 0] = 0
-            yarrl[yarrl > len(yarrl)] = len(yarrl)
-            yarrr[yarrr < 0] = 0
-            yarrr[yarrr > len(yarrr)] = len(yarrr)
-
-            ymid = np.median(yarr)
-            xmid = np.median(xarr)
-
-            frame.plot(yarr, xarr, color='r', linewidth=1)
-            frame.plot(yarrl, xarr, color='r', linewidth=1, linestyle='dashed')
-            frame.plot(yarrr, xarr, color='r', linewidth=1, linestyle='dashed')
-            frame.text(ymid, xmid, 'Order{0}'.format(pp),
-                       horizontalalignment='center', verticalalignment='center',
-                       rotation=90, color='g', zorder=5)
-        #frame.set_title(title)
-    # get kwargs
-    pkwargs = dict(frame=frame, im = im, pfits = pfits, xlows = xlows, xhighs = xhighs, widths = widths, w_mult = w_mult)
-    # run initial update plot function
-    plot(**pkwargs)
-    
-    # define valid_function
-    # input is one variable (the string input)
-    # return is either:
-    #   True and values
-    # or
-    #   False and error message
-    def vfunc(xs):
-        try:
-            value = float(xs)
-            return True, value
-        except:
-            return False, ('Error, input must consist of a float')
-    # define widgets
-    widgets = dict()
-    widgets['shift'] = dict(label='Shift science -> arc',
-                                comment='Shift between science traces and arc traces' ,
-                                kind='TextEntry', minval=0, maxval=None,
-                                fmt=str, start=str(in_shift), valid_function=vfunc,
-                                width=10)
-    widgets['width_multiplier'] = dict(label='Multiplier to the measured width',
-                                comment='The width for extractingthe arc traces,\ncompared to the width used for\nextraction of the science traces' ,
-                                kind='TextEntry', minval=0, maxval=None,
-                                fmt=str, start=str(w_mult), valid_function=vfunc,
-                                width=10)
-
-    widgets['accept'] = dict(label='Accept Map', kind='ExitButton', position=Tk.BOTTOM)
-    widgets['update'] = dict(label='Update', kind='UpdatePlot', position=Tk.BOTTOM)
-
-    wprops = dict(orientation='v', position=Tk.RIGHT)
-
-    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='Determine shifts between science and arc traces', widgets=widgets,
-                        widgetprops=wprops)
-    
-    gui3.master.mainloop()
-    
-    shift = float(gui3.data['shift'])
-    w_mult = float(gui3.data['width_multiplier'])
-    plt.close()
-    return shift, w_mult
-
 def correlate_UI(im, order, arc_settings, reference_catalog, reference_names, adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
     global oldorder
     oldorder = order
@@ -4202,7 +4124,7 @@ def correlate_UI(im, order, arc_settings, reference_catalog, reference_names, ad
             value = float(xs)
             return True, value
         except:
-            return False, ('Error, input must be integer')
+            return False, ('Error, input must be float')
             
     # define widgets
     widgets = dict()
@@ -4353,7 +4275,7 @@ def correlate_px_wave_result_UI(im, arc_lines_wavelength, reference_catalog, arc
             value = float(xs)
             return True, value
         except:
-            return False, ('Error, input must be integer')
+            return False, ('Error, input must be float')
             
     # define widgets
     widgets = dict()
@@ -5365,12 +5287,84 @@ def read_fit_wavelength_solution(params, filename, im):
     
     return wavelength_solution, np.array(wavelength_solution_arclines)
 
+
+def adjust_binning_UI(im1, binxy, userinput=True):
+    """
+    Adjusts the binning
+    """
+    if not userinput:
+        return binxy
+    
+    #sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_search_apertures'] )
+    # set up plot
+    fig, frame = plt.subplots(1, 1)
+
+    # get kwargs
+    pkwargs = dict(frame=frame, im1=im1, binxy=binxy)
+
+    # define update plot function
+    def plot(frame, im1, binxy):
+        frame.clear()
+        title = ('Adjusting the binning')
+        try:
+            binxy = [gui3.data['binx'], gui3.data['biny']]          # Fails on first step
+        except:
+            binxy = binxy
+        im_bin, dummy, dummy = bin_im(im1, binxy )
+        frame = plot_img_spec.plot_image(im_bin, 'dummy_filename', pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=False, axis_name=['Cross-dispersion axis [px]','Dispersion axis [px]','flux [ADU]'])
+    # run initial update plot function
+    plot(**pkwargs)
+
+    # define valid_function
+    # input is one variable (the string input)
+    # return is either:
+    #   True and values
+    # or
+    #   False and error message
+    def vfunc_int(xs):
+        try:
+            value = int(xs)
+            return True, value
+        except:
+            return False, ('Error, input must be integer')
+
+    # define widgets
+    widgets = dict()
+    widgets['binx'] = dict(label='Binning in\nDispersion axis',
+                           kind='TextEntry', minval=None, maxval=None,
+                           fmt=str, start=str(binxy[0]), valid_function=vfunc_int,
+                           width=10)
+    widgets['biny'] = dict(label='Binning in\nCross-dispersion axis',
+                           kind='TextEntry', minval=None, maxval=None,
+                           fmt=str, start=str(binxy[1]), valid_function=vfunc_int,
+                           width=10)
+    widgets['accept'] = dict(label='Accept Binning\nUpdate before\nAccepting',
+                             kind='ExitButton',
+                             position=Tk.BOTTOM)
+    widgets['update'] = dict(label='Update', kind='UpdatePlot',
+                             position=Tk.BOTTOM)
+                             
+    wprops = dict(orientation='v', position=Tk.RIGHT)
+
+    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
+                        title='Adjusting the binning', widgets=widgets,
+                        widgetprops=wprops)
+    gui3.master.mainloop()
+    
+    try:
+        binxy = [ int(gui3.data['binx']), int(gui3.data['biny']) ]
+    except:
+        logger('Error: Require integers for binning')
+
+    plt.close()
+    return binxy
+
 def remove_orders(pfits, rm_orders):
     """
     Remove orders by masking them
     :param pfits:
     :param rm_orders: list of integers, contains the orders to be removed
-    return mask: array of bool with the same length as original orders
+    return mask: array of bool with the same length as original orders, True for the orders to keep
     """
     mask = np.repeat([True], len(pfits))
     if type(rm_orders) is not list:
@@ -5381,13 +5375,15 @@ def remove_orders(pfits, rm_orders):
             mask[r] = False
     return mask
 
-def run_remove_orders_UI(im1, pfits, xlows, xhighs, userinput=True):
+def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, userinput=True, do_rm=False, do_adj=False, do_shft=False):
     """
-    Removes orders from the pfits array in a GUI
+    Removes orders from the pfits array in a GUI, allows to adjust the width of th extracted area
+    return fmask: array of bool with the same length as original orders, True for the orders to keep
+    return pfits: same format as pfits, with adjusted parameters for the polynomial for the left and right border
+    return widths: same format as widths, with adjusted left and right stop of the trace
     """
-    # Plot fitted orders
-    if not userinput:
-        return pfits, xlows, xhighs, True
+    if not userinput or (not do_rm and not do_adj and not do_shft):
+        return remove_orders(pfits, []), pfits         # No orders to remove, pfits stays the same
 
     # convert to numpy arrays
     pfits = np.array(pfits)
@@ -5397,18 +5393,26 @@ def run_remove_orders_UI(im1, pfits, xlows, xhighs, userinput=True):
     fig, frame = plt.subplots(1, 1)
 
     rm_orders = []
+    w_mult = 1
     # get kwargs
-    pkwargs = dict(frame=frame, im1=im1, pfits=pfits, xlows=xlows,
-                   xhighs=xhighs, rm_orders=rm_orders)
+    pkwargs = dict(frame=frame, im1=im1, pfits=pfits, xlows=xlows, xhighs=xhighs, widths=widths,
+                   w_mult=w_mult, rm_orders=rm_orders, shift=shift)
 
     # define update plot function
-    def plot(frame, im1, pfits, xlows, xhighs, rm_orders):
+    def plot(frame, im1, pfits, xlows, xhighs, widths, w_mult, rm_orders, shift):
         frame.clear()
-        title = ('Removing bad orders  \n(Largest order '
-                 'number = {0})'.format(len(pfits)))
+        title = ''
+        if do_adj:
+            title += 'Defining the width of the traces.\n'
+        if do_shft:
+            title += 'Finding the shift of the traces.\n'
+        if do_rm:
+            title += 'Removing bad orders (Largest order number = {0})\n'.format(len(pfits))
         mask = remove_orders(pfits, rm_orders)
-        frame = plot_traces_over_image(im1, 'dummy_filename', pfits, xlows, xhighs, mask=mask, frame=frame, return_frame=True)
-        frame.set_title(title)
+        pfits_shift = copy.deepcopy(pfits)
+        pfits_shift[:,:,-1] += shift        # shift all traces
+        frame = plot_traces_over_image(im1, 'dummy_filename', pfits_shift, xlows, xhighs, widths, w_mult=w_mult, mask=mask, frame=frame, return_frame=True)
+        frame.set_title(title[:-1])
 
     # run initial update plot function
     plot(**pkwargs)
@@ -5430,10 +5434,16 @@ def run_remove_orders_UI(im1, pfits, xlows, xhighs, userinput=True):
         except:
             return False, ('Error, input must consist of integers \n '
                            'separated by commas or white spaces')
-
+    def vfunc_float(xs):
+        try:
+            value = float(xs)
+            return True, value
+        except:
+            return False, ('Error, input must be float')
     # define widgets
     widgets = dict()
-    widgets['rm_orders'] = dict(label='Select orders to remove',
+    if do_rm:
+        widgets['rm_orders'] = dict(label='Select orders to remove',
                                 comment='Enter all order numbers to remove \n'
                                         'separated by a whitespace or comma \n'
                                         'to undo just delete the entered '
@@ -5441,7 +5451,23 @@ def run_remove_orders_UI(im1, pfits, xlows, xhighs, userinput=True):
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start=" ", valid_function=vfunc,
                                 width=60)
-    widgets['accept'] = dict(label='Accept Orders', kind='ExitButton',
+    if do_adj:
+        widgets['w_mult'] = dict(label='Multiplier for the\nwidth of the traces',
+                            comment='If the results are not as wished,\n'
+                                    'a modification of the parameter "width_percentile"\n'
+                                    'might help. To do this\n'
+                                    'Cancel the script with CTRL+C in the terminal\n'
+                                    'and then restart',
+                            kind='TextEntry', minval=None, maxval=None,
+                            fmt=str, start='1.0', valid_function=vfunc_float,
+                            width=10)
+    if do_shft:
+        widgets['shift'] = dict(label='Shift the traces by:',
+                            #comment='',
+                            kind='TextEntry', minval=None, maxval=None,
+                            fmt=str, start='0.0', valid_function=vfunc_float,
+                            width=10)           
+    widgets['accept'] = dict(label='Accept\n(Update\nbeforehand)', kind='ExitButton',
                              position=Tk.BOTTOM)
     widgets['update'] = dict(label='Update', kind='UpdatePlot',
                              position=Tk.BOTTOM)
@@ -5457,10 +5483,32 @@ def run_remove_orders_UI(im1, pfits, xlows, xhighs, userinput=True):
         if gui3.data['rm_orders'] is not None:
             if type(gui3.data['rm_orders']) == list:
                 rm_orders = gui3.data['rm_orders']
-
     fmask = remove_orders(pfits, rm_orders)
+    
+    if 'w_mult' in gui3.data:
+        w_mult = float(gui3.data['w_mult'])
+        leftfit = pfits[:,1,:]
+        rightfit = pfits[:,2,:]
+        cenfits = pfits[:,0,:]
+        for pp in range(len(pfits)):
+            if fmask[pp] == False:
+                continue
+            xarr = np.arange(xlows[pp], xhighs[pp], 1)
+            yarr =  np.polyval(pfits[pp, 0, 1:], xarr - pfits[pp, 0, 0])
+            yarrl = np.polyval(pfits[pp, 1, 1:], xarr - pfits[pp, 1, 0])
+            yarrr = np.polyval(pfits[pp, 2, 1:], xarr - pfits[pp, 2, 0])
+            yarrl, yarrr = adjust_width_orders(yarr, yarrl, yarrr, [w_mult, w_mult])             # Adjust width
+            pfits[pp,1,1:] = np.polyfit( xarr - pfits[pp, 1, 0], yarrl, len(pfits[pp, 1, 1:])-1 )
+            pfits[pp,2,1:] = np.polyfit( xarr - pfits[pp, 2, 0], yarrr, len(pfits[pp, 2, 1:])-1 )
+        widths[:,0] = pfits[:,1,-1]
+        widths[:,1] = pfits[:,2,-1]
+        
+    if 'shift' in gui3.data:
+        shift = float(gui3.data['shift'])
+        pfits[:,:,-1] += shift
+    
     plt.close()
-    return fmask
+    return fmask, pfits, widths
 
 def plot_gauss_data_center(datapoints_x, datapoints, label_datapoins, gauss, label_gauss, centroids, label_centroids, filename='', title=''):
     """

@@ -390,7 +390,7 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
             return False, ('Error, input must consist of integers \n '
                            'separated by commas or white spaces')
     def vfunc_bool(xs):
-        if xs.lower() in ['true']:
+        if xs.lower() in ['true', 'yes']:
             xs = True
         else:
             xs = False
