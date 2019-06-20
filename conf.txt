@@ -19,8 +19,8 @@
 
   ## General parameters:
   #---------------------
-  # GUI: allows userinput for some of the steps (experimental, not tested for long time)
-GUI = False
+  # GUI: allows userinput for some of the steps (tracing the echelle orders)
+GUI = True
 
 
   # The folder where the raw data is stored. All file names given in this section need to be given relative to this path, e.g. with leading subfolder if data is stored in a subfolder.

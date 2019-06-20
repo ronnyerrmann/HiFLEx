@@ -1667,7 +1667,7 @@ def find_center(imslice, oldcenter, x, maxFWHM, border_pctl=0, significance=3.0,
         width = popt[2]
         if border_pctl > 0:
             left, right = find_border_pctl(sub_slice, border_pctl=border_pctl)          # left, right in terms of sub_slices pixels
-            rightmin = right + leftmin
+            rightmin = right + leftmin      # leftmin as this is the zero-point in sub_slice
             leftmin = left + leftmin
 
     return centerfit, width, leftmin,rightmin
@@ -2000,18 +2000,18 @@ def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
             #    print center,oldcenter,i, leftmin,rightmin
             if width != 0 and abs(center-oldcenter)<maxshift:
                 #print 'maxFWHM,order,j,i,leftmin,center, rightmin, width',maxFWHM,order,j,i,leftmin,center, rightmin, width
-                positions.append([i, center,0])
-                if leftmin < center-width*2.35482*3 or leftmin > center:        # unreasonable small position
+                if leftmin < center-width*2.35482*3 or leftmin > center:        # unreasonable small position (3xFWHM)
                     leftmin = np.nan
-                if rightmin > center+width*2.35482*3 or rightmin < center:      # unreasonable large position
+                if rightmin > center+width*2.35482*3 or rightmin < center:      # unreasonable large position (3xFWHM)
                     rightmin = np.nan
                 #leftmin = max(leftmin, center-width*2.35482*3)          # anything bigger than 
                 #rightmin = min(rightmin, center+width*2.35482*3)
-                widths_o.append([i, leftmin, rightmin, width])         # leftmin and rightmin are positions, they are transformed into a width below
+                positions.append([i, center, 0, leftmin, rightmin])                 # leftmin and rightmin are positions
+                widths_o.append([i, center-leftmin, rightmin-center, width])        # center-leftmin, rightmin-center are widths
                 lastadd = i
                 shifts.append(center-oldcenter)
             elif oldcenter > -maxFWHM and i-lastadd == 10:          # If inside the image add the center after every 10 data points
-                positions.append([i, oldcenter,1])
+                positions.append([i, oldcenter, 1, np.nan, np.nan])
                 lastadd = i
             #else:
             #    print center, oldcenter, maxshift, maxFWHM
@@ -2034,18 +2034,18 @@ def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
         pfs = np.polyfit(positions[:,0]*binx - cen_px, positions[:,1]*biny, params['polynom_order_apertures'])
         #centerfit.append(pfs)
         # Fit the borders
-        good_vaules = ~np.isnan(widths_o[:,1])
-        if sum(good_vaules) > len(good_vaules)/20.:
-            leftfit =  np.polyfit(widths_o[good_vaules,0]*binx - cen_px, widths_o[good_vaules,1]*biny, params['polynom_order_apertures'])
-            widthleft = np.nanmean(percentile_list(widths_o[:,1],0.1))
+        good_vaules = ~np.isnan(positions[:,3])
+        if sum(good_vaules) > len(good_vaules)*0.05:        # Position available at least 5% of positions
+            leftfit =  np.polyfit(positions[good_vaules,0]*binx - cen_px, positions[good_vaules,3]*biny, params['polynom_order_apertures'])
+            widthleft = np.nanmean(percentile_list(widths_o[:,1],0.1))          # Average of the widths except the 10% highest and lowest
         else:                                                   # left side at FWHM of line
             widthleft = np.nanmean(percentile_list(widths_o[:,3],0.1)) * 2.35482
             leftfit = copy.deepcopy(pfs)
             leftfit[-1] -= widthleft
-        good_vaules = ~np.isnan(widths_o[:,2])
-        if sum(good_vaules) > len(good_vaules)/20.:
-            rightfit = np.polyfit(widths_o[good_vaules,0]*binx - cen_px, widths_o[good_vaules,2]*biny, params['polynom_order_apertures'])
-            widthright = np.nanmean(percentile_list(widths_o[:,2],0.1))
+        good_vaules = ~np.isnan(positions[:,4])
+        if sum(good_vaules) > len(good_vaules)*0.05:        # Position available at least 5% of positions
+            rightfit = np.polyfit(positions[good_vaules,0]*binx - cen_px, positions[good_vaules,4]*biny, params['polynom_order_apertures'])
+            widthright = np.nanmean(percentile_list(widths_o[:,2],0.1))         # Average of the widths except the 10% highest and lowest
         else:                                                   # left side at FWHM of line
             widthright = np.nanmean(percentile_list(widths_o[:,3],0.1)) * 2.35482
             rightfit = copy.deepcopy(pfs)
@@ -2062,12 +2062,14 @@ def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
     """traces = np.array(traces)"""
     if len(widths) == 0:
         logger('Error: When adjusting the traces, all traces were rejected due to poor fit. '+\
-                'Please check the binned image {0}: Is the orientation and the binning right? Are the orders covering at least half of the CCD (in dispersion correction)'.format(params['logging_trace1_binned'])+\
+               'Please check the binned image {0}: Is the orientation and the binning right? Are the orders covering at least half of the CCD (in dispersion correction)'.format(params['logging_trace1_binned'])+\
                'Please check that the right image was used to search for the traces (e.g. {0}) '.format(params['logging_traces_im_binned'])+\
                'After you selected different file(s) for parameter "trace1_rawfiles", please run the following command before restarting the pipeline'+\
                '\nrm {0} {1}'.format( params['logging_traces_binned'], params['master_trace1_filename'] ))
-    logger('Info: traces of the {0} apertures adjusted. The average shift of the individual apertures was between {1} and {2} pixel between the searching of the traces and this solution. The maximum allowed shift was {3} pixel.'.format(len(centerfit), np.round(np.min(avg_shifts),1), np.round(np.max(avg_shifts),1), np.round(maxshift,1) ))
-
+    logger( ('Info: traces of the {0} apertures adjusted. The average shift of the individual apertures was between '+\
+             '{1} and {2} pixel between the searching of the traces and this solution. '+\
+             'The maximum allowed shift was {3} pixel.').format(len(centerfit), np.round(np.min(avg_shifts),1), np.round(np.max(avg_shifts),1), np.round(maxshift,1) ))
+    
     return np.array(centerfit), np.array(xlows).astype(int), np.array(xhighs).astype(int), np.array(widths)
 
 def adjust_width_orders(center, left, right, w_mult):
@@ -2308,21 +2310,23 @@ def shift_orders(im, params, sci_tr_poly, xlows, xhighs, oldwidths, in_shift = 0
     problem_order = []
     shift_map = np.zeros((im.shape[0],sci_tr_poly.shape[0]))
     logger('Step: Searching for shifts of the orders', show=False) 
-    for i in tqdm(range(sci_tr_poly.shape[0]), desc='Searching for shifts of the orders'):       # For each order
-        xarr = range(int(xlows[i]),int(xhighs[i]),steps)
-        yarr = np.polyval(sci_tr_poly[i, 0, 1:], xarr-sci_tr_poly[i, 0, 0])+in_shift          #apply input shift
+    for order in tqdm(range(sci_tr_poly.shape[0]), desc='Searching for shifts of the orders'):       # For each order
+        xarr = range(int(xlows[order]),int(xhighs[order]),steps)
+        yarr = np.polyval(sci_tr_poly[order, 0, 1:], xarr-sci_tr_poly[order, 0, 0])+in_shift          #apply input shift
         widths = []
-        for j,oldcenter in enumerate(yarr):        #each pixel
-            center, width, leftmin,rightmin = find_center(im[xarr[j],:], int(round(oldcenter)), xarr[j], 2*params['maxshift_orders'], border_pctl=params['width_percentile'], significance=3.0)
+        for px,oldcenter in enumerate(yarr):        #each pixel
+            center, width, leftmin,rightmin = find_center(im[xarr[px],:], int(round(oldcenter)), xarr[px], 2*params['maxshift_orders'], border_pctl=0, significance=3.0)
+            if width*2.35482*3 < 2*params['maxshift_orders']:
+                center, width, leftmin,rightmin = find_center(im[xarr[px],:], int(round(center)),    xarr[px], width*2.35482*3, border_pctl=params['width_percentile'], significance=3.0)
             #if width != 0:
-            #    print 'i,j,center, width, leftmin,rightmin',i,j,center, width, leftmin,rightmin
+            #    print 'order,px,center, width, leftmin,rightmin',order,px,center, width, leftmin,rightmin
             if width != 0 and abs(center-oldcenter) < params['maxshift_orders']:
                 widths.append([center-leftmin,rightmin-center, width])
                 shifts.append(center-oldcenter)
-                shift_map[max(0,int(xarr[j]-steps/2)):min(im.shape[0],int(xarr[j]+steps/2))+1,i] = center-oldcenter
+                shift_map[max(0,int(xarr[px]-steps/2)):min(im.shape[0],int(xarr[px]+steps/2))+1,order] = center-oldcenter
         if widths == []:
-            twidths.append(oldwidths[i])
-            problem_order.append(i)
+            twidths.append(oldwidths[order])
+            problem_order.append(order)
             continue
         widths = np.array(widths)
         width = [np.mean(percentile_list(widths[:,0],0.1)), np.mean(percentile_list(widths[:,1],0.1)), np.mean(percentile_list(widths[:,2],0.1))]      #average left, right, and gaussian width
@@ -2363,6 +2367,7 @@ def find_bck_px(im, pfits, xlows, xhighs, widths, w_mult):
     im = im*0+1
     ims = im.shape
     #xarr = range(0,ims[0])
+    # pfits, widths = update_tr_poly_width_multiplicate(pfits, widths, [w_mult, w_mult], xlows-10, xhighs+10) # not suitable as calculation has to be done again
     for pp in range(pfits.shape[0]):
         xarr = range(max(0,xlows[pp]-10),min(ims[0],xhighs[pp]+10))             # extend the area slightly
         yarr = np.polyval(pfits[pp, 0, 1:], xarr-pfits[pp, 0, 0])
@@ -3056,7 +3061,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
         # make flat smaller: combine px in spatial direction
         params['bin_search_apertures'] = adjust_binning_UI(im_sflat, params['bin_search_apertures'], userinput=params['GUI'])
         params['binx'], params['biny'] = params['bin_search_apertures']             # Required for find_trace_orders        
-        sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_search_apertures'] )
+        sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_search_apertures'], method='mean' )
         save_im_fits(params, sim_sflat, im_sflat_head, params['logging_trace1_binned'])
      
         # Search for orders in the small image
@@ -3092,6 +3097,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
         printarrayformat = ['%1.1i','%3.1f', '%3.1f', '%4.2f\t','%1.1i','%1.1i','%1.1i']
         logger('\t\torder\tleft\tright\tgausswidth\tpositio\tmin_tr\tmax_tr\t(positio at the center of the image)',printarrayformat=printarrayformat, printarray=data)
     """        
+
     return polyfits, xlows, xhighs, widths
 
 def prepare_measure_background_noise(params, im, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths):
@@ -3672,9 +3678,9 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
             yarrl[yarrl > ims[1]] = ims[1]
             yarrr[yarrr < 0] = 0
             yarrr[yarrr > ims[1]] = ims[1]
-
-            ymid = np.median(yarr)
-            xmid = np.median(xarr)
+            mid_pos = int(len(xarr)/2)
+            ymid = yarr[mid_pos]
+            xmid = xarr[mid_pos]
             #if pp == 24:
             #    print 'xarr[0],xarr[-1],yarr[0],yarr[-1],yarrl[0],yarrl[-1],yarrr[0],yarrr[-1],pf',xarr[0],xarr[-1],yarr[0],yarr[-1],yarrl[0],yarrl[-1],yarrr[0],yarrr[-1],pf
 
@@ -3683,7 +3689,7 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
             frame.plot(yarrr, xarr, color=colors[pp], linewidth=1, linestyle='dashed')
             frame.text(ymid, xmid, 'Order{0}'.format(pp),
                        horizontalalignment='center', verticalalignment='center',
-                       rotation=90, color='g', zorder=5)
+                       rotation=90, color=colors[pp], zorder=5)
     if return_frame:
         return frame
     fig.set_size_inches(42, 42)        
@@ -5359,6 +5365,38 @@ def adjust_binning_UI(im1, binxy, userinput=True):
     plt.close()
     return binxy
 
+def get_leftwidth_rightwidth_tr_poly(centre, left, right):
+    w_left  = np.median(centre-left)
+    w_right = np.median(right-centre)
+    return [w_left, w_right]
+
+def update_tr_poly_width_multiplicate(tr_poly, widths, w_mults, xlows, xhighs):
+    """
+    Adjusts the polinomial fits for the trace of the order after the extraction width changed.
+    Also modifies the widths
+    :params w_mults: 1d-list of two floats or 2d-array/list of floats. In the first case gives the multiplicator to left an right borders of the trace
+                                    In the second case gives for each order the multiplicator to left an right borders of the trace. Shape needs to be (orders,2)
+    """
+    w_mults = np.array(w_mults)
+    if len(w_mults.shape) == 1:
+        w_mults = np.repeat([w_mults],len(tr_poly), axis=0)
+    else:
+        if w_mults.shape[0] != len(tr_poly) and w_mults.shape[1] == len(tr_poly) and w_mults.shape[0] == 2:       # Transpose if necessay
+            w_mults = w_mults.T
+        if w_mults.shape[0] != len(tr_poly) or w_mults.shape[1] != 2:
+            logger('Error: Expected w_mults.shape = ({0}, {1}) or ({1}, {0}), but got {2}. This is probably a programming error.'.format( len(tr_poly), 2, w_mults.shape ))
+    for order in range(len(tr_poly)):
+        xarr = np.arange(xlows[order], xhighs[order], 1)
+        yarr =  np.polyval(tr_poly[order, 0, 1:], xarr - tr_poly[order, 0, 0])
+        yarrl = np.polyval(tr_poly[order, 1, 1:], xarr - tr_poly[order, 1, 0])
+        yarrr = np.polyval(tr_poly[order, 2, 1:], xarr - tr_poly[order, 2, 0])
+        yarrl, yarrr = adjust_width_orders(yarr, yarrl, yarrr, w_mults[order,:])             # Adjust width
+        tr_poly[order,1,1:] = np.polyfit( xarr - tr_poly[order, 1, 0], yarrl, len(tr_poly[order, 1, 1:])-1 )
+        tr_poly[order,2,1:] = np.polyfit( xarr - tr_poly[order, 2, 0], yarrr, len(tr_poly[order, 2, 1:])-1 )
+        widths[order,0:2] = get_leftwidth_rightwidth_tr_poly(yarr, yarrl, yarrr)
+    
+    return tr_poly, widths
+
 def remove_orders(pfits, rm_orders):
     """
     Remove orders by masking them
@@ -5410,7 +5448,10 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
             title += 'Removing bad orders (Largest order number = {0})\n'.format(len(pfits))
         mask = remove_orders(pfits, rm_orders)
         pfits_shift = copy.deepcopy(pfits)
-        pfits_shift[:,:,-1] += shift        # shift all traces
+        if len(pfits_shift.shape) == 3:
+            pfits_shift[:,:,-1] += shift        # shift all traces
+        else:
+            pfits_shift[:,-1] += shift          # shift all traces
         frame = plot_traces_over_image(im1, 'dummy_filename', pfits_shift, xlows, xhighs, widths, w_mult=w_mult, mask=mask, frame=frame, return_frame=True)
         frame.set_title(title[:-1])
 
@@ -5450,7 +5491,7 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
                                         'number',
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start=" ", valid_function=vfunc,
-                                width=60)
+                                width=40)
     if do_adj:
         widgets['w_mult'] = dict(label='Multiplier for the\nwidth of the traces',
                             comment='If the results are not as wished,\n'
@@ -5485,27 +5526,16 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
                 rm_orders = gui3.data['rm_orders']
     fmask = remove_orders(pfits, rm_orders)
     
-    if 'w_mult' in gui3.data:
+    if 'w_mult' in gui3.data and len(pfits.shape) == 3:
         w_mult = float(gui3.data['w_mult'])
-        leftfit = pfits[:,1,:]
-        rightfit = pfits[:,2,:]
-        cenfits = pfits[:,0,:]
-        for pp in range(len(pfits)):
-            if fmask[pp] == False:
-                continue
-            xarr = np.arange(xlows[pp], xhighs[pp], 1)
-            yarr =  np.polyval(pfits[pp, 0, 1:], xarr - pfits[pp, 0, 0])
-            yarrl = np.polyval(pfits[pp, 1, 1:], xarr - pfits[pp, 1, 0])
-            yarrr = np.polyval(pfits[pp, 2, 1:], xarr - pfits[pp, 2, 0])
-            yarrl, yarrr = adjust_width_orders(yarr, yarrl, yarrr, [w_mult, w_mult])             # Adjust width
-            pfits[pp,1,1:] = np.polyfit( xarr - pfits[pp, 1, 0], yarrl, len(pfits[pp, 1, 1:])-1 )
-            pfits[pp,2,1:] = np.polyfit( xarr - pfits[pp, 2, 0], yarrr, len(pfits[pp, 2, 1:])-1 )
-        widths[:,0] = pfits[:,1,-1]
-        widths[:,1] = pfits[:,2,-1]
+        pfits, widths = update_tr_poly_width_multiplicate(pfits, widths, [w_mult, w_mult], xlows, xhighs)
         
     if 'shift' in gui3.data:
         shift = float(gui3.data['shift'])
-        pfits[:,:,-1] += shift
+        if len(pfits_shift.shape) == 3:
+            pfits_shift[:,:,-1] += shift        # shift all traces
+        else:
+            pfits_shift[:,-1] += shift          # shift all traces
     
     plt.close()
     return fmask, pfits, widths

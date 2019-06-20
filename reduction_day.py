@@ -44,22 +44,14 @@ if __name__ == "__main__":
             save_im_fits(params, shift_map, im_trace1_head, params['logging_map_shift_orders'])
         else:
             shift_error = -1
-        if shift_error > 1 or shift_error == -1 or abs(shift) > params['maxshift']:
+        if shift_error > 1 or shift_error == -1 or abs(shift) > params['maxshift_orders']:
             logger('Warn: The deviation of the shift of the orders seems too big or no previous solution was available, therefore searching for the position of the orders from scratch:')
             sci_tr_poly, xlows, xhighs, widths = find_adjust_trace_orders(params, im_trace1, im_trace1_head)
             printresults = True
         else:
-            # update the sci_tr_poly parameters
-            sci_tr_poly[:,:,-1] += shift
+            sci_tr_poly[:,:,-1] += shift                # update the sci_tr_poly parameters
             if params['update_width_orders'] == True:
-                for order in range(sci_tr_poly.shape[0]):
-                    xarr = list(range(xlows[order], xhighs[order]))
-                    center = np.polyval(sci_tr_poly[order, 0, 1:], xarr-sci_tr_poly[order, 0, 0])
-                    left   = np.polyval(sci_tr_poly[order, 1, 1:], xarr-sci_tr_poly[order, 1, 0])
-                    right  = np.polyval(sci_tr_poly[order, 2, 1:], xarr-sci_tr_poly[order, 2, 0])
-                    left, right = adjust_width_orders(center, left, right, [widths_new[order,0]/widths[order,0], widths_new[order,1]/widths[order,1] ] )
-                    sci_tr_poly[order, 1, 1:] = np.polyfit(xarr - sci_tr_poly[order, 1, 0], left, len(sci_tr_poly[order, 1, 1:])-1 )
-                    sci_tr_poly[order, 2, 1:] = np.polyfit(xarr - sci_tr_poly[order, 2, 0], right, len(sci_tr_poly[order, 2, 1:])-1 )
+                sci_tr_poly, widths = update_tr_poly_width_multiplicate(sci_tr_poly, widths, [widths_new[:,0]/widths[:,0], widths_new[:,1]/widths[:,1]], xlows, xhighs)
                 widths = widths_new
                 logger('Info: widths of the traces have been updated')
             dummy, sci_tr_poly, widths = remove_adjust_orders_UI( scale_image_plot(im_trace1, 'log10'), sci_tr_poly, xlows, xhighs, widths, userinput=params['GUI'], do_adj=True)
