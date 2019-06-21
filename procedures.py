@@ -4029,7 +4029,7 @@ def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=T
     plt.close()
     return im_bck_px, params
 
-def correlate_UI(im, order, arc_settings, reference_catalog, reference_names, adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
+def correlate_UI(im, order, arc_settings, reference_catalog, reference_names, adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):      # not used anymore
     global oldorder
     oldorder = order
     
@@ -5304,7 +5304,7 @@ def adjust_binning_UI(im1, binxy, userinput=True):
     #sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_search_apertures'] )
     # set up plot
     fig, frame = plt.subplots(1, 1)
-
+    fig.set_size_inches(10, 7.5, forward=True)
     # get kwargs
     pkwargs = dict(frame=frame, im1=im1, binxy=binxy)
 
@@ -5317,7 +5317,9 @@ def adjust_binning_UI(im1, binxy, userinput=True):
         except:
             binxy = binxy
         im_bin, dummy, dummy = bin_im(im1, binxy )
-        frame = plot_img_spec.plot_image(im_bin, 'dummy_filename', pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=False, axis_name=['Cross-dispersion axis [px]','Dispersion axis [px]','flux [ADU]'])
+        frame = plot_img_spec.plot_image(im_bin, 'dummy_filename', pctile=0, show=False, adjust=[0.07,0.95,0.95,0.07], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=False, axis_name=['Cross-dispersion axis [px]','Dispersion axis [px]','flux [ADU]'])
+    def result(frame, im1, binxy):
+        return binxy
     # run initial update plot function
     plot(**pkwargs)
 
@@ -5338,13 +5340,13 @@ def adjust_binning_UI(im1, binxy, userinput=True):
     widgets = dict()
     widgets['binx'] = dict(label='Binning in\nDispersion axis',
                            kind='TextEntry', minval=None, maxval=None,
-                           fmt=str, start=str(binxy[0]), valid_function=vfunc_int,
+                           fmt=str, start=binxy[0], valid_function=vfunc_int,
                            width=10)
     widgets['biny'] = dict(label='Binning in\nCross-dispersion axis',
                            kind='TextEntry', minval=None, maxval=None,
-                           fmt=str, start=str(binxy[1]), valid_function=vfunc_int,
+                           fmt=str, start=binxy[1], valid_function=vfunc_int,
                            width=10)
-    widgets['accept'] = dict(label='Accept Binning\nUpdate before\nAccepting',
+    widgets['accept'] = dict(label='Accept Binning',
                              kind='ExitButton',
                              position=Tk.BOTTOM)
     widgets['update'] = dict(label='Update', kind='UpdatePlot',
@@ -5357,11 +5359,9 @@ def adjust_binning_UI(im1, binxy, userinput=True):
                         widgetprops=wprops)
     gui3.master.mainloop()
     
-    try:
-        binxy = [ int(gui3.data['binx']), int(gui3.data['biny']) ]
-    except:
-        logger('Error: Require integers for binning')
-
+    #binxy = pkwargs['binxy']       # This doesn't work, pkwargs are only updated within the plot function
+    binxy = [ gui3.data['binx'], gui3.data['biny'] ]
+    
     plt.close()
     return binxy
 
@@ -5429,7 +5429,7 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
 
     # set up plot
     fig, frame = plt.subplots(1, 1)
-
+    fig.set_size_inches(10, 7.5, forward=True)
     rm_orders = []
     w_mult = 1
     # get kwargs
@@ -5500,15 +5500,15 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
                                     'Cancel the script with CTRL+C in the terminal\n'
                                     'and then restart',
                             kind='TextEntry', minval=None, maxval=None,
-                            fmt=str, start='1.0', valid_function=vfunc_float,
+                            fmt=float, start=1.0, valid_function=vfunc_float,
                             width=10)
     if do_shft:
         widgets['shift'] = dict(label='Shift the traces by:',
                             #comment='',
                             kind='TextEntry', minval=None, maxval=None,
-                            fmt=str, start='0.0', valid_function=vfunc_float,
+                            fmt=float, start=0.0, valid_function=vfunc_float,
                             width=10)           
-    widgets['accept'] = dict(label='Accept\n(Update\nbeforehand)', kind='ExitButton',
+    widgets['accept'] = dict(label='Accept', kind='ExitButton',
                              position=Tk.BOTTOM)
     widgets['update'] = dict(label='Update', kind='UpdatePlot',
                              position=Tk.BOTTOM)
@@ -5521,17 +5521,15 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
     gui3.master.mainloop()
 
     if 'rm_orders' in gui3.data:
-        if gui3.data['rm_orders'] is not None:
-            if type(gui3.data['rm_orders']) == list:
-                rm_orders = gui3.data['rm_orders']
+        rm_orders = gui3.data['rm_orders']
     fmask = remove_orders(pfits, rm_orders)
     
     if 'w_mult' in gui3.data and len(pfits.shape) == 3:
-        w_mult = float(gui3.data['w_mult'])
+        w_mult = gui3.data['w_mult']
         pfits, widths = update_tr_poly_width_multiplicate(pfits, widths, [w_mult, w_mult], xlows, xhighs)
         
     if 'shift' in gui3.data:
-        shift = float(gui3.data['shift'])
+        shift = gui3.data['shift']
         if len(pfits_shift.shape) == 3:
             pfits_shift[:,:,-1] += shift        # shift all traces
         else:

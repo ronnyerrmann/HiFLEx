@@ -137,7 +137,7 @@ class TkCanvas:
             onclick = widgets[widget].get('onclick', None)
             vfunc = widgets[widget].get('valid_function', None)
             width = widgets[widget].get('width', 10)
-
+            
             if kind == 'TextEntry':
                 if name not in self.data:
                     self.data[name] = start
@@ -145,6 +145,11 @@ class TkCanvas:
                                        position=pos, minval=minval,
                                        maxval=maxval, comment=comment,
                                        valid_function=vfunc, width=width)
+            elif kind == 'CheckBox':                    #added by ronny
+                if name not in self.data:                #added by ronny
+                    self.data[name] = start                #added by ronny
+                w = self.add_CheckBox(parent, name=name, desc=label,
+                                      position=pos, comment=comment)                #added by ronny
             elif kind == 'ExitButton':
                 if result is not None:
                     self.data[name] = result
@@ -156,10 +161,6 @@ class TkCanvas:
                                         command=lambda name=name:
                                                 self.valueend(name),
                                         side=pos)
-            elif kind == 'CheckBox':                    #added by ronny
-                if name not in self.data:                #added by ronny
-                    self.data[name] = start                #added by ronny
-                w = self.add_checkbox(parent, name=name, text=label)                #added by ronny
             elif kind == 'UpdatePlot':
                 w = self.add_button(parent, label, self.update,
                                     side=pos)
@@ -224,6 +225,20 @@ class TkCanvas:
         # self.allbind(entry, self.update)
         return entry
 
+    def add_CheckBox(self, master, name, desc, position, **kwargs):     # added by ronny
+        width = kwargs.get('width', 10)
+        side = kwargs.get('side', None)
+        padx = kwargs.get('padx', 5)
+        pady = kwargs.get('pady', 2)
+        self.entries[name] = Tk.IntVar()                                # added by ronny
+        self.funcs[name] = lambda x: x                                  # added by ronny
+        checkbox = Tk.Checkbutton(master=self.master, text=desc, variable=self.entries[name], onvalue=True, offvalue=False)     # added by ronny, variable has to be set before, different to TextEntry
+        checkbox.pack(in_=master, side=side, padx=padx, pady=pady)
+        self.entries[name].set(self.data[name])                         # added by ronny, set the startvalue
+        self.validation[name] = True
+        self.fmts[name] = bool
+        return checkbox     # added by ronny
+        
     def add_button(self, master, text, command, **kwargs):
 
         background = kwargs.get('background', 'white')
@@ -238,32 +253,6 @@ class TkCanvas:
                            width=width)
         button.pack(in_=master, side=side, padx=padx, pady=pady)
         return button
-    
-    def add_checkbox(self, master, name, text, **kwargs):     # added by ronny
-        width = kwargs.get('width', 10)
-        padx = kwargs.get('padx', 5)
-        pady = kwargs.get('pady', 2)
-        comment = kwargs.get('comment', None)
-        
-        # first make a frame to contain all elements
-        #tframe = Tk.Frame(master)
-        #tframe.pack(side=position, pady=10)
-
-        # set initial value
-        #labelv = Tk.StringVar(value=desc)
-        #label = Tk.Label(tframe, textvariable=labelv)
-        #label.pack(side=Tk.TOP)
-        #label.config(font=("Times", 12))
-        #if comment is not None:
-        #    commentv = Tk.StringVar(value=comment)
-        #    comment = Tk.Label(tframe, textvariable=commentv)
-        #    comment.pack(side=Tk.TOP)
-        #    comment.config(font=("Times", 10))
-        entryv = self.data[name]
-        checkbox = Tk.Checkbutton(master=self.master, text=text, variable=entryv, onvalue=1, offvalue=False)     # added by ronny
-        checkbox.pack(side=Tk.BOTTOM, padx=padx, pady=pady)
-        return checkbox     # added by ronny
-        
     
     def prompt(self, message):
         top = Tk.Toplevel(master=self.master)
@@ -303,13 +292,16 @@ class TkCanvas:
     # -------------------------------------------------------------------------
     # Events, Updates and Validation
     # -------------------------------------------------------------------------
-    def end(self, event=None):
+    def end(self, event=None):          # Run wenn clicking the ExitButton
         """
         Event for clicking the finish button - closes the graph
 
         :return:
         """
+        self.update()   # Update everything (first gui3.data, afterwards kwargs (self.update() calls self.update_plot()) before exiting - Added by Ronny
+        
         self.master.quit()
+        time.sleep(1)
         self.master.destroy()
 
     def valueend(self, name):
@@ -321,9 +313,10 @@ class TkCanvas:
         if name in self.onclickvalue:
             if self.onclickvalue is not None:
                 self.data[name] = self.onclickvalue[name]
+        self.update()   # Update everything (first gui3.data, afterwards kwargs (self.update() calls self.update_plot()) before exiting - Added by Ronny
+        
         self.master.quit()
         self.master.destroy()
-
 
     def allbind(self, entry, update):
         entry.bind('<FocusOut>', update)
@@ -344,7 +337,6 @@ class TkCanvas:
         else:
             self.funcs[name] = lambda x: x
 
-
     def update(self, event=None):
         for name in self.entries:
             value = self.entries[name].get()
@@ -354,7 +346,9 @@ class TkCanvas:
                 if not self.validation[name]:
                     continue
                 if self.validate_fmt(value, fmt):
-                    self.data[name] = F(fmt(value))
+                    new = F(fmt(value))             # Added by Ronny
+                    if new is not None:             # Added by Ronny
+                        self.data[name] = new       # Modified by Ronny
         self.update_plot()
 
     def update_plot(self):
@@ -513,15 +507,17 @@ if __name__ == "__main__":
 
     fig, frame = plt.subplots(nrows=1, ncols=1)
     xlow, xhigh = 0.0, 3.0
+    testronny, testronny2 = False, True
 
-    def plot(ax, xlow, xhigh):
+    def plot(ax, xlow, xhigh, testronny, testronny2):
         ax.clear()
         x = np.arange(xlow, xhigh, 0.01)
         y = np.sin(2 * np.pi * x)
         ax.plot(x, y)
         ax.set(xlabel='x', ylabel='y')
+        print testronny,testronny2
 
-    pkwargs = dict(ax=frame, xlow=xlow, xhigh=xhigh)
+    pkwargs = dict(ax=frame, xlow=xlow, xhigh=xhigh, testronny=testronny, testronny2=testronny2)
 
     plot(**pkwargs)
 
@@ -530,13 +526,18 @@ if __name__ == "__main__":
     widgets['xlow'] = dict(label='Enter x low', comment='-20 < x low < 20',
                            kind='TextEntry',
                            minval=-20, maxval=+20, fmt=float, start=xlow)
+    widgets['testronny'] = dict(label='Test for Checkbox',
+                           kind='CheckBox', start=testronny)
     widgets['xhigh'] = dict(label='Enter x high', comment='-20 < x low < 20',
                             kind='TextEntry',
                             minval=-20, maxval=+20, fmt=float, start=xhigh)
+    widgets['testronny2'] = dict(label='Test for Checkbox2',
+                           kind='CheckBox', start=testronny2)
     widgets['close'] = dict(label='Next', kind='ExitButton',
                             position=Tk.BOTTOM, result='Close')
     widgets['update'] = dict(label='Update', kind='UpdatePlot',
                              position=Tk.BOTTOM)
+    
 
     wprops = dict(orientation='v')
 

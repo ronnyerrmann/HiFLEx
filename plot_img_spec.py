@@ -219,8 +219,7 @@ def load_obj(name ):
         return pickle.load(f)
 
 def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
-    param=dict()
-    
+
     ims = im.shape
     iml = len(ims)
     
@@ -231,10 +230,11 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
     fig, frame = plt.subplots(1, 1)
     plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
     
-    def plot(frame, im, settings):
+    def plot(**param):
+        frame, im = param['frame'], param['im']
         x_range, y_range, old_xlabel_text = copy.copy(frame.get_xlim()), copy.copy(frame.get_ylim()), copy.copy(frame.get_xlabel())
         frame.clear()
-        for i in range(iml-1):
+        """for i in range(iml-1):
             try:
                 param['plot_sub_{0}'.format(i)] = gui3.data['plot_sub_{0}'.format(i)]
                 param['exclude_{0}'.format(i)] = gui3.data['exclude_{0}'.format(i)]
@@ -256,7 +256,7 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
             reset_plot = gui3.data['reset_plot']
             gui3.ws[-3].delete(0, 200)              #clear the text field
         except:
-            reset_plot = ''
+            reset_plot = ''"""
         param['name_data_-1'] = ['data']
         param['data'] = im
         for j in range(0,iml-1):
@@ -280,7 +280,7 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
             for data_entry in tqdm(param['name_data_{0}'.format(iml-1-1)]):
                 data_label = data_entry.replace('data_','')
                 data = np.array(param[data_entry], float)
-                if wavelength_plot == 'w' or wavelength_plot == 'wl' or wavelength_plot == 'lw':
+                if param['wavelength_plot'] == 'w' or param['wavelength_plot'] == 'wl' or param['wavelength_plot'] == 'lw':
                     data_entry_w = data_entry.rsplit('_',iml-2)                     # iml-2 should be 2 for nomal images
                     if iml == 4:                                      # for normal images
                         data_entry_w = data_entry_w[0]+'_0_'+data_entry_w[2]        # Select the wavelength in the data file
@@ -307,13 +307,13 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                 # Create the full signal
                 data = A * np.sin(omega * x_axis + phi)"""
 
-                if wavelength_plot == 'f':    # make a fft
+                if param['wavelength_plot'] == 'f':    # make a fft
                     x_axis = np.fft.fftfreq(len(data))
                     data = np.abs(np.fft.fft(data))         # px -> 1/px (dT -> f = 1/dT)
                     good_values = list(range(1,int(len(data)/2)))      # 0 contains the sum of the data, and n/2+1 the negative frequencies
                     data = data * 2 / data.shape[0]
                     data, x_axis = data[good_values], 1/x_axis[good_values]
-                elif wavelength_plot == 'l' or wavelength_plot == 'wl' or wavelength_plot == 'lw':       # http://joseph-long.com/writing/recovering-signals-from-unevenly-sampled-data/
+                elif param['wavelength_plot'] == 'l' or param['wavelength_plot'] == 'wl' or param['wavelength_plot'] == 'lw':       # http://joseph-long.com/writing/recovering-signals-from-unevenly-sampled-data/
                     nout = 4*len(data) # number of frequency-space points at which to calculate the signal strength (output)
                     # the posible Periods in px scale: 2 to 10% length of the data; in wave-scale: diff between 2 closest to 10% diff between furthest away:
                     period_range = np.array([ 2*np.nanmin(np.abs(x_axis[1:] - x_axis[:-1])), 0.5*(np.nanmax(x_axis)-np.nanmin(x_axis)) ])
@@ -341,30 +341,31 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                     plot_ranges[1] = max(plot_ranges[1], max(x_axis))
                     plot_ranges[2] = min(plot_ranges[2], min(data))
                     plot_ranges[3] = max(plot_ranges[3], max(data))
-        if wavelength_plot == 'w':
+        if param['wavelength_plot'] == 'w':
             xlabel_text = 'wavelength [Angstrom]'
-        elif wavelength_plot == 'f':
+        elif param['wavelength_plot'] == 'f':
             xlabel_text = 'period [px]'
-        elif wavelength_plot == 'l':
+        elif param['wavelength_plot'] == 'l':
             xlabel_text = 'period [px]'
-        elif wavelength_plot == 'wl' or wavelength_plot == 'lw':
+        elif param['wavelength_plot'] == 'wl' or param['wavelength_plot'] == 'lw':
             xlabel_text = 'period [Angstrom]'
         else:
             xlabel_text = 'x [px]'
-        if x_range != (0.0, 1.0) and y_range != (0.0, 1.0) and old_xlabel_text==xlabel_text and reset_plot=='':
+        if x_range != (0.0, 1.0) and y_range != (0.0, 1.0) and old_xlabel_text==xlabel_text and param['reset_plot']==False:
             plt.axis([x_range[0], x_range[1], y_range[0], y_range[1]])
         else:
             dx = (plot_ranges[1] - plot_ranges[0])*0.01
             dy = (plot_ranges[3] - plot_ranges[2])*0.01
             plt.axis([plot_ranges[0]-dx,plot_ranges[1]+dx, plot_ranges[2]-dy, plot_ranges[3]+dy])
+            param['reset_plot']=True
         frame.set_xlabel(xlabel_text, fontsize=14)
         frame.set_ylabel('flux [ADU]', fontsize=14)
         frame.set_title(title, fontsize=16)
         frame.legend(loc='upper left', bbox_to_anchor=(adjust[4], adjust[5]))
     # get kwargs
-    pkwargs = dict(frame=frame, im = im, settings=settings)
-    # run initial update plot function
-    plot(**pkwargs)
+    pkwargs = dict()
+    pkwargs['frame'] = frame
+    pkwargs['im'] = im
     
     # define valid_function
     # input is one variable (the string input)
@@ -402,38 +403,39 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start='', valid_function=None,
                                 width=5)
+    pkwargs['wavelength_plot'] = ''
     for i in range(iml-1):
-        starta, startb = '', 'True'
+        starta, startb = [], True
         text = [ 'Which data?', 'comma or colon\nseparated list' ]
         if (iml-1) - i - 1 == 2:
             text = [ 'Which file', 'comma or colon\nseparated list']
         if (iml-1) - i - 1 == 1:
             text = [ 'Which data', 'list']
-            starta, startb = '1', ''
+            starta, startb = [1], False
         if (iml-1) - i - 1 == 0:
             text = [ 'Which aperture', 'list']
-        
         if 'plot_sub_{0}'.format(i) in settings.keys():
-            starta = (('{0}'.format(settings['plot_sub_{0}'.format(i)])).replace('[','')).replace(']','')
+            starta = settings['plot_sub_{0}'.format(i)]
         if 'exclude_{0}'.format(i) in settings.keys():
-            startb = '{0}'.format(settings['exclude_{0}'.format(i)])
+            startb = settings['exclude_{0}'.format(i)]
+        startat = str(starta).replace('[','').replace(']','')               # make the list into a text
         widgets['plot_sub_{0}'.format(i)] = dict(label=text[0], comment=None, #text[1],
                                 kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start=starta, valid_function=vfunc,
+                                fmt=str, start=startat, valid_function=vfunc,
                                 width=10)
         widgets['exclude_{0}'.format(i)] = dict(label='Exclude',
-                                comment=None, #'True for exclude' ,
-                                kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start=startb, valid_function=vfunc_bool,
-                                width=5)
+                                kind='CheckBox', start=startb)
+        pkwargs['plot_sub_{0}'.format(i)] = starta
+        pkwargs['exclude_{0}'.format(i)] = startb
     widgets['reset_plot'] = dict(label='reset plot',
-                                comment=None, #'anything to reset' ,
-                                kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start='', valid_function=None,
-                                width=5)
+                                kind='CheckBox', start=False)
+    pkwargs['reset_plot'] = False
     widgets['accept'] = dict(label='Close', kind='ExitButton', position=Tk.BOTTOM)
     widgets['update'] = dict(label='Update', kind='UpdatePlot', position=Tk.BOTTOM)
-
+    
+    # run initial update plot function
+    plot(**pkwargs)
+    
     wprops = dict(orientation='v', position=Tk.RIGHT)
 
     gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
