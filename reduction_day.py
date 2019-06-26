@@ -292,13 +292,13 @@ if __name__ == "__main__":
     im_blazecor, im_blazecor_head = create_image_general(params, 'blazecor')    # -> cont1cal2
     
     # Extract the flat spectrum and normalise it
-    if os.path.isfile(params['master_flat_spec_norm_filename']) == True:
-        logger('Info: Normalised flat already exists: {0}'.format(params['master_flat_spec_norm_filename']))
+    if os.path.isfile(params['master_blaze_spec_norm_filename']) == True:
+        logger('Info: Normalised flat already exists: {0}'.format(params['master_blaze_spec_norm_filename']))
         # The file is read later on purpose
     else:
         logger('Step: Create the normalised flat for the night')
         obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_blazecor_head)
-        shift = find_shift_images(params, im_blazecor, im_trace1, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly, extract=True)
+        shift = find_shift_images(params, im_blazecor, im_trace1, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, extract=True)
         flat_spec, good_px_mask = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='prec', offset=shift)
         flat_spec_norm = flat_spec/np.nanmedian(flat_spec)
         flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.1)
@@ -307,9 +307,9 @@ if __name__ == "__main__":
         else:
             blazecor_spec, agood_px_mask = extract_orders(params, im_blazecor, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
         wavelength_solution_shift, shift = shift_wavelength_solution(params, blazecor_spec, wavelength_solution, wavelength_solution_arclines, 
-                                            reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, params['master_flat_spec_norm_filename'])
+                                            reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, params['master_blaze_spec_norm_filename'])
         wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, blazecor_spec)
-        save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, blazecor_spec], params['master_flat_spec_norm_filename'], im_blazecor_head)
+        save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, blazecor_spec], params['master_blaze_spec_norm_filename'], im_blazecor_head)
         #save_im_fits(params, flat_spec_norm, im_sflat_head, params['master_flat_spec_norm_filename'])
     
     logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the loging directory {0}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?\n'.format(params['logging_path']))
@@ -324,7 +324,7 @@ if __name__ == "__main__":
             wavelengthcals_sci.append(entry.replace('_rawfiles',''))
         elif entry.find('wavelengthcal') >= 0 and entry.find('_rawfiles') >= 0:
             wavelengthcals_cal.append(entry.replace('_rawfiles',''))
-    flat_spec_norm = np.array(fits.getdata(params['master_flat_spec_norm_filename']))           # read it again, as the file is different than the data above
+    flat_spec_norm = np.array(fits.getdata(params['master_blaze_spec_norm_filename']))           # read it again, as the file is different than the data above
     if ( params['arcshift_side'] == 0 or params['two_solutions'] ) and len(wavelengthcals_cal)+len(wavelengthcals_sci) > 0:         # no calibration spectrum at the same time
         logger('Info: Starting to extract wavelength calibrations')
         params['extract_wavecal'] = True

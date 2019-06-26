@@ -668,7 +668,7 @@ def create_image_general(params, imtype, level=0):
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].lower()
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].replace('normaliz', 'normalis')
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].replace('normalisation', 'normalise')
-        im, med_fluxes, std_fluxes = [], [], []
+        im, med_fluxes, std_fluxes = None, [], []
         if '{0}_rawfiles'.format(imtype) not in params.keys():
             logger('Error: The list of raw files for image type {0} is not defined in the configuration. Please check the configuration files.'.format(imtype))
         if len(params['{0}_rawfiles'.format(imtype)]) == 0:
@@ -685,7 +685,7 @@ def create_image_general(params, imtype, level=0):
             std_fluxes.append(np.std(img, axis=None, ddof=1))
             if 'normalise' in params['{0}_calibs_create'.format(imtype)]:
                 img = img/(med_flux+0.0)
-            if im == []:                                                # Initiate the array with correct precission to avoid swapping
+            if im is None:                                                # Initiate the array with correct precission to avoid swapping
                 if num_imgs * np.prod(img.shape) * 2 > mem[1] * 0.49:
                     prec = np.float16
                     logger('Warn: The ammount of pictures will most likely cause swapping, which might cause the system to become unresponsive.')
@@ -2160,10 +2160,11 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
         #print pp,np.nanmean(uppers-lowers), np.nanmedian(uppers-lowers), np.nansum(uppers-lowers)
         if w_mult == 0.0:                                                       # only the central full pixel
             order_in_frame = ((yarr[xarr1] <= maxpx) & (yarr[xarr1] >= 0) )     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
+            yarr = np.round(yarr).astype(int)
             for xrow in xarr1[order_in_frame]:
-                ssum = image[xrow, int(round(yarr[xrow]))]                      # Verified 20190122
+                ssum = image[xrow, yarr[xrow]]                      # Verified 20190122
                 good_px = 1
-                good_px = asign_bad_px_value(params, good_px, badpx_mask, image, (xrow, int(round(yarr[xrow]))) )
+                good_px = asign_bad_px_value(params, good_px, badpx_mask, image, (xrow, yarr[xrow]) )
                 ospecs[xrow] = ssum
                 ogood_px_mask[xrow] = good_px  
         elif var == 'prec':         # new solution, better than the one below, tested with many values in excel
@@ -2610,7 +2611,8 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
     # plot_img_spec.plot_image(im, ['savename'], pctile=0, show=True, adjust=[0.05,0.95,0.95,0.05], title='Title', autotranspose=False)
     for shift in tqdm(arcshifts, desc='Search for the shift of the calibration traces, compared to the science traces'):
         # Shift the solution -> give parameter offset; and extract the arc_spectrum with the offset
-        arc_spec, good_px_mask = extract_orders(params, im, pfits, xlows, xhighs, widths, w_mult/2., shift)          # The smaller w_mult -> the better the gauss (hopefully)
+        # arc_spec, good_px_mask = extract_orders(params, im, pfits, xlows, xhighs, widths, w_mult/2., shift, plot_tqdm=False)          # The smaller w_mult -> the better the gauss (hopefully)
+        arc_spec, good_px_mask = extract_orders(params, im, pfits, xlows, xhighs, widths, 0, shift, plot_tqdm=False)          # w_mult == 0: only central pixel
         flux = np.nansum(arc_spec, axis=1)
         flux[np.isnan(flux)] = np.nanmin(flux)          # replace nans with the minimum flux
         fluxes.append(flux)
@@ -2680,9 +2682,12 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
         used_orders = np.sum(goodval)
     # Log the results
     arcshifts = np.repeat([arcshifts],len(orders),axis=0)
-    title = 'Determining the shift of the arc orders'
+    title = 'Determining the shift of the calibration traces'
     plot_gauss_data_center(arcshifts, fluxes.T, label_datapoins, gauss, label_gauss, shifts, label_centroids, params['logging_find_arc_traces'], title=title)
-    logger('Info: The shift between science traces and calibration orders is between {0} and {1} px. The standard difference of the measured values to the 2nd order polynomial is {4} px, {5} orders were used. The gaussian width of the arc lines in spacial direction is between {2} and {3} px'.format(min(shifts), max(shifts), min_gauss, max_gauss, round(np.std(diff, ddof=len(poly)),2), used_orders ))
+    logger(('Info: The shift between science traces and calibration orders is between {0} and {1} px. '+\
+            'The average residuals to the 2nd order polynomial is {6} px (standard deviation of {4} px), {5} orders were used. '+\
+            'The gaussian width of the arc lines in spacial direction is between {2} and {3} px').format(min(shifts), max(shifts), 
+                    min_gauss, max_gauss, round(np.std(np.abs(diff), ddof=len(poly)),2), used_orders, round(np.mean(np.abs(diff)),2) ))
     logger('Info: The parameters of the polynomial are: {0}'.format(poly), show=False)
     return shifts
     
@@ -2697,8 +2702,8 @@ def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None
     """
     ims = im.shape
     lines = []
-    FWHM = 4
-    for order in tqdm(range(ims[0]), desc='Identify lines in the arc'):
+    FWHM = 4            # not universal
+    for order in tqdm(range(ims[0]), desc='Identify lines in the emission spectrum'):
         xarr = np.arange(ims[1])
         yarr = im[order,:]
         notnans = ~np.isnan(yarr)
@@ -3334,7 +3339,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     #not necessary anymore obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
     obnames = get_possible_object_names(obname)
     
-    shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces
+    shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces, w_mult=0 so that only the central pixel is extracted
     spectra, good_px_mask = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift)#, var='prec')
     orders = range(spectra.shape[0])
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
@@ -3365,7 +3370,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     for entry in [ params['result_path'] ] + params['raw_data_paths']:      # Check also the result and raw data paths for object names
         object_files.append( entry + params['object_file'] )
     for object_file in object_files:
-        ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, mjd, filen=object_file, warn_notfound=False)
+        ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using ceres to calculated BCV
         if ra2 !=0 and dec2 != 0:                                           # Found the object
             break
     
@@ -3741,6 +3746,36 @@ def plot_wavelength_solution_width_emmission_lines(fname, specs, arc_lines_wavel
     axis_name = ['Position in Dispersion direction [{0} px]'.format(step), 'Order', 'Gaussian width of the emission lines [px] (white shows areas with no data available)'.format(step)]
     plot_img_spec.plot_image(gauss_ima, [fname], pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, autotranspose=False, colorbar=True, axis_name=axis_name)
 
+def plot_overlapping_orders(order, x_full, y1_full, y2_full=None, labels=[]):
+    """
+    :param order: integer, first index in x_full, y1_full, y2_full
+    :param x_full: 2d array of floats: first index for order, second index for pixel; normally wavelength or pixel
+    :param y1_full: same format and size as x_full, flux
+    :param y2_full: same format and size as x_full, flux of a different exposure time
+    :param labels: list of strings, label for y1_full and y2_full
+    """
+    x_data = [x_full[order,:]]
+    y_data = [y1_full[order,:]]
+    color = ['tab:blue']
+    if y2_full is not None:
+        x_data.append(x_full[order,:])
+        y_data.append(y2_full[order,:])
+        color.append('tab:orange')
+    
+    label = copy.deepcopy(labels)
+    if np.min(x_full) > 1000:      # real wavelength solution, not pseudo solution
+        if order < x_full.shape[0]-1:
+            x_data.insert(0, x_full[order+1,:])
+            y_data.insert(0, y1_full[order+1,:])
+            label.insert(0, 'next order')
+            color.insert(0, 'lightgrey')
+        if order > 0:
+            x_data.insert(0, x_full[order-1,:])
+            y_data.insert(0, y1_full[order-1,:])
+            label.insert(0, 'prev. order')
+            color.insert(0, 'silver')
+    return x_data, y_data, label, color
+
 def plot_wavelength_solution_spectrum(spec1, spec2, fname, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=False):
     """
     Creates a pdf with one page for each ThAr spectrum and adds the identified and further catalogue lines to the plots
@@ -3789,22 +3824,9 @@ def plot_wavelength_solution_spectrum(spec1, spec2, fname, wavelength_solution, 
             
             title = titel_f.format(order, int(wavelength_solution[order,0]), num_ident, min(max_reflines,num_notident-num_ident), num_notident-num_ident)
             fig, frame = plt.subplots(1, 1)
-            x_data = [wavelengths[order,:], wavelengths[order,:]]
-            y_data = [spec1[order,:], spec2[order,:]]
-            color = ['tab:blue','tab:orange']
             
-            label = copy.deepcopy(labels)
-            if np.min(wavelengths) > 1000:      # real wavelength solution, not pseudo solution
-                if order < wavelength_solution.shape[0]-1:
-                    x_data.insert(0, wavelengths[order+1,:])
-                    y_data.insert(0, spec1[order+1,:])
-                    label.insert(0, 'next. order')
-                    color.insert(0,'lightgrey')
-                if order > 0:
-                    x_data.insert(0, wavelengths[order-1,:])
-                    y_data.insert(0, spec1[order-1,:])
-                    label.insert(0, 'prev. order')
-                    color.insert(0,'silver')
+            # Create a the plotting data
+            x_data, y_data, label, color = plot_overlapping_orders(order, wavelengths, spec1, spec2, labels)        # create the overlapping pixel
             plot_img_spec.plot_points(x_data, y_data, label, [], show=False, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01], title=title, 
                                       return_frame=True, frame=frame, x_title=x_title, y_title=y_title, linestyle="-", marker="",
                                       color=color)
@@ -3940,40 +3962,6 @@ def plot_wavelength_solution_image(im, fname, pfits, xlows, xhighs, wavelength_s
     plt.savefig(fname, bbox_inches='tight')
     plt.close()
 
-
-            
-""" not used anymore def find_bck_fit(im, im_bck_px, p_orders, GUI=True):         # Needs to be rewritten using 2d image fit.
-    ims = im.shape
-    im_bck = []
-    xarr = np.array(range(ims[1]))
-    for i in range(ims[0]):           #crossing the orders
-        bck = im_bck_px[i,:] == 1
-        xarr1 = xarr[bck]
-        yarr = im[i,bck]
-        sigmaclip = (yarr*0 == 0)
-        for j in range(3):
-            pbck = polyfit_adjust_order(xarr1[sigmaclip], yarr[sigmaclip], p_orders[1])
-            difffit = yarr - np.polyval(pbck, xarr1)
-            stddiff = np.std(difffit, ddof=p_orders[1]+1)
-            sigmaclip = np.abs(difffit) <= 3*stddiff
-        im_bck.append(np.polyval(pbck, xarr))
-        #if i/100 == i/100.:
-        #if i >1510 and i< 1600 and i/10 == i/10.:
-        #    plot_img_spec.plot_spectra(np.array([xarr,xarr]),np.array([(im*im_bck_px)[i,:],np.polyval(pbck, xarr)]),['data','fit'], ['savepaths'], True, [0.06,0.92,0.95,0.06, 1.0,1.01], 'line {0}'.format(i))
-    im_bck = np.array(im_bck)
-    if GUI == True:
-        plot_img_spec.plot_image(im_bck, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'fit perpendicular to traces')
-    im_bck1 = []
-    yarr = np.array(range(ims[0]))
-    for i in range(ims[1]):         #crossing the fits
-        pbck = polyfit_adjust_order(yarr, im_bck[:,i], p_orders[0])
-        im_bck1.append(np.polyval(pbck, yarr))
-    im_bck1 = np.array(im_bck1).T
-    if GUI == True:
-        plot_img_spec.plot_image(im_bck1, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'Background map')
-    return im_bck1
-"""
-
 def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=True):    # not used anymore
     fig, frame = plt.subplots(1, 1)
     def plot(frame, im_orig, pfits, xlows, xhighs, widths, w_mult):
@@ -4028,6 +4016,162 @@ def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=T
     #gui3.destroy 
     plt.close()
     return im_bck_px, params
+
+def correlate_px_wave_result_UI(im, arc_lines_wavelength, reference_catalog, arc_lines_px, reference_names, wavelength_solution, wavelength_solution_arclines, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01]):
+    ims = im.shape
+            
+    fig, frame = plt.subplots(1, 1)
+    plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
+    
+    order = 10
+    high_limit = 98
+    arc_stretch = 0.5
+    
+    def plot(frame, im, order, high_limit, arc_stretch):
+        x_range, y_range = copy.copy(frame.get_xlim()), copy.copy(frame.get_ylim())
+        frame.clear()
+        """try:
+            order = gui3.data['order']
+        except:
+            order = order
+        try:
+            high_limit = gui3.data['high_limit']
+        except:
+            high_limit = high_limit
+        try:
+            arc_stretch = gui3.data['arc_stretch']
+        except:
+            arc_stretch = arc_stretch"""
+        
+        #print 'order, arc_setting', order, arc_setting
+        title = ('Order {0}: identified emission lines: blue [px],\n'+\
+                 'catalog lines: red (0.1px precission, name and wavelength at the botom),\n'+\
+                 'corellated lines: green (px, wavelength at top)').format(order)
+        
+        # Plot the extracted arc spectrum
+        xarr = np.arange(len(im[order,:]))
+        yarr = im[order,:]
+        notnans = ~np.isnan(yarr)
+        yarr = yarr[notnans]
+        xarr = xarr[notnans]
+        yarr_max = max(0,np.percentile(yarr,high_limit))
+        yarr[yarr > yarr_max] = yarr_max
+        frame = plot_img_spec.plot_points([xarr], [yarr], [], [], show=False, adjust=adjust, title=title, 
+                                      return_frame=True, frame=frame, x_title='x [px]', y_title='flux [ADU]', linestyle="-", marker="")
+        
+        # Plot the correlated lines in the extracted spectrum
+        arc_line_order = arc_lines_px[(arc_lines_px[:,0] == order),:]
+        xarr = np.vstack(( arc_line_order[:, 1], arc_line_order[:, 1])).T
+        yplot = np.repeat( [[min(yarr), max(yarr)]], len(arc_line_order), axis=0)
+        frame = plot_img_spec.plot_points(xarr, yplot, [], [], show=False, adjust=adjust, title=title, 
+                                      return_frame=True, frame=frame, x_title='x [px]', y_title='flux [ADU]', linestyle="-", marker="", color='b')
+
+        # Plot the catalog lines using the fit
+        xarr_catalog = np.arange(-100,ims[1]+100, 0.1)
+        xarr_wave = np.polyval(wavelength_solution[order,2:], xarr_catalog-wavelength_solution[order,1])
+        inorder = ( reference_catalog[:,0] >= min(xarr_wave) ) & ( reference_catalog[:,0] <= max(xarr_wave) )
+        reference_catalog_sub = reference_catalog[inorder, :]
+        reference_names_sub = np.array(reference_names)[inorder]
+        arc_stretch *= (max(yarr)-min(yarr)) / max(reference_catalog_sub[:,1])      # Rescale the arc lines so that arc_stretch=1 fills it just once
+        for line_index in range(reference_catalog_sub.shape[0]):
+            diff = abs(reference_catalog_sub[line_index,0] - xarr_wave)
+            xarc = xarr_catalog[np.argmin(diff)]
+            frame.plot( [xarc,xarc],[min(yarr),min(yarr)+reference_catalog_sub[line_index,1]*arc_stretch], color='r' )
+            frame.text(xarc, min(yarr)+reference_catalog_sub[line_index,1]*arc_stretch, '{0} {1}'.format(reference_names_sub[line_index],reference_catalog_sub[line_index,0]),
+                            horizontalalignment='center', verticalalignment='bottom', rotation=90, color='k', zorder=5)
+           
+        # Plot the identified catalog lines
+        arc_line_order = arc_lines_wavelength[(arc_lines_wavelength[:,0] == order),:]
+        xarr = np.vstack(( arc_line_order[:, 1], arc_line_order[:, 1])).T
+        yplot = np.repeat( [[min(yarr), max(yarr)]], len(arc_line_order), axis=0)
+        frame = plot_img_spec.plot_points(xarr, yplot, [], [], show=False, adjust=adjust, title=title, 
+                                      return_frame=True, frame=frame, x_title='x [px]', y_title='flux [ADU]', linestyle="-", marker="", color='g')
+        for arc_line in arc_line_order:
+            frame.text(arc_line[1], max(yarr), r'{0} $\pm$ {1}'.format(arc_line[2], round(arc_line[3],3) ), horizontalalignment='center', verticalalignment='top', rotation=90, color='k', zorder=5)
+
+    # get kwargs
+    pkwargs = dict(frame=frame, im=im, order=order, high_limit=high_limit, arc_stretch=arc_stretch)
+    # run initial update plot function
+    plot(**pkwargs)
+    
+    # define valid_function
+    # input is one variable (the string input)
+    # return is either:
+    #   True and values
+    # or
+    #   False and error message
+    def vfunc_int(xs):
+        try:
+            value = int(xs)
+            return True, value
+        except:
+            return False, ('Error, input must be integer')
+    def vfunc_float(xs):
+        try:
+            value = float(xs)
+            return True, value
+        except:
+            return False, ('Error, input must be float')
+            
+    # define widgets
+    widgets = dict()
+    widgets['order'] = dict(label='Order',
+                                comment='which order to show' ,
+                                kind='TextEntry', minval=0, maxval=ims[0]-1,
+                                fmt=int, start=order, valid_function=vfunc_int,
+                                width=10)
+    widgets['high_limit'] = dict(label='High limit [%]',
+                                comment='Reject highest pixels' ,
+                                kind='TextEntry', minval=1, maxval=105,
+                                fmt=float, start=high_limit, valid_function=vfunc_float,
+                                width=10)
+    widgets['arc_stretch'] = dict(label='Scale of\ncatalogue lines',
+                                comment='float value' ,
+                                kind='TextEntry', minval=None, maxval=None,
+                                fmt=float, start=arc_stretch, valid_function=vfunc_float,
+                                width=10)
+    widgets['accept'] = dict(label='Close', kind='ExitButton', position=Tk.BOTTOM)
+    widgets['update'] = dict(label='Update', kind='UpdatePlot', position=Tk.BOTTOM)
+
+    wprops = dict(orientation='v', position=Tk.RIGHT)
+
+    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
+                        title='Check the identified and correlated emission lines', widgets=widgets,
+                        widgetprops=wprops)
+    
+    gui3.master.mainloop()
+
+""" not used anymore def find_bck_fit(im, im_bck_px, p_orders, GUI=True):         # Needs to be rewritten using 2d image fit.
+    ims = im.shape
+    im_bck = []
+    xarr = np.array(range(ims[1]))
+    for i in range(ims[0]):           #crossing the orders
+        bck = im_bck_px[i,:] == 1
+        xarr1 = xarr[bck]
+        yarr = im[i,bck]
+        sigmaclip = (yarr*0 == 0)
+        for j in range(3):
+            pbck = polyfit_adjust_order(xarr1[sigmaclip], yarr[sigmaclip], p_orders[1])
+            difffit = yarr - np.polyval(pbck, xarr1)
+            stddiff = np.std(difffit, ddof=p_orders[1]+1)
+            sigmaclip = np.abs(difffit) <= 3*stddiff
+        im_bck.append(np.polyval(pbck, xarr))
+        #if i/100 == i/100.:
+        #if i >1510 and i< 1600 and i/10 == i/10.:
+        #    plot_img_spec.plot_spectra(np.array([xarr,xarr]),np.array([(im*im_bck_px)[i,:],np.polyval(pbck, xarr)]),['data','fit'], ['savepaths'], True, [0.06,0.92,0.95,0.06, 1.0,1.01], 'line {0}'.format(i))
+    im_bck = np.array(im_bck)
+    if GUI == True:
+        plot_img_spec.plot_image(im_bck, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'fit perpendicular to traces')
+    im_bck1 = []
+    yarr = np.array(range(ims[0]))
+    for i in range(ims[1]):         #crossing the fits
+        pbck = polyfit_adjust_order(yarr, im_bck[:,i], p_orders[0])
+        im_bck1.append(np.polyval(pbck, yarr))
+    im_bck1 = np.array(im_bck1).T
+    if GUI == True:
+        plot_img_spec.plot_image(im_bck1, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'Background map')
+    return im_bck1
+"""
 
 def correlate_UI(im, order, arc_settings, reference_catalog, reference_names, adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):      # not used anymore
     global oldorder
@@ -4173,143 +4317,6 @@ def correlate_UI(im, order, arc_settings, reference_catalog, reference_names, ad
     #print 'arc_settings',arc_settings
     return arc_settings
 
-def correlate_px_wave_result_UI(im, arc_lines_wavelength, reference_catalog, arc_lines_px, reference_names, wavelength_solution, adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
-    global oldorder
-    order = 10
-    oldorder = order
-    ims = im.shape
-            
-    fig, frame = plt.subplots(1, 1)
-    plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
-    
-    def plot(frame, im):
-        global oldorder
-        x_range, y_range = copy.copy(frame.get_xlim()), copy.copy(frame.get_ylim())
-        frame.clear()
-        try:
-            order = gui3.data['order']
-        except:
-            order = oldorder
-        try:
-            high_limit = gui3.data['high_limit']
-        except:
-            high_limit = 100
-        try:
-            arc_stretch = gui3.data['arc_stretch']
-        except:
-            arc_stretch = 1
-        if order < 0 or order > im.shape[0]-1:
-            print('Warn: order outside the allowed area: 0...{0}'.format(im.shape[0]-1))
-            order = oldorder
-        #print 'order, arc_setting', order, arc_setting
-        title = 'Order {0}: identified lines: b [px], catalog lines: r [0.1px, name and wavelength at the botom],\nidentified lines: g [px, wavelength at top]'.format(order)
-        
-        # Plot the extracted arc spectrum
-        xarr = np.arange(len(im[order,:]))
-        yarr = im[order,:]
-        notnans = ~np.isnan(yarr)
-        yarr = yarr[notnans]
-        xarr = xarr[notnans]
-        yarr_max = max(0,np.percentile(yarr,high_limit))
-        yarr[yarr > yarr_max] = yarr_max
-        frame.plot(xarr, yarr)
-        
-        # Plot the identified lines in the extracted spectrum
-        for arc_line in arc_lines_px[(arc_lines_px[:,0] == order),:]:
-            frame.plot( [arc_line[1],arc_line[1]],[min(yarr),max(yarr)],color='b' )
-        #for arc_line_order in arc_lines_px: #arc_lines_px[(arc_lines_px[:,0] == order),:]: doesn't work
-        #    if arc_line_order[0] == order:
-        #        for arc_line in arc_line_order[1]:
-        #            frame.plot( [arc_line[0],arc_line[0]],[min(yarr),max(yarr)],color='b' )
-        
-        # Plot the catalog lines using the fit
-        xarr_catalog = np.arange(-100,ims[1]+100, 0.1)
-        if len(wavelength_solution.shape) == 1:
-            xarr_wave = polynomial_value_2d(xarr_catalog-wavelength_solution[2], 1.0/(order+wavelength_solution[3]), int(wavelength_solution[0]), int(wavelength_solution[1]), wavelength_solution[4:])
-        else:
-            xarr_wave = np.polyval(wavelength_solution[order,2:], xarr_catalog-wavelength_solution[order,1])
-        for line_index in range(reference_catalog.shape[0]):
-                diff = abs(reference_catalog[line_index,0] - xarr_wave)
-                if min(diff) < 1:
-                    xarc = xarr_catalog[np.argmin(diff)]
-                    frame.plot( [xarc,xarc],[min(yarr),min(yarr)+reference_catalog[line_index,1]*arc_stretch],color='r' )
-                    frame.text(xarc, min(yarr)+reference_catalog[line_index,1]*arc_stretch, '{0} {1}'.format(reference_names[line_index],reference_catalog[line_index,0]),
-                            horizontalalignment='center', verticalalignment='center', rotation=90, color='k', zorder=5)
-        
-                       
-        # Plot the identified catalog lines
-        for arc_line in arc_lines_wavelength[(arc_lines_wavelength[:,0] == order),:]:
-            xarc = arc_line[1]
-            frame.plot( [xarc,xarc],[min(yarr),max(yarr)],color='g' )
-            frame.text(xarc, max(yarr), '{0} +/- {1}'.format(arc_line[2], round(arc_line[3],3) ), horizontalalignment='center', verticalalignment='top', rotation=90, color='k', zorder=5)
-
-        frame.set_xlabel('x [px]', fontsize=14)
-        frame.set_ylabel('flux [ADU]', fontsize=14)
-        frame.set_title(title, fontsize=16)
-        #frame.legend(loc='upper left', bbox_to_anchor=(adjust[4], adjust[5]))
-        oldorder = order
-
-    # get kwargs
-    pkwargs = dict(frame=frame, im = im)
-    # run initial update plot function
-    arc_settings = plot(**pkwargs)
-    
-    # define valid_function
-    # input is one variable (the string input)
-    # return is either:
-    #   True and values
-    # or
-    #   False and error message
-    def vfunc_colon(xs):
-        try:
-            new_xs = xs.split(':')
-            xs = []
-            for entry in new_xs:
-                xs.append(float(entry))
-            return True, xs
-        except:
-            return False, ('Error, input must consist of floats \n '
-                           'separated by colon')
-    def vfunc_int(xs):
-        try:
-            value = int(xs)
-            return True, value
-        except:
-            return False, ('Error, input must be integer')
-    def vfunc_float(xs):
-        try:
-            value = float(xs)
-            return True, value
-        except:
-            return False, ('Error, input must be float')
-            
-    # define widgets
-    widgets = dict()
-    widgets['order'] = dict(label='Order',
-                                comment='which order to show' ,
-                                kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start=str(oldorder), valid_function=vfunc_int,
-                                width=10)
-    widgets['high_limit'] = dict(label='High limit',
-                                comment='Reject highest pixels' ,
-                                kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start=str(98), valid_function=vfunc_float,
-                                width=10)
-    widgets['arc_stretch'] = dict(label='Scale of Arc lines',
-                                comment='float value' ,
-                                kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start=str(1), valid_function=vfunc_float,
-                                width=10)
-    widgets['accept'] = dict(label='Save and Close', kind='ExitButton', position=Tk.BOTTOM)
-    widgets['update'] = dict(label='Update', kind='UpdatePlot', position=Tk.BOTTOM)
-
-    wprops = dict(orientation='v', position=Tk.RIGHT)
-
-    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='Plot spectral orders', widgets=widgets,
-                        widgetprops=wprops)
-    
-    gui3.master.mainloop()
 
 """
 def fit_poly_between_orders(polyfit_pl, polyfit_o, polynom_order_intertrace, sigma):       # only used by correlate_px_wavelength, which is only used by ident_arc.py
@@ -5009,15 +5016,22 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     # Create an image of the gaussian widths of the identified lines
     plot_wavelength_solution_width_emmission_lines(params['logging_em_lines_gauss_width_form'], specs, arc_lines_wavelength)
     
-    x,y,l=[],[],[]
+    x, w, y, l = [], [], [], []
     max_number_reflines = 0             # will be needed later in order to save the data correctly into a fits file
     for order in orders:
         x.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),1])    # Pixel
+        w.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),2])    # Wavelength
         y.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),3])    # Residuals
         l.append('{0}'.format(order))
         max_number_reflines = max(max_number_reflines, len(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),2]))
-    text = 'Residuals of the identificated arc lines: identified {0} lines for a 2d polynom fit with {1} and {2} orders'.format(arc_lines_wavelength.shape[0], polynom_order_trace, polynom_order_intertrace)
-    plot_img_spec.plot_points(x,y,l,[params['logging_arc_line_identification_residuals']],show=False, title=text, x_title='Pixel', y_title='Residuals [Angstrom]', marker=['o','s','*','P','^','v','>','<','x'])
+    text = ('Residuals of the identificated arc lines: identified {0} lines when using a 2d polynom fit with {1} (dispersion) '+\
+            'and {2} (cross-dispersion) orders').format(arc_lines_wavelength.shape[0], polynom_order_trace, polynom_order_intertrace)
+    fname_px   = params['logging_arc_line_identification_residuals'][:-4] + '_px'   + params['logging_arc_line_identification_residuals'][-4:]
+    fname_wave = params['logging_arc_line_identification_residuals'][:-4] + '_wave' + params['logging_arc_line_identification_residuals'][-4:]
+    plot_img_spec.plot_points(x,y,l,[fname_px],   show=False, title=text, x_title='Pixel', 
+                              y_title='Residual (O-C) [Angstrom]', marker=['o','s','*','P','^','v','>','<','x'])
+    plot_img_spec.plot_points(w,y,l,[fname_wave], show=False, title=text, x_title='Wavelength [Angstrom]', 
+                              y_title='Residual (O-C) [Angstrom]', marker=['o','s','*','P','^','v','>','<','x'])
 
     # Transform the wavelength solution into the old wavelength solution
     wavelength_solution, wavelength_solution_arclines = [], []
@@ -5053,7 +5067,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     
     # See the results
     if show_res:
-        correlate_px_wave_result_UI(spectrum, arc_lines_wavelength, reference_catalog, arc_lines_px, reference_names, wavelength_solution, adjust=[0.07,0.93,0.94,0.06, 1.0,1.01])
+        correlate_px_wave_result_UI(spectrum, arc_lines_wavelength, reference_catalog, arc_lines_px, reference_names, wavelength_solution, wavelength_solution_arclines, adjust=[0.07,0.93,0.94,0.06, 1.0,1.01])
     
     return wavelength_solution, wavelength_solution_arclines
 
@@ -5312,10 +5326,10 @@ def adjust_binning_UI(im1, binxy, userinput=True):
     def plot(frame, im1, binxy):
         frame.clear()
         title = ('Adjusting the binning')
-        try:
+        """try:
             binxy = [gui3.data['binx'], gui3.data['biny']]          # Fails on first step
         except:
-            binxy = binxy
+            binxy = binxy"""
         im_bin, dummy, dummy = bin_im(im1, binxy )
         frame = plot_img_spec.plot_image(im_bin, 'dummy_filename', pctile=0, show=False, adjust=[0.07,0.95,0.95,0.07], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=False, axis_name=['Cross-dispersion axis [px]','Dispersion axis [px]','flux [ADU]'])
     def result(frame, im1, binxy):
@@ -5530,10 +5544,10 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
         
     if 'shift' in gui3.data:
         shift = gui3.data['shift']
-        if len(pfits_shift.shape) == 3:
-            pfits_shift[:,:,-1] += shift        # shift all traces
+        if len(pfits.shape) == 3:
+            pfits[:,:,-1] += shift        # shift all traces
         else:
-            pfits_shift[:,-1] += shift          # shift all traces
+            pfits[:,-1] += shift          # shift all traces
     
     plt.close()
     return fmask, pfits, widths
