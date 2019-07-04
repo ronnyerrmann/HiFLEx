@@ -21,7 +21,7 @@ import operator
 import copy
 import random
 import warnings
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit            # Curve-fit Gauss takes the longest: 20ms
 import scipy.interpolate as inter
 import scipy
 import scipy.signal
@@ -37,7 +37,7 @@ else:
 import plot_img_spec
 import psutil
 import ephem
-from math import radians as rad
+import math
 import barycorrpy
 import glob
 
@@ -61,7 +61,8 @@ ephemeris = 'DEc403'        # To use the JPL DE403 ephemerides, https://en.wikip
 tqdm.monitor_interval = 0   #On the virtual machine at NARIT the code raises an exception otherwise
 
 calimages = dict()  # dictionary for all calibration images used by create_image_general and read_file_calibration
-oldorder = 12
+# oldorder = 12     used for correlate_UI
+beg_ts = time.time()
 
 class Constants:                    # from Ceres
     "Here I declare the constants I will use in the different functions"
@@ -81,6 +82,21 @@ class Constants:                    # from Ceres
     w = 7.2921158554E-5 
     DaystoYear = 1.0/365.256363004
 
+def get_timing(text=''):
+    global beg_ts
+    end_ts = time.time()
+    print(text+"elapsed time: %f" % (end_ts - beg_ts))
+    beg_ts = time.time()
+    
+def time_usage(func):
+    def wrapper(*args, **kwargs):
+        beg_ts = time.time()
+        retval = func(*args, **kwargs)
+        end_ts = time.time()
+        print("elapsed time: %f" % (end_ts - beg_ts))
+        return retval
+    return wrapper
+    
 def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logfile'):
     """
     Saves the status information to a logfile
@@ -327,7 +343,7 @@ def textfileargs(params, textfile=None):
         
     return params
 
-def update_calibration_memory(key,value):
+def update_calibration_memory(key, value):
     """
     Add new information to the global variable calimages, which is not accessable from other python files
     :param key: string, key for the dictionary
@@ -336,7 +352,7 @@ def update_calibration_memory(key,value):
     global calimages
     calimages[key] = copy.deepcopy(value)
 
-def read_text_file(filename, no_empty_lines=False):
+def read_text_file(filename, no_empty_lines=False, warn_missing_file=True):
     """
     Read a textfile and put it into a list, one entry per line
     Empty lines means they consist only of tabs and spaces
@@ -351,7 +367,7 @@ def read_text_file(filename, no_empty_lines=False):
             if ( line == '' or linetemp == '') and no_empty_lines:
                 continue
             text.append(line)
-    else:
+    elif warn_missing_file:
         logger('Warn: File {0} does not exist, assuming empty file'.format(filename))    
     return text
 
@@ -1524,7 +1540,7 @@ def width_order(y, oldcenter, maxFWHM):
     #    print 'leftmin,rightmin,linemax,linemin,range30pct,range2pct,rangediff,y[leftmin:rightmin+1].astype(int),left,right',leftmin,rightmin,linemax,linemin,range30pct,range2pct,rangediff,y[leftmin:rightmin+1].astype(int),left,right
     return int(round((right-left+.1)/2)), int(round((right+left+.1)/2)), leftmin, rightmin
 
-def centroid_order(x, y, center, width, significance=3, blended_gauss=False, bugfix=False):
+def centroid_order(x, y, center, width, significance=3, bordersub_fine=True, blended_gauss=False, bugfix=False):
     """
     Fits the center of a line
     :param x: 1d array of px
@@ -1550,17 +1566,23 @@ def centroid_order(x, y, center, width, significance=3, blended_gauss=False, bug
         p0 = p0 + p0
         bounds = (bounds[0] + bounds[0], bounds[1] + bounds[1])
     stdlin = np.std(y, ddof=1)
+    if bordersub_fine:
+        border_subs = [ [0,0], [0,1], [1,0], [1,1], [2,1], [1,2], [2,2] ]   # number of pixels to be removed from the begin/end of the area for the Gaussian fit
+    else:
+        border_subs = [ [0,0], [2,2] ]              # Testing all the ones above can take too long
     significant = False
-    for border_sub in [ [0,0], [0,1], [1,0], [1,1], [2,1], [1,2], [2,2] ]:    
+    for border_sub in border_subs:    
         range_data = list(range(border_sub[0],len(x)-border_sub[1]))
         if len(range_data) <= 6:
             break
         if not blended_gauss:
+            #get_timing('{0} '.format(border_sub))
             try:
                 popt,pcov = curve_fit(oneD_gauss,x[range_data],y[range_data],p0=p0, bounds=bounds)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
             except:
                 # print 'curve fit failed'
                 continue
+            #get_timing('after ')
             stdfit = np.std(oneD_gauss(x[range_data],popt)-y[range_data], ddof=len(popt))           # if the average is 0, than this gives the stray of the residuals
             if stdlin/(stdfit+0.0) >= significance or popt[0]/(stdfit+0.0) >= significance:
                 significant = True
@@ -2503,10 +2525,13 @@ def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_
     oldcen, olderr = np.nan, np.nan
     if extract:                                                     # takes a bit longer
         logger('Step: checking if the current image is shifted compared to the reference frame in which the traces were searched (in cross-dispersion direction)')
+    no_orders = len(xlows)
+    step = max( 1, int(no_orders/20) )
+    mask = list(range(0,no_orders,step))            # only use part of the orders to speed up calculations
     for shift in range(max(np.abs(range_shifts))+1):
         for pm in [-1, +1]:
             if extract:         # extract and find the maximum flux
-                spec, good_px_mask = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, w_mult, pm*shift, plot_tqdm=False)       
+                spec, good_px_mask = extract_orders(params, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, pm*shift, plot_tqdm=False)       
                 fluxes = np.nansum(spec, axis=1)
                 fluxes[np.isnan(fluxes)] = np.nanmin(fluxes)          # replace nans with the minimum flux to avoid problems caused at the borders at the image
             else:               # Use the difference of the 2 images
@@ -2543,7 +2568,7 @@ def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_
                 for fshift in fshifts:
                     if np.min( np.abs( np.array(nshifts) - fshift ) ) < 0.005:                  # Don't do the fit again, if it was done before
                         continue
-                    spec, good_px_mask = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, w_mult, fshift, plot_tqdm=False)
+                    spec, good_px_mask = extract_orders(params, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, fshift, plot_tqdm=False)
                     fluxes.append( np.mean( np.nansum(spec, axis=1) ) )
                     nshifts.append(fshift)
                 sort_arr = np.argsort(fluxes)
@@ -2702,7 +2727,7 @@ def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None
     """
     ims = im.shape
     lines = []
-    FWHM = 4            # not universal
+    FWHM = 4            # not universal!!!
     for order in tqdm(range(ims[0]), desc='Identify lines in the emission spectrum'):
         xarr = np.arange(ims[1])
         yarr = im[order,:]
@@ -2870,8 +2895,8 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     ass = aspectra.shape
     shifts = []
     checked_arc_lines = 0
+    xarr = np.arange(ass[1])                                    # array of the x-positions
     for order_index in range(wavelength_solution.shape[0]):
-        xarr = np.arange(ass[1])
         warr = np.polyval(wavelength_solution[order_index,2:], xarr-wavelength_solution[order_index,1])                 # Wavelength of each pixel in the order
         for arcline in wavelength_solution_arclines[order_index]:
             ref_line_index = np.argmin(np.abs( reference_catalog[:,0] - arcline ))
@@ -2883,7 +2908,9 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
                 pos = np.argmin(diff)                                               # Position of the line in the array
                 range_arr = range( max(0,pos+in_shift_int-int(FWHM*3)), min(ass[1],pos+in_shift_int+int(FWHM*3)+1) )     # Range to search for the arc line
                 #print range_arr, xarr, aspectra.shape, order_index
-                popt = centroid_order(xarr[range_arr],aspectra[order_index,range_arr], pos+in_shift_int, FWHM*3, significance=3.5)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+                #get_timing('{0}'.format(arcline))
+                popt = centroid_order(xarr[range_arr],aspectra[order_index,range_arr], pos+in_shift_int, FWHM*3, significance=3.5, bordersub_fine=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+                #get_timing('{0}'.format(popt))
                 if popt[1] == 0 or popt[2] > FWHM*1.5:
                     #if order_index == 50:
                     #    print 'not used',order_index, pos,popt, reference_catalog[ref_line_index,0]
@@ -3196,9 +3223,11 @@ def get_obsdate(params, im_head):
     """
     Get the observation date and time using the header and exposure time
     
-    :return obsdate_midexp: datetime.datetime object, containing the the center of the observation (in UTC)
+    :return obsdate_midexp: datetime.datetime object, containing the the (light collection) center of the observation (in UTC)
     :return obsdate_float: float, unix timestamp of the mid observation time (in UTC)
     :return exposure_time: float, exposure time
+    :return obsdate: datetime.datetime object, beginning of the observation (in UTC)
+    :return fraction: float, what fraction of the exposure time collected half the light
     """
     obsformats = ['%Y-%m-%dT%H:%M:%S.%f','%Y-%m-%dT%H:%M:%S']           # Put into the parameters?
     if 'raw_data_mid_exposure_keys' in params.keys():                   # To stay backwards compatible, can be removed a few versions after v0.4.1
@@ -3371,8 +3400,10 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         object_files.append( entry + params['object_file'] )
     for object_file in object_files:
         ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using ceres to calculated BCV
-        if ra2 !=0 and dec2 != 0:                                           # Found the object
+        if ra2 !=0 or dec2 != 0:                                           # Found the object
             break
+    if ra2 ==0 and dec2 == 0:
+        logger('Warn: Reference coordinates files {0} do not exist.'.format(object_files))
     
     # Get the baycentric velocity
     params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, object_file)       # obnames becomes the single entry which matched entry in params['object_file']
@@ -3443,7 +3474,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         serval_keys.append(['RA',       im_head_harps_format['EXO_PIPE RA'],                        'RA start, for Serval'])
     if 'EXO_PIPE DEC' in im_head_harps_format.keys():
         serval_keys.append(['DEC',      im_head_harps_format['EXO_PIPE DEC'],                       'DEC start, for Serval'])
-    if 'EXO_PIPE RV_BARY' in im_head_harps_format.keys():
+    if 'EXO_PIPE BCV' in im_head_harps_format.keys():
         serval_keys.append(['HIERARCH ESO DRS BERV',     im_head_harps_format['EXO_PIPE BCV'],      'Barycentric Earth Radial Velocity'])
     serval_keys.append(['HIERARCH ESO DPR TECH',         'ECHELLE ',        'Observation technique'])
     serval_keys.append(['HIERARCH ESO INS MODE',         'HARPS',           'Instrument mode used.'])
@@ -3517,7 +3548,8 @@ def save_spec_csv(spec, wavelengths, good_px_mask, fname):
         
     specs = spec.shape
     spec_cor = spec * good_px_mask
-    spec_cor[np.isnan(spec_cor)] = 0
+    spec_cor[np.isnan(spec_cor)] = 0            # replace NaNs with 0
+    #spec_cor[spec_cor < 0] = 0                  # replace negative values (test 20190701 after terra RVs are NaN - > doesn't solve the NaNs => problems was a full order without data)
     wave = copy.copy(wavelengths)
     wave[np.isnan(wave)] = 0
     fname = fname.replace('.csv','') + '.csv'
@@ -5435,7 +5467,7 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
     return widths: same format as widths, with adjusted left and right stop of the trace
     """
     if not userinput or (not do_rm and not do_adj and not do_shft):
-        return remove_orders(pfits, []), pfits         # No orders to remove, pfits stays the same
+        return remove_orders(pfits, []), pfits, widths         # No orders to remove, pfits stays the same, widths stays the same
 
     # convert to numpy arrays
     pfits = np.array(pfits)
@@ -6001,10 +6033,10 @@ def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True):  
     RA0, DEC0, PMRA, PMDEC, epoch = 0., 0., 0., 0., 2000.
     
     if not os.path.isfile(filen) and warn_notfound:
-        logger('Warn: Reference coordinates files {0} does not exist.'.format(filen))
+        logger('Warn: Reference coordinates file {0} does not exist.'.format(filen))
         return RA0, DEC0, epoch, PMRA, PMDEC, obnames
     # !!! Use read files with split already available
-    lines_txt = read_text_file(filen, no_empty_lines=True)
+    lines_txt = read_text_file(filen, no_empty_lines=True, warn_missing_file=False)
     lines = convert_readfile(lines_txt, [str, str, str, float, float, float, float], delimiter=',', replaces=[['\t',',']])
     if len(lines) < len(lines_txt):
         logger('Warn: {1} line(s) could not be read in the reference coordinates file: {0}. Please check that columns 4 to 7 (starting counting with 1) are numbers'.format(filen, len(lines_txt)-len(lines) ))
@@ -6122,6 +6154,7 @@ def get_barycent_cor(params, im_head, obnames, reffile):
     params['epoch'] = 2000.0
     params['pmra']  = 0.
     params['pmdec'] = 0.
+    params['altitude'] = 0.
     source_obs = 'The site coordinates from the configuration file were used.'
     settings = []
     settings.append( [0, site_keys, 'site'] )
@@ -6137,8 +6170,9 @@ def get_barycent_cor(params, im_head, obnames, reffile):
         if parentr == 'longitude':                  # Enough information to calculate the ephemerides of sun and moon.
             gobs = ephem.Observer()  
             gobs.name = copy.copy(params['site'])
-            gobs.lat  = rad(params['latitude'])     # lat/long in decimal degrees  
-            gobs.long = rad(params['longitude'])
+            gobs.lat  = math.radians(params['latitude'])     # lat/long in decimal degrees  
+            gobs.long = math.radians(params['longitude'])
+            gobs.elevation = params['altitude']
             obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_head)               # in UTC, mid of the exposure
             gobs.date = obsdate.strftime('%Y-%m-%d %H:%M:%S')
             mephem    = ephem.Moon()
@@ -6188,10 +6222,9 @@ def get_barycent_cor(params, im_head, obnames, reffile):
                     source_radec = 'The object coordinates are derived from the image header.'
                 if parentr == 'latitude':           # Assume that latitute is coming from the same source
                     source_obs = 'The site coordinates are derived from the image header.'
-
     mjd,mjd0, mjd_begin = mjd_fromheader(params, im_head)
     
-    ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, mjd, filen=reffile)     # obnames will be a list with only one entry: the matching entry 
+    ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, mjd, filen=reffile, warn_notfound=False)     # obnames will be a list with only one entry: the matching entry 
     if ra2 !=0 and dec2 != 0:
         params['ra']  = ra2
         params['dec'] = dec2
@@ -6199,7 +6232,10 @@ def get_barycent_cor(params, im_head, obnames, reffile):
         params['pmra'] = pmra
         params['pmdec'] = pmdec
         source_radec = 'The object coordinates are derived from the reference file: {0}.'.format(reffile)
-    
+    if type(params['ra']) == ephem.Angle:
+        params['ra'] = math.degrees(params['ra'])           # convert radians(float) into a float
+    if type(params['dec']) == ephem.Angle:
+        params['dec'] = math.degrees(params['dec'])         # convert into a float
     ra, dec = params['ra'], params['dec']
     
     bcvel_baryc, bjd = 0.0, 0.0
@@ -6219,6 +6255,7 @@ def get_barycent_cor(params, im_head, obnames, reffile):
         if params['site'] in barycorrpy.EarthLocation.get_site_names():
             site = params['site']
         ephemeris2='https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de405.bsp'
+
         bcvel_baryc = barycorrpy.get_BC_vel(JDUTC=mjd+mjd0,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
                            pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)
         bcvel_baryc = bcvel_baryc[0][0] / 1E3       # in km/s

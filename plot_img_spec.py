@@ -414,6 +414,7 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
             starta, startb = [1], False
         if (iml-1) - i - 1 == 0:
             text = [ 'Which aperture', 'list']
+            starta, startb = [int(ims[-2]/2)], False
         if 'plot_sub_{0}'.format(i) in settings.keys():
             starta = settings['plot_sub_{0}'.format(i)]
         if 'exclude_{0}'.format(i) in settings.keys():
