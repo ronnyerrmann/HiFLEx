@@ -218,7 +218,7 @@ def load_obj(name ):
     with open(name + '.pkl', 'rb') as f:
         return pickle.load(f)
 
-def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
+def plot_spectra_UI(im, title=''):
 
     ims = im.shape
     iml = len(ims)
@@ -227,36 +227,24 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
     if os.path.isfile('plot_settings.pkl') == True:
         settings = load_obj('plot_settings')
     
-    fig, frame = plt.subplots(1, 1)
-    plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
-    
+    fig, frame = plt.subplots(1, 1, figsize=(8,6))
+    #plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
+
     def plot(**param):
         frame, im = param['frame'], param['im']
         x_range, y_range, old_xlabel_text = copy.copy(frame.get_xlim()), copy.copy(frame.get_ylim()), copy.copy(frame.get_xlabel())
         frame.clear()
-        """for i in range(iml-1):
-            try:
-                param['plot_sub_{0}'.format(i)] = gui3.data['plot_sub_{0}'.format(i)]
-                param['exclude_{0}'.format(i)] = gui3.data['exclude_{0}'.format(i)]
-            except:
-                param['plot_sub_{0}'.format(i)] = []
-                param['exclude_{0}'.format(i)] = True
-                if (iml-1) - i - 1 == 1:
-                    param['plot_sub_{0}'.format(i)] = [1]
-                    param['exclude_{0}'.format(i)] = False
-                if 'plot_sub_{0}'.format(i) in settings:
-                    param['plot_sub_{0}'.format(i)] = settings['plot_sub_{0}'.format(i)]
-                if 'exclude_{0}'.format(i) in settings:
-                    param['exclude_{0}'.format(i)] = settings['exclude_{0}'.format(i)]
-        try:
-            wavelength_plot = gui3.data['wavelength_plot']
-        except:
-            wavelength_plot =''
-        try:
-            reset_plot = gui3.data['reset_plot']
-            gui3.ws[-3].delete(0, 200)              #clear the text field
-        except:
-            reset_plot = ''"""
+        size_inch = copy.deepcopy(fig.get_size_inches())
+        adjust=[0.04,0.97,0.97,0.03, 1.0,1.01]
+        adjust[0] = max(0.04, 0.2 - 0.04682*(size_inch[0] - 3.8)** 0.4416)          # left
+        adjust[3] = max(0.03, 0.0 + 0.47866*(size_inch[1] - 0.0)**-0.9368)          # bottom
+        if param['draw_filenames']:
+            frame.set_title(title, fontsize=14)
+            adjust[2] = 0.75
+        if param['draw_legend']:
+            adjust[1] = min(0.95, 0.7 + 0.07518*(size_inch[0] - 3.8)** 0.4289)          # right
+        plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
+        
         param['name_data_-1'] = ['data']
         param['data'] = im
         for j in range(0,iml-1):
@@ -335,7 +323,10 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
                     x_axis = periods
                     
                 if len(x_axis) > 0:
-                    frame.plot(x_axis, data, label=data_label)
+                    if param['draw_legend']:
+                        frame.plot(x_axis, data, label=data_label)
+                    else:
+                        frame.plot(x_axis, data)
                     #print sum(data[70:3000]-min(data[70:3000])), sum(data[1550:3000]-min(data[1550:3000]))
                     plot_ranges[0] = min(plot_ranges[0], min(x_axis))
                     plot_ranges[1] = max(plot_ranges[1], max(x_axis))
@@ -360,8 +351,9 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
             param['reset_plot']=True
         frame.set_xlabel(xlabel_text, fontsize=14)
         frame.set_ylabel('flux [ADU]', fontsize=14)
-        frame.set_title(title, fontsize=16)
-        frame.legend(loc='upper left', bbox_to_anchor=(adjust[4], adjust[5]))
+        if param['draw_legend']:
+            frame.legend(loc='upper left', bbox_to_anchor=(adjust[4], adjust[5]))
+            
     # get kwargs
     pkwargs = dict()
     pkwargs['frame'] = frame
@@ -431,6 +423,16 @@ def plot_spectra_UI(im, title='', adjust=[0.07,0.93,0.94,0.06, 1.0,1.01]):
     widgets['reset_plot'] = dict(label='reset plot',
                                 kind='CheckBox', start=False)
     pkwargs['reset_plot'] = False
+    widgets['draw_legend'] = dict(label='draw legend',
+                                kind='CheckBox', start=True)
+    pkwargs['draw_legend'] = True
+    widgets['draw_filenames'] = dict(label='draw filenames',
+                                kind='CheckBox', start=True)
+    pkwargs['draw_filenames'] = True
+    #widgets['draw_size'] = dict(label='12.8 x 9.6 inch',
+    #                            kind='CheckBox', start=False)
+    #pkwargs['draw_size'] = False
+    
     widgets['accept'] = dict(label='Close', kind='ExitButton', position=Tk.BOTTOM)
     widgets['update'] = dict(label='Update', kind='UpdatePlot', position=Tk.BOTTOM)
     

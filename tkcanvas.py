@@ -105,7 +105,7 @@ class TkCanvas:
         except:
             "do nothing"
         #extra room at top
-        plt.subplots_adjust(top=0.75)
+        #plt.subplots_adjust(top=0.75)      # commented out by ronny
         self.mwindow.draw()
 
     def button_bar(self, master, orientation='h'):

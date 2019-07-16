@@ -4,6 +4,7 @@
 \usepackage[usenames,dvipsnames,svgnames,table]{xcolor}    %Driver-independent color extensions
 \usepackage[linktocpage=true]{hyperref}            % Extensive support for hypertext in LaTeX
 \usepackage{graphicx,subfig}              % Enhanced support for graphics
+\usepackage{tabularx}					% Line breaks in tabluar environment
 \usepackage{amsmath}
 \usepackage{enumitem}
 
@@ -43,8 +44,23 @@
 \tableofcontents
 \pagenumbering{arabic}
 
+
 % -------------------------------------------------------------------------------------------
 \newpage
+
+
+\section{Introduction}
+\label{intro}
+
+This program is designed to take a fits image file (i.e. a CCD image) and run data reduction steps, extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another), apply the wavelength correction, measure the radial velocity, and perform further calibration steps.
+
+If you use the barycentric corrected radial velocities, the barycentric velocity, or the BJDTDB, please cite Kanodia and Wright 2018\footnote{\url{https://iopscience.iop.org/article/10.3847/2515-5172/aaa4b7}}.
+
+
+
+% -------------------------------------------------------------------------------------------
+%\newpage
+
 \section{For Beginners in Echelle Spectroscopy or Programming}
 
 This Pipeline was intended to be written as a black box for the unskilled user, however a basic understanding of echelle spectroscopy and data reduction of digital astronomical images is necessary in order to use it.
@@ -76,14 +92,6 @@ In order to work with the spectra, the following steps have to be done:
 % ------------------------------------------------------------------------------
 \newpage
 
-\section{Introduction}
-\label{intro}
-
-This program is designed to take a fits image file (i.e. a CCD image) and run data reduction steps, extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another), apply the wavelength correction, measure the radial velocity, and perform further calibration steps.
-
-If you use the barycentric corrected radial velocities, the barycentric velocity, or the BJDTDB, please cite Kanodia and Wright 2018\footnote{\url{https://iopscience.iop.org/article/10.3847/2515-5172/aaa4b7}}.
-
-
 \section{Changelog (recently)}
 \label{Section:Changelog_new}
 Please found the changes of newer versions in Chapter~\ref{Section:Changelog_old}.
@@ -110,12 +118,13 @@ Please found the changes of newer versions in Chapter~\ref{Section:Changelog_old
   \item Renamed parameter \verb|maxshift| to \verb|maxshift_orders|.
   \item Renamed parameter \verb|update_widths| to \verb|update_width_orders|.
   \item Renamed parameter \verb|master_flat_spec_norm_filename| to \verb|master_blaze_spec_norm_filename|.
+  \item Renamed parameter \verb|raw_data_imtyp_flatarc| to \verb|raw_data_imtyp_blaze|.
   \item Script \verb|prepare_file_list.py| changed to allow for easy GUI development. Files can be assigned directly to calibration within the script. 
   \item Time format in the file from parameter \verb|configfile_fitsfiles| created by \verb|prepare_file_list.py| changed.
   \item Improved determination of shift between current frame and the reference frame.
   \item Improved Error messages.
   \item Improvement of the way how the new header values are stored.
-  \item Improvement of the GUI
+  \item Improvement of the GUI and plotting the spectra.
 \end{itemize}
 
 
@@ -132,8 +141,8 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
     \item Create a new folder and copy the \verb|conf.txt| into that folder and open the file in an editor.
     \item Change parameter \verb|raw_data_path| to point to the folder or folders with your raw or pre-reduced fits-files. The data can be stored in sub-folders.
-    \item Set the parameter \verb|badpx_mask_filename| if a bad-pixel-mask exists. Otherwise leave empty.
-    \item Adjust \verb|rotate_frame| and \verb|flip_frame| so that the orders are up to down (blue wavelength on top) and red orders are on the right. The pipeline will first rotate and then flip.
+    \item Set the parameter \verb|badpx_mask_filename| if a bad-pixel-mask exists (see Chapter~\ref{Section:create_badpxmask}). Otherwise leave empty or 'NA'.
+    \item Adjust \verb|rotate_frame| and \verb|flip_frame| so that the orders are up to down (blue wavelength on top) and red orders are on the right. The pipeline will first rotate and then flip, the flip is swapping left and right.
     \item Adjust parameter \verb|subframe| to the full CCD size or a subframe, if only part of the CCD should be used.
   \end{itemize}
  
@@ -150,6 +159,7 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
   
   \item Create a new wavelength solution: \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
+    \item Change the path to the catalogue of the reference lines (\verb|reference_catalog|), if necessary. The file must contain one entry per line, each entry consists of tab-separated wavelength, line strength, and element. Line strength can be empty.
     \item Set parameter \verb|original_master_wavelensolution_filename =| \verb|master_wavelength_manual.fits|.
     \item To find a wavelength solution a file which provides the wavelength for some (extracted) pixel and wavelengths needs to be given (called \textit{pixel\_to\_wavelength.txt}. Until a GUI is available, a way to create the list is described in Chapter~\ref{section:create_new_wave_solution}.
     \item The number of degrees of freedom for the wavelength solution (2-dimensional polynomial fit) can be adjusted with \verb|polynom_order_traces| (polynomial orders along the dispersion direction) and \verb|polynom_order_intertraces| (polynomial orders between the traces).
@@ -173,7 +183,7 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
   
   \item Create the file \textit{object\_list.txt}: See Chapter~\ref{Section:create_object_list_file}.
   
-  \item Run the scrip \verb|prepare_file_list.py|: \vspace*{-\itemsep}
+  \item Run the scrip \verb|prepare_file_list.py| (see Chapter~\ref{Section:prepare_files} below for more information): \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
     \item Define what files should be what calibration.
     \item Please note that you can use already reduced images. In this case the reduction steps above should be empty for the file type (e.g. dark or real flats) to avoid a second application of the correction.
@@ -181,7 +191,7 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
   
   \item Run the scrip \verb|reduction_day.py|: \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
-    \item 
+    \item Afterwards: check the output in the \verb|logfile|, the images in the logging path, or in results in the extracted files.
   \end{itemize}
   
 \end{enumerate}
@@ -379,6 +389,10 @@ If the coordinates of the object are not stored in the fits header, then they ca
 
 Please note that the position of Moon, Jupiter, and Sun are calculated by the pipeline using the mid-exposure time. This requires that the filename contains the (case-insensitive) object name. Therefore the object is not required in the object list.
 
+\subsection{Create a bad pixel mask}
+\label{Section:create_badpxmask}
+\noindent The bad pixel masked used by the pipeline is fits file which consists of a 2 dimensional image consisting of '1' for good data and '0' for bad pixels. It can be created by the script \verb|create_badpx_mask.py|, but this is script is really work in progress at the moment.
+
 
 \subsection{Finding further information - logged results}
 
@@ -395,22 +409,12 @@ Please note that the position of Moon, Jupiter, and Sun are calculated by the pi
 \end{itemize}
 
 
-\subsection{Handling Parameters}
-
-\begin{enumerate}
-  \item The script has some hard coded values in the *.py files (normally at the beginning of a procedure). These values can be changed for testing, but usually do not need any changes.
-  \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|), given at the beginning of the python scripts. Some of the parameters in the configuration file need adjustment on a regular basis (see Chapter~\ref{Section:steps_new_data_set}).
-  \item Furthermore, the pipeline reads the configuration file given in parameter \verb|configfile_fitsfiles| (standard: \verb|fits_conf.txt|), which is automatically created by the pipeline when running \verb|prepare_file_list.py|.
-  \item The parameters which are set in the configuration file(s) can be overwritten with a command line input when a python script is started (e.g. \verb|python bla.py argument1=valueX argument2=valueY|).
-  \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
-\end{enumerate}
-
 
 % -------------------------------------------------------------------------------------------
 
 
 \newpage
-\section{Running the code on a new set of data (e.g. a new night)}
+\section{More information about how the pipeline works}
 
 
 \subsection{Steps performed by the pipeline}
@@ -469,7 +473,7 @@ To get the best results, the following data (or more files) should be taken. Ple
 \end{itemize}
 The suggestions are for bifurcated fiber input to the spectrograph. If a spectrograph with a single fiber is used, then the same data should be taken using the same fiber (setting parameter \verb|arcshift_side = center| will process the data correctly).
 
-\subsection{Steps to run the code on a new set of data}
+\subsection{Steps to run the code on a new set of data - to be moved to the front}
 \label{Section:steps_new_data_set}
 \noindent The following steps give an overview about the parameters which need to be adjusted when copying the configuration file from one night to the next.
 
@@ -493,9 +497,6 @@ The suggestions are for bifurcated fiber input to the spectrograph. If a spectro
     \item[\textless type\textgreater\_calibs\_create\_g] : Change the calibrations, which are applied to the CCD images before further processing or extraction for the different file types (e.g. bias, dark, flat, sflat, arc, blazecor, extract, wavelengthcal). A list of possible calibration options is given in Chapter~\ref{Section:parameters_CCD_proc} below.
     %In case of a new setup, it can be set to \verb|manual_solution.fits| (or any filename that doesn't exist). The script will then create a new solution from the information given in the file \verb|pixel_to_wavelength.txt|. For a description of the format of this file, check Chapter~\ref{section:create_new_wave_solution}.
   \end{description}
-  \item Run the python script: \\ \verb|python <path to scripts>/prepare_file_list.py|~. \\ See Chapter~\ref{Section:prepare_files} below for more information.
-  \item Run the python script: \\ \verb|python <path to scripts>/reduction_day.py|~.
-  \item Check the out in the \verb|logfile|, the images in the logging path, or in results in the extracted files.
 \end{enumerate}
 
 \noindent After checking the results (see Chapter~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to it's big flexibility. The orders can be removed in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the depending steps of \verb|reduction_day.py| will run again.
@@ -608,6 +609,8 @@ The final fits file contains the original header and some additional information
   \end{itemize}
   \item Spectrum of the calibration fiber, e.g. of the emission line lamp.
 \end{enumerate}
+
+These files can be plotted with the pipeline. Please find instructions in Chapter~\ref{Section:Plotting_extracted_files}.
 
 \subsubsection{raw-data filename + \_harps\_e2ds}
 This file contains the extracted spectrum without any modification in the same form as the \textit{e2ds} files created by the HARPS pipeline. The wavelength solution is stored in the header.
@@ -760,22 +763,11 @@ The data of the individual objects are stored in this folder in the subfolder \t
 
 It is possible to include the information from previous nights of the same object by linking or copying the \textit{.csv}-files into the corresponding \textit{data/}-folders and rerunning \verb|python <path to scripts>/reduction_day.py|. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
 
-% -------------------------------------------------------------------------------------------
 
-
-\newpage
-\section{Seting up the pipeline}
-
-
-\subsection{Setting up a new account or a new camera}
-When setting up a new camera or a new account paths and parameters need to be adjusted. The following list explains necessary changes and how to determine parameters which need to be changed.
+\subsection{Further comments}
 \begin{description}
-  \item[badpx\_mask\_filename] : Insert path to the bad-pixel mask. Use 'NA', if no bad-pixel mask is needed.
-  \item[reference\_catalog] : Change the path to the catalogue of the reference lines. The file contains one entry per line, each entry consists of tab-separated wavelength, line strength, and element. Line strength can be empty.
-  \item[rotate\_frame, flip\_frame] : The CCD image needs to be aligned in a way that the cross-dispersion axis is along vertical direction and the dispersion axis is along the horizontal direction, AND that the wavelength in dispersion direction is increasing with higher pixel number by providing the necessary angle for \verb|rotate_frame|. If necessary the image can be flipped (\verb|flip_frame = True|) after the rotation so that the wavelength in cross-dispersion direction decreases with increasing pixel number (blue orders on the right and the red orders on the left).
+
   \item[width\_percentile] Only pixel with more flux than the value given in \verb|width_percentile| (of the maximum flux) will be extracted. The extraction width can be varied later using the parameters \verb|extraction_width_multiplier| and \verb|arcextraction_width_multiplier|. The covered area can be checked in the logged images given in the parameters \verb|logging_traces_im| and \verb|logging_arctraces_im|. %In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
-  \item[bin\_search\_apertures] : In order to speed up the search for the traces, heavy binning should be applied. However, the value for the cross-dispersion axis should to chosen in a way, that neighbouring orders are still separated. This can be checked in the images \verb|flat_binned.fits|.
-  \item[arcshift\_side] : Position of the calibration traces compared to the science traces. Can be 'left', 'right', or 'center'. The later option implies, that only one fiber exists.
   \item[raw\_data\_imtyp\_keyword, raw\_data\_imtyp\_*] : Put the correct information for the image type header key here. 
   \item[raw\_data\_exptim\_keyword, raw\_data\_dateobs\_keyword] : Use the right header keywords for the exposure time and the observation date. The format should be \verb|%Y-%m-%dT%H:%M:%S.%f| or\footnote{\url{https://docs.python.org/2/library/datetime.html\#strftime-and-strptime-behavior}} \verb|%Y-%m-%dT%H:%M:%S|. More formats can be added in the procedure \textit{get\_obsdate}.
   \item[raw\_data\_timezone\_cor] In the unlikely case, that the date and time stored in \verb|raw_date_timezone_cor| is not UTC, the time zone correction can be given here. Numbers will be positive east of UTC and negative west of UTC, e.g. +7 for Bangkok time or -10 for Hawaii.
@@ -784,10 +776,18 @@ When setting up a new camera or a new account paths and parameters need to be ad
 %  \item[] : 
 \end{description}
 
-\noindent Further settings are described in Chapter~\ref{Section:steps_new_data_set}.
 
-\subsection{Create a bad pixel mask}
-\noindent The bad pixel masked used by the pipeline is fits file which consists of a 2 dimensional image consisting of '1' for good data and '0' for bad pixels. It can be created by the script \verb|create_badpx_mask.py|, but this is script is really work in progress at the moment.
+\subsection{Handling Parameters}
+
+\begin{enumerate}
+  \item The script has some hard coded values in the *.py files (normally at the beginning of a procedure). These values can be changed for testing, but usually do not need any changes.
+  \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|), given at the beginning of the python scripts. Some of the parameters in the configuration file need adjustment on a regular basis (see Chapter~\ref{Section:steps_new_data_set}).
+  \item Furthermore, the pipeline reads the configuration file given in parameter \verb|configfile_fitsfiles| (standard: \verb|fits_conf.txt|), which is automatically created by the pipeline when running \verb|prepare_file_list.py|.
+  \item The parameters which are set in the configuration file(s) can be overwritten with a command line input when a python script is started (e.g. \verb|python bla.py argument1=valueX argument2=valueY|).
+  \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
+\end{enumerate}
+
+
 
 % -------------------------------------------------------------------------------------------
 
@@ -798,14 +798,18 @@ When setting up a new camera or a new account paths and parameters need to be ad
 \noindent Once the science spectra were extracted these files can be analysed more in detail. 
 
 \subsection{Plotting the data}
+\label{Section:Plotting_extracted_files}
+To plot the results the python program \verb|plot_img_spec.py| can be used. This script reads the files as described in Chapter~\ref{section:extraction_data_format} and which are listed in the file \verb|plot_files.lst|. At the first start it will plot the extracted spectrum for all orders of all files in the list. The spectra will be plotted in the pixel-reference.
 
-To plot the results the python program \verb|plot_img_spec.py| can be used. This script read the files given in the file \verb|plot_files.lst| and will plot at the beginning all data. Further limitations of the plotted data can be done using the UI. For a plot in different axis the first text box can be used. See the list below for options. For plotting only data from a subsection of files, the first text boxes 'Which file' and 'Exclude' need to be used. For plotting only a subsection of data types the second text boxes with 'Which data' and 'Exclude' are used to define this. For plotting only some apertures, the last text boxes are used (see an example in Fig.~\ref{figure_plotting_results_example1} and \ref{figure_plotting_results_example2}).
+This plot uses the matplotlib libraries and a toolbar for interactive navigation is available\footnote{\label{Footnote:matplotlib_toolbar} \url{https://matplotlib.org/3.1.1/users/navigation_toolbar.html}} in the lower left corner. Please refer to Footnote~\ref{Footnote:matplotlib_toolbar} for instruction on the use. While the changes done with the toolbar are instant, the changes of the parameters on the right have to be updated using the button provided. To reset the plot to automatic scaling enable \textit{reset plot}. Please be aware that once the window size has been changed and the plot is updated again the margins will be adapted to use the plot area in an optimal way.
+
+Further limitations of the plotted data can be done using the GUI. For a plot in different x-axis the first text box can be used. See the list in Table~\ref{Tab:plotting_options} for options. For plotting only data from a subsection of files, the first text boxes \textit{Which file} and \textit{Exclude} below this field can to be used. For plotting only a subsection of data types the second text boxes with \textit{Which data} and \textit{Exclude} are used to define this. For plotting only some apertures, the last text box are used (see an example in Fig.~\ref{figure_plotting_results_example1} and \ref{figure_plotting_results_example2}).
 
 \begin{figure} 
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/screenshot_plot_img_spec}
   \end{center} 
-  \caption{An example of how to plot the extracted data. Shown are the solar spectra of entry 0 and 14 in the plot\_files.lst file. The graph shows the continuum normalised flux (data type 5), plotted over the wavelength (w). Only apertures 14 and 16 are shown.
+  \caption{An example of how to plot the extracted data. Shown are the solar spectra of entry 20 and 280 in the plot\_files.lst file (\textit{Which file}). The graph shows the blaze corrected flux (\textit{Which data}: 3), plotted over the wavelength (w). Only apertures 18, 19, and 20 are shown. Each of the selections can be inverted by ticking the \textit{Exclude}-boxes below their entries.
     \label{figure_plotting_results_example1}}
 \end{figure}
 
@@ -813,19 +817,22 @@ To plot the results the python program \verb|plot_img_spec.py| can be used. This
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/screenshot_plot_img_spec_lomb_scargle_fft}
   \end{center} 
-  \caption{Another example of how to plot the extracted data. Shown is the Lomb-Scargle Periodogram for the white light spectra of entry 5 to 7, 20, 24, and 44 in the plot\_files.lst file. The extracted spectra (data type 1) of apertures 2, 12, and 29 and their corresponding wavelength solution was used as basis for the calculations.
+  \caption{Another example of how to plot the extracted data. Shown is the Lomb-Scargle Periodogram (wl) for the same spectra as shown in Figure~\ref{figure_plotting_results_example1} of files 20 and 280 in the plot\_files.lst file. The blaze corrected spectra (data type 3) of all apertures except 0 to 17 and 21 to 280 (this means only apertures 18 to 20) and their corresponding wavelength solution was used as basis for the calculations.
     \label{figure_plotting_results_example2}}
 \end{figure}
 
-The following options for axis plotting exist:
-\begin{description}\setlength\itemsep{0em}
-  \item [] (empty): The flux is plotted against the pixel along the CCD in dispersion direction.
-  \item [w] : The flux is plotted against the wavelength (stored in data type 0).
-  \item [f] : The Fourier transformation is plotted against the period (in pixel). 
-  \item [l] : The Lomb-Scargle-Periodogram is plotted against the period (in pixel).
-  \item [wl] : The Lomb-Scargle-Periodogram is plotted against the period (in wavelength). If you look for periodic signals in the spectrum, this is what you very probably should use. 
-\end{description}
 
+\begin{table}[htb]
+ \caption{Options for the data on the x-axis for plotting.\vspace{-0.9\baselineskip} }
+ \label{Tab:plotting_options}
+ \begin{tabularx}{\textwidth}{c X}
+  (empty)    & The flux is plotted against the pixel along the CCD in dispersion direction.   \\
+  \textbf{w} & The flux is plotted against the wavelength (stored in data type 0).   \\
+  \textbf{f} & The Fourier transformation is plotted against the period (in pixel).    \\
+  \textbf{l} & The Lomb-Scargle-Periodogram is plotted against the period (in pixel).   \\
+  \textbf{wl} & The Lomb-Scargle-Periodogram is plotted against the period (in wavelength). If you look for periodic signals in the spectrum, this is what you very probably should use.    \\
+ \end{tabularx}
+\end{table}
 
 %\subsection{Finding the radial velocity }
 
@@ -1089,7 +1096,7 @@ rm extracted/*
 \end{itemize}
 
 \subsection{Error message: ``urllib2.URLError: \textless urlopen error timed out\textgreater''}
-When the barycentric correction are done, the python package \textit{barycorrpy} is downloading data from the internet, e.g. for the leap second management. It also calls the package \textit{astropy}, which downloads position files. If the internet connection is not available during the download the pipeline might fail. In this case try to re-run the pipeline again, it might have been just a slip in the internet connection. If it continuously fails you can check that following resources are available in you browser:
+When the barycentric correction are done, the python package \textit{barycorrpy} is downloading data from the internet, e.g. for the leap second management. It also calls the package \textit{astropy}, which downloads position files. If the internet connection is not available during the download the pipeline might fail. In this case try to re-run the pipeline again, it might have been just a slip in the internet connection. If it continuously fails you can check that following resources are available (e.g. in you browser):
 \begin{itemize}
   \item \url{http://www.astropy.org/astropy-data/coordinates/sites.json}
   \item \url{http://maia.usno.navy.mil/ser7/finals2000A.all}
@@ -1099,14 +1106,14 @@ When the barycentric correction are done, the python package \textit{barycorrpy}
 
 
 \subsection{Further help}
-If you observe strange behaviour, please contact Ronny with a describtion of the problem and the error message. Access to the reduction folder would be preferable.
+If you observe strange behaviour, please contact Ronny\footnote{r.errmann@herts.ac.uk} with a description of the problem and the error message. Access to the reduction folder would be preferable.
 
 % -------------------------------------------------------------------------------------------
 
 
 \newpage
 \section{Installation and dependencies}
-\label{installation}
+\label{Section:installation}
 
 \noindent This program was written to work with modules installed in Anaconda 2 and python 2.7. It is recommended to use an installation of anaconda 2 to use this program (If this is not possible, the whole module dependency is given in Appendix~\ref{section:module_dependency}).
 
