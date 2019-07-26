@@ -239,7 +239,7 @@ def textfileargs(params, textfile=None):
     bools = ['flip_frame', 'update_width_orders', 'GUI']
     sides = ['arcshift_side']
     results = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_csv_terra', 
-               'path_harpsformat']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
+               'path_harpsformat', 'master_blaze_spec_norm_filename']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
     full_filenames = ['badpx_mask_filename', 'original_master_traces_filename', 'original_master_wavelensolution_filename', 'reference_catalog',
                 'configfile_fitsfiles', 'raw_data_file_list', 'terra_jar_file']    # deal with full filenames -> nothing to do
     texts = ['editor', 'extracted_bitpix', 'site', 'object_file']      # -> nothing to do
@@ -892,7 +892,9 @@ def save_fits_width(pfits, xlows, xhighs, widths, filename):
     :param widths: 2d list, length same as number of orders, each entry contains left border, right border, and Gaussian width of the lines, as estimated in the master flat
     :param filename: string, location and file name of the file containing the polynomial fits
     """
-    if not os.path.exists(filename.rsplit('/',1)[0]):
+    if len(filename.rsplit('/',1)) == 1:     # no path is in the filename
+        logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( filename, os.getcwd() ))
+    elif not os.path.exists(filename.rsplit('/',1)[0]):
         logger('Error: Folder to save {0} does not exists.'.format(filename))
         
     data = []
@@ -978,7 +980,9 @@ def save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_ar
                                         sorted by the brightest to faintest (in spectrum from which the solution is derived) and 0 to make into an array
     :param filename: string, location and file name of the file
     """
-    if not os.path.exists(filename.rsplit('/',1)[0]):
+    if len(filename.rsplit('/',1)) == 1:     # no path is in the filename
+        logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( filename, os.getcwd() ))
+    elif not os.path.exists(filename.rsplit('/',1)[0]):
         logger('Error: Folder to save {0} does not exists.'.format(filename))
     
     data = []
@@ -1155,14 +1159,19 @@ def scale_image_plot(im, scale_type):
     """
     im = np.array(im)
     if scale_type == 'log10':
-        if np.min(im) <= 1:
-            add_value = 1-np.min(im)
+        min_im = np.min(im)
+        if min_im <= 0:
+            add_value = 1-min_im
             im_plot = np.log10(im+add_value) - np.log10(add_value)
+        elif min_im < 1:
+            add_value = 1-min_im
+            im_plot = np.log10(im+add_value)
         else:
             im_plot = np.log10(im)
     else:
         logger('Warn: The scaletype to scale the image is not defined: {}'.format(scale_type))
         im_plot = im
+    
     return im_plot
 
 def combine_median(ims):
@@ -1779,7 +1788,7 @@ def find_trace_orders(params, im):
     binx = params['binx']
     biny = params['biny']
     maxFWHM = max(1, int(round(estimate_width(im)*2.35482*1.5)))   # The average Gaussian width, transformed into a FWHM and extendet, as this is the maximum FWHM
-    maxshift = 0.15*binx                    # Only 0.15px shift per pixel along one order
+    maxshift = max(0.5,0.17*binx)                    # Only 0.15px shift per pixel along one order
     ims = im.shape
     cen_px = int(ims[0]*binx/2)             # central pixel to base the fit on
     breakvalue = np.percentile(im,25)       # The brightes pixel of one order needs to be brighter than this value, otherwise it won't be identified (lower values -> darker orders are found)
@@ -1823,24 +1832,28 @@ def find_trace_orders(params, im):
         oldcenter, lastadd = pos_max[1], pos_max[0]
         order_overlap = False
         last_trustworth_position, no_center = 0, 0
+        #print pos_max  # Test !
         for i in range(pos_max[0],-1,-1):               # check positions upwards
             center, width, leftmin,rightmin = find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.5)       # significance=4.0 tested as useful for HARPS, EXOhSPEC
-            if pos_max[1] >= 2000 and pos_max[1] <= 260:            # bugfixing
-                if not ( width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0 and abs(center-oldcenter)<maxshift*2) ) ):
-                    find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.5, bugfix=True)
+            if pos_max[1] >= 2900 and pos_max[1] <= 320:            # bugfixing
+                #if not ( width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0 and abs(center-oldcenter)<maxshift*2) ) ):
+                find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.0, bugfix=True)
                 #print(pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions))
             if width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0 and abs(center-oldcenter)<maxshift*2) ):        #first entry can be further off
                 if im_traces[i,min(ims[1]-1,int(center))] != 0 or im_traces[i,min(ims[1]-1,int(center+1))] != 0:        # this order shouldn't cross another order
+                    #print i, "order_overlap"   # Test !
                     order_overlap = True
                     break
                 positions = np.vstack([positions, [i, center, 0]])
                 widths.append([center-leftmin,rightmin-center, width])
                 oldcenter, lastadd, last_trustworth_position, no_center  = center, i, len(positions)-1, 0
             else:#if expected_positions != []:
+                #if width !=0:
+                #    print i, abs(center-oldcenter), maxshift   # Test !
                 no_center += 1
                 if abs(oldcenter - 0.) < maxshift/2. or abs(oldcenter - ims[1]) < maxshift/2.:  # if the trace leaves shortly the CCD
                     no_center -= 0.6
-                if no_center >= max(3, int(40/binx), 1*maxFWHM):         # stop searching if too many fits are unseccessful, as otherwise the fit might drift off
+                if no_center >= max(5, int(40/binx), 1*maxFWHM):         # stop searching if too many fits are unseccessful, as otherwise the fit might drift off
                     break
                 center1, width, leftmin,rightmin = find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.0, bugfix=False)
                 if width != 0 and abs(center1-oldcenter) < maxshift:
@@ -1867,22 +1880,25 @@ def find_trace_orders(params, im):
         last_trustworth_position, no_center = 0, 0
         for i in range(pos_max[0]+1,ims[0]):               # check positions downwards
             center, width, leftmin,rightmin = find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.5)       # significance=4.0 tested as useful for HARPS, EXOhSPEC
-            if pos_max[1] >= 2000 and pos_max[1] <= 260:            # bugfixing
-                if not ( width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0and abs(center-oldcenter)<maxshift*2) ) ):
-                    find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.5, bugfix=True)
-                print(pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions), len(expected_positions), last_trustworth_position)
-            if width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0and abs(center-oldcenter)<maxshift*2) ):
+            if pos_max[1] >= 2900 and pos_max[1] <= 320:            # bugfixing
+                #if not ( width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0and abs(center-oldcenter)<maxshift*2) ) ):
+                find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.0, bugfix=True)
+                #print(pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions), len(expected_positions), last_trustworth_position)
+            if width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0 and abs(center-oldcenter)<maxshift*2) ):
                 if im_traces[i,min(ims[1]-1,int(center))] != 0 or im_traces[i,min(ims[1]-1,int(center+1))] != 0 or order_overlap == True:
+                    #print i, "order_overlap"   # Test !
                     order_overlap = True
                     break
                 positions = np.vstack([positions, [i, center, 0]])
                 widths.append([center-leftmin,rightmin-center, width])
                 oldcenter, lastadd, last_trustworth_position, no_center  = center, i, len(positions)-1, 0
             else:#if expected_positions != []:
+                #if width !=0:
+                #    print i, abs(center-oldcenter), maxshift   # Test !
                 no_center += 1
                 if abs(oldcenter - 0) < maxshift/2. or abs(oldcenter - ims[1]) < maxshift/2.:  # if the trace leaves shortly the CCD
                     no_center -= 0.6
-                if no_center >= max(3, int(40/binx), 1*maxFWHM):         # stop searching if too many fits are unseccessful, as otherwise the fit might drift off
+                if no_center >= max(5, int(40/binx), 1*maxFWHM):         # stop searching if too many fits are unseccessful, as otherwise the fit might drift off
                     break
                 center1, width, leftmin,rightmin = find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.0, bugfix=False)
                 if width != 0 and abs(center1-oldcenter) < maxshift:
@@ -2148,7 +2164,7 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
     :param offset: allows to shift the spectrum
     :param var: can be 'fast' or 'prec'.
         'fast': extraction of the fraction of the border pixel
-        'prec': fit a polynomial around the border of the extrion width to extract with higher precission
+        'prec': fit a polynomial around the border of the extraction width to extract with higher precission
     :return spec: list,  length same as number of orders, each containing
                   a 1D numpy array with the spectrum of each order in
 
@@ -2227,7 +2243,7 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
                     elif pos == 'b':
                         ssum += polyint(uppers[xrow]) - polyint(lowers[xrow])
                     else:
-                        print('Programming error around line 2100')
+                        print('Programming error around line 2200')
                 ospecs[xrow] = ssum
                 ogood_px_mask[xrow] = good_px
         else:           # old solution
@@ -2937,38 +2953,39 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
         # Using the pixel shift
         good_values, pfit = sigma_clip(shifts[:,3]*0, shifts[:,3]-shifts[:,7], 0, 3, 3, repeats=20)  #orders, sigma low, sigma high
         shifts = shifts[good_values,:]
-    shift_avg, shift_std, width_avg, width_std = in_shift,0,0,0
+    shift_avg, shift_med, shift_std, width_avg, width_std = in_shift,in_shift,0,0,0
     if len(shifts) >= ratio_lines_identified * checked_arc_lines and len(shifts) != 0:                          # Only if enough lines have been detected
         #shift_avg, shift_std = np.mean( (shifts[:,4]-shifts[:,2]) / shifts[:,2] ), np.std( (shifts[:,4]-shifts[:,2]) / shifts[:,2], ddof=1)    # Will vary along the CCD
         shift_avg, shift_std = np.mean( (shifts[:,3]-shifts[:,7]) ), np.std( (shifts[:,3]-shifts[:,7]), ddof=1)
+        shift_med = np.median( (shifts[:,3]-shifts[:,7]) )
         width_avg, width_std = np.mean(shifts[:,6]), np.std(shifts[:,6], ddof=1)
-        
+
         # Save the shift for later use
         if params['extract_wavecal']:            # This values are not correct, as later the shift has to be applied
-            add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_float, shift_avg-in_shift, shift_std, fib), params['master_wavelengths_shift_filename'] )
+            add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_float, shift_med-in_shift, shift_std, fib), params['master_wavelengths_shift_filename'] )
         
-    logger('Info: The shift between the lines used in the wavelength solution and the current calibration spectrum of file {9} is {0} +- {1} px ({8} km/s). {2} reference lines have been used, {7} reference lines have been tested. The arc lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px'\
-                .format(round(shift_avg,4), round(shift_std,4), shifts.shape[0], round(width_avg,3), \
+    logger('Info: The median shift between the lines used in the wavelength solution and the current calibration spectrum of file {9} is {0} +- {1} px ({8} km/s). {2} reference lines have been used, {7} reference lines have been tested. The arc lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px'\
+                .format(round(shift_med,4), round(shift_std,4), shifts.shape[0], round(width_avg,3), \
                         round(width_std,3), round(width_avg*2.35482,3), round(width_std*2.35482,3), checked_arc_lines,
-                        round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), objname ))
+                        round(shift_med*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), objname ))
     if len(shifts) >= ratio_lines_identified * checked_arc_lines and len(shifts) != 0:                          # Statistics only if enough lines were detected
         statistics_arc_reference_lines(shifts, [0,1,6,2], reference_names, wavelength_solution, xlows, xhighs, show=False)
     # correction in the other side of the shift
 
     wavelength_solution_new = copy.deepcopy(wavelength_solution)
     #wavelength_solution_new[:,1] -= shift_avg                       # shift the central pixel, - sign is right, tested before 19/9/2018
-    wavelength_solution_new[:,1] += shift_avg                       # shift the central pixel, + sign is right, tested on 19/9/2018
+    wavelength_solution_new[:,1] += shift_med                       # shift the central pixel, + sign is right, tested on 19/9/2018
     
     # In case of pixel shift available -> linear interpolation of pixel shift
     if not params['extract_wavecal']:         # science and calibration traces are at the same position and it's not the calibration spectrum
         wavelength_solution_new, shift_stored = shift_wavelength_solution_times(params, wavelength_solution_new, obsdate_float, objname)
-        shift_avg += shift_stored
+        shift_med += shift_stored
     
-    if False:
-        shift_avg -= in_shift
+    if False:           # The changes below are not necessary, shift_med/shift_avg will contain the input shift
+        shift_avg -= in_shift           # To separate the input shift from the rest
         logger('Info: Corrected for input shift. The shift of the currect spectrum is {0}'.format(round(shift_avg,4) ))
     #print 'return_shift', shift_avg
-    return wavelength_solution_new, shift_avg
+    return wavelength_solution_new, shift_med
     
     """ old and wrong
     wavelength_solution_new = []
@@ -3498,7 +3515,9 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         if im_head_harps_format.comments[entry] == '':
             im_head_harps_format.comments[entry] = '/'      # Serval can't read header keywords without comment, for NAXISj this needs to be done in save_multispec
     fname = params['path_harpsformat']+obnames[0]+'/'+'HARPS.{0}_e2ds_A.fits'.format(im_head_harps_format['EXO_PIPE DATE-OBS'][:-3])
-    if not os.path.exists(fname.rsplit('/',1)[0]):
+    if len(fname.rsplit('/',1)) == 1:     # no path is in the filename
+        logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( fname, os.getcwd() ))
+    elif not os.path.exists(fname.rsplit('/',1)[0]):
         try:
             os.makedirs(fname.rsplit('/',1)[0])
         except:
@@ -3540,7 +3559,9 @@ def save_spec_csv(spec, wavelengths, good_px_mask, fname):
     Note: all orders must of of the SAME LENGTH
     [email from Guillem Anglada, 18/10/2018 12:25
     """
-    if not os.path.exists(fname.rsplit('/',1)[0]):
+    if len(fname.rsplit('/',1)) == 1:     # no path is in the filename
+        logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( fname, os.getcwd() ))
+    elif not os.path.exists(fname.rsplit('/',1)[0]):
         try:
             os.makedirs(fname.rsplit('/',1)[0])
         except:
@@ -5351,21 +5372,18 @@ def adjust_binning_UI(im1, binxy, userinput=True):
     # set up plot
     fig, frame = plt.subplots(1, 1)
     fig.set_size_inches(10, 7.5, forward=True)
+
     # get kwargs
-    pkwargs = dict(frame=frame, im1=im1, binxy=binxy)
+    binx, biny = binxy
+    pkwargs = dict(frame=frame, im1=im1, binx=binx, biny=biny)
 
     # define update plot function
-    def plot(frame, im1, binxy):
+    def plot(frame, im1, binx, biny):
         frame.clear()
         title = ('Adjusting the binning')
-        """try:
-            binxy = [gui3.data['binx'], gui3.data['biny']]          # Fails on first step
-        except:
-            binxy = binxy"""
-        im_bin, dummy, dummy = bin_im(im1, binxy )
+        im_bin, dummy, dummy = bin_im(im1, [binx,biny] )
         frame = plot_img_spec.plot_image(im_bin, 'dummy_filename', pctile=0, show=False, adjust=[0.07,0.95,0.95,0.07], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=False, axis_name=['Cross-dispersion axis [px]','Dispersion axis [px]','flux [ADU]'])
-    def result(frame, im1, binxy):
-        return binxy
+    
     # run initial update plot function
     plot(**pkwargs)
 
@@ -5491,7 +5509,7 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
         if do_shft:
             title += 'Finding the shift of the traces.\n'
         if do_rm:
-            title += 'Removing bad orders (Largest order number = {0})\n'.format(len(pfits))
+            title += 'Removing bad orders (Largest order number = {0})\n'.format(len(pfits)-1)
         mask = remove_orders(pfits, rm_orders)
         pfits_shift = copy.deepcopy(pfits)
         if len(pfits_shift.shape) == 3:

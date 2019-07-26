@@ -301,7 +301,7 @@ if __name__ == "__main__":
         shift = find_shift_images(params, im_blazecor, im_trace1, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, extract=True)
         flat_spec, good_px_mask = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='prec', offset=shift)
         flat_spec_norm = flat_spec/np.nanmedian(flat_spec)
-        flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.1)         # Ignore all areas where the flux is 10% of median flux
+        flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.005)         # Ignore all areas where the flux is 0.5% of median flux
         if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
             blazecor_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
         else:
@@ -320,15 +320,15 @@ if __name__ == "__main__":
     for entry in params.keys():
         if entry.find('extract') >= 0 and entry.find('_rawfiles') >= 0:
             extractions.append(entry.replace('_rawfiles',''))
-        if entry.find('wavelengthcal2') >= 0 and entry.find('_rawfiles') >= 0:
-            wavelengthcals_sci.append(entry.replace('_rawfiles',''))
-        elif entry.find('wavelengthcal') >= 0 and entry.find('_rawfiles') >= 0:
+        if entry.find('wavelengthcal2') >= 0 and entry.find('_rawfiles') >= 0:          # ThAr in calibration fiber
             wavelengthcals_cal.append(entry.replace('_rawfiles',''))
+        elif entry.find('wavelengthcal') >= 0 and entry.find('_rawfiles') >= 0:         # ThAr in science fiber
+            wavelengthcals_sci.append(entry.replace('_rawfiles',''))
             
     flat_spec_norm = np.array(fits.getdata(params['master_blaze_spec_norm_filename']))              # read it again, as the file is different than the data above
     number_no_data = np.sum(np.isnan(flat_spec_norm[2,:,:]), axis=1)                                # What orders don't contain enough data
-    keep_orders  = np.where(number_no_data <= 0.1*flat_spec_norm.shape[2])[0]                         # remove all orders where less than 10% are not available
-    remove_orders = np.where(number_no_data > 0.1*flat_spec_norm.shape[2])[0]
+    keep_orders  = np.where(number_no_data <= 0.2*flat_spec_norm.shape[2])[0]                         # remove all orders where more than 10% of the pixel are not available
+    remove_orders = np.where(number_no_data > 0.2*flat_spec_norm.shape[2])[0]
     if len(keep_orders) < flat_spec_norm.shape[1]:
         logger('Warn: The blaze function for {0} orders contains not enough flux. The following orders have been removed: {1}'.format(len(remove_orders), remove_orders))
         #print wavelength_solution.shape, wavelength_solution_arclines.shape, sci_tr_poly.shape, xlows.shape, xhighs.shape, widths.shape, cal_tr_poly.shape, axlows.shape, axhighs.shape, awidths.shape, flat_spec_norm.shape
@@ -340,8 +340,8 @@ if __name__ == "__main__":
     
     if ( params['arcshift_side'] == 0 or params['two_solutions'] ) and len(wavelengthcals_cal)+len(wavelengthcals_sci) > 0:         # no calibration spectrum at the same time
         logger('Info: Starting to extract wavelength calibrations')
-        params['extract_wavecal'] = True
-        for [wavelengthcals,fib] in [ [wavelengthcals_cal,'cal'], [wavelengthcals_sci,'sci'] ]:
+        params['extract_wavecal'] = True                                                                                # necessary for shift_wavelength_solution so the shift is stored in a file
+        for [wavelengthcals, fib] in [ [wavelengthcals_cal,'cal'], [wavelengthcals_sci,'sci'] ]:
             for wavelengthcal in wavelengthcals:
                 for im_name_full in params[wavelengthcal+'_rawfiles']:
                     # !!! Posible improvement: combine a few files if they are taken close to each other

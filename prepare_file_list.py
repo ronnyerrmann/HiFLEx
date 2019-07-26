@@ -63,6 +63,7 @@ def create_parameters(conf_data, warn, param, textparam, parcals, exist_bias, ex
         conf_data[param+'_calibs_create'] = text
     else:                                                   # Just add the file
         conf_data[param+'_rawfiles'] += ', ' + entry[0]
+
     return conf_data, warn
 
 def add_new_rawfiles_file_list(params, file_list=[]):
@@ -245,7 +246,7 @@ def add_extraction_parameters_file_list(params, file_list, start_index):
                 extract += 't2, '
             elif params['cal2_s_exp']*0.9 <= entry[3] <= params['cal2_s_exp']*1.1:                             # In case only one exposure time -> cal2_l is copied in cal2_s
                 extract += 'w2s, '
-        if (entry[2] == 'none' or entry[2] == 'dark' or entry[2] == 'wave') and entry[1] == 'wave' and params['cal1_l_exp'] >= cal1_s_exp:               # wave in science fiber
+        if (entry[2] == 'none' or entry[2] == 'dark' or entry[2] == 'wave') and entry[1] == 'wave' and params['cal1_l_exp'] >= params['cal1_s_exp']:               # wave in science fiber
             parcal = 'arc'
             if params['cal1_l_exp']*0.9 <= entry[3] <= params['cal1_l_exp']*1.1:
                 extract += 'w1l, '
@@ -302,18 +303,19 @@ def create_configuration_file(params, file_list):
     easy_assignments.append(['z'   , 'blazecor' , 'blazecor'])       # blaze correction (continuum source)
     easy_assignments.append(['t1'  , 'trace1'  , 'trace1' ])       # trace of the science fiber
     easy_assignments.append(['t2'  , 'trace2'  , 'trace2' ])       # trace of the calibration fiber
-    easy_assignments.append(['w1s' , 'cal1_s'  , 'arc'    ])       # Wavelength calibration
-    easy_assignments.append(['w1l' , 'cal1_l'  , 'arc'    ])       # Wavelength calibration
-    easy_assignments.append(['w2s' , 'cal2_s'  , 'arc'    ])       # Wavelength calibration
-    easy_assignments.append(['w2l' , 'cal2_l'  , 'arc'    ])       # Wavelength calibration
+    easy_assignments.append(['w1s' , 'cal1_s'  , 'arc'    ])       # Wavelength calibration (in science fiber)
+    easy_assignments.append(['w1l' , 'cal1_l'  , 'arc'    ])       # Wavelength calibration (in science fiber)
+    easy_assignments.append(['w2s' , 'cal2_s'  , 'arc'    ])       # Wavelength calibration (standard)
+    easy_assignments.append(['w2l' , 'cal2_l'  , 'arc'    ])       # Wavelength calibration (standard)
     for entry in file_list:                                         # Extraction is set up below
         #if entry[0].find('#') <> -1:        # comment # found
         #    continue
+        #print entry, conf_data
         param = ''
         extract = entry[5].lower().replace(' ','').split(',')
         for easy_assignment in easy_assignments:
             if easy_assignment[0] in extract:
-                conf_data, warn = create_parameters(conf_data, warn, easy_assignment[1], easy_assignment[1], [easy_assignment[1]], exist_bias, exist_rflat, exp_darks, entry)
+                conf_data, warn = create_parameters(conf_data, warn, easy_assignment[1], easy_assignment[1], [easy_assignment[2]], exist_bias, exist_rflat, exp_darks, entry)
         if 'd' in extract:               # Fiber1 and Fiber2
             param = 'dark{0}'.format(entry[3])                      # Exposure time
             textparam = param.replace('.','p')+'s'
@@ -322,18 +324,18 @@ def create_configuration_file(params, file_list):
         if entry[5].lower().find('e') == -1 and entry[5].lower().find('w') == -1:          # No extraction and no wavelength calibration
             continue
         for extraction in entry[5].replace(' ','').split(','):
-            if extraction.lower().find('w2') == 0:       # use this file for wavelength calibration between spectra
+            if extraction.lower() == 'w2':       # use this file for wavelength calibration between spectra
                 param = 'wavelengthcal2'
                 parcal = 'wavelengthcal'
                 conf_data, warn = create_parameters(conf_data, warn, param, param, [parcal], exist_bias, exist_rflat, exp_darks, entry)
                 continue  
-            elif extraction.lower().find('w') == 0:       # use this file for wavelength calibration between spectra
+            elif extraction.lower() == 'w':       # use this file for wavelength calibration between spectra
                 param = 'wavelengthcal'
                 conf_data, warn = create_parameters(conf_data, warn, param, param, [param], exist_bias, exist_rflat, exp_darks, entry)
                 continue                        # otherwise Warn from below will be triggered
-            #if extraction.lower().find('e') <> 0:        # use find as len(extraction) might be 0
-            #    warn.append('Warn: I dont know what to do with the extraction parameter {0} (it doesnt begin with "e") for file {1}. This spectrum will therefore not be extracted. Please check {2} and run the script again, if you perform changes.'.format(extraction, entry[0], params['raw_data_file_list'] ))
-            #    continue
+            if extraction.lower().find('e') <> 0:        # use find as len(extraction) might be 0
+                # warn.append('Warn: I dont know what to do with the extraction parameter {0} (it doesnt begin with "e") for file {1}. This spectrum will therefore not be extracted. Please check {2} and run the script again, if you perform changes.'.format(extraction, entry[0], params['raw_data_file_list'] ))
+                continue                                # The lines remaining in the for loop are only to be executed when it's about extraction, otherwise something might readded another time
             if extraction.lower().find('ec') == 0:            # combine data before extraction
                 param = 'extract_combine'+extraction[2:]
             elif extraction.lower().find('e') == 0:           # just extraction:
@@ -351,7 +353,7 @@ def create_configuration_file(params, file_list):
 
     for entry in warn:
         logger(entry)
-        
+    
     return conf_data
 
 if __name__ == "__main__":

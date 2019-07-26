@@ -326,7 +326,7 @@ Tests have shown that providing about 10 lines every 5 to 10 orders is enough fo
 22 & 73.44 & 0.99 & 50.2 \\
     \end{tabular}}
   \qquad
-  \subfloat[Example of \textit{arc\_lines\_wavelength.txt} for one order as seen in a spreadsheet. Lines without a wavelength can, but don't have to be deleted. The text in the columns with line type and following are optional. Columns have to be spaced by exactly one tabulator in the exported txt-file.]{
+  \subfloat[Example of \textit{pixel\_to\_wavelength.txt} for one order as seen in a spreadsheet. Lines without a wavelength can, but don't have to be deleted. The text in the columns with line type and following are optional. Columns have to be spaced by exactly one tabulator in the exported txt-file.]{
     \begin{tabular}{ | r | r | r | l | l | l |}
 \hline
 22 & 47 & 244.85 & 6182.6216 & ThI &  \\
@@ -371,7 +371,7 @@ Tests have shown that providing about 10 lines every 5 to 10 orders is enough fo
 \end{table}
 
 
-The correlated data needs to be saved into file \textit{arc\_lines\_wavelength.txt} (in the working directory) with the following tab-separated entries (exactly one separator between each column):
+The correlated data needs to be saved into file \textit{pixel\_to\_wavelength.txt} (in the working directory) with the following tab-separated entries (exactly one separator between each column):
 \begin{itemize}
   \item Aperture (starting at 0 for the reddest order)
   \item Real/physical order from the grating equation (bigger than 0, usually between 40 and 120, doesn't have to be exactly the right one). \textbf{Warn:} the difference between columns 1 (Aperture) and 2 (Real/physical) has to be the same for all lines.
@@ -381,7 +381,7 @@ The correlated data needs to be saved into file \textit{arc\_lines\_wavelength.t
   \item (optional: Comments ).
 \end{itemize}
 
-Afterwards the script can run again and will use this data to create a new wavelength solution. Afterwards the output or logfile, and the file given in parameter \verb|logging_arc_line_identification_spectrum| (standard: \textit{logging/arc\_line\_identification\_spectrum.pdf}) should be checked. The brightest lines of the reference file should be marked in red with the brightest emission lines of the spectrum (e.g. see Fig.~\ref{Figure:create_wavelength_solution_identified}. If some areas of the spectrum (some orders, or the right or left side of some orders) are not fitted well, please add more lines of the problematic area to \textit{arc\_lines\_wavelength.txt} and remove the following files (if standard names are used) before running the pipeline again:
+Afterwards the script can run again and will use this data to create a new wavelength solution. Afterwards the output or logfile, and the file given in parameter \verb|logging_arc_line_identification_spectrum| (standard: \textit{logging/arc\_line\_identification\_spectrum.pdf}) should be checked. The brightest lines of the reference file should be marked in red with the brightest emission lines of the spectrum (e.g. see Fig.~\ref{Figure:create_wavelength_solution_identified}. If some areas of the spectrum (some orders, or the right or left side of some orders) are not fitted well, please add more lines of the problematic area to \textit{pixel\_to\_wavelength.txt} and remove the following files (if standard names are used) before running the pipeline again:
 \begin{lstlisting}[style=base]
 rm master_wavelength*.fits 
 rm master_flat_spec_norm.fits
@@ -467,6 +467,10 @@ Please note that the flag(s) need to be exactly one tabulator after the Observat
 \subsection{Create a bad pixel mask}
 \label{Section:create_badpxmask}
 \noindent The bad pixel masked used by the pipeline is fits file which consists of a 2 dimensional image consisting of '1' for good data and '0' for bad pixels. It can be created by the script \verb|create_badpx_mask.py|, but this is script is really work in progress at the moment.
+
+
+\subsection{Removing wrongly identified traces}
+After checking the results (see Chapter~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to it's big flexibility. The orders can be removed in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the depending steps of \verb|reduction_day.py| will run again.
 
 
 \subsection{Finding further information - logged results}
@@ -771,9 +775,6 @@ This step is only done, if the Ceres pipeline is installed and \verb|path_ceres|
 The data of the individual objects are stored in this folder in the subfolder \textit{object name + /data/}. If Terra is installed and \verb|terra_jar_file| is set correctly to the Terra \textit{PRV.jar}-file, then Terra will be run on each \textit{object name} within the folder. The results of the radial velocity analysis will be stored in \textit{object name + /results/synthetic.rv}.
 
 It is possible to include the information from previous nights of the same object by linking or copying the \textit{.csv}-files into the corresponding \textit{data/}-folders and rerunning \verb|python <path to scripts>/reduction_day.py|. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
-
-\subsection{Removing wrongly identified traces}
-After checking the results (see Chapter~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to it's big flexibility. The orders can be removed in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the depending steps of \verb|reduction_day.py| will run again.
 
 
 
