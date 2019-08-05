@@ -142,9 +142,9 @@ if __name__ == "__main__":
         if params['original_master_wavelensolution_filename'].lower() != 'pseudo':                  # Create the master files
             im_cal_l, im_arclhead = create_image_general(params, calib[1]+'_l')
             if calib[1] == 'cal2':
-                cal_l_spec, good_px_mask_l = extract_orders(params, im_cal_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
+                cal_l_spec, good_px_mask_l, extr_width = extract_orders(params, im_cal_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
             else:
-                cal_l_spec, good_px_mask_l = extract_orders(params, im_cal_l, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'])
+                cal_l_spec, good_px_mask_l, extr_width = extract_orders(params, im_cal_l, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'])
         if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']) == True:
             logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution'+calib[0]+'_filename']))
             wavelength_solution, wavelength_solution_arclines = read_wavelength_solution_from_fits(params['master_wavelensolution'+calib[0]+'_filename'])
@@ -154,9 +154,9 @@ if __name__ == "__main__":
         else:
             im_cal_s, im_arcshead = create_image_general(params, calib[1]+'_s')
             if calib[1] == 'cal2':
-                cal_s_spec, good_px_mask_s = extract_orders(params, im_cal_s, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
+                cal_s_spec, good_px_mask_s, extr_width = extract_orders(params, im_cal_s, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
             else:
-                cal_s_spec, good_px_mask_s = extract_orders(params, im_cal_s, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'])
+                cal_s_spec, good_px_mask_s, extr_width = extract_orders(params, im_cal_s, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'])
             # Begin: This bit is not necessary once the procedure has been written
             im_name = 'master_'+calib[1]+'_long'
             if 'master_'+calib[1]+'_l_filename' in params.keys():
@@ -299,13 +299,13 @@ if __name__ == "__main__":
         logger('Step: Create the normalised flat for the night')
         obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_blazecor_head)
         shift = find_shift_images(params, im_blazecor, im_trace1, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, extract=True)
-        flat_spec, good_px_mask = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='prec', offset=shift)
+        flat_spec, good_px_mask, extr_width = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='prec', offset=shift)
         flat_spec_norm = flat_spec/np.nanmedian(flat_spec)
-        flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.005)         # Ignore all areas where the flux is 0.5% of median flux
+        flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.001)         # Ignore all areas where the flux is 0.5% of median flux
         if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
             blazecor_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
         else:
-            blazecor_spec, agood_px_mask = extract_orders(params, im_blazecor, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
+            blazecor_spec, agood_px_mask, extr_width = extract_orders(params, im_blazecor, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
         wavelength_solution_shift, shift = shift_wavelength_solution(params, blazecor_spec, wavelength_solution, wavelength_solution_arclines, 
                                             reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, params['master_blaze_spec_norm_filename'])
         wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, blazecor_spec)
@@ -327,8 +327,8 @@ if __name__ == "__main__":
             
     flat_spec_norm = np.array(fits.getdata(params['master_blaze_spec_norm_filename']))              # read it again, as the file is different than the data above
     number_no_data = np.sum(np.isnan(flat_spec_norm[2,:,:]), axis=1)                                # What orders don't contain enough data
-    keep_orders  = np.where(number_no_data <= 0.2*flat_spec_norm.shape[2])[0]                         # remove all orders where more than 10% of the pixel are not available
-    remove_orders = np.where(number_no_data > 0.2*flat_spec_norm.shape[2])[0]
+    keep_orders  = np.where(number_no_data <= 0.51*flat_spec_norm.shape[2])[0]                         # remove all orders where more than 51% of the pixel are not available
+    remove_orders = np.where(number_no_data > 0.51*flat_spec_norm.shape[2])[0]
     if len(keep_orders) < flat_spec_norm.shape[1]:
         logger('Warn: The blaze function for {0} orders contains not enough flux. The following orders have been removed: {1}'.format(len(remove_orders), remove_orders))
         #print wavelength_solution.shape, wavelength_solution_arclines.shape, sci_tr_poly.shape, xlows.shape, xhighs.shape, widths.shape, cal_tr_poly.shape, axlows.shape, axhighs.shape, awidths.shape, flat_spec_norm.shape

@@ -268,12 +268,22 @@ def plot_spectra_UI(im, title=''):
             for data_entry in tqdm(param['name_data_{0}'.format(iml-1-1)]):
                 data_label = data_entry.replace('data_','')
                 data = np.array(param[data_entry], float)
-                if param['wavelength_plot'] == 'w' or param['wavelength_plot'] == 'wl' or param['wavelength_plot'] == 'lw':
+                if param['wavelength_plot'].find('w') != -1:
+                    w_pos = 0
+                    searchpos = param['wavelength_plot'].find('w')+1
+                    for searchlength in range(len(param['wavelength_plot'])-searchpos, 0,-1):
+                        try:
+                            w_pos = int(param['wavelength_plot'][searchpos:searchpos+searchlength+1])
+                            break
+                        except:
+                            w_pos = 0
                     data_entry_w = data_entry.rsplit('_',iml-2)                     # iml-2 should be 2 for nomal images
                     if iml == 4:                                      # for normal images
-                        data_entry_w = data_entry_w[0]+'_0_'+data_entry_w[2]        # Select the wavelength in the data file
+                        #data_entry_w = data_entry_w[0]+'_0_'+data_entry_w[2]        # Select the wavelength in the data file
+                        data_entry_w = '{0}_{1}_{2}'.format(data_entry_w[0],w_pos,data_entry_w[2])        # Select the wavelength in the data file
                     elif iml ==3:                                                           # for images with linearised wavelength
-                        data_entry_w = data_entry_w[0]+'_0'
+                        #data_entry_w = data_entry_w[0]+'_0'     # barycentric
+                        data_entry_w = '{0}_{1}'.format(data_entry_w[0],w_pos)    # uncorrected wavelength
                     else:
                         print('not implemented')
                     if data_entry_w not in param.keys():
@@ -283,8 +293,10 @@ def plot_spectra_UI(im, title=''):
                         elif iml ==3:
                             param[data_entry_w] = im[int(text[1]), int(text[2]) ]
                     x_axis = np.array(param[data_entry_w], float)
+                    xlabel_text = 'wavelength [Angstrom] (dataset {0})'.format(w_pos)
                 else:
                     x_axis = np.arange(len(data), dtype=float)
+                    xlabel_text = 'x [px]'
                 x_axis = x_axis[~np.isnan(data)]
                 data = data[~np.isnan(data)]
                 """ Create a test signal
@@ -301,7 +313,8 @@ def plot_spectra_UI(im, title=''):
                     good_values = list(range(1,int(len(data)/2)))      # 0 contains the sum of the data, and n/2+1 the negative frequencies
                     data = data * 2 / data.shape[0]
                     data, x_axis = data[good_values], 1/x_axis[good_values]
-                elif param['wavelength_plot'] == 'l' or param['wavelength_plot'] == 'wl' or param['wavelength_plot'] == 'lw':       # http://joseph-long.com/writing/recovering-signals-from-unevenly-sampled-data/
+                    xlabel_text = 'period [px]'
+                elif param['wavelength_plot'].find('l') != -1:       # http://joseph-long.com/writing/recovering-signals-from-unevenly-sampled-data/
                     nout = 4*len(data) # number of frequency-space points at which to calculate the signal strength (output)
                     # the posible Periods in px scale: 2 to 10% length of the data; in wave-scale: diff between 2 closest to 10% diff between furthest away:
                     period_range = np.array([ 2*np.nanmin(np.abs(x_axis[1:] - x_axis[:-1])), 0.5*(np.nanmax(x_axis)-np.nanmin(x_axis)) ])
@@ -321,7 +334,10 @@ def plot_spectra_UI(im, title=''):
                     normalized_pgram = np.sqrt(4 * (pgram / data.shape[0]))
                     data = normalized_pgram
                     x_axis = periods
-                    
+                    if param['wavelength_plot'].find('w') != -1:
+                        xlabel_text = 'period [Angstrom]'
+                    else:
+                        xlabel_text = 'period [px]'
                 if len(x_axis) > 0:
                     if param['draw_legend']:
                         frame.plot(x_axis, data, label=data_label)
@@ -332,16 +348,7 @@ def plot_spectra_UI(im, title=''):
                     plot_ranges[1] = max(plot_ranges[1], max(x_axis))
                     plot_ranges[2] = min(plot_ranges[2], min(data))
                     plot_ranges[3] = max(plot_ranges[3], max(data))
-        if param['wavelength_plot'] == 'w':
-            xlabel_text = 'wavelength [Angstrom]'
-        elif param['wavelength_plot'] == 'f':
-            xlabel_text = 'period [px]'
-        elif param['wavelength_plot'] == 'l':
-            xlabel_text = 'period [px]'
-        elif param['wavelength_plot'] == 'wl' or param['wavelength_plot'] == 'lw':
-            xlabel_text = 'period [Angstrom]'
-        else:
-            xlabel_text = 'x [px]'
+        
         if x_range != (0.0, 1.0) and y_range != (0.0, 1.0) and old_xlabel_text==xlabel_text and param['reset_plot']==False:
             plt.axis([x_range[0], x_range[1], y_range[0], y_range[1]])
         else:

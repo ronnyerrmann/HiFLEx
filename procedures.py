@@ -548,7 +548,11 @@ def read_file_calibration(params, filename, level=0):
             logger(('Error: The file is stored in a multi-demensional array, which I do not know how to handle. The size of the image is {0}. '+\
                     '\tThis requires a small adjustment to the code in procedure read_file_calibration.').format(ims))
         ims = im.shape
-    exptime = im_head[params['raw_data_exptim_keyword']]        #saved as float
+    if params['raw_data_exptim_keyword'] in im_head.keys():
+        exptime = im_head[params['raw_data_exptim_keyword']]        #saved as float
+    else:
+        exptime = 0.0
+        logger('Warn: Cannot find the raw_data_exptim_keyword = {0} in the header. Assuming 0 seconds.'.format(params['raw_data_exptim_keyword'] ))
     logger('Info: image loaded: {0}'.format(filename))
     im = rotate_flip_frame(im, params )
     for entry in params['calibs']:
@@ -1099,11 +1103,11 @@ def bin_im(im, binxy, method='median'):
     """
     def bin_im_function(data, method, axis=None):
         if method == 'median':
-            return np.median(data, axis=axis)    # median binning
+            return np.nanmedian(data, axis=axis)    # median binning
         elif method == 'mean':
-            return np.mean(data, axis=axis)    # averge binning
+            return np.nanmean(data, axis=axis)    # averge binning
         elif method == 'sum':
-            return np.sum(data, axis=axis)    # averge binning
+            return np.nansum(data, axis=axis)    # averge binning
     
     [binx, biny] = binxy
     ims = im.shape
@@ -1117,7 +1121,7 @@ def bin_im(im, binxy, method='median'):
             iline = im[i*binx:min(ims[0],(i+1)*binx),:]
             for j in range(int((ims[1]+biny-1)/biny)):
                 temdata = iline[:,j*biny:min(ims[1],(j+1)*biny)]
-                if np.sum( np.isnan(temdata) ) == 0:
+                if np.sum( ~np.isnan(temdata) ) >= 0.9 * np.prod(temdata.shape):     # only of at least 10% of data points available
                     nline.append(bin_im_function(temdata, method, axis=None))    # binning
                 else:
                     nline.append(np.nan) 
@@ -2178,7 +2182,7 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
     if badpx_mask_name not in calimages:
         calimages[badpx_mask_name] = read_badpx_mask(params)
     badpx_mask = calimages[badpx_mask_name]
-    spec, good_px_mask = [], []
+    spec, good_px_mask, widths_o = [], [], []
     xarr = range(0, image.shape[0])
     maxpx = image.shape[1]-1                    # End of the image in cross-dispersion direction
     for pp in plot_tqdm(range(pfits.shape[0]), desc='Extract Spectrum'):        # pp is order
@@ -2195,8 +2199,10 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
         lowers = np.polyval(pfits[pp, 1, 1:], xarr-pfits[pp, 1, 0]) + offset 
         uppers = np.polyval(pfits[pp, 2, 1:], xarr-pfits[pp, 2, 0]) + offset
         lowers, uppers = adjust_width_orders(yarr, lowers, uppers, [w_mult, w_mult])          # Adjust the width of the orders
+        widths_o.append(uppers - lowers)
         #print pp,np.nanmean(uppers-lowers), np.nanmedian(uppers-lowers), np.nansum(uppers-lowers)
         if w_mult == 0.0:                                                       # only the central full pixel
+            widths_o[-1][:] = widths_o[-1][:] * 0 + 1.
             order_in_frame = ((yarr[xarr1] <= maxpx) & (yarr[xarr1] >= 0) )     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
             yarr = np.round(yarr).astype(int)
             for xrow in xarr1[order_in_frame]:
@@ -2322,7 +2328,8 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
         """    
         spec.append(ospecs)
         good_px_mask.append(ogood_px_mask)
-    return np.array(spec), np.array(good_px_mask)
+    
+    return np.array(spec), np.array(good_px_mask), np.array(widths_o)
 
 def shift_orders(im, params, sci_tr_poly, xlows, xhighs, oldwidths, in_shift = 0):
     """
@@ -2432,10 +2439,18 @@ def measure_background_noise(im):
     im[im == 0.0] = np.nan                                                              # Replace zeros with NaNs
     im[im == 0] = np.nan                                                              # Replace zeros with NaNs
     #plot_img_spec.plot_image(im, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'orig')
-    dummy, gim, sim = bin_im(im, [10, 10])          # gim: number of eleements, sim: standard deviation
-    #plot_img_spec.plot_image(dummy, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_im')
+    bim, gim, sim = bin_im(im, [10, 10])          # gim: number of eleements, sim: standard deviation
+    #plot_img_spec.plot_image(bim, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_im')
     #plot_img_spec.plot_image(gim, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_datapoints')
     #plot_img_spec.plot_image(sim, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_std')
+    mask = ~np.isnan(bim)
+    while np.sum(bim[mask] - np.percentile(bim[mask],30) >= 3 * np.nanstd(bim[mask], ddof=1)) > 0:  # Excluded brightest areas (MRES: unidentiefied orders define the noise otherwise
+        #plot_img_spec.plot_image(mask, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'mask')
+        bim_0 = copy.copy(bim)
+        bim_0[np.isnan(bim)] = -1E10            # otherwise the line below will produce "RuntimeWarning: invalid value encountered"
+        mask[bim_0 - np.percentile(bim[mask],30) >= 3 * np.nanstd(bim[mask], ddof=1)] = False
+    sim[~mask] = np.nan
+    gim[~mask] = 0
     for threshold in range(90,30,-5):
         if np.sum( gim >= threshold ) >= gim.shape[0] * gim.shape[1] * 0.10:              # 10% of the binned data is available
             break
@@ -2547,7 +2562,7 @@ def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_
     for shift in range(max(np.abs(range_shifts))+1):
         for pm in [-1, +1]:
             if extract:         # extract and find the maximum flux
-                spec, good_px_mask = extract_orders(params, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, pm*shift, plot_tqdm=False)       
+                spec, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, pm*shift, plot_tqdm=False)       
                 fluxes = np.nansum(spec, axis=1)
                 fluxes[np.isnan(fluxes)] = np.nanmin(fluxes)          # replace nans with the minimum flux to avoid problems caused at the borders at the image
             else:               # Use the difference of the 2 images
@@ -2584,7 +2599,7 @@ def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_
                 for fshift in fshifts:
                     if np.min( np.abs( np.array(nshifts) - fshift ) ) < 0.005:                  # Don't do the fit again, if it was done before
                         continue
-                    spec, good_px_mask = extract_orders(params, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, fshift, plot_tqdm=False)
+                    spec, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, fshift, plot_tqdm=False)
                     fluxes.append( np.mean( np.nansum(spec, axis=1) ) )
                     nshifts.append(fshift)
                 sort_arr = np.argsort(fluxes)
@@ -2652,8 +2667,8 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
     # plot_img_spec.plot_image(im, ['savename'], pctile=0, show=True, adjust=[0.05,0.95,0.95,0.05], title='Title', autotranspose=False)
     for shift in tqdm(arcshifts, desc='Search for the shift of the calibration traces, compared to the science traces'):
         # Shift the solution -> give parameter offset; and extract the arc_spectrum with the offset
-        # arc_spec, good_px_mask = extract_orders(params, im, pfits, xlows, xhighs, widths, w_mult/2., shift, plot_tqdm=False)          # The smaller w_mult -> the better the gauss (hopefully)
-        arc_spec, good_px_mask = extract_orders(params, im, pfits, xlows, xhighs, widths, 0, shift, plot_tqdm=False)          # w_mult == 0: only central pixel
+        # arc_spec, good_px_mask, extr_width = extract_orders(params, im, pfits, xlows, xhighs, widths, w_mult/2., shift, plot_tqdm=False)          # The smaller w_mult -> the better the gauss (hopefully)
+        arc_spec, good_px_mask, extr_width = extract_orders(params, im, pfits, xlows, xhighs, widths, 0, shift, plot_tqdm=False)          # w_mult == 0: only central pixel
         flux = np.nansum(arc_spec, axis=1)
         flux[np.isnan(flux)] = np.nanmin(flux)          # replace nans with the minimum flux
         fluxes.append(flux)
@@ -3175,7 +3190,7 @@ def combine_photonnoise_readnoise(spectra, bck_noise):
     pos_spectra[np.isnan(pos_spectra)] = 0          # otherwise the line below creates a invalid value error
     pos_spectra[pos_spectra < 0] = 0                # avoid errors
     for order in range(spectra.shape[0]):
-        espectra.append( np.sqrt( pos_spectra[order,:] + bck_noise[order]**2 ) )
+        espectra.append( np.sqrt( pos_spectra[order,:] + bck_noise[order,:]**2 ) )
     espectra = np.array(espectra)
     espectra[np.isnan(spectra)] = np.nan            # revert replacing NaNs with 0
     return espectra
@@ -3297,10 +3312,10 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     
     #shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces
     if im_name[-8:] == '_wavecal':
-        aspectra, agood_px_mask = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
+        aspectra, agood_px_mask, extr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
         fib = 'cal'
     elif im_name[-8:] == '_wavesci':   
-        aspectra, agood_px_mask = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
+        aspectra, agood_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
         fib = 'sci'
     else:
         logger('Error: The filename does not end as expected: {0} . It should end with _wavecal or _wavesci. This is probably a programming error.'.format(im_name))
@@ -3385,19 +3400,35 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     #not necessary anymore obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
     obnames = get_possible_object_names(obname)
     
+    # Change the path to the object_file to the result_path, if necessary
+    object_files = [ params['object_file'] ]
+    for entry in [ params['result_path'] ] + params['raw_data_paths']:      # Check also the result and raw data paths for object names
+        object_files.append( entry + params['object_file'] )
+    for object_file in object_files:
+        ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using ceres to calculated BCV
+        if ra2 !=0 or dec2 != 0:                                           # Found the object
+            break
+    if ra2 ==0 and dec2 == 0:
+        logger('Warn: Reference coordinates files {0} do not exist or object not found within them.'.format(object_files))
+    
+    # Get the baycentric velocity
+    params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, object_file)       # obnames becomes the single entry which matched entry in params['object_file']
+    im_head['HIERARCH EXO_PIPE OBJNAME'] = (obnames[0], 'Used object name')
+    im_head['HIERARCH EXO_PIPE BCV'] = (round(bcvel_baryc,4),'Barycentric velocity in km/s')
+    
     shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces, w_mult=0 so that only the central pixel is extracted
-    spectra, good_px_mask = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift)#, var='prec')
+    spectra, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift)#, var='prec')
     orders = range(spectra.shape[0])
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
         aspectra, agood_px_mask = spectra*0, copy.copy(good_px_mask)
     else:
-        aspectra, agood_px_mask = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
+        aspectra, agood_px_mask, aextr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
     wavelength_solution_shift, shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
                                                               reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, im_name)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, spectra)
     wavelengths_vac = wavelength_air_to_vacuum(wavelengths)                             # change into vacuum wavelengths
     
-    espectra = combine_photonnoise_readnoise(spectra, im_head['EXO_PIPE BCKNOISE'] * np.sqrt(widths[:,2]) )
+    espectra = combine_photonnoise_readnoise(spectra, im_head['EXO_PIPE BCKNOISE'] * np.sqrt(extr_width) )     # widths[:,2] is gaussian width
     fspectra = spectra/(flat_spec_norm[2]+0.0)        # 1: extracted flat, 2: low flux removed
     # Doing a wavelength shift for the flat_spec_norm is probably not necessay, as it's only few pixel
     measure_noise_orders = 12
@@ -3409,22 +3440,6 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     # normalise_continuum measures the noise different than measure_noise
     ceres_spec = np.array([wavelengths_vac, spectra, espectra, fspectra, efspectra, cspectra, noise_cont, good_px_mask, aspectra])
     ceres_spec = clip_noise(ceres_spec)
-    
-    # Change the path to the object_file to the result_path, if necessary
-    
-    object_files = [ params['object_file'] ]
-    for entry in [ params['result_path'] ] + params['raw_data_paths']:      # Check also the result and raw data paths for object names
-        object_files.append( entry + params['object_file'] )
-    for object_file in object_files:
-        ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using ceres to calculated BCV
-        if ra2 !=0 or dec2 != 0:                                           # Found the object
-            break
-    if ra2 ==0 and dec2 == 0:
-        logger('Warn: Reference coordinates files {0} do not exist.'.format(object_files))
-    
-    # Get the baycentric velocity
-    params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, object_file)       # obnames becomes the single entry which matched entry in params['object_file']
-    im_head['HIERARCH EXO_PIPE OBJNAME'] = (obnames[0], 'Used object name')
     
     # Do the Ceres-pipeline Radial velocity analysis 
     no_RV_names = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
@@ -3447,7 +3462,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf (no, causes 83.15 km/s shift, < 5m/s is between the different models)
         logger('Info: The radial velocity (including barycentric correction) for {0} gives: RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s'.format(\
                                     im_name, round(RV+bcvel_baryc,4), round(RVerr2,4), round(BS,4), round(BSerr,4), round(bcvel_baryc,4) ))
-        im_head['HIERARCH EXO_PIPE RV_BARY'] = (round(RV+bcvel_baryc),'RV including BCV in km/s (measured RV+BCV)')
+        im_head['HIERARCH EXO_PIPE RV_BARY'] = (round(RV+bcvel_baryc,4),'RV including BCV in km/s (measured RV+BCV)')
         im_head['HIERARCH EXO_PIPE RV_ERR'] = round(RVerr2,4)
     
     # Correct wavelength by barycentric velocity
@@ -3536,8 +3551,9 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     
     # For easier plotting
     add_text_to_file(params['path_extraction']+im_name+'.fits', 'plot_files.lst')
-
-    ceres_spec = np.array([wavelengths_bary, spectra, espectra, fspectra, efspectra, cspectra, noise_cont, good_px_mask, aspectra])        
+    # Checked that telluric lines (e.g 7600 Angstom) are at the same position when using wavelength solution without barycentric correction and 
+    #   that stellar lines are overlaying when using wavelength solution with barycentric correction (MRES 20190801)
+    ceres_spec = np.array([wavelengths_bary, spectra, espectra, fspectra, efspectra, cspectra, noise_cont, good_px_mask, aspectra, wavelengths])        
     im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
     im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
     im_head['Comment'] = ' 1: extracted spectrum'
@@ -3548,6 +3564,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     im_head['Comment'] = ' 6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_orders)
     im_head['Comment'] = ' 7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
     im_head['Comment'] = ' 8: spectrum of the emission line lamp'
+    im_head['Comment'] = ' 9: wavelength for each order and pixel without barycentric correction'
     save_multispec(ceres_spec, params['path_extraction']+im_name, im_head, bitpix=params['extracted_bitpix'])
 
     return obnames[0]
