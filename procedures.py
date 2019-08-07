@@ -81,6 +81,7 @@ class Constants:                    # from Ceres
     f = 1.0/298.256420
     w = 7.2921158554E-5 
     DaystoYear = 1.0/365.256363004
+    MJD0 = 2400000.5
 
 def get_timing(text=''):
     global beg_ts
@@ -698,8 +699,8 @@ def create_image_general(params, imtype, level=0):
         for im_index, imf in enumerate(params['{0}_rawfiles'.format(imtype)]):                   # Only works for maximum 40 images on neils machine
             params['calibs'] = params['{0}_calibs_create'.format(imtype)]       # get's overwritten when other files are being read
             img, im_head = read_file_calibration(params, imf, level=level)
-            obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_head)    # unix_timestamp of mid exposure time
-            header_updates[im_index,:] = [exposure_time, obsdate_float]
+            im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # unix_timestamp of mid exposure time
+            header_updates[im_index,:] = [im_head['HIERARCH EXO_PIPE EXPOSURE'], obsdate_mid_float]         # !!! Improve this calculation and write in the header so it can be used later by get_obsdate 
             med_flux = np.median(img, axis=None)
             med_fluxes.append(med_flux)
             std_fluxes.append(np.std(img, axis=None, ddof=1))
@@ -721,9 +722,9 @@ def create_image_general(params, imtype, level=0):
             im[im_index,:,:] = img
             #print im.dtype, im.itemsize, im.nbytes, sys.getsizeof(im), im.nbytes/7979408000.
         for i in range(len(med_fluxes)):
-            im_head['HIERARCH EXO_PIPE NORM_{0}'.format(i)] = med_fluxes[i]
+            im_head['HIERARCH EXO_PIPE NORM_{0}'.format(i)] = (med_fluxes[i], 'Median flux in image {0}'.format(i))
         for i in range(len(std_fluxes)):
-            im_head['HIERARCH EXO_PIPE STDV_{0}'.format(i)] = std_fluxes[i]
+            im_head['HIERARCH EXO_PIPE STDV_{0}'.format(i)] = (round(std_fluxes[i],5), 'Stdev of flux')
         if 'combine_mean' in params['{0}_calibs_create'.format(imtype)]:
             im = combine_sum(im)/(len(im)+0.0)
             im_head['HIERARCH EXO_PIPE redu07'] = 'Average of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
@@ -740,7 +741,7 @@ def create_image_general(params, imtype, level=0):
             norm_factor = np.median(med_fluxes)
             im = im * norm_factor
             im_head['HIERARCH EXO_PIPE NORM_MED'] = norm_factor
-        im_head['HIERARCH EXO_PIPE '+params['raw_data_dateobs_keyword']] = datetime.datetime.utcfromtimestamp(np.median(header_updates[:,1])).strftime('%Y-%m-%dT%H:%M:%S.%f')
+        im_head['HIERARCH EXO_PIPE MID_'+params['raw_data_dateobs_keyword']] = datetime.datetime.utcfromtimestamp(np.median(header_updates[:,1])).strftime('%Y-%m-%dT%H:%M:%S.%f')
         im_head['HIERARCH EXO_PIPE '+params['raw_data_exptim_keyword']] = exposure_time
         first, last = np.argmin(header_updates[:,1]), np.argmax(header_updates[:,1])
         first = header_updates[first,1]-header_updates[first,0]/2.
@@ -1707,14 +1708,48 @@ def find_center(imslice, oldcenter, x, maxFWHM, border_pctl=0, significance=3.0,
 
     return centerfit, width, leftmin,rightmin
 
-def measure_noise(spectra, p_order=12, semi_range=10):
+def measure_noise(spectra, p_order=16, semi_window=10):
     """
     Measures the noise in a spectrum by fitting a high order polynomial against the data and deriving the residuals
+    !!! Possible improvement: Take into account the wavelength solution -> use a semi_window that only few lines are covered
     :param spectra: 2d array of floats, spectrum
     :param p_order: integer, order of the polynomial
-    :param semi_range: integer, the noise is calculated using a sample of +/- semi_range pixels around the current value
+    :param semi_window: integer, the noise is calculated using a sample of +/- semi_window pixels around the current value; tests were done with semi_window=10
     :return noise: 2d array of floats, same dimension as spectra
     """
+    while 2*semi_window+1 - p_order < 6:           # make sure that the values make sense
+        if semi_window < 10:
+            semi_window += 2
+        else:
+            p_order -= 1
+    specs = spectra.shape
+    noise = []
+    for order in range(specs[0]):
+        xarr = np.arange(specs[1])
+        spec = spectra[order]
+        nonnan = ~np.isnan(spec)
+        spec_fit = scipy.signal.savgol_filter(spec[nonnan], 2*semi_window+1, p_order)            # Fit the flux
+        res = spec[nonnan] - spec_fit
+        noise_order = np.repeat([np.NaN], specs[1])
+        for index, index_f in enumerate(xarr[nonnan]):
+            x_s = xarr[ max(0,index_f-semi_window):min(specs[1],index_f+semi_window) + 1 ]        # range on full list
+            nonnan_s = ~np.isnan(spec[x_s])
+            x_s = x_s[nonnan_s]
+            left = np.where(x_s == index_f)[0][0]
+            res_sub = res[ max(0,index-left):min(len(res),index+(len(x_s)-left)) + 1 ]
+            res_sub = percentile_list(res_sub, 1./len(res))         # remove the highest and lowest outlier
+            noise_order[index_f] = np.std(res_sub, ddof=1)        # ddof=1 and not ddof=p_order+1, as the latter one doesn't take into account that there are real physical features (absorption lines)
+        # !!! Maybe remove the outliers, as a cosmics affect the fit and then the noise in this area is much higher
+        noise_order = scipy.signal.medfilt(noise_order, 2*semi_window+1)
+        noise.append(noise_order)
+        #print len(spec_fit), sum(nonnan), specs, len(xarr)
+        #if order>45:
+        #    plot_img_spec.plot_points([xarr, xarr[nonnan], xarr[nonnan], xarr, xarr],[spec, spec_fit, res, noise_nofilt, noise_order],['data','fit', 'res', 'noise', 'noisefiltered'],'path',show=True, x_title='Pixel', y_title='Flux', title='' )
+        
+    return np.array(noise)
+    
+    
+    """# Old, before August 2019 - fits the whole order and then uses part of the fit to calculate stdev
     specs = spectra.shape
     cen_px = int(specs[1]/2)                 # integer of the central pixel
     noise = []
@@ -1733,7 +1768,7 @@ def measure_noise(spectra, p_order=12, semi_range=10):
                     noise_order[index] = np.std(res_sub, ddof=p_order+1)        # Noise will be high at areas wih many absorption lines
         noise.append(noise_order)
         
-    return np.array(noise)
+    return np.array(noise)"""
 
 def estimate_width(im):
     """
@@ -2884,7 +2919,7 @@ def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
         logger('Info The faintest {0} of {1} entries in the arc reference file {2} will not be used '.format(arcs[0]-reference_catalog.shape[0], arcs[0], filename ))
     return reference_catalog, reference_names
 
-def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, objname, maxshift=2.5, in_shift=0, fib='cal'):
+def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=2.5, in_shift=0, fib='cal'):
     """
     Determines the pixelshift between the current arc lines and the wavelength solution
     Two ways for a wavelength shift can happen:
@@ -2909,7 +2944,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     if np.max(wavelength_solution[:,-1]) < 100:                 # pseudo solution, wavelength of the central pixel is < 100 Angstrom
         return copy.deepcopy(wavelength_solution), 0.               # No shift is necessary
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0 and np.nansum(aspectra) == 0:         # science and calibration traces are at the same position and it's not the calibration spectrum
-        wavelength_solution_shift, shift = shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, objname)
+        wavelength_solution_shift, shift = shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname)
         return wavelength_solution_shift, shift
     
     FWHM = 3.5
@@ -2977,12 +3012,12 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
 
         # Save the shift for later use
         if params['extract_wavecal']:            # This values are not correct, as later the shift has to be applied
-            add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_float, shift_med-in_shift, shift_std, fib), params['master_wavelengths_shift_filename'] )
+            add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(jd_midexp, shift_med-in_shift, shift_std, fib), params['master_wavelengths_shift_filename'] )
         
-    logger('Info: The median shift between the lines used in the wavelength solution and the current calibration spectrum of file {9} is {0} +- {1} px ({8} km/s). {2} reference lines have been used, {7} reference lines have been tested. The arc lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px'\
+    logger('Info: The median shift between the lines used in the wavelength solution and the current calibration spectrum of file {9} at JD {10} is {0} +- {1} px ({8} km/s). {2} reference lines have been used, {7} reference lines have been tested. The arc lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px'\
                 .format(round(shift_med,4), round(shift_std,4), shifts.shape[0], round(width_avg,3), \
                         round(width_std,3), round(width_avg*2.35482,3), round(width_std*2.35482,3), checked_arc_lines,
-                        round(shift_med*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), objname ))
+                        round(shift_med*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), objname, round(jd_midexp,5) ))
     if len(shifts) >= ratio_lines_identified * checked_arc_lines and len(shifts) != 0:                          # Statistics only if enough lines were detected
         statistics_arc_reference_lines(shifts, [0,1,6,2], reference_names, wavelength_solution, xlows, xhighs, show=False)
     # correction in the other side of the shift
@@ -2993,7 +3028,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     
     # In case of pixel shift available -> linear interpolation of pixel shift
     if not params['extract_wavecal']:         # science and calibration traces are at the same position and it's not the calibration spectrum
-        wavelength_solution_new, shift_stored = shift_wavelength_solution_times(params, wavelength_solution_new, obsdate_float, objname)
+        wavelength_solution_new, shift_stored = shift_wavelength_solution_times(params, wavelength_solution_new, obsdate_float, jd_midexp, jd_midexp, objname)
         shift_med += shift_stored
     
     if False:           # The changes below are not necessary, shift_med/shift_avg will contain the input shift
@@ -3012,14 +3047,14 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     
     return np.array(wavelength_solution_new)"""
 
-def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, objname):
+def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname):
     """
     In case no calibration spectrum was taken at the same time as the science spectra use the stored information to aply a shift in the lines
     !!! shift_avg = np.average( shifts[:,1], weights=weight )  -> Tested, will work fine for obsdate in range(all_shifts), but will fail for extrapolation. Maybe it's necessary to replace this by a linear fit?
     :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
     all_shifts = read_text_file(params['master_wavelengths_shift_filename'], no_empty_lines=True)
-    all_shifts = convert_readfile(all_shifts, [float, float, float, str], delimiter='\t', replaces=['\n'])       # obsdate_float, shift_avg, shift_std, can contain duplicate obsdate_float (last one is the reliable one)
+    all_shifts = convert_readfile(all_shifts, [float, float, float, str], delimiter='\t', replaces=['\n'])       # jd_midexp, shift_avg, shift_std, can contain duplicate jd_midexp (last one is the reliable one)
     if len(all_shifts) == 0:
         logger('Warn: No pixel-shift for the wavelength solution is available. Please re-run prepare_file_list.py and asign "w" to the emission line spectra.')
         return copy.deepcopy(wavelength_solution), 0.               # No shift is possible
@@ -3027,7 +3062,7 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
     # Remove the double entries, e.g. if better shifts were added later
     all_shifts_str_n = []
     for i in range(all_shifts_str.shape[0])[::-1]:
-        if np.sum( ( all_shifts_str[i:,0] == all_shifts_str[i,0] ) & ( all_shifts_str[i:,3] == all_shifts_str[i,3] ) ) == 1:    # Find only exactly this entry with same obsdate and same fiber
+        if np.sum( ( all_shifts_str[i:,0] == all_shifts_str[i,0] ) & ( all_shifts_str[i:,3] == all_shifts_str[i,3] ) ) == 1:    # Find only exactly this entry with same jd_midexp and same fiber
             all_shifts_str_n.append(all_shifts_str[i,:])
     all_shifts_str = np.array(all_shifts_str_n)                     # Only contains the latest entries, newest entry first
     # select the right data, depending on params['two_solutions']
@@ -3043,7 +3078,7 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
             return copy.deepcopy(wavelength_solution), 0.               # No shift is possible
         all_shifts = []
         for entry in all_shifts_sci:
-            diff = np.abs(entry[0] - all_shifts_cal[:,0])           # difference in obsdate
+            diff = np.abs(entry[0] - all_shifts_cal[:,0])           # difference in jd_midexp
             if np.min(diff) > 1 * 3600:                             # difference less than one hour
                 continue
             index = np.argmin(diff)                                    # the closest entry
@@ -3053,22 +3088,22 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
         if params['wavelength_solution_type'] == 'sci-fiber':       # Test on 20190307 indicates that it should be sci-fiber
             all_shifts[:,1] = -1 * all_shifts[:,1]
     # Find the closest entries in time
-    for diff_array in [obsdate_float - all_shifts[:,0], all_shifts[:,0] - obsdate_float]:           # difference in two different directions
-        diff_array[diff_array < 0] = diff_array.max()                                               # Only values before/after obsdate_float
+    for diff_array in [jd_midexp - all_shifts[:,0], all_shifts[:,0] - jd_midexp]:           # difference in two different directions
+        diff_array[diff_array < 0] = diff_array.max()                                               # Only values before/after jd_midexp
         index = np.where( diff_array == diff_array.min() )[0][-1]                                   # Get the index in shifts for the last minimum
         shifts.append(all_shifts[index,:])
     shifts = np.array(shifts)
-    weight = np.abs(shifts[:,0] - obsdate_float)
+    weight = np.abs(shifts[:,0] - jd_midexp)
     if np.nansum(weight) == 0:                                                                      # When using the border position
         weight += 1.
     weight /= (np.nansum(weight)+0.0)
     weight = 1 - weight
     shift_avg = np.average( shifts[:,1], weights=weight )           # Tested, will work fine for obsdate in range(all_shifts), but will fail for extrapolation. Maybe it's necessary to replace this by a linear fit?
-    logger('Info: The shift between the wavelength solution and the current file {7} (center of exposure is {1}) is {0} px ({6} km/s). The stored shifts {2} ({3}) and {4} ({5}) from file {8} were used.'.format(\
+    logger('Info: The shift between the wavelength solution and the current file {7} (center of exposure is {1}, JD = {9}) is {0} px ({6} km/s). The stored shifts {2} ({3}) and {4} ({5}) from file {8} were used.'.format(\
                         round(shift_avg,4), datetime.datetime.utcfromtimestamp(obsdate_float).strftime('%Y-%m-%d %H:%M:%S'), 
-                        round(shifts[0,1],4), datetime.datetime.utcfromtimestamp(shifts[0,0]).strftime('%Y-%m-%d %H:%M:%S'),
-                        round(shifts[-1,1],4), datetime.datetime.utcfromtimestamp(shifts[-1,0]).strftime('%Y-%m-%d %H:%M:%S'),
-                        round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), objname, params['master_wavelengths_shift_filename'] ) )
+                        round(shifts[0,1],4), round(shifts[0,0],5), round(shifts[-1,1],4), round(shifts[-1,0],5),
+                        round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), 
+                        objname, params['master_wavelengths_shift_filename'], round(jd_midexp,5) ) )
 
     wavelength_solution_new = copy.deepcopy(wavelength_solution)
     #wavelength_solution_new[:,1] -= shift_avg                       # shift the central pixel, - sign is right, tested before 19/9/2018
@@ -3251,15 +3286,41 @@ def clip_noise(spectra, maxnoise=10, noisedataset=4, correctdatasets=[5,6]):
     #print np.nanmedian(spectra[noisedataset]), np.sum(high_noise), np.sum(high_noise, axis=1).shape, np.sum(high_noise, axis=1)
     return spectra
 
+def get_julian_datetime(date):      # from https://stackoverflow.com/questions/31142181/calculating-julian-date-in-python
+    """
+    Convert a datetime object into julian float.
+    Args:
+        date: datetime-object of date in question
+
+    Returns: float - Julian calculated datetime.
+    Raises: 
+        TypeError : Incorrect parameter type
+        ValueError: Date out of range of equation
+    """
+
+    # Ensure correct format
+    if not isinstance(date, datetime.datetime):
+        raise TypeError('Invalid type for parameter "date" - expecting datetime')
+    elif date.year < 1801 or date.year > 2099:
+        raise ValueError('Datetime must be between year 1801 and 2099')
+
+    # Perform the calculation
+    julian_datetime =   367 * date.year \
+                      - int((7 * (date.year + int((date.month + 9) / 12.0))) / 4.0) \
+                      + int((275 * date.month) / 9.0) \
+                      + date.day + 1721013.5 \
+                      + (date.hour + date.minute / 60.0 + date.second / math.pow(60,2)) / 24.0 \
+                      - 0.5 * math.copysign(1, 100 * date.year + date.month - 190002.5) + 0.5
+
+    return julian_datetime
+
 def get_obsdate(params, im_head):
     """
     Get the observation date and time using the header and exposure time
-    
+    !!! Necessary improvement: check what header keywords are already available to not overwrite information created by create_image_general()
     :return obsdate_midexp: datetime.datetime object, containing the the (light collection) center of the observation (in UTC)
-    :return obsdate_float: float, unix timestamp of the mid observation time (in UTC)
-    :return exposure_time: float, exposure time
-    :return obsdate: datetime.datetime object, beginning of the observation (in UTC)
-    :return fraction: float, what fraction of the exposure time collected half the light
+    :return obsdate_mid_float: float, unix timestamp of the mid observation time (in UTC)
+    :return jd_midexp: float, Julian data of mid-exposure
     """
     obsformats = ['%Y-%m-%dT%H:%M:%S.%f','%Y-%m-%dT%H:%M:%S']           # Put into the parameters?
     if 'raw_data_mid_exposure_keys' in params.keys():                   # To stay backwards compatible, can be removed a few versions after v0.4.1
@@ -3268,7 +3329,7 @@ def get_obsdate(params, im_head):
         exp_fraction_keys = ['HIERARCH ESO INS DET1 TMMEAN', 'ESO INS DET1 TMMEAN']     # HIERARCH will be removed when python reads the header
     # Get the obsdate
     obsdate = -1
-    for header_key in [ 'EXO_PIPE '+params['raw_data_dateobs_keyword'], params['raw_data_dateobs_keyword'] ]:
+    for header_key in [ params['raw_data_dateobs_keyword'] ]:       # 'EXO_PIPE MID_'+params['raw_data_dateobs_keyword'] as it's mid exposure time
         if header_key in im_head.keys():
             obsdate = im_head[header_key]
     if obsdate == -1:
@@ -3297,10 +3358,21 @@ def get_obsdate(params, im_head):
         exposure_time = 0
         
     obsdate_midexp = obsdate + datetime.timedelta(0, fraction*exposure_time)      # days, seconds, then other fields.
-    
+    jd_midexp = get_julian_datetime(obsdate_midexp)
+    jd_begin = get_julian_datetime(obsdate)
+    im_head['HIERARCH EXO_PIPE DATE-OBS']   = (obsdate.strftime("%Y-%m-%dT%H:%M:%S.%f"), 'UTC, Begin of expose')
+    im_head['HIERARCH EXO_PIPE DATE-MID']   = (obsdate_midexp.strftime("%Y-%m-%dT%H:%M:%S.%f"), 'UTC, Begin of expose')
+    im_head['HIERARCH EXO_PIPE EXPOSURE']   = (exposure_time, 'Exposure time in s')
+    im_head['HIERARCH EXO_PIPE EXP_FRAC']   = (fraction, 'Normalised mean exposure time')
+    im_head['HIERARCH EXO_PIPE JD']         = (round(jd_midexp,6), 'mid-exposure Julian date')             # MJD = JD - 2400000.5 from http://www.csgnetwork.com/julianmodifdateconv.html
+    im_head['HIERARCH EXO_PIPE MJD']        = (round(jd_midexp - Constants.MJD0,6), 'mid-exposure modified JD')        # round 5 -> precision is 1 second, timing is not more precise
+    im_head['HIERARCH EXO_PIPE JD_START']   = (round(jd_begin,6), 'JD at start of exposure')
+    im_head['HIERARCH EXO_PIPE MJD_START']  = (round(jd_begin - Constants.MJD0,6), 'modified JD at begin of exposure')
+
     epoch = datetime.datetime.utcfromtimestamp(0)
-    obsdate_float = (obsdate_midexp - epoch).total_seconds()                                   # (obsdate - epoch) is a timedelta
-    return obsdate_midexp, obsdate_float, exposure_time, obsdate, fraction
+    obsdate_mid_float = (obsdate_midexp - epoch).total_seconds()                                   # (obsdate - epoch) is a timedelta
+    return im_head, obsdate_midexp, obsdate_mid_float, jd_midexp
+    #return obsdate_midexp, obsdate_mid_float, exposure_time, obsdate, fraction, jd_midexp
     
 def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace, objname):
     """
@@ -3308,7 +3380,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     
     """
     shift = 0
-    obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_head)               # in UTC, mid of the exposure
+    im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)               # in UTC, mid of the exposure
     
     #shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces
     if im_name[-8:] == '_wavecal':
@@ -3320,7 +3392,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     else:
         logger('Error: The filename does not end as expected: {0} . It should end with _wavecal or _wavesci. This is probably a programming error.'.format(im_name))
     wavelength_solution_shift, shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
-                                                              reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, objname, fib=fib)   # This is only for a shift of the pixel, but not for the shift of RV
+                                                              reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, fib=fib)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, aspectra)
     im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
     im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
@@ -3387,18 +3459,15 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     if im_head['EXO_PIPE BCKNOISE'] <= 0 or np.isnan(im_head['EXO_PIPE BCKNOISE']):
         logger('Warn: Measured an unphysical background noise in the data: {0}. Set the noise to 1'.format(im_head['EXO_PIPE BCKNOISE']))
         im_head['HIERARCH EXO_PIPE BNOISVAR'] = (1., '1, because of unphysical measurement')
-    obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_head)               # in UTC, mid of the exposure
-    im_head['HIERARCH EXO_PIPE DATE-OBS'] = (obsdate_begin.strftime("%Y-%m-%dT%H:%M:%S.%f"), 'UTC, Begin of expose')
-    im_head['HIERARCH EXO_PIPE EXP_FRAC'] = (exposure_fraction, 'Normalised mean exposure time')
+    im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)               # in UTC, mid of the exposure
     
     im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
-    # Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
-    obname = im_name.split('/')    # get rid of the path
-    im_head['HIERARCH EXO_PIPE NAME'] = (obname[-1], im_name)       # TO know later what was the original filename
-    obname = obname[-1].replace('\n','')
-    #not necessary anymore obname = obname.split('-')  # remove the numbering and exposure time from the filename
-    #not necessary anymore obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
-    obnames = get_possible_object_names(obname)
+    # not anymore: Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
+    obname = im_name.replace('\n','').split('/')    # get rid of the path
+    im_head['HIERARCH EXO_PIPE NAME'] = (obname[-1], 'original filename')       # To know later what was the original filename
+    #not necessary anymore: obname = obname.split('-')  # remove the numbering and exposure time from the filename
+    #not necessary anymore: obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
+    obnames = get_possible_object_names(obname[-1])
     
     # Change the path to the object_file to the result_path, if necessary
     object_files = [ params['object_file'] ]
@@ -3412,7 +3481,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         logger('Warn: Reference coordinates files {0} do not exist or object not found within them.'.format(object_files))
     
     # Get the baycentric velocity
-    params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, object_file)       # obnames becomes the single entry which matched entry in params['object_file']
+    params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, object_file, obsdate_midexp)       # obnames becomes the single entry which matched entry in params['object_file']
     im_head['HIERARCH EXO_PIPE OBJNAME'] = (obnames[0], 'Used object name')
     im_head['HIERARCH EXO_PIPE BCV'] = (round(bcvel_baryc,4),'Barycentric velocity in km/s')
     
@@ -3424,16 +3493,16 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     else:
         aspectra, agood_px_mask, aextr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
     wavelength_solution_shift, shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
-                                                              reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, im_name)   # This is only for a shift of the pixel, but not for the shift of RV
+                                                              reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, spectra)
-    wavelengths_vac = wavelength_air_to_vacuum(wavelengths)                             # change into vacuum wavelengths
+    wavelengths_vac = wavelength_air_to_vacuum(wavelengths)                             # change into vacuum wavelengths, needed for ceres RV
     
     espectra = combine_photonnoise_readnoise(spectra, im_head['EXO_PIPE BCKNOISE'] * np.sqrt(extr_width) )     # widths[:,2] is gaussian width
     fspectra = spectra/(flat_spec_norm[2]+0.0)        # 1: extracted flat, 2: low flux removed
     # Doing a wavelength shift for the flat_spec_norm is probably not necessay, as it's only few pixel
-    measure_noise_orders = 12
+    measure_noise_orders = 16
     measure_noise_semiwindow = 10                   # in pixel
-    efspectra = measure_noise(fspectra, p_order=measure_noise_orders, semi_range=measure_noise_semiwindow)             # Noise will be high at areas wih absorption lines
+    efspectra = measure_noise(fspectra, p_order=measure_noise_orders, semi_window=measure_noise_semiwindow)             # Noise will be high at areas wih absorption lines
     cspectra, noise_cont = normalise_continuum(fspectra, wavelengths, nc=6, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders)      
     #logger('Warn: !!!! no blaze correction before continuum correction')
     #cspectra, noise_cont = normalise_continuum(spectra, wavelengths, nc=4, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders)      
@@ -3459,9 +3528,15 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         Given in the mask is the lower and the higher end of the line, and the weight
         """
         RV, RVerr2, BS, BSerr = rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], object_file, mephem)
+        if 'EXO_PIPE BJDTDB' in im_head.keys():
+            bjdtdb = im_head['EXO_PIPE BJDTDB']
+        else:
+            bjdtdb = 0
         # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf (no, causes 83.15 km/s shift, < 5m/s is between the different models)
-        logger('Info: The radial velocity (including barycentric correction) for {0} gives: RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s'.format(\
-                                    im_name, round(RV+bcvel_baryc,4), round(RVerr2,4), round(BS,4), round(BSerr,4), round(bcvel_baryc,4) ))
+        logger(('Info: The radial velocity (including barycentric correction) for {0} at [ {6} , JD= {8} , BJDTDB= {9} (center)] gives: '+\
+                'RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s. '+\
+                'The total extracted flux is {7} counts.').format(im_name, round(RV+bcvel_baryc,4), round(RVerr2,4), round(BS,4), 
+                        round(BSerr,4), round(bcvel_baryc,4), obsdate_midexp.strftime("%Y-%m-%dT%H:%M:%S.%f"), np.nansum(spectra), round(jd_midexp,5), round(bjdtdb,5) ))
         im_head['HIERARCH EXO_PIPE RV_BARY'] = (round(RV+bcvel_baryc,4),'RV including BCV in km/s (measured RV+BCV)')
         im_head['HIERARCH EXO_PIPE RV_ERR'] = round(RVerr2,4)
     
@@ -3469,8 +3544,8 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     wavelengths_bary = wavelengths * (1 + bcvel_baryc/(Constants.c/1000.) )
     
     im_head_bluefirst = copy.copy(im_head)
-    im_head = add_specinfo_head(spectra, spectra, noise_cont, im_head)
-    im_head_bluefirst = add_specinfo_head(spectra[::-1,:], spectra[::-1,:], noise_cont[::-1,:], im_head_bluefirst)
+    im_head = add_specinfo_head(spectra, spectra, noise_cont, extr_width, im_head)
+    im_head_bluefirst = add_specinfo_head(spectra[::-1,:], spectra[::-1,:], noise_cont[::-1,:], extr_width[::-1,:], im_head_bluefirst)
     im_head_wave, im_head_weight = copy.copy(im_head), copy.copy(im_head)
     im_head_harps_format = copy.copy(im_head_bluefirst)
     im_head_iraf_format = copy.copy(im_head)
@@ -3490,7 +3565,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     save_multispec(fspectra[::-1,:],                params['path_extraction_single']+im_name+'_blaze_bluefirst', im_head_iraf_format_bluefirst, bitpix=params['extracted_bitpix'])
     
     # CSV file for terra
-    fname = params['path_csv_terra']+obnames[0]+'/data/'+obsdate.strftime('%Y-%m-%d%H%M%S')
+    fname = params['path_csv_terra']+obnames[0]+'/data/'+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
     os.system('rm -f {0}{1}/results/synthetic.rv'.format(params['path_csv_terra'],obnames[0]) )     # Delete the old solution, as won't be created otherwise
     save_spec_csv(cspectra, wavelengths_bary, good_px_mask, fname)
     
@@ -3499,9 +3574,9 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     serval_keys = []
     #serval_keys.append(['INSTRUME', 'HARPS',                                                    'added for Serval'])
     serval_keys.append(['INSTRUME', 'EXOHSPEC',                                                    'added for Serval'])
-    serval_keys.append(['EXPTIME',  im_head_harps_format[params['raw_data_exptim_keyword']],    'Exposure time, for Serval'])
+    serval_keys.append(['EXPTIME',  im_head_harps_format['EXO_PIPE EXPOSURE'],    'Exposure time, for Serval'])
     serval_keys.append(['DATE-OBS', im_head_harps_format['EXO_PIPE DATE-OBS'],                  'UT start, for Serval'])
-    serval_keys.append(['MJD-OBS',  im_head_harps_format['EXO_PIPE MJD-START'],                 'MJD start ({0})'.format(im_head_harps_format['EXO_PIPE DATE-OBS']) ])
+    serval_keys.append(['MJD-OBS',  im_head_harps_format['EXO_PIPE MJD_START'],                 'MJD start ({0})'.format(im_head_harps_format['EXO_PIPE DATE-OBS']) ])
     if 'EXO_PIPE RA' in im_head_harps_format.keys():
         serval_keys.append(['RA',       im_head_harps_format['EXO_PIPE RA'],                        'RA start, for Serval'])
     if 'EXO_PIPE DEC' in im_head_harps_format.keys():
@@ -5656,7 +5731,7 @@ def plot_gauss_data_center(datapoints_x, datapoints, label_datapoins, gauss, lab
             plt.savefig(filename.replace('.png','_{0}-{1}.png'.format('%3.3i'%datarange[0],'%3.3i'%datarange[-1])), bbox_inches='tight')
             plt.close()
 
-def add_specinfo_head(spectra, s_spec, n_spec, im_head):
+def add_specinfo_head(spectra, s_spec, n_spec, w_spec, im_head):
     """
     Add information from the spectra to the header
     :param spectra:
@@ -5672,15 +5747,23 @@ def add_specinfo_head(spectra, s_spec, n_spec, im_head):
     snr2 = np.sqrt( np.nanmedian( s_spec[:,px_range], axis=1) )     # sqrt of flux
     snr = np.nanmin( np.vstack(( snr1, snr2 )), axis=0 )            # SNR can't be better than sqrt of flux
     snr[np.isnan(snr)] = -1
+    width_med = np.nanmedian(w_spec, axis=1)
+    width_std = np.nanstd(w_spec, ddof=1, axis=1)
+    width_min = np.nanmin(w_spec, axis=1)
+    width_max = np.nanmax(w_spec, axis=1)
+    width_sum = np.nansum(w_spec, axis=1)
     im_head['HIERARCH EXO_PIPE fmin'] = (np.nanmin(spectra), 'Minimum Flux per pixel')
     im_head['HIERARCH EXO_PIPE fmax'] = (np.nanmax(spectra), 'Maximum Flux per pixel')
     im_head['HIERARCH EXO_PIPE fsum_all'] = (np.nansum(spectra, axis=None), 'Total flux')
+    im_head['HIERARCH EXO_PIPE EXTR_PX'] = ( round(np.nansum(w_spec),1), 'Total Number of pixel extracted' )
     for order in range(spectra.shape[0]):
         im_head['HIERARCH EXO_PIPE fsum_order{0}'.format('%2.2i'%order)] = ( round(signal[order],2), 'Flux (counts) in order {0}'.format('%2.2i'%order) )
         im_head['HIERARCH EXO_PIPE SN_order{0}'.format('%2.2i'%order)] = ( round(snr[order],1), 'median SNR (+-10% of centre px)' )
-        
+        im_head['HIERARCH EXO_PIPE WIDTH_median{0}'.format('%2.2i'%order)] = ( round(width_med[order],1), 'median width, stdev = {0}'.format(round(width_std[order],1)) )
+        im_head['HIERARCH EXO_PIPE WIDTH_minmax{0}'.format('%2.2i'%order)] = ( '{0}, {1}'.format(round(width_min[order],1), round(width_max[order],1)), 'min and max width' )
+        im_head['HIERARCH EXO_PIPE EXTR_PX{0}'.format('%2.2i'%order)] = ( round(width_sum[order],1), 'Total Number of pixel extracted' )
+    
     return im_head
-
 
 def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_window=10, nc_noise=15):      # without modal noise nc=4,ll=1.,lu=5. might work
     """
@@ -6008,14 +6091,14 @@ def linearise_wavelength_spec(params, wavelength_solution, spectra, method='sum'
     
     return data[:,0], data[:,1]
 
-def mjd_fromheader(params, head):
-    """
+"""def mjd_fromheader(params, head):                   # Not necessary anymore
+    ""#"
     :return mjd: modified Julian date from header, in UT of the mid of the exposure
     :return mjd0: 2400000.5
-    """
+    ""#"
     secinday = 24*3600.0
     
-    obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, head)               # obsdate, obsdate_float, in UTC, mid of the exposure
+    obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction, jd_midexp = get_obsdate(params, head)               # obsdate, obsdate_float, in UTC, mid of the exposure
     # Mid exppsure
     mjd0,mjd = iau_cal2jd(obsdate.year, obsdate.month, obsdate.day)
     ut       = obsdate.hour*3600. + obsdate.minute*60. + obsdate.second
@@ -6027,7 +6110,7 @@ def mjd_fromheader(params, head):
     
     return mjd, mjd0, mjd_begin
 
-def iau_cal2jd(IY,IM,ID):               # from CERES, modified
+def iau_cal2jd(IY,IM,ID):               # from CERES, modified                   # Not necessary anymore
     IYMIN = -4799.
     MTAB = np.array([ 31., 28., 31., 30., 31., 30., 31., 31., 30., 31., 30., 31.])
     if IY < IYMIN:
@@ -6049,7 +6132,7 @@ def iau_cal2jd(IY,IM,ID):               # from CERES, modified
             DJM = ID + int((153*m + 2)/5) + 365*y + int(y/4) - int(y/100) + int(y/400) - 32045 - 2400001.
         else:
             logger('Error: The month of the observation is not defined: {0}'.format(IM))
-    return DJM0, DJM
+    return DJM0, DJM"""
 
 def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True):               # from CERES, heavily modified
     """
@@ -6115,7 +6198,7 @@ def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True):  
                 PMDEC = float(cos[4])   # mas/yr
                 
                 """ # Steps to adjust the coordinates to the correct position, not necessary anymore because not using CERES routines to get BCVel and the barycorrpy package takes care of it
-                mjdepoch = 2451545.0 - 2400000.5 + (float(cos[5]) - 2000.)
+                mjdepoch = 2451545.0 - constants.MJD0 + (float(cos[5]) - 2000.)
     
                 RA  = RA0 + (PMRA/1000./3600.)*(mjd-mjdepoch)/365.
                 DEC = DEC0 + (PMDEC/1000./3600.)*(mjd-mjdepoch)/365."""
@@ -6169,7 +6252,7 @@ def obspos(longitude,obsradius,R0):               # from CERES, not needed anymo
     obpos.append(z)
     return obpos
 
-def get_barycent_cor(params, im_head, obnames, reffile):
+def get_barycent_cor(params, im_head, obnames, reffile, obsdate):
     """
     Calculates the barycentric correction.
     To do this, position of the telescope and pointing of the telescope need to be known.
@@ -6208,7 +6291,6 @@ def get_barycent_cor(params, im_head, obnames, reffile):
             gobs.lat  = math.radians(params['latitude'])     # lat/long in decimal degrees  
             gobs.long = math.radians(params['longitude'])
             gobs.elevation = params['altitude']
-            obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_head)               # in UTC, mid of the exposure
             gobs.date = obsdate.strftime('%Y-%m-%d %H:%M:%S')
             mephem    = ephem.Moon()
             mephem.compute(gobs)
@@ -6257,7 +6339,9 @@ def get_barycent_cor(params, im_head, obnames, reffile):
                     source_radec = 'The object coordinates are derived from the image header.'
                 if parentr == 'latitude':           # Assume that latitute is coming from the same source
                     source_obs = 'The site coordinates are derived from the image header.'
-    mjd,mjd0, mjd_begin = mjd_fromheader(params, im_head)
+    # mjd,mjd0, mjd_begin = mjd_fromheader(params, im_head)
+    mjd = im_head['HIERARCH EXO_PIPE MJD']
+    jd  = im_head['HIERARCH EXO_PIPE JD']
     
     ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, mjd, filen=reffile, warn_notfound=False)     # obnames will be a list with only one entry: the matching entry 
     if ra2 !=0 and dec2 != 0:
@@ -6291,7 +6375,7 @@ def get_barycent_cor(params, im_head, obnames, reffile):
             site = params['site']
         ephemeris2='https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de405.bsp'
 
-        bcvel_baryc = barycorrpy.get_BC_vel(JDUTC=mjd+mjd0,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
+        bcvel_baryc = barycorrpy.get_BC_vel(JDUTC=jd,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
                            pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)
         bcvel_baryc = bcvel_baryc[0][0] / 1E3       # in km/s
         #print "result3", bcvel_baryc
@@ -6308,19 +6392,16 @@ def get_barycent_cor(params, im_head, obnames, reffile):
         bjd = bjd[0]"""
         
         # Using barycorrpy (https://github.com/shbhuk/barycorrpy), pip install barycorrpy
-        bjdtdb = barycorrpy.utc_tdb.JDUTC_to_BJDTDB(JDUTC=mjd+mjd0,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
+        bjdtdb = barycorrpy.utc_tdb.JDUTC_to_BJDTDB(JDUTC=jd,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
                                         pmdec=params['pmdec'],px=0,rv=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)           # only precise to 0.2s 
         bjd = bjdtdb[0][0]
         #print "bjdtdb", bjdtdb
         #print "bjdtdb0", bjdtdb[0][0]
         
         # end test
-        im_head['HIERARCH EXO_PIPE BJDTDB'] = (round(bjd,5), 'Baryc. cor. JD (incl leap seconds)')     # without leap seconds: remove 32.184+N leap seconds after 1961'
+        im_head['HIERARCH EXO_PIPE BJDTDB'] = (round(bjd,6), 'Baryc. cor. JD (incl leap seconds)')     # without leap seconds: remove 32.184+N leap seconds after 1961'
 
-    im_head['HIERARCH EXO_PIPE JD']         = (round(mjd+mjd0,5), 'mid-exp Julian date')             # MJD = JD - 2400000.5 from http://www.csgnetwork.com/julianmodifdateconv.html
-    im_head['HIERARCH EXO_PIPE MJD']        = (round(mjd,5), 'mid-exp modified JD')        # round 5 -> precision is 1 second, timing is not more precise
-    im_head['HIERARCH EXO_PIPE MJD-START']  = (round(mjd_begin,5), 'mid-exp modified JD')
-
+    
     logger(('Info: Using the following data for object name(s) {10}, Observatory site {9}, mid exposure MJD {11}: '+\
                     'altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}, pmra = {13}, pmdec = {14}. {8} {6} '+\
                     'This leads to a barycentric velocity of {7} km/s and a mid-exposure BJD-TDB of {12}').format(params['altitude'], params['latitude'], params['longitude'], 
@@ -6329,7 +6410,7 @@ def get_barycent_cor(params, im_head, obnames, reffile):
        
     return params, bcvel_baryc, mephem, obnames, im_head
 
-def JPLiers(path, mjdini, mjdend):                  # from CERES, updates the iers.tab file so it contains only 2000 entries, # not needed anymore
+"""def JPLiers(path, mjdini, mjdend):                  # from CERES, updates the iers.tab file so it contains only 2000 entries, # not needed anymore
     output    = open(path+'iers.tab','w')
     filename  = path+'finals2000A.data'
     finaldata = open(filename,'r')
@@ -6350,13 +6431,13 @@ def JPLiers(path, mjdini, mjdend):                  # from CERES, updates the ie
     pass
 
 def jd_corr(mjd, ra, dec, epoch, lat, lon, jd_type='bjd'):          # not used anymore
-    """
+    "#""
     Return BJD or HJD for input MJD(UTC).
     Adapted from https://mail.python.org/pipermail/astropy/2014-April/002843.html
     Ignores the position of the observatory at the moment, but this will change it by less than 0.1s
     Comparing to http://astroutils.astronomy.ohio-state.edu/time/utc2bjd.html gives a difference of 69s, which is probably due to using BJD_TDB there and BJD_UTC here (32.184+37 leap seconds (Feb 2019))
     return new_jd.jd: 1d array of floats, same length as mjd
-    """
+    ""#"
     # Initialise ephemeris from jplephem
     eph = jplephem.Ephemeris(de423)
 
@@ -6395,7 +6476,7 @@ def jd_corr(mjd, ra, dec, epoch, lat, lon, jd_type='bjd'):          # not used a
     # Compute and return HJD/BJD as astropy.time.Time
     new_jd = t + dt
 
-    return new_jd.jd            # Return as float-array
+    return new_jd.jd            # Return as float-array"""
 
 def find_shift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_sol_2, wave_sol_lines_2, spectra, names=['first','second']):     # Doesn't do the job as expected, it's a pixel shift, not an RV shift
     """

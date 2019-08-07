@@ -214,19 +214,19 @@ if __name__ == "__main__":
             plot_wavelength_solution_spectrum(cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
             plot_wavelength_solution_image(im_cal_l, params['logging_arc_line_identification_positions'], cal_tr_poly, axlows, axhighs, wavelength_solution, wavelength_solution_arclines, reference_catalog)
         if params['original_master_wavelensolution_filename'].lower() != 'pseudo': 
-            obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_arclhead)               # in UTC, mid of the exposure
+            im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_arclhead)               # in UTC, mid of the exposure
             if calib[1] == 'cal2':          # for the calibration fiber
                 wavelength_solution_cal, wavelength_solution_arclines_cal = copy.deepcopy(wavelength_solution), copy.deepcopy(wavelength_solution_arclines)
                 params['wavelength_solution_type'] = 'cal-fiber'
                 cal2_l_spec = copy.deepcopy(cal_l_spec)
                 im_arc2lhead = copy.copy(im_arclhead)
-                add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_float, 0, 0, 'cal'), params['master_wavelengths_shift_filename'] )
+                add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_mid_float, 0, 0, 'cal'), params['master_wavelengths_shift_filename'] )
             else:
                 wavelength_solution_sci, wavelength_solution_arclines_sci = copy.deepcopy(wavelength_solution), copy.deepcopy(wavelength_solution_arclines)
                 params['wavelength_solution_type'] = 'sci-fiber'
                 cal1_l_spec = copy.deepcopy(cal_l_spec)
                 im_arc1lhead = copy.copy(im_arclhead)
-                add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_float, 0, 0, 'sci'), params['master_wavelengths_shift_filename'] )
+                add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_mid_float, 0, 0, 'sci'), params['master_wavelengths_shift_filename'] )
                 params['two_solutions'] = True
 
     # Use the better wavelength solution: should be the one of the science fiber (wavelength_solution_sci), but if calibration fiber is better, then use calibration fiber
@@ -264,10 +264,10 @@ if __name__ == "__main__":
             aspectra = cal1_l_spec
             im_arclhead = im_arc1lhead
             im_name = 'long_exposure_emision_lamp_science_fiber'
-        obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_arclhead)               # in UTC, mid of the exposure
+        im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_arclhead)               # in UTC, mid of the exposure
 
         dummy_shift_wavesoln, master_shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
-                                                              reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, im_name, maxshift=max(2,2*shift_err), in_shift=shift )
+                                                              reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name, maxshift=max(2,2*shift_err), in_shift=shift )
         # master shift gives the shift from the wavelength_solution to the aspectra
         params['master_shift'] = master_shift
         #print("0:params['master_shift']", params['master_shift'])
@@ -297,7 +297,7 @@ if __name__ == "__main__":
         # The file is read later on purpose
     else:
         logger('Step: Create the normalised flat for the night')
-        obsdate, obsdate_float, exposure_time, obsdate_begin, exposure_fraction = get_obsdate(params, im_blazecor_head)
+        im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_blazecor_head)
         shift = find_shift_images(params, im_blazecor, im_trace1, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, extract=True)
         flat_spec, good_px_mask, extr_width = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='prec', offset=shift)
         flat_spec_norm = flat_spec/np.nanmedian(flat_spec)
@@ -307,7 +307,7 @@ if __name__ == "__main__":
         else:
             blazecor_spec, agood_px_mask, extr_width = extract_orders(params, im_blazecor, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
         wavelength_solution_shift, shift = shift_wavelength_solution(params, blazecor_spec, wavelength_solution, wavelength_solution_arclines, 
-                                            reference_catalog, reference_names, xlows, xhighs, obsdate_float, sci_tr_poly, cal_tr_poly, params['master_blaze_spec_norm_filename'])
+                                            reference_catalog, reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, params['master_blaze_spec_norm_filename'])
         wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, blazecor_spec)
         save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, blazecor_spec], params['master_blaze_spec_norm_filename'], im_blazecor_head)
         #save_im_fits(params, flat_spec_norm, im_sflat_head, params['master_flat_spec_norm_filename'])

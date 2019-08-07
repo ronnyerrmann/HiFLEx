@@ -140,38 +140,9 @@ def add_new_rawfiles_file_list(params, file_list=[]):
                 fiber1 = 'science'
                 if fnlow.find('harps') <> -1:
                     fiber2 = 'wave'
-            obsdate_tuple, dateobs, exptime, obsdate_begin, exposure_fraction = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
-            """# Get the exposure time
-            exptime = -1
-            if params['raw_data_exptim_keyword'] in im_head.keys():
-                exptime = im_head[params['raw_data_exptim_keyword']]
-            else:
-                temp = filename.rsplit('_',1)
-                temp = temp[1].split('s')
-                try:
-                    exptime = float(temp[0])
-                except:
-                    logger('Warn: Problem with exposure time for file {1}. Header keyword {0} does not exist. Can not transform {2} into a number'.format(params['raw_data_exptim_keyword'], filename, temp[0]))
-            # Get the observation time
-            dateobs = 0
-            if params['raw_data_dateobs_keyword'] in im_head.keys():
-                dateobs = im_head[params['raw_data_dateobs_keyword']]
-                found_time = False
-                for timestring in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S']:
-                    try:
-                        dateobs = datetime.datetime.strptime(dateobs, timestring)
-                        found_time = True
-                    except:
-                        found_time = False
-                    if found_time:
-                        break
-                if found_time:        
-                    dateobs = time.mktime(dateobs.timetuple())             #Time in seconds
-                else:
-                    dateobs = 0"""
-            
+            im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
             extract = ''
-            file_list.append([filename, fiber1, fiber2, exptime, dateobs, extract])
+            file_list.append([filename, fiber1, fiber2, im_head['HIERARCH EXO_PIPE EXPOSURE'], dateobs, extract])
     
     return file_list
 
@@ -282,10 +253,11 @@ def create_configuration_file(params, file_list):
         conf_data['master_bias_filename'] = 'master_bias.fits'
     for file in os.listdir("."):
         if file.endswith(".fits"):
-            filename =os.path.join("", file)
+            filename = os.path.join("", file)
             if filename.find('master_dark') == 0:
                 im_head = fits.getheader(filename)
-                obsdate_tuple, dateobs, exptime, obsdate_begin, exposure_fraction = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
+                im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # obsdate_mid_float: unix_timestamp of mid exposure time
+                exptime = im_head['HIERARCH EXO_PIPE EXPOSURE']
                 """exptime = filename.replace('master_dark','').replace('s.fits','').replace('p','.')
                 try:
                     exptime = float( exptime )
