@@ -100,7 +100,7 @@ def plot_spectra(spectra_x, spectra_y, labels, spaths, show=False, adjust=[0.05,
             plt.savefig(spath, bbox_inches='tight')
         plt.close()
 
-def create_plot_marker_linestyle_color(length, linestyle=None, marker=None, color=None):
+def create_plot_linestyle_marker_markersize_color(length, linestyle=None, marker=None, markersize=None, color=None):
     """
     :param length: integer, number of individual plots in the graph
     :param linestyle, marker, color: List, Array, String, or None: use the given properties for the plot. String will be transformed to a list, and the list will multiplied by the number of entries
@@ -118,6 +118,8 @@ def create_plot_marker_linestyle_color(length, linestyle=None, marker=None, colo
         marker = [marker]
     if type(color).__name__ == 'str':           # Make string to list
         color = [color]
+    if type(markersize).__name__ == 'int' or type(markersize).__name__ == 'float':           # Make number to list
+        markersize = [markersize]
     if linestyle != None:
         for i in range(len(linestyle)):         # replace None by empty string
             if linestyle[i] == None:
@@ -141,10 +143,12 @@ def create_plot_marker_linestyle_color(length, linestyle=None, marker=None, colo
         cycler_plt += plt.cycler(linestyle=linestyle*length)
     elif 'linestyle' in cycler_ori.by_key():
         cycler_plt += plt.cycler(linestyle=cycler_ori.by_key()['linestyle']*length)
+    if type(markersize) == list or type(markersize) == np.ndarray:
+        cycler_plt += plt.cycler(markersize=markersize*length)
     
     return cycler_plt
 
-def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.95,0.05, 1.0,1.01], title='', return_frame=False, frame=None, x_title='x', y_title='y', linestyle="", marker="o", color=None, size=[16.2, 10]):
+def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.95,0.05, 1.0,1.01], title='', return_frame=False, frame=None, x_title='x', y_title='y', linestyle="", marker="o", markersize=None, color=None, size=[16.2, 10]):
     """
     Plots the Spectra to files $spaths$
     :param spectra: ???
@@ -181,7 +185,7 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     dy = max(1,maxy - miny)*0.01
     plt.axis([minx-dx,maxx+dx, miny-dy,maxy+dy])
 
-    cycler_plt = create_plot_marker_linestyle_color(len(data_x), linestyle, marker, color)
+    cycler_plt = create_plot_linestyle_marker_markersize_color(len(data_x), linestyle, marker, markersize, color)
     frame.set_prop_cycle(cycler_plt)
     label = ''
     for i in range(len(data_x)):

@@ -39,9 +39,9 @@ if __name__ == "__main__":
     polyfits, xlows, xhighs, widths = polyfits[fmask], xlows[fmask], xhighs[fmask], widths[fmask]
     
     # Move original data into a sub-folder
-    os.system('mv {0} {1}/'.format(params['master_trace_sci_filename'], params['folder_original_traces']))
-    
-    for entry in ['background_filename', 'master_trace_cal_filename', 'master_wavelensolution_filename', 'master_blaze_spec_norm_filename', 'logging_path', 'path_extraction']:
+    #os.system('mv {0} {1}/'.format(params['master_trace_sci_filename'], params['folder_original_traces']))
+    params['master_wavelensolution_sci_filename'] = params['master_wavelensolution_filename'].replace('.fits','_sci.fits')
+    for entry in ['background_filename', 'master_trace_sci_filename', 'master_trace_cal_filename', 'master_wavelensolution_filename', 'master_blaze_spec_norm_filename', 'logging_path', 'path_extraction']:
         if os.path.exists(params[entry]):           # Covers folders, links, files
             os.system('mv {0} {1}/'.format(params[entry], params['folder_original_traces']))
             if entry.find('path_') <> -1 or entry.find('_path') <> -1:

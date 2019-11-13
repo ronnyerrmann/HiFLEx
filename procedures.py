@@ -243,7 +243,9 @@ def textfileargs(params, textfile=None):
                'path_harpsformat', 'master_blaze_spec_norm_filename']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
     full_filenames = ['badpx_mask_filename', 'original_master_traces_filename', 'original_master_wavelensolution_filename', 'reference_catalog',
                 'configfile_fitsfiles', 'raw_data_file_list', 'terra_jar_file']    # deal with full filenames -> nothing to do
-    texts = ['editor', 'extracted_bitpix', 'site', 'object_file']      # -> nothing to do
+    texts = ['editor', 'extracted_bitpix', 'site', 'object_file', 'raw_data_imtyp_keyword', 
+             'raw_data_imtyp_bias', 'raw_data_imtyp_dark', 'raw_data_imtyp_flat', 'raw_data_imtyp_trace1', 'raw_data_imtyp_blaze', 'raw_data_imtyp_trace2',
+             'raw_data_exptim_keyword', 'raw_data_dateobs_keyword', 'raw_data_timezone_cor']      # -> nothing to do
     paths, loggings = [], []
     #list_raw = []              # not necessary anymore
     for entry in params.keys():                         # make the live easier by adding entries automatically to the lists above
@@ -3028,7 +3030,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     
     # In case of pixel shift available -> linear interpolation of pixel shift
     if not params['extract_wavecal']:         # science and calibration traces are at the same position and it's not the calibration spectrum
-        wavelength_solution_new, shift_stored = shift_wavelength_solution_times(params, wavelength_solution_new, obsdate_float, jd_midexp, jd_midexp, objname)
+        wavelength_solution_new, shift_stored = shift_wavelength_solution_times(params, wavelength_solution_new, obsdate_float, jd_midexp, objname)
         shift_med += shift_stored
     
     if False:           # The changes below are not necessary, shift_med/shift_avg will contain the input shift

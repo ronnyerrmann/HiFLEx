@@ -25,7 +25,7 @@ if __name__ == "__main__":
     for line in files:
         if line[0] <> '#':
             fname = line.rsplit('/',1)
-            fitsfiles.append([line, fname[1]])
+            fitsfiles.append([line, fname[-1]])
     # Perform the convertion
     for fname in fitsfiles:
         if not os.path.isfile(fname[0]):

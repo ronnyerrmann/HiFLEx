@@ -112,7 +112,8 @@ Please found the changes of older versions in Chapter~\ref{Section:Changelog_old
 \subsection*{v0.4.1}
 \begin{itemize}\setlength\itemsep{0em}
   \item Switched to barycentric correction (radial velocity and BJDTDB) from \url{https://github.com/shbhuk/barycorrpy}.
-  \item Added parameter \verb|raw_data_mid_exposure_keys| to conf.txt (optional at the moment).
+  \item Added parameter \verb|raw_data_mid_exposure_keys| to conf.txt.
+  \item Added parameter \verb|raw_data_object_name_keys| to conf.txt
   \item Added parameter \verb|path_harpsformat| to conf.txt
   \item Changed parameter \verb|raw_data_path| to \verb|raw_data_paths|, allowing list of folders.
   \item Renamed parameter \verb|maxshift| to \verb|maxshift_orders|.
@@ -401,8 +402,8 @@ If the coordinates of the object are not stored in the fits header, then they ca
  \item PM DEC (mas/year, can be 0 in the most cases)
  \item Epoch of the coordinates (only the number, e.g. 2000 or 2015.5)
  \item Enable/Disable flag (1 for enabled)
- \item (optinal) Mask to use. At the moment G2, K5, or M2 are possible options. Can be empty.
- \item (optinal) Velocity width to broaden the lines of the binary mask. Can be empty.
+ \item Mask to use. At the moment G2, K5, or M2 are possible options. Can be empty.
+ \item Velocity width to broaden the lines of the binary mask. Can be empty.
 \end{enumerate}
 
 Please note that the position of Moon, Jupiter, and Sun are calculated by the pipeline using the mid-exposure time. This requires that the filename contains the (case-insensitive) object name. Therefore the object is not required in the object list.
@@ -1275,13 +1276,20 @@ Authors: Rafael Brahm, Andr{\'e}s Jord{\'a}n, N{\'e}stor Espinoza. If you make u
 
 The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres} (``Clone or Download''-button)\\ and then unpack the archive. To make it work, please follow the Installation Chapter in the README.md file on\\ \url{https://github.com/rabrahm/ceres}~.
 
+It might be necessary to install further packages, e.g.
+\begin{lstlisting}[style=base]
+sudo apt-get install libgfortran3
+\end{lstlisting}
 
 \subsubsection{Terra}
 Terra can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}~. It only has to be extracted. To check that all dependencies are installed on the system one can run.
 \begin{lstlisting}[style=base]
 java -jar <path to terra>/terra/PRV.jar
 \end{lstlisting}
-This should produce the entry \textit{*** TERRA v1.8 ***} before failing.
+This should produce the entry \textit{*** TERRA v1.8 ***} before failing. If not, please check that java is installed
+\begin{lstlisting}[style=base]
+java --version
+\end{lstlisting}
 
 \subsubsection{Serval}
 \label{Section:serval_package}

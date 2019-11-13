@@ -142,7 +142,7 @@ def add_new_rawfiles_file_list(params, file_list=[]):
                     fiber2 = 'wave'
             im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
             extract = ''
-            file_list.append([filename, fiber1, fiber2, im_head['HIERARCH EXO_PIPE EXPOSURE'], dateobs, extract])
+            file_list.append([filename, fiber1, fiber2, im_head['HIERARCH EXO_PIPE EXPOSURE'], obsdate_mid_float, extract])
     
     return file_list
 
@@ -384,6 +384,19 @@ if __name__ == "__main__":
         if rtn <> 0 or time.time()-start < 10:
             print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
             raw_input('To continue please press Enter\t\t')
+    # Reset the list of parameters in case important data was deleted, e.g. all Darks
+    del params['cal2_l_exp']
+    del params['cal2_s_exp']
+    del params['cal1_l_exp']
+    del params['cal1_s_exp']
+    del params['arc_fib1']
+    del params['sflat_fib2']
+    del params['blazecor_fib2']
+    del params['exist_bias']
+    del params['exist_rflat']
+    del params['exp_darks']
+    params = check_raw_files_infos(params, file_list)
+
     time.sleep(0.3)
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
     file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
