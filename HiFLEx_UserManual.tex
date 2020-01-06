@@ -54,6 +54,8 @@
 
 This program is designed to take a fits image file (i.e. a CCD image) and run data reduction steps, extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another), apply the wavelength correction, measure the radial velocity, and perform further calibration steps.
 
+Please cite Errmann, et al. (submitted).
+
 If you use the barycentric corrected radial velocities, the barycentric velocity, or the BJDTDB, please cite Kanodia and Wright 2018\footnote{\url{https://iopscience.iop.org/article/10.3847/2515-5172/aaa4b7}}.
 
 
@@ -117,7 +119,7 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 
 \subsection*{v0.4.2 (not released yet)}
 \begin{itemize}\setlength\itemsep{0em}
-  \item Work in progress 
+  \item Change to the new name: HiFLEx 
 \end{itemize}
 % -------------------------------------------------------------------------------------------
 %\noindent
@@ -913,7 +915,7 @@ The pipeline produces the following files:
   \item[spec.co.B.fits.S, spec.co.R.fits.S] 
   \item[spec.ob.B.fits.S, spec.ob.R.fits.S] 
   \item[proc/results.txt] Results of the cross-correlation, including the radial velocity.
-  \item[proc/*.fits] The reduced images, in the similar format as produced by the EXOhSPEC pipeline.
+  \item[proc/*.fits] The reduced images, in the similar format as produced by the HiFLEx pipeline.
 \end{description}
 
 Please note that the CERES pipeline uses both the red and the blue HARPS chip in order to determine the radial velocities (the data of the blue chip can be avoided by changing \verb|spec| into \verb|spec[:,:26,:]| in \verb|harpspipe.py|, lines 1507 and 1530). Furthermore, a cosmic ray correction is applied. The extracted spectra have the same features as when extracting data with the HiFLEx pipeline.
@@ -1236,9 +1238,9 @@ pip install ephem
 
 \subsection{Necessary files}
 
-\noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/exohspec/releases}):
+\noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/HiFLEx/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/exohspec/archive/v0.4.2.tar.gz
+wget https://github.com/ronnyerrmann/HiFLEx/archive/v0.4.2.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
 
