@@ -41,6 +41,11 @@ import math
 import barycorrpy
 import glob
 
+# Necessary because of https://github.com/astropy/astropy/issues/9427
+from astropy.utils.iers import conf as iers_conf 
+iers_conf.iers_auto_url = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all' 
+iers_conf.auto_max_age = None 
+
 """ only needed for BJD calculation using jplephem and BVC calculation from CERES pipeline
 import jplephem                     # jplehem from the pip install jplehem
 import de423
@@ -160,20 +165,28 @@ def read_parameterfile(textfile):
     # load text file (remove all white spaces)
     if not os.path.exists(textfile):
         logger('Error: The parameterfile {0} does not exist.'.format(textfile))
-    # Extra steps to check that the user didn't make mistakes in the file:
+    """ # Extra steps to check that the user didn't make mistakes in the file:
     data = read_text_file(textfile, no_empty_lines=True)
-    data = convert_readfile(data, [str,str], delimiter='=', replaces=[' '], ignorelines=['#'])
+    data = convert_readfile(data, [str,str], delimiter='=', replaces=[' ', '\t',['\\',' ']], ignorelines=['#'])         # this replaces too many spaces
     for line in data:
         if len(line) != 2:
             logger(('Error: The line in file {0} containing the entries {1} has the wrong format. Expected was "parameter = value(s)" .'+\
-                    'Please check if the "=" sign is there or if a comment "#" is missing.').format(textfile, line))
-    data = np.genfromtxt(textfile, dtype=str, comments='#', delimiter='=')
-    if data.shape[0] == 0 or len(data.shape) < 2:
+                    'Please check if the "=" sign is there or if a comment "#" is missing.').format(textfile, line))"""
+    try:
+        keys, values = np.genfromtxt(textfile, dtype=str, comments='#', delimiter='=', filling_values='', autostrip=True, unpack=True)
+    except ValueError as error:
+        print(error)
+        logger(('Error: One line (see previous output (empty lines are missing in the line number counting)) in file {0} has the wrong format. Expected was "parameter = value(s)" .'+\
+                'Please check if the "=" sign is there or if a comment "#" is missing.').format(textfile))
+        # raise                 # just this to show the error
+        # raise ValueError      # Don't do this, you'll lose the stack trace!
+    if len(keys) == 0 or len(values) == 0:
         logger('Error: No values found when reading the parameterfile {0}.'.format(textfile))
+    """# This bit was necesary before adding autostrip and unpack
     keys, values = data[:, 0], data[:, 1]
     for k in range(len(keys)):
         keys[k] = keys[k].replace(' ', '')
-        values[k] = values[k].replace(' ', '')
+        values[k] = values[k].replace(' ', '')"""
     textparams = dict(zip(keys, values))
     
     return textparams
@@ -223,12 +236,12 @@ def textfileargs(params, textfile=None):
             #        emsg = [key, str(VARIABLES[key])]
             #        print('Command line input not understood for' +
             #              'argument {0} must be {1}'.format(*emsg))
-        elif arg in ['nocheck', 'prepare']:
+        elif arg in ['nocheck', 'prepare'] or 0 <= arg.find('nocheck') <= 2:
             continue        # Do nothing, just prevent the warning below
         else:
             logger('Warn: I dont know how to handle command line argument: {0}'.format(arg))
     params.update(cmdparams)
-    list_txt = ['use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths']
+    list_txt = ['use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys']
     list_int = ['arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck']
     list_float = ['opt_px_range', 'background_width_multiplier']
@@ -284,12 +297,12 @@ def textfileargs(params, textfile=None):
     for entry in params.keys():
         if entry in list_txt+list_int+list_float:       # Split the lists
             temp = params[entry]
-            for i in ['[', ' ', ']']:
+            for i in ['[', ']']:                        # remove the brakets
                 temp = temp.replace(i,'')
-            if len(temp) == 0:
-                temp = []
-            else:
-                temp = temp.split(',')
+            temp = [x.strip() for x in temp.split(',')] # strip the entries from leading or ending spaces
+            for i in range(len(temp))[::-1]:            # remove empty entries
+                if temp[i] == '':
+                    del temp[i]
             params[entry] = temp
         for [list_no, funct, functxt] in [ [list_int, int, 'intergers'], [list_float, float, 'floats'], [list_abs, abs, 'numbers'] ]:
             if entry in list_no:        # deal with list of integers, floats, abs, numpy array (int and float could be also done with dtype, but then needs to be converted back to list
@@ -567,7 +580,7 @@ def read_file_calibration(params, filename, level=0):
             if im.shape != (subframe[0],subframe[1]):                   # only apply subframe if the file doesn't have the size already
                 im = im[subframe[2]: subframe[0]+subframe[2], subframe[3]: subframe[1]+subframe[3]]
             logger('Info: {1}: subframe applied: {0} ({2})'.format(entry, level, subframe))
-            im_head['HIERARCH EXO_PIPE redu{0}a'.format(level)] = 'Subframe: {0}'.format(entry)
+            im_head['HIERARCH HiFLEx redu{0}a'.format(level)] = 'Subframe: {0}'.format(entry)
         elif entry.lower().find('bias') > -1:
             if entry not in calimages:
                  create_image_general(params, entry, level=level+1)
@@ -598,7 +611,7 @@ def read_file_calibration(params, filename, level=0):
             warn_images_not_same([im, calimages[entry]], [filename,params[entry+'filename']])
             im = im - calimages[entry]*exptime
             logger('Info: {1}: background correction applied: {0}'.format(params[entry], level))
-            im_head['HIERARCH EXO_PIPE redu{0}e'.format(level)] = 'Background: {0}'.format(params[entry])
+            im_head['HIERARCH HiFLEx redu{0}e'.format(level)] = 'Background: {0}'.format(params[entry])
         elif entry.lower().find('badpx_mask') > -1:
             if entry not in calimages:
                 calimages[entry] = read_badpx_mask(params)
@@ -617,7 +630,7 @@ def read_file_calibration(params, filename, level=0):
                 else:
                     im[nonzeroind[0][i],nonzeroind[1][i]] = np.median(section)  #replace bad px with the median of each surrounding area
             logger('Info: {1}: badpx correction applied: {0}'.format(entry, level))
-            im_head['HIERARCH EXO_PIPE redu{0}f'.format(level)] = 'Bad-pixel-mask: {0}'.format(entry)
+            im_head['HIERARCH HiFLEx redu{0}f'.format(level)] = 'Bad-pixel-mask: {0}'.format(entry)
         elif entry.lower().find('localbackground') > -1:
             if 'sci_trace' in calimages.keys() and 'cal_trace' in calimages.keys():
                 logger('Step: Performing the background fit')
@@ -643,9 +656,9 @@ def read_file_calibration(params, filename, level=0):
                 if np.isnan(bck_noise_var):
                     bck_noise_var = -1
                 logger('Info: {1}: background correction applied: {0}'.format(entry, level))
-                im_head['HIERARCH EXO_PIPE redu{0}f'.format(level)] = 'Background: {0}'.format(entry)
-                im_head['HIERARCH EXO_PIPE BCKNOISE'] = round(bck_noise_std,8)
-                im_head['HIERARCH EXO_PIPE BNOISVAR'] = (round(bck_noise_var,8), 'Variation of noise through image')             # Background noise variation can be very high, because some light of the traces remains
+                im_head['HIERARCH HiFLEx redu{0}f'.format(level)] = 'Background: {0}'.format(entry)
+                im_head['HIERARCH HiFLEx BCKNOISE'] = round(bck_noise_std,8)
+                im_head['HIERARCH HiFLEx BNOISVAR'] = (round(bck_noise_var,8), 'Variation of noise through image')             # Background noise variation can be very high, because some light of the traces remains
             else:
                 logger('Warn: Could not apply the calibration step {0} because the science and/or calibration traces are not yet known.'.format(entry))
         elif entry.lower().find('combine_sum') > -1 or entry.lower().find('combine_mean') > -1 or entry.lower().find('normalise') > -1:
@@ -655,7 +668,7 @@ def read_file_calibration(params, filename, level=0):
         if logtxt != [] and headtxt != []:
             im_median, im_std = int(round(np.median(calimages[entry]))), int(round(np.std(calimages[entry], ddof=1)))
             logger('Info: {4}: {3}: {0} (median={1}, std={2})'.format(entry, im_median, im_std, logtxt[0], level))
-            im_head['HIERARCH EXO_PIPE '+headtxt[0]] = '{3}: {0}, median={1}, std={2}'.format(entry, im_median, im_std, headtxt[1])
+            im_head['HIERARCH HiFLEx '+headtxt[0]] = '{3}: {0}, median={1}, std={2}'.format(entry, im_median, im_std, headtxt[1])
     #logger('Info: image loaded and processed: {0}'.format(filename))
     if os.path.exists(params['path_reduced']) and params['path_reduced'].lower() != 'na/':       # Save the reduced image
         fname = filename.rsplit('/',1)
@@ -702,7 +715,7 @@ def create_image_general(params, imtype, level=0):
             params['calibs'] = params['{0}_calibs_create'.format(imtype)]       # get's overwritten when other files are being read
             img, im_head = read_file_calibration(params, imf, level=level)
             im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # unix_timestamp of mid exposure time
-            header_updates[im_index,:] = [im_head['HIERARCH EXO_PIPE EXPOSURE'], obsdate_mid_float]         # !!! Improve this calculation and write in the header so it can be used later by get_obsdate 
+            header_updates[im_index,:] = [im_head['HIERARCH HiFLEx EXPOSURE'], obsdate_mid_float]         # !!! Improve this calculation and write in the header so it can be used later by get_obsdate 
             med_flux = np.median(img, axis=None)
             med_fluxes.append(med_flux)
             std_fluxes.append(np.std(img, axis=None, ddof=1))
@@ -724,33 +737,33 @@ def create_image_general(params, imtype, level=0):
             im[im_index,:,:] = img
             #print im.dtype, im.itemsize, im.nbytes, sys.getsizeof(im), im.nbytes/7979408000.
         for i in range(len(med_fluxes)):
-            im_head['HIERARCH EXO_PIPE NORM_{0}'.format(i)] = (med_fluxes[i], 'Median flux in image {0}'.format(i))
+            im_head['HIERARCH HiFLEx NORM_{0}'.format(i)] = (med_fluxes[i], 'Median flux in image {0}'.format(i))
         for i in range(len(std_fluxes)):
-            im_head['HIERARCH EXO_PIPE STDV_{0}'.format(i)] = (round(std_fluxes[i],5), 'Stdev of flux')
+            im_head['HIERARCH HiFLEx STDV_{0}'.format(i)] = (round(std_fluxes[i],5), 'Stdev of flux')
         if 'combine_mean' in params['{0}_calibs_create'.format(imtype)]:
             im = combine_sum(im)/(len(im)+0.0)
-            im_head['HIERARCH EXO_PIPE redu07'] = 'Average of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
+            im_head['HIERARCH HiFLEx redu07'] = 'Average of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
             exposure_time = np.mean(header_updates[:,0])                     # Average of the exposure times
         elif 'combine_sum' in params['{0}_calibs_create'.format(imtype)]:
             im = combine_sum(im)
-            im_head['HIERARCH EXO_PIPE redu07'] = 'Sum of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
+            im_head['HIERARCH HiFLEx redu07'] = 'Sum of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
             exposure_time = np.sum(header_updates[:,0])                      # Sum of the exposure times
         else:           # Median combine
             im = combine_median(im)
-            im_head['HIERARCH EXO_PIPE redu07'] = 'Median of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
+            im_head['HIERARCH HiFLEx redu07'] = 'Median of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
             exposure_time = np.median(header_updates[:,0])                   # Median of the exposure times
         if 'normalise' in params['{0}_calibs_create'.format(imtype)]:
             norm_factor = np.median(med_fluxes)
             im = im * norm_factor
-            im_head['HIERARCH EXO_PIPE NORM_MED'] = norm_factor
-        im_head['HIERARCH EXO_PIPE MID_'+params['raw_data_dateobs_keyword']] = datetime.datetime.utcfromtimestamp(np.median(header_updates[:,1])).strftime('%Y-%m-%dT%H:%M:%S.%f')
-        im_head['HIERARCH EXO_PIPE '+params['raw_data_exptim_keyword']] = exposure_time
+            im_head['HIERARCH HiFLEx NORM_MED'] = norm_factor
+        im_head['HIERARCH HiFLEx MID_'+params['raw_data_dateobs_keyword']] = datetime.datetime.utcfromtimestamp(np.median(header_updates[:,1])).strftime('%Y-%m-%dT%H:%M:%S.%f')
+        im_head['HIERARCH HiFLEx '+params['raw_data_exptim_keyword']] = exposure_time
         first, last = np.argmin(header_updates[:,1]), np.argmax(header_updates[:,1])
         first = header_updates[first,1]-header_updates[first,0]/2.
         last  = header_updates[last, 1]+header_updates[last, 0]/2.
-        im_head['HIERARCH EXO_PIPE BEGIN FIRST'] = datetime.datetime.utcfromtimestamp(first).strftime('%Y-%m-%dT%H:%M:%S.%f')
-        im_head['HIERARCH EXO_PIPE END LAST']    = datetime.datetime.utcfromtimestamp(last ).strftime('%Y-%m-%dT%H:%M:%S.%f')
-        im_head['HIERARCH EXO_PIPE EXP_RANGE']   = (last - first, 'sec, from BEGIN to END')
+        im_head['HIERARCH HiFLEx BEGIN FIRST'] = datetime.datetime.utcfromtimestamp(first).strftime('%Y-%m-%dT%H:%M:%S.%f')
+        im_head['HIERARCH HiFLEx END LAST']    = datetime.datetime.utcfromtimestamp(last ).strftime('%Y-%m-%dT%H:%M:%S.%f')
+        im_head['HIERARCH HiFLEx EXP_RANGE']   = (last - first, 'sec, from BEGIN to END')
         if 'master_{0}_filename'.format(imtype) in params.keys():
             if params['master_{0}_filename'.format(imtype)] != '':
                 save_im_fits(params, im, im_head,  params['master_{0}_filename'.format(imtype)])
@@ -1503,7 +1516,7 @@ def sigma_clip(xarr, yarr, p_orders, sigma_l, sigma_h, repeats = 1):
     old_values = [0,0]
     for i in range(repeats):
         poly = polyfit_adjust_order(xarr[goodvalues], yarr[goodvalues], p_orders)
-        stddiff = np.std(yarr[goodvalues] - np.polyval(poly, xarr[goodvalues]), ddof=p_orders+1)
+        stddiff = np.std(yarr[goodvalues] - np.polyval(poly, xarr[goodvalues]), ddof=p_orders+1)    # np.abs added and removed on 28/11/2019, 
         diff = (yarr - np.polyval(poly, xarr))/(stddiff+0.0)
         goodvalues = ( (diff >= -sigma_l) & (diff <= sigma_h) )    #average should be 0
         if stddiff == old_values[0] and poly[0] == old_values[1]:
@@ -2559,7 +2572,7 @@ def find_shift_images_2d(im, im_ref, shift_range):
     
     return popt
 
-def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_mult, cal_tr_poly, extract=True):
+def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_mult, cal_tr_poly, extract=True, im_head=dict()):
     """
     Finds the shift between two images by cross corellating both. The images are substracted and the total flux [sum(abs())] is calculated. At the best position, a minimum will be reached
     :param im: 2d array with the image, for which the shift should be calculated
@@ -2648,10 +2661,17 @@ def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_
             shift, width = round(popt[1],2), round(popt[2],2)
             mshift = round( best_shifts[-1], 2)                 # find the maximum
             comment = ' The center of the gauss was shifted by {0} px and the maximum flux found at a shift of {1} px.'.format(shift, mshift)
+            im_head['HIERARCH HiFLEx CD_SHIFT_GAUSS']  = (shift, 'Shift of the center of a Gauss in C-D')        # (value, comment)
+            im_head['HIERARCH HiFLEx CD_SHIFT_MAXFLUX']  = (mshift, 'Shift of the maximum flux in C-D')        # (value, comment)
             #shift = np.mean([shift,mshift]     # if not symetrical traces then, a big shift
             shift = mshift                                      # use the maximum flux as shift
     logger('Info: The shift between this frame and the reference frame is {0} px. The gaussian width is {1} px. A shift between {2} and {3} pixel was tested.{4}'.format(shift, width, min(shifts), max(shifts), comment ))
-    return shift
+    im_head['HIERARCH HiFLEx CD_SHIFT']  = (shift, 'Applied Shift in Cross-dispersion')        # (value, comment)
+    im_head['HIERARCH HiFLEx CD_S_WDTH'] = (width, 'Width of shift in Cross-dispersion')        # (value, comment)
+    im_head['HIERARCH HiFLEx CD_S_MIN']  = (min(shifts), 'Minimum tested shift in Cross-dispersion')        # (value, comment)
+    im_head['HIERARCH HiFLEx CD_S_MAX']  = (max(shifts), 'Maximum tested shift in Cross-dispersion')        # (value, comment)
+    
+    return shift, im_head
 
 def arc_shift(params, im, pfits, xlows, xhighs, widths):
     """
@@ -2921,7 +2941,7 @@ def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
         logger('Info The faintest {0} of {1} entries in the arc reference file {2} will not be used '.format(arcs[0]-reference_catalog.shape[0], arcs[0], filename ))
     return reference_catalog, reference_names
 
-def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=2.5, in_shift=0, fib='cal'):
+def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=20.0, in_shift=0, fib='cal', fine=False, im_head=dict()):
     """
     Determines the pixelshift between the current arc lines and the wavelength solution
     Two ways for a wavelength shift can happen:
@@ -2944,18 +2964,18 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     """
     #logger('Step: Finding the wavelength shift for this exposure')
     if np.max(wavelength_solution[:,-1]) < 100:                 # pseudo solution, wavelength of the central pixel is < 100 Angstrom
-        return copy.deepcopy(wavelength_solution), 0.               # No shift is necessary
+        return copy.deepcopy(wavelength_solution), 0., im_head               # No shift is necessary
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0 and np.nansum(aspectra) == 0:         # science and calibration traces are at the same position and it's not the calibration spectrum
-        wavelength_solution_shift, shift = shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname)
-        return wavelength_solution_shift, shift
+        wavelength_solution_shift, shift, im_head = shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname, im_head)
+        return wavelength_solution_shift, shift, im_head
     
-    FWHM = 3.5
+    FWHM = 3.5                          # !! Replace this with a value derived from the wavelength solution
     ratio_lines_identified = 0.15       # if more than ratio_lines_identified of the checked_arc_lines has been identified, then a sigma_clipping will be applied. If less than this number of lines remain after sigma clipping, then the assumption is, that the calibration fiber wasn't used and therefore no wavelength shift is applied
     # In each order get the approx pixel of each reference line, fit a gaussian against the position, calculate the wavelength for the gaussian center, compare the wavelength of the line center with the reference line wavelength
     if in_shift == 0 and params['wavelength_solution_type'] == 'sci-fiber' and fib == 'cal':
         in_shift = params['master_shift']              # if the wavelength solution is from the science fiber, then all the lines calibration fiber will be shifted
     if in_shift == 0 and params['wavelength_solution_type'] == 'cal-fiber' and fib == 'sci':
-        in_shift = params['master_shift']                   # if the wavelength solution is from the calibration fiber and emission spectrum from the science fiber, then the shift is necessary
+        in_shift = params['master_shift']              # if the wavelength solution is from the calibration fiber and emission spectrum from the science fiber, then the shift is necessary
     in_shift_int = int(round(in_shift))
     #print 'input_shift', in_shift, in_shift_int
     
@@ -2967,6 +2987,8 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     for order_index in range(wavelength_solution.shape[0]):
         warr = np.polyval(wavelength_solution[order_index,2:], xarr-wavelength_solution[order_index,1])                 # Wavelength of each pixel in the order
         for arcline in wavelength_solution_arclines[order_index]:
+            if arcline == 0.0:
+                continue
             ref_line_index = np.argmin(np.abs( reference_catalog[:,0] - arcline ))
             if abs( reference_catalog[ref_line_index,0] - arcline ) > 0.0001:           # check that it is in the reference catalog, allowing for uncertainty; catches also zeros used to fill the array
                 continue                                                                # it's not in the reference catalog
@@ -2974,7 +2996,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
             if min(diff) <= wavelength_solution[order_index,-2]*maxshift:               # Distance should be less than 2.5 px
                 checked_arc_lines += 1
                 pos = np.argmin(diff)                                               # Position of the line in the array
-                range_arr = range( max(0,pos+in_shift_int-int(FWHM*3)), min(ass[1],pos+in_shift_int+int(FWHM*3)+1) )     # Range to search for the arc line
+                range_arr = range( max(0,pos+in_shift_int-int(maxshift)), min(ass[1],pos+in_shift_int+int(maxshift)+1) )     # Range to search for the arc line
                 #print range_arr, xarr, aspectra.shape, order_index
                 #get_timing('{0}'.format(arcline))
                 popt = centroid_order(xarr[range_arr],aspectra[order_index,range_arr], pos+in_shift_int, FWHM*3, significance=3.5, bordersub_fine=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
@@ -3005,6 +3027,14 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
         # Using the pixel shift
         good_values, pfit = sigma_clip(shifts[:,3]*0, shifts[:,3]-shifts[:,7], 0, 3, 3, repeats=20)  #orders, sigma low, sigma high
         shifts = shifts[good_values,:]
+    
+    if fine == True:
+        return shifts
+    elif maxshift > 5. and len(shifts) >= ratio_lines_identified * checked_arc_lines and len(shifts) != 0:
+        shift_med = np.median( (shifts[:,3]-shifts[:,7]) )      # Better: check within bins where the most matches are found
+        shifts = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, 
+                                           xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=5.5, in_shift=shift_med, fib=fib, fine=True)
+    
     shift_avg, shift_med, shift_std, width_avg, width_std = in_shift,in_shift,0,0,0
     if len(shifts) >= ratio_lines_identified * checked_arc_lines and len(shifts) != 0:                          # Only if enough lines have been detected
         #shift_avg, shift_std = np.mean( (shifts[:,4]-shifts[:,2]) / shifts[:,2] ), np.std( (shifts[:,4]-shifts[:,2]) / shifts[:,2], ddof=1)    # Will vary along the CCD
@@ -3016,10 +3046,15 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
         if params['extract_wavecal']:            # This values are not correct, as later the shift has to be applied
             add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(jd_midexp, shift_med-in_shift, shift_std, fib), params['master_wavelengths_shift_filename'] )
         
-    logger('Info: The median shift between the lines used in the wavelength solution and the current calibration spectrum of file {9} at JD {10} is {0} +- {1} px ({8} km/s). {2} reference lines have been used, {7} reference lines have been tested. The arc lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px'\
+    logger('Info: The median shift between the lines used in the wavelength solution and the current calibration spectrum of file {9} at JD {10} is {0} +- {1} px ({8} km/s). {2} reference lines have been used, {7} reference lines have been tested. The calibration lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px'\
                 .format(round(shift_med,4), round(shift_std,4), shifts.shape[0], round(width_avg,3), \
                         round(width_std,3), round(width_avg*2.35482,3), round(width_std*2.35482,3), checked_arc_lines,
                         round(shift_med*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), objname, round(jd_midexp,5) ))
+    im_head['HIERARCH HiFLEx D_SHIFT'] = (round(shift_med,4), 'Applied shift in dispersion direction')
+    im_head['HIERARCH HiFLEx D_SHIFT_ERR'] = (round(shift_std,4), 'Uncertainty of the shift')
+    im_head['HIERARCH HiFLEx D_SHIFT_NUMBER_LINES'] = (shifts.shape[0], 'out of {0} calibration lines'.format(checked_arc_lines))
+    im_head['HIERARCH HiFLEx D_WIDTH'] = (round(width_avg,2), 'Gaussian width of the calibration lines')
+    im_head['HIERARCH HiFLEx D_WIDTH_ERR'] = (round(width_std,4), 'Uncertainty of the width')
     if len(shifts) >= ratio_lines_identified * checked_arc_lines and len(shifts) != 0:                          # Statistics only if enough lines were detected
         statistics_arc_reference_lines(shifts, [0,1,6,2], reference_names, wavelength_solution, xlows, xhighs, show=False)
     # correction in the other side of the shift
@@ -3030,14 +3065,14 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     
     # In case of pixel shift available -> linear interpolation of pixel shift
     if not params['extract_wavecal']:         # science and calibration traces are at the same position and it's not the calibration spectrum
-        wavelength_solution_new, shift_stored = shift_wavelength_solution_times(params, wavelength_solution_new, obsdate_float, jd_midexp, objname)
+        wavelength_solution_new, shift_stored, im_head = shift_wavelength_solution_times(params, wavelength_solution_new, obsdate_float, jd_midexp, objname, im_head)
         shift_med += shift_stored
     
     if False:           # The changes below are not necessary, shift_med/shift_avg will contain the input shift
         shift_avg -= in_shift           # To separate the input shift from the rest
         logger('Info: Corrected for input shift. The shift of the currect spectrum is {0}'.format(round(shift_avg,4) ))
     #print 'return_shift', shift_avg
-    return wavelength_solution_new, shift_med
+    return wavelength_solution_new, shift_med, im_head
     
     """ old and wrong
     wavelength_solution_new = []
@@ -3049,7 +3084,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     
     return np.array(wavelength_solution_new)"""
 
-def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname):
+def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname, im_head):
     """
     In case no calibration spectrum was taken at the same time as the science spectra use the stored information to aply a shift in the lines
     !!! shift_avg = np.average( shifts[:,1], weights=weight )  -> Tested, will work fine for obsdate in range(all_shifts), but will fail for extrapolation. Maybe it's necessary to replace this by a linear fit?
@@ -3106,12 +3141,15 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
                         round(shifts[0,1],4), round(shifts[0,0],5), round(shifts[-1,1],4), round(shifts[-1,0],5),
                         round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), 
                         objname, params['master_wavelengths_shift_filename'], round(jd_midexp,5) ) )
+    im_head['HIERARCH HiFLEx DT_SHIFT'] = (round(shift_avg,4), 'Applied shift in dispersion direction')
+    im_head['HIERARCH HiFLEx DT_SHIFT1'] = (round(shifts[0,1],4), 'Shift before @ {0}'.format(round(shifts[0,0],5) ))
+    im_head['HIERARCH HiFLEx DT_SHIFT2'] = (round(shifts[-1,1],4), 'Shift after @ {0}'.format(round(shifts[-1,0],5) ))
 
     wavelength_solution_new = copy.deepcopy(wavelength_solution)
     #wavelength_solution_new[:,1] -= shift_avg                       # shift the central pixel, - sign is right, tested before 19/9/2018
     wavelength_solution_new[:,1] += shift_avg                       # shift the central pixel, + sign is right, tested on 19/9/2018
     
-    return wavelength_solution_new, shift_avg
+    return wavelength_solution_new, shift_avg, im_head
 
 def create_wavelengths_from_solution(wavelength_solution, spectra):
     """
@@ -3174,7 +3212,8 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
     if params['GUI']:
         logger('Step: Allowing user to remove orders')
         fmask, dummy, dummy = remove_adjust_orders_UI( scale_image_plot(im_sflat, 'log10'), polyfits, xlows, xhighs, userinput=params['GUI'], do_rm=True)
-        polyfits, xlows, xhighs = polyfits[fmask], xlows[fmask], xhighs[fmask]   
+        polyfits, xlows, xhighs = polyfits[fmask], xlows[fmask], xhighs[fmask]
+        plot_traces_over_image(im_sflat, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
     # retrace orders in the original image to finetune the orders
     params['bin_adjust_apertures'] = adjust_binning_UI(im_sflat, params['bin_adjust_apertures'], userinput=params['GUI'])
     params['binx'], params['biny'] = params['bin_adjust_apertures']
@@ -3325,13 +3364,10 @@ def get_obsdate(params, im_head):
     :return jd_midexp: float, Julian data of mid-exposure
     """
     obsformats = ['%Y-%m-%dT%H:%M:%S.%f','%Y-%m-%dT%H:%M:%S']           # Put into the parameters?
-    if 'raw_data_mid_exposure_keys' in params.keys():                   # To stay backwards compatible, can be removed a few versions after v0.4.1
-        exp_fraction_keys = params['raw_data_mid_exposure_keys']
-    else:
-        exp_fraction_keys = ['HIERARCH ESO INS DET1 TMMEAN', 'ESO INS DET1 TMMEAN']     # HIERARCH will be removed when python reads the header
+    exp_fraction_keys = params['raw_data_mid_exposure_keys']
     # Get the obsdate
     obsdate = -1
-    for header_key in [ params['raw_data_dateobs_keyword'] ]:       # 'EXO_PIPE MID_'+params['raw_data_dateobs_keyword'] as it's mid exposure time
+    for header_key in [ params['raw_data_dateobs_keyword'] ]:       # 'HiFLEx MID_'+params['raw_data_dateobs_keyword'] as it's mid exposure time
         if header_key in im_head.keys():
             obsdate = im_head[header_key]
     if obsdate == -1:
@@ -3352,7 +3388,7 @@ def get_obsdate(params, im_head):
             break
     # Get the exposure time    
     exposure_time = -1
-    for header_key in [ 'EXO_PIPE '+params['raw_data_exptim_keyword'], params['raw_data_exptim_keyword'] ]:
+    for header_key in [ 'HiFLEx '+params['raw_data_exptim_keyword'], params['raw_data_exptim_keyword'] ]:
         if header_key in im_head.keys():
             exposure_time = im_head[header_key]
     if exposure_time == -1:
@@ -3362,14 +3398,14 @@ def get_obsdate(params, im_head):
     obsdate_midexp = obsdate + datetime.timedelta(0, fraction*exposure_time)      # days, seconds, then other fields.
     jd_midexp = get_julian_datetime(obsdate_midexp)
     jd_begin = get_julian_datetime(obsdate)
-    im_head['HIERARCH EXO_PIPE DATE-OBS']   = (obsdate.strftime("%Y-%m-%dT%H:%M:%S.%f"), 'UTC, Begin of expose')
-    im_head['HIERARCH EXO_PIPE DATE-MID']   = (obsdate_midexp.strftime("%Y-%m-%dT%H:%M:%S.%f"), 'UTC, Begin of expose')
-    im_head['HIERARCH EXO_PIPE EXPOSURE']   = (exposure_time, 'Exposure time in s')
-    im_head['HIERARCH EXO_PIPE EXP_FRAC']   = (fraction, 'Normalised mean exposure time')
-    im_head['HIERARCH EXO_PIPE JD']         = (round(jd_midexp,6), 'mid-exposure Julian date')             # MJD = JD - 2400000.5 from http://www.csgnetwork.com/julianmodifdateconv.html
-    im_head['HIERARCH EXO_PIPE MJD']        = (round(jd_midexp - Constants.MJD0,6), 'mid-exposure modified JD')        # round 5 -> precision is 1 second, timing is not more precise
-    im_head['HIERARCH EXO_PIPE JD_START']   = (round(jd_begin,6), 'JD at start of exposure')
-    im_head['HIERARCH EXO_PIPE MJD_START']  = (round(jd_begin - Constants.MJD0,6), 'modified JD at begin of exposure')
+    im_head['HIERARCH HiFLEx DATE-OBS']   = (obsdate.strftime("%Y-%m-%dT%H:%M:%S.%f"), 'UTC, Begin of expose')
+    im_head['HIERARCH HiFLEx DATE-MID']   = (obsdate_midexp.strftime("%Y-%m-%dT%H:%M:%S.%f"), 'UTC, Begin of expose')
+    im_head['HIERARCH HiFLEx EXPOSURE']   = (exposure_time, 'Exposure time in s')
+    im_head['HIERARCH HiFLEx EXP_FRAC']   = (fraction, 'Normalised mean exposure time')
+    im_head['HIERARCH HiFLEx JD']         = (round(jd_midexp,6), 'mid-exposure Julian date')             # MJD = JD - 2400000.5 from http://www.csgnetwork.com/julianmodifdateconv.html
+    im_head['HIERARCH HiFLEx MJD']        = (round(jd_midexp - Constants.MJD0,6), 'mid-exposure modified JD')        # round 5 -> precision is 1 second, timing is not more precise
+    im_head['HIERARCH HiFLEx JD_START']   = (round(jd_begin,6), 'JD at start of exposure')
+    im_head['HIERARCH HiFLEx MJD_START']  = (round(jd_begin - Constants.MJD0,6), 'modified JD at begin of exposure')
 
     epoch = datetime.datetime.utcfromtimestamp(0)
     obsdate_mid_float = (obsdate_midexp - epoch).total_seconds()                                   # (obsdate - epoch) is a timedelta
@@ -3383,18 +3419,21 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     """
     shift = 0
     im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)               # in UTC, mid of the exposure
-    
-    #shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces
+    if params['arcshift_side'] == 0:                       # single fibre spectrograph
+        shift, im_head = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 1, cal_tr_poly, im_head=im_head)     # w_mult=1 so that the same area is covered as for the find traces
     if im_name[-8:] == '_wavecal':
         aspectra, agood_px_mask, extr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
         fib = 'cal'
     elif im_name[-8:] == '_wavesci':   
-        aspectra, agood_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
+        #if params['arcshift_side'] == 0:			# single fibre spectrograph
+        aspectra, agood_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
+        #else:
+        #  aspectra, agood_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
         fib = 'sci'
     else:
         logger('Error: The filename does not end as expected: {0} . It should end with _wavecal or _wavesci. This is probably a programming error.'.format(im_name))
-    wavelength_solution_shift, shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
-                                                              reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, fib=fib)   # This is only for a shift of the pixel, but not for the shift of RV
+    wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
+                                                              reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, fib=fib, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, aspectra)
     im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
     im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
@@ -3403,7 +3442,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     ceres_spec = np.array([wavelengths, aspectra, agood_px_mask])
     save_multispec(ceres_spec, params['path_extraction']+im_name, im_head, bitpix=params['extracted_bitpix'])
 
-def get_possible_object_names(filename, replacements=['_arc','arc', '_thar','thar', '_une','une']):
+def get_possible_object_names(filename, header, header_keywords, replacements=['_arc','arc', '_thar','thar', '_une','une']):
     """
     Analyses the filename in order to find the possible Name of the Object (for exampled stored in parameter object_file
     The filename is subsequently stripped from the "_" or "-" separated entings
@@ -3411,8 +3450,14 @@ def get_possible_object_names(filename, replacements=['_arc','arc', '_thar','tha
     :param replacements: list of strings with entries to be removed from the filename
     return obnames: list of strings with possible object names
     """
+    obnames = []
+    for header_keyword in header_keywords:                  # Check the header first, if the object is stored there
+        if header_keyword in header.keys():
+            new = header[header_keyword].replace(' ','')
+            if new not in obnames:
+                obnames.append(new)
     first_entry = filename.replace('-','_').split('_')      # most likely object is without any _ and -
-    obnames = [first_entry[0]]
+    obnames.append(first_entry[0])
     obname = filename + '-'                   # Have at least one run
     while obname.find('_') != -1 or obname.find('-') != -1:
         for splitter in ['-', '_']:
@@ -3452,24 +3497,25 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     Extracts the spectra and stores it in a fits file
     
     """
-    if 'EXO_PIPE BCKNOISE' not in im_head.keys():        # if not already done because localbackground is in parameters
+    if 'HiFLEx BCKNOISE' not in im_head.keys():        # if not already done because localbackground is in parameters
         bck_noise_std, bck_noise_var = prepare_measure_background_noise(params, im, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths)
         if np.isnan(bck_noise_var):
             bck_noise_var = -1
-        im_head['HIERARCH EXO_PIPE BCKNOISE'] = round(bck_noise_std,8)
-        im_head['HIERARCH EXO_PIPE BNOISVAR'] = (round(bck_noise_var,8), 'Variation of noise through image')             # Background noise variation can be very high, because some light of the traces remains
-    if im_head['EXO_PIPE BCKNOISE'] <= 0 or np.isnan(im_head['EXO_PIPE BCKNOISE']):
-        logger('Warn: Measured an unphysical background noise in the data: {0}. Set the noise to 1'.format(im_head['EXO_PIPE BCKNOISE']))
-        im_head['HIERARCH EXO_PIPE BNOISVAR'] = (1., '1, because of unphysical measurement')
+        im_head['HIERARCH HiFLEx BCKNOISE'] = round(bck_noise_std,8)
+        im_head['HIERARCH HiFLEx BNOISVAR'] = (round(bck_noise_var,8), 'Variation of noise through image')             # Background noise variation can be very high, because some light of the traces remains
+    if im_head['HiFLEx BCKNOISE'] <= 0 or np.isnan(im_head['HiFLEx BCKNOISE']):
+        logger('Warn: Measured an unphysical background noise in the data: {0}. Set the noise to 1'.format(im_head['HiFLEx BCKNOISE']))
+        im_head['HIERARCH HiFLEx BNOISVAR'] = (1., '1, because of unphysical measurement')
     im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)               # in UTC, mid of the exposure
     
     im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
     # not anymore: Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
     obname = im_name.replace('\n','').split('/')    # get rid of the path
-    im_head['HIERARCH EXO_PIPE NAME'] = (obname[-1], 'original filename')       # To know later what was the original filename
+    im_head['HIERARCH HiFLEx NAME'] = (obname[-1], 'original filename')       # To know later what was the original filename
     #not necessary anymore: obname = obname.split('-')  # remove the numbering and exposure time from the filename
     #not necessary anymore: obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
-    obnames = get_possible_object_names(obname[-1])
+    obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
+    
     
     # Change the path to the object_file to the result_path, if necessary
     object_files = [ params['object_file'] ]
@@ -3484,22 +3530,21 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     
     # Get the baycentric velocity
     params, bcvel_baryc, mephem, obnames, im_head = get_barycent_cor(params, im_head, obnames, object_file, obsdate_midexp)       # obnames becomes the single entry which matched entry in params['object_file']
-    im_head['HIERARCH EXO_PIPE OBJNAME'] = (obnames[0], 'Used object name')
-    im_head['HIERARCH EXO_PIPE BCV'] = (round(bcvel_baryc,4),'Barycentric velocity in km/s')
+    im_head['HIERARCH HiFLEx OBJNAME'] = (obnames[0], 'Used object name')
     
-    shift = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly)     # w_mult=1 so that the same area is covered as for the find traces, w_mult=0 so that only the central pixel is extracted
+    shift, im_head = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, im_head=im_head)     # w_mult=1 so that the same area is covered as for the find traces, w_mult=0 so that only the central pixel is extracted
     spectra, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift)#, var='prec')
     orders = range(spectra.shape[0])
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
         aspectra, agood_px_mask = spectra*0, copy.copy(good_px_mask)
     else:
         aspectra, agood_px_mask, aextr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='fast', plot_tqdm=False)
-    wavelength_solution_shift, shift = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
-                                                              reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name)   # This is only for a shift of the pixel, but not for the shift of RV
+    wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
+                                                              reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, spectra)
     wavelengths_vac = wavelength_air_to_vacuum(wavelengths)                             # change into vacuum wavelengths, needed for ceres RV
     
-    espectra = combine_photonnoise_readnoise(spectra, im_head['EXO_PIPE BCKNOISE'] * np.sqrt(extr_width) )     # widths[:,2] is gaussian width
+    espectra = combine_photonnoise_readnoise(spectra, im_head['HiFLEx BCKNOISE'] * np.sqrt(extr_width) )     # widths[:,2] is gaussian width
     fspectra = spectra/(flat_spec_norm[2]+0.0)        # 1: extracted flat, 2: low flux removed
     # Doing a wavelength shift for the flat_spec_norm is probably not necessay, as it's only few pixel
     measure_noise_orders = 16
@@ -3530,8 +3575,8 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         Given in the mask is the lower and the higher end of the line, and the weight
         """
         RV, RVerr2, BS, BSerr = rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], object_file, mephem)
-        if 'EXO_PIPE BJDTDB' in im_head.keys():
-            bjdtdb = im_head['EXO_PIPE BJDTDB']
+        if 'HiFLEx BJDTDB' in im_head.keys():
+            bjdtdb = im_head['HiFLEx BJDTDB']
         else:
             bjdtdb = 0
         # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf (no, causes 83.15 km/s shift, < 5m/s is between the different models)
@@ -3539,8 +3584,8 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
                 'RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s. '+\
                 'The total extracted flux is {7} counts.').format(im_name, round(RV+bcvel_baryc,4), round(RVerr2,4), round(BS,4), 
                         round(BSerr,4), round(bcvel_baryc,4), obsdate_midexp.strftime("%Y-%m-%dT%H:%M:%S.%f"), np.nansum(spectra), round(jd_midexp,5), round(bjdtdb,5) ))
-        im_head['HIERARCH EXO_PIPE RV_BARY'] = (round(RV+bcvel_baryc,4),'RV including BCV in km/s (measured RV+BCV)')
-        im_head['HIERARCH EXO_PIPE RV_ERR'] = round(RVerr2,4)
+        im_head['HIERARCH HiFLEx RV_BARY'] = (round(RV+bcvel_baryc,4),'RV including BCV in km/s (measured RV+BCV)')
+        im_head['HIERARCH HiFLEx RV_ERR'] = (round(RVerr2,4), 'Uncertainty RV')
     
     # Correct wavelength by barycentric velocity
     wavelengths_bary = wavelengths * (1 + bcvel_baryc/(Constants.c/1000.) )
@@ -3576,27 +3621,31 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     serval_keys = []
     #serval_keys.append(['INSTRUME', 'HARPS',                                                    'added for Serval'])
     serval_keys.append(['INSTRUME', 'EXOHSPEC',                                                    'added for Serval'])
-    serval_keys.append(['EXPTIME',  im_head_harps_format['EXO_PIPE EXPOSURE'],    'Exposure time, for Serval'])
-    serval_keys.append(['DATE-OBS', im_head_harps_format['EXO_PIPE DATE-OBS'],                  'UT start, for Serval'])
-    serval_keys.append(['MJD-OBS',  im_head_harps_format['EXO_PIPE MJD_START'],                 'MJD start ({0})'.format(im_head_harps_format['EXO_PIPE DATE-OBS']) ])
-    if 'EXO_PIPE RA' in im_head_harps_format.keys():
-        serval_keys.append(['RA',       im_head_harps_format['EXO_PIPE RA'],                        'RA start, for Serval'])
-    if 'EXO_PIPE DEC' in im_head_harps_format.keys():
-        serval_keys.append(['DEC',      im_head_harps_format['EXO_PIPE DEC'],                       'DEC start, for Serval'])
-    if 'EXO_PIPE BCV' in im_head_harps_format.keys():
-        serval_keys.append(['HIERARCH ESO DRS BERV',     im_head_harps_format['EXO_PIPE BCV'],      'Barycentric Earth Radial Velocity'])
+    serval_keys.append(['EXPTIME',  im_head_harps_format['HiFLEx EXPOSURE'],    'Exposure time, for Serval'])
+    serval_keys.append(['DATE-OBS', im_head_harps_format['HiFLEx DATE-OBS'],                  'UT start, for Serval'])
+    serval_keys.append(['MJD-OBS',  im_head_harps_format['HiFLEx MJD_START'],                 'MJD start ({0})'.format(im_head_harps_format['HiFLEx DATE-OBS']) ])
+    if 'HiFLEx BJDTDB' in im_head.keys():
+        serval_keys.append(['HIERARCH ESO DPS BJD',     im_head_harps_format['HiFLEx BJDTDB'],        'Barycentric Julian Day'])      # DRS produces them without leap seconds, e.g. 68.2s earlier at 2015
+    if 'HiFLEx RA' in im_head_harps_format.keys():
+        serval_keys.append(['RA',       im_head_harps_format['HiFLEx RA'],                            'RA start, for Serval'])
+    if 'HiFLEx DEC' in im_head_harps_format.keys():
+        serval_keys.append(['DEC',      im_head_harps_format['HiFLEx DEC'],                           'DEC start, for Serval'])
+    if 'HiFLEx BCV' in im_head_harps_format.keys():
+        serval_keys.append(['HIERARCH ESO DRS BERV',     im_head_harps_format['HiFLEx BCV'],          'Barycentric Earth Radial Velocity'])
+        serval_keys.append(['HIERARCH ESO DRS BERVMX',   im_head_harps_format['HiFLEx BCV MAX'],      'Maximum BERV'])
+        serval_keys.append(['HIERARCH ESO DRS BERVMN',   im_head_harps_format['HiFLEx BCV MIN'],      'Minimum BERV'])
     serval_keys.append(['HIERARCH ESO DPR TECH',         'ECHELLE ',        'Observation technique'])
     serval_keys.append(['HIERARCH ESO INS MODE',         'HARPS',           'Instrument mode used.'])
     serval_keys.append(['HIERARCH ESO DRS CAL LOC NBO',  spectra.shape[0],  'nb orders localised'])
     serval_keys.append(['HIERARCH ESO OBS TARG NAME',    obnames[0],        'OB target name'])
     serval_keys.append(['OBJECT',                        obnames[0],        'OB target name'])
-    serval_keys.append(['HIERARCH ESO INS DET1 TMMEAN',  im_head_harps_format['EXO_PIPE EXP_FRAC'],     'Normalised mean exposure time'])
-    serval_keys.append(['HIERARCH ESO INS DET2 TMMEAN',  im_head_harps_format['EXO_PIPE EXP_FRAC'],     'Normalised mean exposure time'])
+    serval_keys.append(['HIERARCH ESO INS DET1 TMMEAN',  im_head_harps_format['HiFLEx EXP_FRAC'],     'Normalised mean exposure time'])
+    serval_keys.append(['HIERARCH ESO INS DET2 TMMEAN',  im_head_harps_format['HiFLEx EXP_FRAC'],     'Normalised mean exposure time'])
     #serval_keys.append(['HIERARCH ESO DRS BLAZE FILE',   'HARPS.2007-04-03T20:57:37.400_blaze_A.fits',  'Bla'])        # not necessary
     #serval_keys.append(['HIERARCH ESO DRS DRIFT RV USED',0.,                'Used RV Drift [m/s]'])                    # not necessary
     #serval_keys.append(['',         '',        ''])
     for order in orders:
-        serval_keys.append([ 'HIERARCH ESO DRS SPE EXT SN{0}'.format(order), im_head['EXO_PIPE SN_order{0}'.format('%2.2i'%order)], 'S_N order center{0}'.format(order) ])
+        serval_keys.append([ 'HIERARCH ESO DRS SPE EXT SN{0}'.format(order), im_head['HiFLEx SN_order{0}'.format('%2.2i'%order)], 'S_N order center{0}'.format(order) ])
     for [newkey, value, comment] in serval_keys:
         if newkey not in im_head_harps_format.keys():
             im_head_harps_format[newkey] = (value, comment)
@@ -3606,7 +3655,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         #print "key, value, comment",(entry, im_head_harps_format[entry], im_head_harps_format.comments[entry])
         if im_head_harps_format.comments[entry] == '':
             im_head_harps_format.comments[entry] = '/'      # Serval can't read header keywords without comment, for NAXISj this needs to be done in save_multispec
-    fname = params['path_harpsformat']+obnames[0]+'/'+'HARPS.{0}_e2ds_A.fits'.format(im_head_harps_format['EXO_PIPE DATE-OBS'][:-3])
+    fname = params['path_harpsformat']+obnames[0]+'/'+'HARPS.{0}_e2ds_A.fits'.format(im_head_harps_format['HiFLEx DATE-OBS'][:-3])
     if len(fname.rsplit('/',1)) == 1:     # no path is in the filename
         logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( fname, os.getcwd() ))
     elif not os.path.exists(fname.rsplit('/',1)[0]):
@@ -3774,7 +3823,7 @@ def n_Edlen(l):
     n = 1 + 8.34213e-5 + 2.406030e-2/(130-s2) + 1.5997e-4/(38.9-s2)    # applied from https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf same formular as in Ceres
     return n
 
-def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1, mask=[], frame=None, return_frame=False):
+def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1, mask=[], frame=None, return_frame=False, color=['r','b','g'], showtext=True, imscale=None):
     """
     Plot the found traces over the CCD image in order to allow the detection of mistakes made by the automatic steps
     :param im: 2d array of floats with the image
@@ -3803,12 +3852,18 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
     colorbar = False
     if frame == None:
         fig, frame = plt.subplots(1, 1)
-        colorbar = True  
-    title = 'Plot the traces in the image (log10 of image).'
-    if np.mean(widths, axis=None) == 0 and np.std(widths, axis=None, ddof=1) == 0:
-        title += ' The marked width (dashed lines) are shown for an extraction width multiplier of {0}.'.format(w_mult)
-    plot_img_spec.plot_image(im, [], pctile=1, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=colorbar)
-    colors = ['r','b','g']*len(pfits)
+        colorbar = True
+    title=''
+    if showtext:
+        title = 'Plot the traces in the image (log10 of image).'
+        if np.mean(widths, axis=None) == 0 and np.std(widths, axis=None, ddof=1) == 0:
+            title += ' The marked width (dashed lines) are shown for an extraction width multiplier of {0}.'.format(w_mult)
+    if imscale is not None:
+        pctile = imscale
+    else:
+        pctile=1
+    plot_img_spec.plot_image(im, [], pctile=pctile, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=colorbar)
+    colors = color*len(pfits)
     for pp, pf in enumerate(pfits):
             if mask[pp] == False:
                 continue
@@ -3839,7 +3894,8 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
             frame.plot(yarr,  xarr, color=colors[pp], linewidth=1)
             frame.plot(yarrl, xarr, color=colors[pp], linewidth=1, linestyle='dashed')
             frame.plot(yarrr, xarr, color=colors[pp], linewidth=1, linestyle='dashed')
-            frame.text(ymid, xmid, 'Order{0}'.format(pp),
+            if showtext:
+                frame.text(ymid, xmid, 'Order{0}'.format(pp),
                        horizontalalignment='center', verticalalignment='center',
                        rotation=90, color=colors[pp], zorder=5)
     if return_frame:
@@ -4152,7 +4208,7 @@ def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=T
     wprops = dict(orientation='v', position=Tk.RIGHT)
 
     gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='Determine area for the background', widgets=widgets,
+                        title='HiFlEx: Determine area for the background', widgets=widgets,
                         widgetprops=wprops)
     
     gui3.master.mainloop()
@@ -4283,7 +4339,7 @@ def correlate_px_wave_result_UI(im, arc_lines_wavelength, reference_catalog, arc
     wprops = dict(orientation='v', position=Tk.RIGHT)
 
     gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='Check the identified and correlated emission lines', widgets=widgets,
+                        title='HiFlEx: Check the identified and correlated emission lines', widgets=widgets,
                         widgetprops=wprops)
     
     gui3.master.mainloop()
@@ -4456,7 +4512,7 @@ def correlate_UI(im, order, arc_settings, reference_catalog, reference_names, ad
     wprops = dict(orientation='v', position=Tk.RIGHT)
 
     gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='Plot spectral orders', widgets=widgets,
+                        title='HiFlEx: Plot spectral orders', widgets=widgets,
                         widgetprops=wprops)
     
     gui3.master.mainloop()
@@ -4711,6 +4767,26 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     steps = 20           # Standard: 20
     sigma = 3.5         # Standard: 3.5, the smaller the better the solution, but lines at the corners of the images might be rejected
     only_one_line = True
+    
+    def fit_solution(arc_lines_wavelength, cen_pxs, order_offset, polynom_order_trace, polynom_order_intertrace):
+        x = arc_lines_wavelength[:,1]-cen_pxs
+        y = 1.0/(arc_lines_wavelength[:,0]+order_offset)
+        
+        """weight = arc_lines_wavelength[:,4] * arc_lines_wavelength[:,5] * arc_lines_wavelength[:,6] * abs(arc_lines_wavelength[:,1])**(polynom_order_trace-1)
+        median = []
+        for order in np.unique(arc_lines_wavelength[:,0]):
+            median.append( np.max( weight[arc_lines_wavelength[:,0] == order] ))
+        divisor = np.median(median)
+        if divisor == 0:
+            divisor = 1.
+        median = np.array(median)/(divisor+0.0)
+        median[median == 0] = 1.
+        for i, order in enumerate(np.unique(arc_lines_wavelength[:,0])):
+            weight[arc_lines_wavelength[:,0] == order] /= (median[i]+0.0)"""
+        weight = []         # No weight fits the data better
+        poly2d_params = polynomial_fit_2d_norm(x, y, arc_lines_wavelength[:,2], polynom_order_trace, polynom_order_intertrace, w=weight)
+        new_waves = polynomial_value_2d(x, y, polynom_order_trace, polynom_order_intertrace, poly2d_params)
+        return poly2d_params, new_waves
     
     specs = spectrum.shape
     orders = np.arange(specs[0])
@@ -5075,23 +5151,11 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     # Redo the 2d polynomial fit (it should also re-create the arc_lines_wavelength table, but most times the difference is 0)
     cen_pxs = arc_lines_wavelength[:,1] * np.nan
     for i,order in enumerate(orders):
-        cen_pxs[ (order == arc_lines_wavelength[:,0]) ] = cen_px[i]          
-    x = arc_lines_wavelength[:,1]-cen_pxs
-    y = 1.0/(arc_lines_wavelength[:,0]+order_offset)
-    
-    weight = arc_lines_wavelength[:,4] * arc_lines_wavelength[:,5] * arc_lines_wavelength[:,6] * abs(arc_lines_wavelength[:,1])**(polynom_order_trace-1)
-    median = []
-    for order in np.unique(arc_lines_wavelength[:,0]):
-        median.append( np.max( weight[arc_lines_wavelength[:,0] == order] ))
-    divisor = np.median(median)
-    if divisor == 0:
-        divisor = 1.
-    median = np.array(median)/(divisor+0.0)
-    median[median == 0] = 1.
-    for i, order in enumerate(np.unique(arc_lines_wavelength[:,0])):
-        weight[arc_lines_wavelength[:,0] == order] /= (median[i]+0.0)
-    weight = []         # No weight fits the data better
-    poly2d_params = polynomial_fit_2d_norm(x, y, arc_lines_wavelength[:,2], polynom_order_trace, polynom_order_intertrace, w=weight)
+        cen_pxs[ (order == arc_lines_wavelength[:,0]) ] = cen_px[i]     
+        
+    # Fit the solution again
+    poly2d_params, new_waves = fit_solution(arc_lines_wavelength, cen_pxs, order_offset, polynom_order_trace, polynom_order_intertrace)
+    arc_lines_wavelength[:,3] = arc_lines_wavelength[:,2] - new_waves               # new differences
     
     if len(arc_lines_wavelength) <= polynom_order_trace+polynom_order_intertrace:
         logger('Error: Not enough lines are remaining for the fit. Please check the parameters "order_offset", "px_offset", and "px_offset_order".')
@@ -5121,10 +5185,33 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     #print np.sort(arc_lines_wavelength[:,3])
     #np.set_printoptions(threshold=1000)
     #print np.histogram(arc_lines_wavelength[:,3], 20), arc_lines_wavelength.shape
-    # Remove the most scattered lines (highest 1% and lowest 1%
-    todel = np.argsort(arc_lines_wavelength[:,3])
-    todel = np.delete(todel, np.arange(int(len(todel)/100), int(len(todel)*99/100)), axis=0)
-    arc_lines_wavelength = np.delete(arc_lines_wavelength, todel, axis=0)
+    
+    # Remove outliers
+    len_orig = len(arc_lines_wavelength)
+    good_values = ( np.abs(arc_lines_wavelength[:,3]) < 100 )               # Initialise
+    for ii in range(20):                                                    # make this graphical!!
+        # Remove the most scattered lines (highest 0.5% and lowest 0.5%
+        """todel = np.argsort(arc_lines_wavelength[:,3])           # diff in Ang between catalog wavelength and solution
+        todel = np.delete(todel, np.arange(int(len(todel)*0.5/100), int(len(todel)*99.5/100)), axis=0)
+        arc_lines_wavelength = np.delete(arc_lines_wavelength, todel, axis=0)
+        cen_pxs = np.delete(cen_pxs, todel, axis=0)
+        print '1percent', len(todel)"""
+        if np.std(arc_lines_wavelength[good_values,3]) > 0.01:
+            sigma = 2.5
+        else:
+            sigma = 2.8
+        std_diff = np.std(arc_lines_wavelength[good_values,3], ddof=(polynom_order_trace+polynom_order_intertrace+1))             # real standard deviation, asume values +-1 to convice yourself, no abs
+        good_values = ( (-sigma*std_diff <= arc_lines_wavelength[:,3]) & (arc_lines_wavelength[:,3] <= sigma*std_diff) )                                        # only works if average is 0
+        # Fit the solution again, using only the good values
+        poly2d_params, new_waves = fit_solution(arc_lines_wavelength[good_values,:], cen_pxs[good_values], order_offset, polynom_order_trace, polynom_order_intertrace)
+        # Calculate the wavelengths again, using all values
+        new_waves = polynomial_value_2d(arc_lines_wavelength[:,1]-cen_pxs, 1.0/(arc_lines_wavelength[:,0]+order_offset), polynom_order_trace, polynom_order_intertrace, poly2d_params)
+        arc_lines_wavelength[:,3] = arc_lines_wavelength[:,2] - new_waves               # new differences
+        if sum(good_values) < len_orig*2/3:
+            break
+    arc_lines_wavelength = arc_lines_wavelength[good_values,:]
+    cen_pxs = cen_pxs[good_values]
+            
     #print np.histogram(arc_lines_wavelength[:,3], 20), arc_lines_wavelength.shape
     avg_diff_fit = np.mean(np.abs(arc_lines_wavelength[:,3]))           # Diff between catalog wavelength and fitted wavelength
     std_diff_fit = np.std(arc_lines_wavelength[:,3], ddof=(polynom_order_trace+polynom_order_intertrace+1))             # real standard deviation, asume values +-1 to convice yourself
@@ -5513,7 +5600,7 @@ def adjust_binning_UI(im1, binxy, userinput=True):
     wprops = dict(orientation='v', position=Tk.RIGHT)
 
     gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='Adjusting the binning', widgets=widgets,
+                        title='HiFlEx: Adjusting the binning', widgets=widgets,
                         widgetprops=wprops)
     gui3.master.mainloop()
     
@@ -5674,7 +5761,7 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
     wprops = dict(orientation='v', position=Tk.RIGHT)
 
     gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='Locating orders', widgets=widgets,
+                        title='HiFlEx: Locating orders', widgets=widgets,
                         widgetprops=wprops)
     gui3.master.mainloop()
 
@@ -5754,16 +5841,16 @@ def add_specinfo_head(spectra, s_spec, n_spec, w_spec, im_head):
     width_min = np.nanmin(w_spec, axis=1)
     width_max = np.nanmax(w_spec, axis=1)
     width_sum = np.nansum(w_spec, axis=1)
-    im_head['HIERARCH EXO_PIPE fmin'] = (np.nanmin(spectra), 'Minimum Flux per pixel')
-    im_head['HIERARCH EXO_PIPE fmax'] = (np.nanmax(spectra), 'Maximum Flux per pixel')
-    im_head['HIERARCH EXO_PIPE fsum_all'] = (np.nansum(spectra, axis=None), 'Total flux')
-    im_head['HIERARCH EXO_PIPE EXTR_PX'] = ( round(np.nansum(w_spec),1), 'Total Number of pixel extracted' )
+    im_head['HIERARCH HiFLEx fmin'] = (np.nanmin(spectra), 'Minimum Flux per pixel')
+    im_head['HIERARCH HiFLEx fmax'] = (np.nanmax(spectra), 'Maximum Flux per pixel')
+    im_head['HIERARCH HiFLEx fsum_all'] = (np.nansum(spectra, axis=None), 'Total flux')
+    im_head['HIERARCH HiFLEx EXTR_PX'] = ( round(np.nansum(w_spec),1), 'Total Number of pixel extracted' )
     for order in range(spectra.shape[0]):
-        im_head['HIERARCH EXO_PIPE fsum_order{0}'.format('%2.2i'%order)] = ( round(signal[order],2), 'Flux (counts) in order {0}'.format('%2.2i'%order) )
-        im_head['HIERARCH EXO_PIPE SN_order{0}'.format('%2.2i'%order)] = ( round(snr[order],1), 'median SNR (+-10% of centre px)' )
-        im_head['HIERARCH EXO_PIPE WIDTH_median{0}'.format('%2.2i'%order)] = ( round(width_med[order],1), 'median width, stdev = {0}'.format(round(width_std[order],1)) )
-        im_head['HIERARCH EXO_PIPE WIDTH_minmax{0}'.format('%2.2i'%order)] = ( '{0}, {1}'.format(round(width_min[order],1), round(width_max[order],1)), 'min and max width' )
-        im_head['HIERARCH EXO_PIPE EXTR_PX{0}'.format('%2.2i'%order)] = ( round(width_sum[order],1), 'Total Number of pixel extracted' )
+        im_head['HIERARCH HiFLEx fsum_order{0}'.format('%2.2i'%order)] = ( round(signal[order],2), 'Flux (counts) in order {0}'.format('%2.2i'%order) )
+        im_head['HIERARCH HiFLEx SN_order{0}'.format('%2.2i'%order)] = ( round(snr[order],1), 'median SNR (+-10% of centre px)' )
+        im_head['HIERARCH HiFLEx WIDTH_median{0}'.format('%2.2i'%order)] = ( round(width_med[order],1), 'median width, stdev = {0}'.format(round(width_std[order],1)) )
+        im_head['HIERARCH HiFLEx WIDTH_minmax{0}'.format('%2.2i'%order)] = ( '{0}, {1}'.format(round(width_min[order],1), round(width_max[order],1)), 'min and max width' )
+        im_head['HIERARCH HiFLEx EXTR_PX{0}'.format('%2.2i'%order)] = ( round(width_sum[order],1), 'Total Number of pixel extracted' )
     
     return im_head
 
@@ -5783,6 +5870,7 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
     data = np.empty((7,specs[1]), dtype=float)                          # Array with the data: 0: index, 1: wavelength, 2: spec, 3: medfilt spec, 4: medfilt+offset, 5: residuals, 6: fit of the residuals
     data[0,:] = np.arange(specs[1])
     for order in range(specs[0]):
+        #print "order", order
         data[1:,:] = np.nan                                             # Initialise
         # Array with the subselections of the data: 0: nonnan, 1: nonnan after medfilt, 2: exclude wavelengths, 3, use for continuum flux, 
         #                                           4: no lines for medfilt, 5: no lines for residuals, 6: zeros at this position of the SN-fit removed
@@ -5853,6 +5941,7 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
         # The fit of the sn should never create values equal/below 0, the steps below are used to reach this
         data[6,:] = np.polyval(p_sn, data[1,:]-x_cen)
         for nc_step in range(1,nc_noise)[::-1]:                                 # Use a lower order, if fit remains stupid
+            #print "nc_step", nc_step
             for dummy in range(100):
                 np.warnings.filterwarnings('ignore')
                 if sum(~sub[5,:]*sub[1,:]) > 0:                                     # There are values that can be replaced
@@ -6162,7 +6251,7 @@ def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True):  
         logger('Warn: {1} line(s) could not be read in the reference coordinates file: {0}. Please check that columns 4 to 7 (starting counting with 1) are numbers'.format(filen, len(lines_txt)-len(lines) ))
     found = False
     for cos in lines:
-        if abs(cos[6]) < 1E-5:         # disabled
+        if abs(cos[6]) < 0.9:         # disabled
             continue
         for obname in obnames:
             if cos[0].lower() == obname.lower() or cos[0].lower().replace('_','') == obname.lower() or cos[0].lower().replace('-','') == obname.lower() or cos[0].lower().replace(' ','') == obname.lower():
@@ -6274,7 +6363,8 @@ def get_barycent_cor(params, im_head, obnames, reffile, obsdate):
     params['epoch'] = 2000.0
     params['pmra']  = 0.
     params['pmdec'] = 0.
-    params['altitude'] = 0.
+    if 'altitude' not in params.keys():
+        params['altitude'] = 0.
     source_obs = 'The site coordinates from the configuration file were used.'
     settings = []
     settings.append( [0, site_keys, 'site'] )
@@ -6342,8 +6432,8 @@ def get_barycent_cor(params, im_head, obnames, reffile, obsdate):
                 if parentr == 'latitude':           # Assume that latitute is coming from the same source
                     source_obs = 'The site coordinates are derived from the image header.'
     # mjd,mjd0, mjd_begin = mjd_fromheader(params, im_head)
-    mjd = im_head['HIERARCH EXO_PIPE MJD']
-    jd  = im_head['HIERARCH EXO_PIPE JD']
+    mjd = im_head['HIERARCH HiFLEx MJD']
+    jd  = im_head['HIERARCH HiFLEx JD']
     
     ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, mjd, filen=reffile, warn_notfound=False)     # obnames will be a list with only one entry: the matching entry 
     if ra2 !=0 and dec2 != 0:
@@ -6377,17 +6467,27 @@ def get_barycent_cor(params, im_head, obnames, reffile, obsdate):
             site = params['site']
         ephemeris2='https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de405.bsp'
 
-        bcvel_baryc = barycorrpy.get_BC_vel(JDUTC=jd,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
-                           pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)
-        bcvel_baryc = bcvel_baryc[0][0] / 1E3       # in km/s
+        #bcvel_baryc = barycorrpy.get_BC_vel(JDUTC=jd,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
+        #                   pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)
+        #bcvel_baryc = bcvel_baryc[0][0] / 1E3       # in km/s
         #print "result3", bcvel_baryc
         #print "result3 RV", bcvel_baryc[0][0]
+        # Calculate the barycentric corrections for 60s intervals
+        jd_start = im_head['HIERARCH HiFLEx JD_START']
+        exposure = im_head['HIERARCH HiFLEx EXPOSURE']
+        jd_range = [jd] + list(np.arange(jd_start, jd_start+exposure/(3600.*24), 60/(3600.*24))) + [jd_start+exposure/(3600.*24)]
+        bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
+                                                  pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)
+        bcvel_baryc_range = bcvel_baryc_range[0] / 1E3       # in km/s
+        bcvel_baryc = bcvel_baryc_range[0]
         
-        im_head['HIERARCH EXO_PIPE RA'] = (round(ra,6),           'RA in degrees, used to calculated BCV, BJD')
-        im_head['HIERARCH EXO_PIPE DEC'] = (round(dec,6),         'DEC in degrees, used to calculated BCV, BJD')
-        im_head['HIERARCH EXO_PIPE BCV'] = (round(bcvel_baryc,4), 'barycentric velocity in km/s')
-        im_head['HIERARCH EXO_PIPE PMRA'] = (round(pmra,3),       'proper motion for RA in mas/yr, for BCV, BJD')
-        im_head['HIERARCH EXO_PIPE PMDEC'] = (round(pmdec,3),     'proper motion for DEC in mas/yr, for BCV, BJD')
+        im_head['HIERARCH HiFLEx RA'] = (round(ra,6),           'RA in degrees, used to calculated BCV, BJD')
+        im_head['HIERARCH HiFLEx DEC'] = (round(dec,6),         'DEC in degrees, used to calculated BCV, BJD')
+        im_head['HIERARCH HiFLEx PMRA'] = (round(pmra,3),       'proper motion for RA in mas/yr, for BCV, BJD')
+        im_head['HIERARCH HiFLEx PMDEC'] = (round(pmdec,3),     'proper motion for DEC in mas/yr, for BCV, BJD')
+        im_head['HIERARCH HiFLEx BCV'] = (round(bcvel_baryc,4), 'Barycentric velocity in km/s')
+        im_head['HIERARCH HiFLEx BCV MAX'] = (round(max(bcvel_baryc_range),4), 'Maximum BCV')
+        im_head['HIERARCH HiFLEx BCV MIN'] = (round(min(bcvel_baryc_range),4), 'Minimum BCV')
         
         """# Using jplephem
         bjd = jd_corr(mjd, ra, dec, params['epoch'], params['latitude'], params['longitude'], jd_type='bjd')
@@ -6401,7 +6501,7 @@ def get_barycent_cor(params, im_head, obnames, reffile, obsdate):
         #print "bjdtdb0", bjdtdb[0][0]
         
         # end test
-        im_head['HIERARCH EXO_PIPE BJDTDB'] = (round(bjd,6), 'Baryc. cor. JD (incl leap seconds)')     # without leap seconds: remove 32.184+N leap seconds after 1961'
+        im_head['HIERARCH HiFLEx BJDTDB'] = (round(bjd,6), 'Baryc. cor. JD (incl leap seconds)')     # without leap seconds: remove 32.184+N leap seconds after 1961'
 
     
     logger(('Info: Using the following data for object name(s) {10}, Observatory site {9}, mid exposure MJD {11}: '+\
@@ -6830,8 +6930,8 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem):
                 break
             logger('Warn: The spectra around the wavelength of {0} Angstrom is not covered'.format(cen_wave))
         
-        B,A = -0.00257864,0.07765779            # from Monte Carlo Simulation, different for each instrument
-        B,A = 0.005, 0.2
+        B,A = -0.00257864,0.07765779            # from Monte Carlo Simulation, different for each instrument (from Ceres for HARPS)
+        #B,A = 0.005, 0.2                       # Tested Ronny before 2/12/2019
         #print SNR_5130
         RVerr  =  B + ( 1.6 + 0.2 * p1gau[2] ) * A / np.round(SNR_5130)
         depth_fact = 1. + p1gau[0]/(p1gau[2]*np.sqrt(2*np.pi))
@@ -6843,7 +6943,7 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem):
         if RVerr < 0.002:
             RVerr = .002
 
-        B,A = -0.00348879, 0.10220848
+        B,A = -0.00348879, 0.10220848           # from Monte Carlo Simulation, different for each instrument (from Ceres for HARPS)
         BSerr = B + ( 1.6 + 0.2 * p1gau[2] ) * A / np.round(SNR_5130)
         if BSerr<0.002:
             BSerr = .002
