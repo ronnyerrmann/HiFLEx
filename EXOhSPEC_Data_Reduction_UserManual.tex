@@ -145,13 +145,13 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
     \item Set the parameter \verb|badpx_mask_filename| if a bad-pixel-mask exists (see Chapter~\ref{Section:create_badpxmask}). Otherwise leave empty or 'NA'.
     \item Modify the header-parameters, if necessary (see Cahpter~\ref{Section:prepare_files}).
     \item Adjust \verb|rotate_frame| and \verb|flip_frame| so that the orders are up to down (blue wavelength on top) and red orders are on the right. The pipeline will first rotate and then flip, the flip is swapping left and right.
-    \item Adjust parameter \verb|subframe| to the full CCD size or a subframe, if only part of the CCD should be used.
+    \item Adjust parameter \verb|subframe| to the full CCD size or a subframe, if only part of the CCD should be used. % Small picture showing the orders and wavelength (arrows blue to red)
   \end{itemize}
  
   \item Finding the traces of the science fiber: \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
     \item Set parameter \verb|original_master_traces_filename = | (empty), or to a non-existing file.
-    \item To increase signal to noise and to speed up the search for the traces of the orders, binning as given in the parameters \verb|bin_search_apertures| (rough estimate) and \verb|bin_adjust_apertures| (fine tuning) can be adjusted. Please note that after binning, the orders should still be well distinguished from each other.
+    \item To increase signal to noise and to speed up the search for the traces of the orders, binning as given in the parameters \verb|bin_search_apertures| (rough estimate) and \verb|bin_adjust_apertures| (fine tuning) can be adjusted. Please note that after binning, the orders should still be well distinguished from each other. % show highly binned image
   \end{itemize}
   
   \item Finding the traces of the calibration fiber: \vspace*{-\itemsep}
@@ -547,7 +547,7 @@ The following steps give an overview about additional parameters which are not c
 
 \begin{description}
   \item[GUI] : If set to true, this allows manipulation of some parameters in a graphical user interface (GUI) during the runtime of the script. (not tested recently)
-  \item[width\_percentile] Only pixel with more flux than the value given in \verb|width_percentile| (of the maximum flux) will be extracted. The extraction width can be varied later using the parameters \verb|extraction_width_multiplier| and \verb|arcextraction_width_multiplier|. The covered area can be checked in the logged images given in the parameters \verb|logging_traces_im| and \verb|logging_arctraces_im|. %In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
+  \item[width\_percentile] Only pixel with more flux than the value given in \verb|width_percentile| (of the maximum flux) will be extracted. The extraction width can be varied later using the parameters \verb|extraction_width_multiplier| and \verb|arcextraction_width_multiplier|. The covered area can be checked in the logged images given in the parameters \verb|logging_traces_im| and \verb|logging_arctraces_im|. % show image explaining width_percentile %In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
   \item[raw\_data\_exptim\_keyword, raw\_data\_dateobs\_keyword] : Use the right header keywords for the exposure time and the observation date. The format for the observation date should be \verb|%Y-%m-%dT%H:%M:%S.%f| or\footnote{\url{https://docs.python.org/2/library/datetime.html\#strftime-and-strptime-behavior}} \verb|%Y-%m-%dT%H:%M:%S|. More formats can be added in the procedure \textit{get\_obsdate}.
   \item[raw\_data\_timezone\_cor] In the unlikely case, that the date and time stored in \verb|raw_date_timezone_cor| is not UTC, the time zone correction can be given here. Numbers will be positive east of UTC and negative west of UTC, e.g. +7 for Bangkok time or -10 for Hawaii.
   \item[standard\_calibs\_create] : Define the standard CCD processing, if necessary (see Chapter~\ref{Section:parameters_CCD_proc} for options).

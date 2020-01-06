@@ -44,7 +44,13 @@ def plot_image(image, spaths, pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05]
             image = np.transpose(image)
             title = title + ' - transposed'
     plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
-    cframe = frame.imshow(image, cmap='gray',vmin=np.percentile(im_good,pctile), vmax=np.percentile(im_good,100-pctile))
+    if type(pctile).__name__ == 'list':
+        vmin = pctile[0]
+        vmax = pctile[1]
+    else:
+        vmin = np.percentile(im_good,pctile)
+        vmax = np.percentile(im_good,100-pctile)
+    cframe = frame.imshow(image, cmap='gray',vmin=vmin, vmax=vmax)
     frame.set_xlabel(axis_name[0], fontsize=14)
     frame.set_ylabel(axis_name[1], fontsize=14)
     frame.set_title(title, fontsize=16)

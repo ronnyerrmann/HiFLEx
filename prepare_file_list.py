@@ -2,7 +2,6 @@ import numpy as np
 import os
 from procedures import *
 
-
 # =============================================================================
 # Define variables
 # =============================================================================
@@ -142,7 +141,7 @@ def add_new_rawfiles_file_list(params, file_list=[]):
                     fiber2 = 'wave'
             im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
             extract = ''
-            file_list.append([filename, fiber1, fiber2, im_head['HIERARCH EXO_PIPE EXPOSURE'], obsdate_mid_float, extract])
+            file_list.append([filename, fiber1, fiber2, im_head['HIERARCH HiFLEx EXPOSURE'], obsdate_mid_float, extract])
     
     return file_list
 
@@ -257,7 +256,7 @@ def create_configuration_file(params, file_list):
             if filename.find('master_dark') == 0:
                 im_head = fits.getheader(filename)
                 im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # obsdate_mid_float: unix_timestamp of mid exposure time
-                exptime = im_head['HIERARCH EXO_PIPE EXPOSURE']
+                exptime = im_head['HIERARCH HiFLEx EXPOSURE']
                 """exptime = filename.replace('master_dark','').replace('s.fits','').replace('p','.')
                 try:
                     exptime = float( exptime )
@@ -328,6 +327,177 @@ def create_configuration_file(params, file_list):
     
     return conf_data
 
+def file_list_UI(file_list):
+    # Extract a common path
+    common_path = ''
+    if file_list[0][0][2:].find('/') != -1:         # it contains subfolders
+        fnames = []
+        for entry in file_list:
+            fnames.append( entry[0].replace('#','').replace(' ','') )
+        common_path = fnames[0].rsplit('/',1)[0]    # just remove the filename
+        for dummy in range(len(fnames[0].split('/'))-2):
+            found_common_path = True
+            for entry in fnames:
+                if entry.find(common_path) == -1:
+                    found_common_path = False
+                    break
+            if found_common_path:
+                common_path += '/'
+                break
+            else:
+                common_path = common_path.rsplit('/',1)[0]      # remove the next subfolder
+    # Split the common_path to make the GUI shorter (in x), if necessary
+    common_path_text = common_path
+    if len(common_path) > 40:
+        common_path_temp = common_path[:-1].split('/')          # without the last '/'
+        common_path_text = [common_path_temp[0]+'/']            # start with the first entry
+        ii = 0
+        for entry in common_path_temp[1:]:
+            entry += '/'
+            if len(common_path_text[ii]+entry) > 40 and len(common_path_text[ii]) > 20:     # If too long to add
+                common_path_text.append(entry)
+                ii += 1
+            else:
+                common_path_text[ii] += entry
+        common_path_text = '\n'.join(common_path_text)
+    
+    # define widgets
+    pkwargs = dict()
+    widgets = dict()
+    widgets['comment'] = dict(label='Comm-\nented\nout ', kind='Label', row=0, column=0, columnspan=1, orientation=Tk.W)
+    widgets['mid_exp'] = dict(label='   Observation Time    \n(mid exposure)\nUTC', kind='Label', row=0, column=1, orientation=Tk.W)
+    widgets['exp']     = dict(label='Expo-\nsure \n[s]  ', kind='Label', row=0, column=2, orientation=Tk.W)
+    widgets['name']    = dict(label='Path and folder\n{0}'.format(common_path_text), kind='Label', row=0, column=3, orientation=Tk.W)
+    #widgets['fib1']    = dict(label='Science\nfiber', kind='Label', row=0, column=5)
+    #widgets['fib2']    = dict(label='Calibration\nfiber', kind='Label', row=0, column=6)
+    widgets['b']       = dict(label='Bias', kind='Label', row=0, column=6)
+    widgets['d']       = dict(label='Dark', kind='Label', row=0, column=7)
+    widgets['a']       = dict(label='Real\nFlat', kind='Label', row=0, column=8)
+    widgets['t1']      = dict(label='Sci.\ntra-\nce', kind='Label', row=0, column=9)
+    widgets['t2']      = dict(label='Cal.\ntra-\nce', kind='Label', row=0, column=10)
+    widgets['z']       = dict(label='Blaze', kind='Label', row=0, column=11)
+    widgets['w2l']     = dict(label='Wave\nlong', kind='Label', row=0, column=12)
+    widgets['w2s']     = dict(label='Wave\nshort', kind='Label', row=0, column=13)
+    widgets['w1l']     = dict(label='Wave\nSci.\nlong', kind='Label', row=0, column=14)
+    widgets['w1s']     = dict(label='Wave\nSci.\nshort', kind='Label', row=0, column=15)
+    widgets['w']       = dict(label='Wave\nshft\ncal', kind='Label', row=0, column=16)
+    widgets['w2']      = dict(label='Wave\nSci\nshft', kind='Label', row=0, column=17)
+    widgets['e']       = dict(label='Ex-\ntract', kind='Label', row=0, column=18)
+    widgets['extra']   = dict(label='Further usage\nof files\n(comma separated)', kind='Label', row=0, column=19)
+    for ii, entry in enumerate(file_list):
+        pkwargs['comment_{0}'.format(ii)] = ( 0 <= entry[0].find('#') < 20 )            # Commented out
+        widgets['comment_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['comment_{0}'.format(ii)], row=ii+1, column=0)
+        text = '{0}{1}   {2}'.format( datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%d %H:%M:%S'), 
+                                     '%9.2f'%entry[3], entry[0].replace('#','').replace(' ','').replace(common_path,'') )
+        widgets['name_{0}'.format(ii)] = dict(label=text, kind='Label', row=ii+1, column=1, columnspan=3, orientation=Tk.W)
+        #fname = entry[0].replace('#','').replace(' ','').replace(common_path,'')
+        #widgets['mid_exp_{0}'.format(ii)] = dict(label=datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), kind='Label', row=ii+1, column=5)
+        #widgets['exp_{0}'.format(ii)]  = dict(label=entry[3], kind='Label', row=ii+1, column=4)
+        #widgets['name_{0}'.format(ii)] = dict(label=fname, kind='Label', row=ii+1, column=1, columnspan=1, orientation=Tk.W)
+        #pkwargs['fib1_{0}'.format(ii)] = entry[1]     # Allows modification of the fiber content
+        #widgets['fib1_{0}'.format(ii)] = dict(kind='TextEntry', minval=None, maxval=None, fmt=str, start=pkwargs['fib1_{0}'.format(ii)], width=8, row=ii+1, column=5)     # Allows modification of the fiber content
+        #pkwargs['fib2_{0}'.format(ii)] = entry[2]     # Allows modification of the fiber content
+        #widgets['fib2_{0}'.format(ii)] = dict(kind='TextEntry', minval=None, maxval=None, fmt=str, start=pkwargs['fib2_{0}'.format(ii)], width=8, row=ii+1, column=6)     # Allows modification of the fiber content
+        flags = entry[5].replace(' ','').split(',')
+        pkwargs['b_{0}'.format(ii)] = ( 'b' in flags )
+        widgets['b_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['b_{0}'.format(ii)], row=ii+1, column=6)
+        pkwargs['d_{0}'.format(ii)] = ( 'd' in flags )
+        widgets['d_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['d_{0}'.format(ii)], row=ii+1, column=7)
+        pkwargs['a_{0}'.format(ii)] = ( 'a' in flags )
+        widgets['a_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['a_{0}'.format(ii)], row=ii+1, column=8)
+        pkwargs['t1_{0}'.format(ii)] = ( 't1' in flags )
+        widgets['t1_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['t1_{0}'.format(ii)], row=ii+1, column=9)
+        pkwargs['t2_{0}'.format(ii)] = ( 't2' in flags )
+        widgets['t2_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['t2_{0}'.format(ii)], row=ii+1, column=10)
+        pkwargs['z_{0}'.format(ii)] = ( 'z' in flags )
+        widgets['z_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['z_{0}'.format(ii)], row=ii+1, column=11)
+        pkwargs['w2l_{0}'.format(ii)] = ( 'w2l' in flags )
+        widgets['w2l_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2l_{0}'.format(ii)], row=ii+1, column=12)
+        pkwargs['w2s_{0}'.format(ii)] = ( 'w2s' in flags )
+        widgets['w2s_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2s_{0}'.format(ii)], row=ii+1, column=13)
+        pkwargs['w1l_{0}'.format(ii)] = ( 'w1l' in flags )
+        widgets['w1l_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1l_{0}'.format(ii)], row=ii+1, column=14)
+        pkwargs['w1s_{0}'.format(ii)] = ( 'w1s' in flags )
+        widgets['w1s_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1s_{0}'.format(ii)], row=ii+1, column=15)
+        pkwargs['w_{0}'.format(ii)] = ( 'w' in flags )
+        widgets['w_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w_{0}'.format(ii)], row=ii+1, column=16)
+        pkwargs['w2_{0}'.format(ii)] = ( 'w2' in flags )
+        widgets['w2_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2_{0}'.format(ii)], row=ii+1, column=17)
+        pkwargs['e_{0}'.format(ii)] = ( 'e' in flags )
+        widgets['e_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['e_{0}'.format(ii)], row=ii+1, column=18)
+        extra = ''
+        for flag in flags:          # Add extra flags, if necessary
+            if flag not in ['b', 'd', 'a', 't1', 't2', 'z', 'w2l', 'w2s', 'w1l', 'w1s', 'w', 'w2', 'e']:
+                extra += ','+flag
+        if len(extra) > 0:
+            extra = extra[1:]
+        pkwargs['extra_{0}'.format(ii)] = extra
+        widgets['extra_{0}'.format(ii)] = dict(kind='TextEntry', minval=None, maxval=None, fmt=str, start=pkwargs['extra_{0}'.format(ii)], width=15, row=ii+1, column=19)
+    
+    explain = 'Explanation of the columns:\n'+\
+              '- Tick first column to not use some files at all\n'+\
+              '- Mark the files to be used for calibration:\n'+\
+              '-- Bias: These file are combined into a master bias\n'+\
+              '-- Dark: exposure time will be automatically taken\n   into account\n'+\
+              '-- Real Flat: Evenly exposed detector to calibrate\n   pixel-to-pixel sensitivity variation\n'+\
+              '-- Science trace: To trace the science orders\n'+\
+              '-- Calibration trace: To trace the calibration orders\n'+\
+              '-- Blaze: To derive the blaze function\n'+\
+              '-- Wavelength solition (long and short expsoure time)\n'+\
+              '-- Wavelength solution for science fiber (*)\n   (long or short exposure time)\n'+\
+              '-- Wavelength shift calibration (**) to correct for\n   wavelength shift\n'+\
+              '-- Wavelength shift between the Science fiber and\n   Calibration fiber (*)\n'+\
+              '-- Extract: Extract these files on an individual basis\n'+\
+              '-- Further settings (manual): e.g. to combine files\n   before extraction\n'+\
+              '(*) not for single fiber spectrographs\n'+\
+              '(**) important for unstabilised single fiber\n     spectrographs'
+              #'- Type of Science and Calibration\n  fibers are derived from header or\n  filename and can be changed here\n  (optional)\n'+\     # Allows modification of the fiber content
+    for ii, commentii in enumerate(explain.split('\n')):
+        widgets['explain_{0}'.format(ii)] = dict(label=commentii, kind='Label', row=ii, column=20, rowspan=1, orientation=Tk.W )#, wraplength=100 )      
+    widgets['accept'] = dict(label='Accept', kind='ExitButton', row=ii+1, column=20, rowspan=2)
+                              
+    wprops = dict(fullscreen=False )
+    #wprops['width_data'] = 800   # not neccssary, as uses the automatic width
+    
+    if len(file_list) > 100:
+        logger('Info: A GUI with {0} elements will be created, on some machines that can take up to a few minutes.'.format(len(widgets)))
+
+    gui3 = tkc.TkCanvasGrid(title='HiFlEx: Asigning Files to extraction steps (What file contains what data)', 
+                            kwargs=pkwargs,widgets=widgets, widgetprops=wprops )
+    gui3.master.mainloop()
+    
+    # Get the information from the GUI
+    file_list_new, file_list_full = [], []
+    for ii in range(len(file_list)):
+        text = ( {True:'b',False:''}[gui3.data['b_{0}'.format(ii)]] +','+
+                 {True:'d',False:''}[gui3.data['d_{0}'.format(ii)]] +','+
+                 {True:'a',False:''}[gui3.data['a_{0}'.format(ii)]] +','+
+                 {True:'t1',False:''}[gui3.data['t1_{0}'.format(ii)]] +','+
+                 {True:'t2',False:''}[gui3.data['t2_{0}'.format(ii)]] +','+
+                 {True:'z',False:''}[gui3.data['z_{0}'.format(ii)]] +','+
+                 {True:'w2l',False:''}[gui3.data['w2l_{0}'.format(ii)]] +','+
+                 {True:'w2s',False:''}[gui3.data['w2s_{0}'.format(ii)]] +','+
+                 {True:'w1l',False:''}[gui3.data['w1l_{0}'.format(ii)]] +','+
+                 {True:'w1s',False:''}[gui3.data['w1s_{0}'.format(ii)]] +','+
+                 {True:'w',False:''}[gui3.data['w_{0}'.format(ii)]] +','+
+                 {True:'w2',False:''}[gui3.data['w2_{0}'.format(ii)]] +','+
+                 {True:'e',False:''}[gui3.data['e_{0}'.format(ii)]] +','+
+                 gui3.data['extra_{0}'.format(ii)]
+               ).replace(',,',',').replace(',,',',').replace(',,',',').replace(',,',',').replace(',,',',')
+        if text[0] == ',':
+            text = text[1:]
+        if len(text) > 0:
+            if text[-1] == ',':
+                text = text[:-1]
+        #file_list_full.append([ {True:'#',False:''}[gui3.data['comment_{0}'.format(ii)]] + file_list[ii][0].replace('#','').replace(' ',''),
+        #                       gui3.data['fib1_{0}'.format(ii)] , gui3.data['fib2_{0}'.format(ii)], file_list[ii][3], file_list[ii][4], 
+        #                       text ])     # Allows modification of the fiber content
+        file_list_full.append([ {True:'#',False:''}[gui3.data['comment_{0}'.format(ii)]] + file_list[ii][0].replace('#','').replace(' ',''),
+                               file_list[ii][1] , file_list[ii][2], file_list[ii][3], file_list[ii][4], text ])
+        if not gui3.data['comment_{0}'.format(ii)]:     # Ignore the commented out lines
+            file_list_new.append(file_list_full[-1])
+    return file_list_new, file_list_full
+
 if __name__ == "__main__":
     logger('Info: Preparing a list with the files')
     log_params(params)
@@ -337,7 +507,8 @@ if __name__ == "__main__":
     try:
         file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' ']) # old way of reading the data, To stay backwards compatible, can be removed in a few versions after v0.4.1
     except:
-        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])     #new way of storing the data
+        #file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])     #new way of storing the data
+        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '])     #new way of storing the data
     number_old_entries = len(file_list)
     
     # get the new files
@@ -350,6 +521,10 @@ if __name__ == "__main__":
     file_list = add_extraction_parameters_file_list(params, file_list, number_old_entries)
 
     file_list = sorted(file_list, key=operator.itemgetter(4,0))           #itemgetter(1,2,3,4,0)
+    
+    # Show the results in a GUI
+    file_list, file_list_commented = file_list_UI(file_list)
+    
     # Save the list, show to user, so the user can disable files, read the list
     file = open(params['raw_data_file_list'],'w')
     file.write('### This file contains the information for all the fits files in the raw_data_paths: {0} and its/their subfolders.\n'.format(params['raw_data_paths']))
@@ -375,15 +550,25 @@ if __name__ == "__main__":
     file.write('###             Used to mark the files with calibration spectrum taken before or after the science observation.\n')
     file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
     file.write('### -> When finished with the editing, save the file and close the editor \n\n')
-    for entry in file_list:
+    for entry in file_list_commented:
         file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5] ))
     file.close()
+    
+    """
     if not ('nocheck' in sys.argv or '-nocheck' in sys.argv or '--nocheck' in sys.argv):
         start = time.time()
         rtn = os.system('{1} {0}'.format(params['raw_data_file_list'], params['editor'] ))
         if rtn <> 0 or time.time()-start < 10:
             print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
             raw_input('To continue please press Enter\t\t')
+     
+    time.sleep(0.3)
+    file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
+    file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
+    
+    file_list = sorted(file_list, key=operator.itemgetter(4,0))       # itemgetter(1,2,3,0)
+    """
+    
     # Reset the list of parameters in case important data was deleted, e.g. all Darks
     del params['cal2_l_exp']
     del params['cal2_s_exp']
@@ -396,14 +581,10 @@ if __name__ == "__main__":
     del params['exist_rflat']
     del params['exp_darks']
     params = check_raw_files_infos(params, file_list)
-
-    time.sleep(0.3)
-    file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
-    file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
-    
-    file_list = sorted(file_list, key=operator.itemgetter(4,0))       # itemgetter(1,2,3,0)
     
     conf_data = create_configuration_file(params, file_list)
+    
+    # Create a GUI that let's the user modify the configuration data
     
     # Save the results in a conf_data.txt file
     #print json.dumps(conf_data,sort_keys = False, indent = 4)
