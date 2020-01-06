@@ -1,5 +1,5 @@
-# exohspec
-A highly flexible pipele to reduce echelle data (taken with a bifurcated or single fiber)
+# HiFLEx
+A highly flexible package to reduce echelle data (taken with a bifurcated or single fiber)
 
-For information on how to use the software please check the Manual: EXOhSPEC_Data_Reduction_UserManual.pdf
-(https://github.com/ronnyerrmann/exohspec/blob/master/EXOhSPEC_Data_Reduction_UserManual.pdf)
+For information on how to use the software please check the Manual: HiFLEx_UserManual.pdf
+(https://github.com/ronnyerrmann/HiFLEx/blob/master/HiFLEx_UserManual.pdf)
