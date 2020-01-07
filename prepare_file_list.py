@@ -1,6 +1,7 @@
 import numpy as np
 import os
 from procedures import *
+from astroquery.simbad import Simbad
 
 # =============================================================================
 # Define variables
@@ -67,81 +68,81 @@ def create_parameters(conf_data, warn, param, textparam, parcals, exist_bias, ex
 
 def add_new_rawfiles_file_list(params, file_list=[]):
     for raw_data_path in params['raw_data_paths']:
-     for root, dirs, files in os.walk(raw_data_path, followlinks=True):
-        for file in files:
-            matchin_fileending = False                      # has the file the correct ending?
-            for fileending in params['raw_data_file_endings']:
-                if file.endswith(fileending):
-                    matchin_fileending = True               # right file ending
-                    break
-            if not matchin_fileending:
-                continue                                    # wrong file ending
-                    
-            #filename = os.path.join(root, file).replace(params['raw_data_path'],'')     # Only relative folder and filename
-            #if not os.path.exists(params['raw_data_path'] + filename):                  # that should never be a problem
-            #    continue
-            filename = os.path.join(root, file)                                         # Full folders and filenames
-            new = True                                      # is it a new file
-            for entry in file_list:
-                if entry[0].find(filename) == 0 or entry[0].find(' '+filename) >= 0 or entry[0].find('#'+filename) >= 0:    # spaces are replaced in convert_readfile, so shouldn't be a problem
-                    new = False
-                    break
-            if not new:
-                continue                                    # if not new, then no further analysis is needed
-            im_head = fits.getheader(filename)
-            # Identify the image type and find out what the fibers show
-            fiber1, fiber2 = 'none', 'none'
-            fnlow = filename.lower()
-            if fnlow.find('bias') >= 0:                     # hardcoded: Bias
-                fiber1, fiber2 = 'bias', 'bias'
-            if fnlow.find('dark') >= 0:                     # hardcoded: Dark
-                fiber1, fiber2 = 'dark', 'dark'
-            posi  = [fnlow.find('flat') , fnlow.find('whli') , fnlow.find('white') , fnlow.find('tung') ]      # hardcoded: White light (Tungston) spectrum in science fiber
-            posi2 = [fnlow.find('flat2'), fnlow.find('whli2'), fnlow.find('white2'), fnlow.find('tung2')]      # hardcoded: White light (Tungston) spectrum in calibration fiber
-            for i in range(len(posi)):
-                if posi2[i] >= 0:
-                    fiber2 = 'cont'
-                    if posi[i] <> posi2[i]:                 # both fibers
-                        fiber1 = 'cont'
-                elif posi[i] >= 0:
-                    fiber1 = 'cont'
-            if fnlow.find('rflat') >= 0:                    # hardcoded: real flat
-                fiber1, fiber2 = 'rflat', 'rflat'
-            if params['raw_data_imtyp_keyword'] in im_head.keys():
-                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flat']:      # replace because when reading the conf file spaces are placed
-                    if fnlow.find('rflat') >= 0:
-                        fiber1, fiber2 = 'rflat', 'rflat'
-                    else:
-                        fiber1, fiber2 = 'cont', 'cont'
-            posi  = [fnlow.find('arc') , fnlow.find('thar') , fnlow.find('th_ar') , fnlow.find('thorium') , fnlow.find('une') ]        # hardcoded: emission line spectrum in calibration fiber
-            posi2 = [fnlow.find('arc2'), fnlow.find('thar2'), fnlow.find('th_ar2'), fnlow.find('thorium2'), fnlow.find('une2')]        # hardcoded: emission line spectrum in science fiber
-            for i in range(len(posi)):
-                if posi2[i] >= 0:
-                    fiber1 = 'wave'
-                    if posi[i] <> posi2[i]:                 # both fibers
-                        fiber2 = 'wave'
-                elif posi[i] >= 0:
-                    fiber2 = 'wave'
-            if params['raw_data_imtyp_keyword'] in im_head.keys():
-                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_bias']:
+        for root, dirs, files in os.walk(raw_data_path, followlinks=True):
+            for file in files:
+                matchin_fileending = False                      # has the file the correct ending?
+                for fileending in params['raw_data_file_endings']:
+                    if file.endswith(fileending):
+                        matchin_fileending = True               # right file ending
+                        break
+                if not matchin_fileending:
+                    continue                                    # wrong file ending
+                        
+                #filename = os.path.join(root, file).replace(params['raw_data_path'],'')     # Only relative folder and filename
+                #if not os.path.exists(params['raw_data_path'] + filename):                  # that should never be a problem
+                #    continue
+                filename = os.path.join(root, file)                                         # Full folders and filenames
+                new = True                                      # is it a new file
+                for entry in file_list:
+                    if entry[0].find(filename) == 0 or entry[0].find(' '+filename) >= 0 or entry[0].find('#'+filename) >= 0:    # spaces are replaced in convert_readfile, so shouldn't be a problem
+                        new = False
+                        break
+                if not new:
+                    continue                                    # if not new, then no further analysis is needed
+                im_head = fits.getheader(filename)
+                # Identify the image type and find out what the fibers show
+                fiber1, fiber2 = 'none', 'none'
+                fnlow = filename.lower()
+                if fnlow.find('bias') >= 0:                     # hardcoded: Bias
                     fiber1, fiber2 = 'bias', 'bias'
-                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_dark']:
+                if fnlow.find('dark') >= 0:                     # hardcoded: Dark
                     fiber1, fiber2 = 'dark', 'dark'
-                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace1']:
-                    fiber1, fiber2 = 'cont', 'dark'
-                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_blaze']:
-                    fiber1, fiber2 = 'cont', 'wave'        # for HARPS it is cont, cont
-                if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace2']:
-                    fiber1, fiber2 = 'wave', 'wave'
-            if (fnlow.find('/arc') == -1 and fnlow.find('/thar') == -1  and fnlow.find('/th_ar') == -1  and fnlow.find('/thorium') == -1 and fnlow.find('/une') == -1) and \
-                        not (fnlow.find('arc') == 0 or fnlow.find('thar') == 0 or fnlow.find('th_ar') == 0 or fnlow.find('thorium') == 0 or fnlow.find('une') == 0) and \
-                        fiber1 not in ['rflat', 'cont', 'dark', 'bias', 'wave']:
-                fiber1 = 'science'
-                if fnlow.find('harps') <> -1:
-                    fiber2 = 'wave'
-            im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
-            extract = ''
-            file_list.append([filename, fiber1, fiber2, im_head['HIERARCH HiFLEx EXPOSURE'], obsdate_mid_float, extract])
+                posi  = [fnlow.find('flat') , fnlow.find('whli') , fnlow.find('white') , fnlow.find('tung') ]      # hardcoded: White light (Tungston) spectrum in science fiber
+                posi2 = [fnlow.find('flat2'), fnlow.find('whli2'), fnlow.find('white2'), fnlow.find('tung2')]      # hardcoded: White light (Tungston) spectrum in calibration fiber
+                for i in range(len(posi)):
+                    if posi2[i] >= 0:
+                        fiber2 = 'cont'
+                        if posi[i] <> posi2[i]:                 # both fibers
+                            fiber1 = 'cont'
+                    elif posi[i] >= 0:
+                        fiber1 = 'cont'
+                if fnlow.find('rflat') >= 0:                    # hardcoded: real flat
+                    fiber1, fiber2 = 'rflat', 'rflat'
+                if params['raw_data_imtyp_keyword'] in im_head.keys():
+                    if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_flat']:      # replace because when reading the conf file spaces are placed
+                        if fnlow.find('rflat') >= 0:
+                            fiber1, fiber2 = 'rflat', 'rflat'
+                        else:
+                            fiber1, fiber2 = 'cont', 'cont'
+                posi  = [fnlow.find('arc') , fnlow.find('thar') , fnlow.find('th_ar') , fnlow.find('thorium') , fnlow.find('une') ]        # hardcoded: emission line spectrum in calibration fiber
+                posi2 = [fnlow.find('arc2'), fnlow.find('thar2'), fnlow.find('th_ar2'), fnlow.find('thorium2'), fnlow.find('une2')]        # hardcoded: emission line spectrum in science fiber
+                for i in range(len(posi)):
+                    if posi2[i] >= 0:
+                        fiber1 = 'wave'
+                        if posi[i] <> posi2[i]:                 # both fibers
+                            fiber2 = 'wave'
+                    elif posi[i] >= 0:
+                        fiber2 = 'wave'
+                if params['raw_data_imtyp_keyword'] in im_head.keys():
+                    if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_bias']:
+                        fiber1, fiber2 = 'bias', 'bias'
+                    if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_dark']:
+                        fiber1, fiber2 = 'dark', 'dark'
+                    if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace1']:
+                        fiber1, fiber2 = 'cont', 'dark'
+                    if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_blaze']:
+                        fiber1, fiber2 = 'cont', 'wave'        # for HARPS it is cont, cont
+                    if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_trace2']:
+                        fiber1, fiber2 = 'wave', 'wave'
+                if (fnlow.find('/arc') == -1 and fnlow.find('/thar') == -1  and fnlow.find('/th_ar') == -1  and fnlow.find('/thorium') == -1 and fnlow.find('/une') == -1) and \
+                            not (fnlow.find('arc') == 0 or fnlow.find('thar') == 0 or fnlow.find('th_ar') == 0 or fnlow.find('thorium') == 0 or fnlow.find('une') == 0) and \
+                            fiber1 not in ['rflat', 'cont', 'dark', 'bias', 'wave']:
+                    fiber1 = 'science'
+                    if fnlow.find('harps') <> -1:
+                        fiber2 = 'wave'
+                im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
+                extract = ''
+                file_list.append([filename, fiber1, fiber2, im_head['HIERARCH HiFLEx EXPOSURE'], obsdate_mid_float, extract])
     
     return file_list
 
@@ -250,7 +251,7 @@ def create_configuration_file(params, file_list):
     if not exist_bias:
         exist_bias = os.path.isfile('master_bias.fits')
         conf_data['master_bias_filename'] = 'master_bias.fits'
-    for file in os.listdir("."):
+    for file in os.listdir(params['result_path']):
         if file.endswith(".fits"):
             filename = os.path.join("", file)
             if filename.find('master_dark') == 0:
@@ -329,32 +330,44 @@ def create_configuration_file(params, file_list):
 
 def file_list_UI(file_list):
     # Extract a common path
+    maxlen_files = 0
+    for entry in file_list:
+        maxlen_files = max(maxlen_files, len(entry[0].replace('#','').replace(' ','')) )
     common_path = ''
     if file_list[0][0][2:].find('/') != -1:         # it contains subfolders
         fnames = []
         for entry in file_list:
             fnames.append( entry[0].replace('#','').replace(' ','') )
         common_path = fnames[0].rsplit('/',1)[0]    # just remove the filename
-        for dummy in range(len(fnames[0].split('/'))-2):
+        for dummy in range(len(fnames[0].split('/'))-1):
             found_common_path = True
             for entry in fnames:
-                if entry.find(common_path) == -1:
+                if entry.find(common_path) == -1:   # This path is not the same
                     found_common_path = False
                     break
             if found_common_path:
                 common_path += '/'
                 break
             else:
-                common_path = common_path.rsplit('/',1)[0]      # remove the next subfolder
+                common_path = common_path.rsplit('/',1)     # remove the next subfolder
+                if len(common_path) == 2:                   # Another subfolder in the path
+                    common_path = common_path[0]
+                else:                                       # no more subfolders
+                    common_path = ''
+                    break
     # Split the common_path to make the GUI shorter (in x), if necessary
-    common_path_text = common_path
-    if len(common_path) > 40:
+    maxlen_files -= len(common_path)
+    if len(common_path) == 0:
+        common_path_text = '{0}\n(no common path)'.format(' '*int(maxlen_files*1.5))
+    else:
+        common_path_text = common_path
+    if len(common_path) > maxlen_files:
         common_path_temp = common_path[:-1].split('/')          # without the last '/'
         common_path_text = [common_path_temp[0]+'/']            # start with the first entry
         ii = 0
         for entry in common_path_temp[1:]:
             entry += '/'
-            if len(common_path_text[ii]+entry) > 40 and len(common_path_text[ii]) > 20:     # If too long to add
+            if len(common_path_text[ii]+entry) > maxlen_files and len(common_path_text[ii]) > maxlen_files/2.:     # If too long to add
                 common_path_text.append(entry)
                 ii += 1
             else:
@@ -387,8 +400,14 @@ def file_list_UI(file_list):
     for ii, entry in enumerate(file_list):
         pkwargs['comment_{0}'.format(ii)] = ( 0 <= entry[0].find('#') < 20 )            # Commented out
         widgets['comment_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['comment_{0}'.format(ii)], row=ii+1, column=0)
+        expstr = '%1.2f'%entry[3]       # '%9.2f'%entry[3] has not long enough spaces
+        if len(expstr) > 7:
+            expstr = '  '+expstr[:-3]        # without fractions at the end
+        else:
+            #expstr = ' '*{4:7, 5:5, 6:4, 7:2, 8:1, 9:1, 10:1}[len(expstr)] + expstr            # This has the 100s not perfectly alligned
+            expstr = ' '*{4:6, 5:4, 6:2, 7:1, 8:1, 9:1, 10:1}[len(expstr)] + expstr             # This has the 100s and 100s not perfectly alligned
         text = '{0}{1}   {2}'.format( datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%d %H:%M:%S'), 
-                                     '%9.2f'%entry[3], entry[0].replace('#','').replace(' ','').replace(common_path,'') )
+                                     expstr, entry[0].replace('#','').replace(' ','').replace(common_path,'') )
         widgets['name_{0}'.format(ii)] = dict(label=text, kind='Label', row=ii+1, column=1, columnspan=3, orientation=Tk.W)
         #fname = entry[0].replace('#','').replace(' ','').replace(common_path,'')
         #widgets['mid_exp_{0}'.format(ii)] = dict(label=datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), kind='Label', row=ii+1, column=5)
@@ -450,10 +469,12 @@ def file_list_UI(file_list):
               '-- Extract: Extract these files on an individual basis\n'+\
               '-- Further settings (manual): e.g. to combine files\n   before extraction\n'+\
               '(*) not for single fiber spectrographs\n'+\
-              '(**) important for unstabilised single fiber\n     spectrographs'
+              '(**) important for unstabilised single fiber\n     spectrographs\n\n'+\
+              'The automatic assignment is based on the parameters\n raw_data_* in conf.txt (and in procedure\n add_new_rawfiles_file_list). '
               #'- Type of Science and Calibration\n  fibers are derived from header or\n  filename and can be changed here\n  (optional)\n'+\     # Allows modification of the fiber content
     for ii, commentii in enumerate(explain.split('\n')):
-        widgets['explain_{0}'.format(ii)] = dict(label=commentii, kind='Label', row=ii, column=20, rowspan=1, orientation=Tk.W )#, wraplength=100 )      
+        if len(commentii) > 0:
+            widgets['explain_{0}'.format(ii)] = dict(label=commentii, kind='Label', row=ii, column=20, rowspan=1, orientation=Tk.W )#, wraplength=100 )      
     widgets['accept'] = dict(label='Accept', kind='ExitButton', row=ii+1, column=20, rowspan=2)
                               
     wprops = dict(fullscreen=False )
@@ -497,6 +518,77 @@ def file_list_UI(file_list):
         if not gui3.data['comment_{0}'.format(ii)]:     # Ignore the commented out lines
             file_list_new.append(file_list_full[-1])
     return file_list_new, file_list_full
+
+def get_observed_objects(params, conf_data):
+    object_information_full = []
+    object_information_head = []
+    object_files = [ params['object_file'] ]
+    for entry in [ params['result_path'] ] + params['raw_data_paths']:      # Check also the result and raw data paths for object names
+        object_files.append( entry + params['object_file'] )
+    Simbad.add_votable_fields("pmra")  # Store proper motion in RA
+    Simbad.add_votable_fields("pmdec")  # Store proper motion in Dec.
+    for entry in sorted(conf_data):
+        if not ( entry.find('extract') != -1 and entry.find('rawfiles') != -1 ):     # Only check for extract*rawfiles
+            continue
+        for im_name in conf_data[entry].split(', '):
+            found = False
+            im_head = fits.getheader(im_name)
+            obname = im_name.replace('\n','').split('/')    # get rid of the path
+            obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
+            # Check if already in the list
+            for obname in obnames:
+                for index, obname_found in enumerate(object_information_full):        # Same objectname doesn't need to be done again
+                    if obname == obname_found[0]:
+                        if im_name not in object_information_full[index][-1]:
+                            object_information_full[index][-1].append(im_name)
+                        found = True
+                        break
+                if found:
+                    break
+            if found:
+                continue
+            # Search if the object exists in an availible file
+            for object_file in object_files:
+                ra2, dec2, epoch, pmra, pmdec, obnames, allentries = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using ceres to calculated BCV
+                if ra2 !=0 or dec2 != 0:                                           # Found the object
+                    found = True
+                    break
+            if not found:
+                # Search the information on Simbad
+                for obname in obnames:
+                    obnames_space = [obname]
+                    for i in range(1,len(obname)-1):    # Simbad requires the space in the object: e.g. Tau Ceti
+                        obnames_space.append(obname[:i]+' '+obname[i:])
+                    warnings.filterwarnings("ignore", category=UserWarning)
+                    simbad_results = Simbad.query_objects(obnames_space)
+                    warnings.filterwarnings("default", category=UserWarning)
+                    if simbad_results is not None:
+                        #print obname, simbad_results
+                        obnames = [obname]
+                        # Simbad quaries standard in J2000, this might change in future
+                        allentries = [ obname, simbad_results[0]['RA'], simbad_results[0]['DEC'], 2000, simbad_results[0]['PMRA'], simbad_results[0]['PMDEC'], 1, '', '' ]
+                        found = True
+                        break
+            if not found:               # Create an empty list
+                allentries = [obnames[0]] + ['']*8
+            allentries.append([im_name])
+            # Get the information from the header
+            im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)
+            parms, source_radec, source_obs, mephem = get_object_site_from_header(params, im_head, obnames, obsdate_midexp)
+            head_info = ['']*5
+            if source_radec.find('') != -1:
+                head_info = [ params['ra'] , params['dec'], params['pmra'], params['pmdec'], params['epoch'] ]
+            #Put the information into a list
+            object_information_full.append(allentries)
+            object_information_head.append(head_info)
+    return object_information_full, object_information_head
+
+def  calibration_parameters_coordinates_UI(conf_data, object_information_full, object_information_head):
+    
+    
+    
+    
+    return conf_data, object_information
 
 if __name__ == "__main__":
     logger('Info: Preparing a list with the files')
@@ -582,9 +674,24 @@ if __name__ == "__main__":
     del params['exp_darks']
     params = check_raw_files_infos(params, file_list)
     
+    # Create the data for fits_conf.txt
     conf_data = create_configuration_file(params, file_list)
+    print(conf_data)
     
-    # Create a GUI that let's the user modify the configuration data
+    # What objects were observed:
+    object_information_full, object_information_head = get_observed_objects(params, conf_data)
+    
+    # Select the calibration parameters and Object coordinates in a GUI
+    #conf_data, object_information = calibration_parameters_coordinates_UI(conf_data, object_information_full, object_information_head)
+    
+    # Append information to params['object_file']
+
+    # ??? Create a GUI that let's the user modify the configuration data and that checks for the coordinates of the objects in Simbad (or header): show simbad -> modify by user, check that header is overwritten by user coordinates in procedures
+    
+
+    
+    
+    
     
     # Save the results in a conf_data.txt file
     #print json.dumps(conf_data,sort_keys = False, indent = 4)

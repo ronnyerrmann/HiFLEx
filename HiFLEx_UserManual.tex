@@ -117,7 +117,7 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
   \item Improvement of the GUI and plotting the spectra.
 \end{itemize}
 
-\subsection*{v0.4.2 (not released yet)}
+\subsection*{v0.4.2}
 \begin{itemize}\setlength\itemsep{0em}
   \item Change to the new name: HiFLEx 
 \end{itemize}
@@ -133,7 +133,7 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
   \item General parameters: \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
     \item Create a new folder and copy the \verb|conf.txt| into that folder and open the file in an editor.
-    \item Change parameter \verb|raw_data_path| to point to the folder or folders with your raw or pre-reduced fits-files. The data can be stored in sub-folders.
+    \item Change parameter \verb|raw_data_paths| to point to the folder or folders with your raw or pre-reduced fits-files. The data can be stored in sub-folders.
     \item Set the parameter \verb|badpx_mask_filename| if a bad-pixel-mask exists (see Chapter~\ref{Section:create_badpxmask}). Otherwise leave empty or 'NA'.
     \item Modify the header-parameters, if necessary (see Cahpter~\ref{Section:prepare_files}).
     \item Adjust \verb|rotate_frame| and \verb|flip_frame| so that the orders are up to down (blue wavelength on top) and red orders are on the right. The pipeline will first rotate and then flip, the flip is swapping left and right.
@@ -180,8 +180,9 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
   
   \item Run the scrip \verb|prepare_file_list.py| (see Chapter~\ref{Section:prepare_files} below for more information): \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
-    \item Define what files should be what calibration.
-    \item Please note that you can use already reduced images. In this case the reduction steps above should be empty for the file type (e.g. dark or real flats) to avoid a second application of the correction.
+    \item Define what files should be used for what calibration.
+    \item Define what files to extract (and measure RVs)
+    \item Please note that you can use already reduced images. In this case the reduction steps as defined in \verb|conf.txt| should be empty for the file type (e.g. dark or real flats) to avoid a second application of the correction.
   \end{itemize}
   
   \item Run the scrip \verb|HiFLEx.py|: \vspace*{-\itemsep}
@@ -262,7 +263,7 @@ After all the calibration steps have been performed for a given instrument (see 
   \item \verb|master_darkfixed_filename|.
 \end{itemize}
 
-\noindent An example for the parameters with additional explanation is shown in Figure~\ref{Fig:example_calibs_create_g}.
+\noindent An example for the parameters with additional explanation is shown in Figure~\ref{Fig:example_calibs_create_g}. The master files for bias, rflat, and darks can also be copied into the result folder from a previous night.
 
 \subsection{Creating a new wavelength solution}
 \label{section:create_new_wave_solution}
@@ -385,7 +386,7 @@ You might also want to read Chapter~\ref{Section:FAQ_wavelength_solution}.
 
 \subsection{Creating a list of objects}
 \label{Section:create_object_list_file}
-If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_path| (the first one has higher priority, in case different file exists in the two folders only the first file will be read). The file must contain one line per object. For each object the following tab-separated or comma-separated values need to be given (exactly one separator between each column):
+If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_paths| (the first one has higher priority, in case different file exists in the two folders only the first file will be read). The file must contain one line per object. For each object the following tab-separated or comma-separated values need to be given (exactly one separator between each column):
 \begin{enumerate}\setlength\itemsep{0em}
  \item Object name (the filename should start with the object name in order to be used)
  \item RA (hh:mm:ss.ss or hh mm ss.ss or as one number in degrees)
@@ -404,7 +405,7 @@ Please note that the position of Moon, Jupiter, and Sun are calculated by the pi
 \subsection{Assigning the observed data and calibration data to the pipeline}
 \label{Section:prepare_files}
 
-The script \verb|prepare_file_list.py| reads all files in the folder (and subfolders) given in parameter \verb|raw_data_path|. The file name and header information are used to determine the type of file and if it can be used for calibration. The header parameters are thereby defined by the following parameters in the configuration file:
+The script \verb|prepare_file_list.py| reads all files in the folders (and subfolders) given in parameter \verb|raw_data_paths|. The file name and header information are used to determine the type of file and if it can be used for calibration. The header parameters are thereby defined by the following parameters in the configuration file:
 
 \begin{description}
   \item[raw\_data\_imtyp\_keyword:] Header keyword if the image type (standard: \\ \mbox{IMAGETYP}),
@@ -412,14 +413,17 @@ The script \verb|prepare_file_list.py| reads all files in the folder (and subfol
   \item[raw\_data\_imtyp\_dark:] Value of the for raw\_data\_imtyp\_keyword for dark frames (standard: Dark Frame),
   \item[raw\_data\_imtyp\_flat:] Value of the for raw\_data\_imtyp\_keyword for flat frames (standard: Flat Frame),
   \item[raw\_data\_imtyp\_trace1:] Value of the for raw\_data\_imtyp\_keyword for frames to trace the science orders (for HARPS: LAMP,DARK,TUN),
-  \item[raw\_data\_imtyp\_blazecor:] Value of the for raw\_data\_imtyp\_keyword for frames with the blaze function (for HARPS: LAMP,LAMP,TUN),
+  \item[raw\_data\_imtyp\_blaze:] Value of the for raw\_data\_imtyp\_keyword for frames with the blaze function (for HARPS: LAMP,LAMP,TUN),
   \item[raw\_data\_imtyp\_trace2:] Value of the for raw\_data\_imtyp\_keyword for frames to trace the calibration orders (for HARPS: WAVE,WAVE,THAR2),
   \item[raw\_data\_exptim\_keyword:] Header keyword for the exposure (standard: \\ \mbox{EXPTIME}),
-  \item[raw\_data\_dateobs\_keyword:] Header keyword observing date and time (in UTC). The format needs to be \mbox{YYYY-MM-DDTHH:MM:SS} (e.g. \\ \mbox{2018-02-28T23:34:01})  (standard: \mbox{DATE-OBS}). Other formats can be defined in the procedure \verb|get_obsdate|.
+  \item[raw\_data\_dateobs\_keyword:] Header keyword observing date and time (in UTC). The format needs to be \mbox{YYYY-MM-DDTHH:MM:SS} (e.g. \\ \mbox{2018-02-28T23:34:01})  (standard: \mbox{DATE-OBS}). Other formats can be defined in the procedure \verb|get_obsdate|. \\
+    If the time zone is not UT, then \verb|raw_data_timezone_cor| can be used for correction, e.g $-7$ when local time in Thailand has been stored as UT time.\\
+    If the information of exposure metre to calculate the weight of the mid exposure time, a list of header keywords can be given in \verb|raw_data_mid_exposure_keys|.
+  \item[raw\_data\_object\_name\_keys:] List of header keywords to get the object name, which is then used to derive the information from Simbad.
 \end{description}
 
 
-\noindent The file type and definition of the fibers is done by using the filename and header information. The assignment is done in the order given in Table~\ref{Tab:fiber_definition}. The result of this assignment is stored in a text file, which is shown to the user. The file can be edited (these information won't be overwritten if the script is re-executed). The following information is stored for each file in the raw data path (tab-separated):
+\noindent The file type and definition of the fibers is done by using the filename and header information. The assignment is done in the order given in Table~\ref{Tab:fiber_definition}. The result of this assignment is stored in a text file (\textit{file\_list\_raw\_data.txt}, which is shown to the user in a GUI (see Figure~\ref{Fig:UI_prepare_filelist}). %The file can be edited (these information won't be overwritten if the script is re-executed). The following information is stored for each file in the raw data path (tab-separated):
 \begin{table}
  \caption{Assignment of the fibers using the header keywords as given in the parameters of the configuration and filename. The science and calibration fibers are denoted with 'fiber1' and 'fiber2', respectively. Later assignment overwrites earlier ones. The filename is case-insensitive. '--' means no change has been done.}
  \label{Tab:fiber_definition}
@@ -439,22 +443,41 @@ The script \verb|prepare_file_list.py| reads all files in the folder (and subfol
  \end{tabular}
 \end{table}
 
+\begin{figure} 
+  \begin{center}
+    \includegraphics[width=\textwidth]{./figures/UI_prepare_filelist}
+  \end{center} 
+  \caption{User interface to select which files should be used for which calibration step. In this selection the Dark-files will be used for dark correction, the Flat-files (Tungsten lamp) will be used to find the science traces and to find the blaze function, the long-exposed ThAr will be used to find the traces of the calibration fiber and for creating the wavelength solution for the calibration fiber, the short-exposed ThAr will also be used for creating the wavelength solution (for lines saturated in the long exposure). The science spectra will only be extracted, together with the long-exposed ThAr individually and the combined ThAr with the long exposures. The first two ThAr files will not be used. Please note, in this data set no data to create a wavelength solution in the science fiber is available.
+    \label{Fig:UI_prepare_filelist}}
+\end{figure}
+
 \begin{itemize}\setlength\itemsep{0em}
-  \item Filename
-  \item Type of light for the science fiber
-  \item Type of light for the calibration fiber
-  \item Exposure time in seconds
+  \item Comment the file out (don't use it)
   \item Observation time
-  \item Flag 'w', if the Arc spectrum should be extracted (important for single fiber spectrographs). Flag 'e', if the spectrum should be extracted. This can be modified in order to allow different processing of the images before extraction. The following options are possible:
+  \item Exposure time in seconds
+  \item Filename
+  %\item Type of light for the science fiber
+  %\item Type of light for the calibration fiber
+  \item What calibration should the file be used for:
     \begin{description}
-      \item[e alone:] The processing as given in parameter \verb|extract_calibs_create_g| will be assigned.
-      \item[e \textless obj \textgreater :] The processing as given in parameter \\ \verb|extract<obj>_calibs_create_g| will be assigned. If this parameter doesn't exist, then parameter \verb|extract_calibs_create_g| will be used.
-      \item[ec \textless obj \textgreater :] The same as \textbf{e \textless obj \textgreater}, but instead of extracting each file induvidually, all files with \textbf{ec \textless obj \textgreater} will be combined into a file called \verb|master_<obj>.fits| and then this file is extracted.
-      \item One raw file can be used for different extractions if several flags are combined with ',', e.g. \textit{e,ecSunAll,ecSunCentroid}.
+      \item[Bias:] Use it to create a master bias.
+      \item[Dark:] Use it to create a master dark with this exposure time.
+      \item[Real flat:] For master full flat (detector evenly illuminated).
+      \item[Sci. trace, Cal. trace:] To find the traces of the science and calibration fiber (for bifurcated fiber input).
+      \item[Blaze:] Use the file to create a master file from which the blaze function is extracted.
+      \item[Wave long, Wave short:] Files from which the wavelength solution for the calibration fiber will be created. The files will first combined into a master file and then extracted. In case of single fiber fed spectrographs, these settings should be used.
+      \item[Wave Sci. long, short:] For bifucated fiber fed spectrographs to create the wavelength solution for the science fiber.
+      \item[Wave shft cal, Wave Sci shft:] Define the files from which a time dependent drift between the wavelength solution is calculated. If ThAr light is used in both fibers, than both calibrations should be ticked. The script will calculate the shift using the pairs closest in time. For single fiber fed spectrographs only "Wave shft cal" is used to derive the shift from the wavelength solution.
+      \item[Extract:] Extract these files individually. The processing as given in parameter \verb|extract_calibs_create_g| will be assigned.
+      \item[Further entries:] Further ways to extract the science spectra is possible. Several options can be combined using comma:
+      \item[e \textless obj \textgreater :] Extract files individually. The processing as given in parameter \verb|extract<obj>_calibs_create_g| will be assigned. If this parameter doesn't exist, then parameter \verb|extract_calibs_create_g| will be used.
+      \item[ec \textless obj \textgreater :] The same as \textbf{e \textless obj \textgreater}, but instead of extracting each file individually, all files with \textbf{ec \textless obj \textgreater} will be combined into a file called \verb|master_<obj>.fits| and then this file is extracted.
     \end{description}
 \end{itemize}
 
-Please note that the flag(s) need to be exactly one tabulator after the Observation time.
+\nointent If the automatic assignment of the the calibrations is wrong, please check the parameters \verb|raw_data_*| in conf.txt. If this doesn't fix it, please check the hard coded lines in procedure \textit{add\_new\_rawfiles\_file\_list} as some of the assignments had to be hard coded.
+
+%Please note that the flag(s) need to be exactly one tabulator after the Observation time.
 
 
 \subsection{Create a bad pixel mask}
@@ -889,7 +912,7 @@ python extract_single_chip.py
   \item \verb|raw_data_imtyp_keyword  = OBJECT|
   \item \verb|raw_data_imtyp_bias     = BIAS,BIAS|
   \item \verb|raw_data_imtyp_sflat    = LAMP,DARK,TUN|
-  \item \verb|raw_data_imtyp_blazecor = LAMP,LAMP,TUN|
+  \item \verb|raw_data_imtyp_blaze    = LAMP,LAMP,TUN|
   \item \verb|raw_data_imtyp_arc      = WAVE,WAVE,THAR2|
   \item \verb|bias_calibs_create_g    = subframe|
   \item \verb|trace1_calibs_create_g  = subframe, bias|

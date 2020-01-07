@@ -408,7 +408,7 @@ def add_text_to_file(text, filename):
     if exists == False:
         add_text_file(text, filename)
         
-def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignorelines=[]):
+def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignorelines=[], expand_input=False):
     """
     Can be used convert a read table into entries with the correct format. E.g integers, floats
         Ignories the lines which have less entries than entries in textformats
@@ -466,7 +466,10 @@ def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignor
             entry = entry.replace(replce[0],replce[1])
         entry = entry.split(delimiter)
         if len(entry) < len(textformats):
-            continue
+            if expand_input:
+                entry += [''] * ( len(textformats) - len(entry) )
+            else:
+                continue
         for index in range(len(textformats)):
             for textformat in textformats[index]:
                 if type(textformat) == type:
@@ -3454,10 +3457,11 @@ def get_possible_object_names(filename, header, header_keywords, replacements=['
     for header_keyword in header_keywords:                  # Check the header first, if the object is stored there
         if header_keyword in header.keys():
             new = header[header_keyword].replace(' ','')
-            if new not in obnames:
+            if new not in obnames and len(new) >= 2:
                 obnames.append(new)
     first_entry = filename.replace('-','_').split('_')      # most likely object is without any _ and -
-    obnames.append(first_entry[0])
+    if first_entry[0] not in obnames:
+        obnames.append(first_entry[0])
     obname = filename + '-'                   # Have at least one run
     while obname.find('_') != -1 or obname.find('-') != -1:
         for splitter in ['-', '_']:
@@ -3485,7 +3489,7 @@ def get_possible_object_names(filename, header, header_keywords, replacements=['
                         break
                 if i == 0 and len(obnametemp) < 5:
                     continue
-                if obnametemp not in obnames:
+                if obnametemp not in obnames and obnametemp.lower() not in replacements:
                     obnames.append(obnametemp)
                 if i == 4:                            # Use the stripped filename as new filename
                     obname = obnametemp
@@ -3522,7 +3526,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     for entry in [ params['result_path'] ] + params['raw_data_paths']:      # Check also the result and raw data paths for object names
         object_files.append( entry + params['object_file'] )
     for object_file in object_files:
-        ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using ceres to calculated BCV
+        ra2, dec2, epoch, pmra, pmdec, obnames, dummy = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using ceres to calculated BCV
         if ra2 !=0 or dec2 != 0:                                           # Found the object
             break
     if ra2 ==0 and dec2 == 0:
@@ -6246,7 +6250,7 @@ def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True):  
         return RA0, DEC0, epoch, PMRA, PMDEC, obnames
     # !!! Use read files with split already available
     lines_txt = read_text_file(filen, no_empty_lines=True, warn_missing_file=False)
-    lines = convert_readfile(lines_txt, [str, str, str, float, float, float, float], delimiter=',', replaces=[['\t',',']])
+    lines = convert_readfile(lines_txt, [str, str, str, float, float, float, float, str, str], delimiter=',', replaces=[['\t',',']], expand_input=True)
     if len(lines) < len(lines_txt):
         logger('Warn: {1} line(s) could not be read in the reference coordinates file: {0}. Please check that columns 4 to 7 (starting counting with 1) are numbers'.format(filen, len(lines_txt)-len(lines) ))
     found = False
@@ -6296,10 +6300,11 @@ def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True):  
                 obnames = [obname]
                 found = True
                 break
-                
-    if not found and warn_notfound:
-        logger('Warn: Object was not found in the reference coordinates file {0}.'.format(filen))
-    return RA0, DEC0, epoch, PMRA, PMDEC, obnames
+    if not found:
+        cos = []
+        if warn_notfound:
+            logger('Warn: Object was not found in the reference coordinates file {0}.'.format(filen))
+    return RA0, DEC0, epoch, PMRA, PMDEC, obnames, cos
 
 def JPLR0(lat, altitude):               # from CERES, not needed anymore
     "the corrections due to earth rotation"
@@ -6343,13 +6348,7 @@ def obspos(longitude,obsradius,R0):               # from CERES, not needed anymo
     obpos.append(z)
     return obpos
 
-def get_barycent_cor(params, im_head, obnames, reffile, obsdate):
-    """
-    Calculates the barycentric correction.
-    To do this, position of the telescope and pointing of the telescope need to be known.
-    Header vaulues are read, if they are not available, then using 
-    
-    """
+def get_object_site_from_header(params, im_head, obnames, obsdate):
     # Define the header keywords, if available
     site_keys       = ['TELESCOP']
     altitude_keys   = ['HIERARCH ESO TEL GEOELEV', 'ESO TEL GEOELEV']       # HIERARCH will be removed from header keywords in python
@@ -6431,11 +6430,22 @@ def get_barycent_cor(params, im_head, obnames, reffile, obsdate):
                     source_radec = 'The object coordinates are derived from the image header.'
                 if parentr == 'latitude':           # Assume that latitute is coming from the same source
                     source_obs = 'The site coordinates are derived from the image header.'
+    return params, source_radec, source_obs, mephem
+
+def get_barycent_cor(params, im_head, obnames, reffile, obsdate):
+    """
+    Calculates the barycentric correction.
+    To do this, position of the telescope and pointing of the telescope need to be known.
+    Header vaulues are read, if they are not available, then using 
+    
+    """
+    params, source_radec, source_obs, mephem = get_object_site_from_header(params, im_head, obnames, obsdate)
+    
     # mjd,mjd0, mjd_begin = mjd_fromheader(params, im_head)
     mjd = im_head['HIERARCH HiFLEx MJD']
     jd  = im_head['HIERARCH HiFLEx JD']
     
-    ra2, dec2, epoch, pmra, pmdec, obnames = getcoords_from_file(obnames, mjd, filen=reffile, warn_notfound=False)     # obnames will be a list with only one entry: the matching entry 
+    ra2, dec2, epoch, pmra, pmdec, obnames, dummy = getcoords_from_file(obnames, mjd, filen=reffile, warn_notfound=False)     # obnames will be a list with only one entry: the matching entry 
     if ra2 !=0 and dec2 != 0:
         params['ra']  = ra2
         params['dec'] = dec2
