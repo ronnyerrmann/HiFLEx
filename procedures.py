@@ -1283,7 +1283,7 @@ def oneD_blended_gauss(x, parameters, p01=0, p02=0, p03=0, p10=np.nan, p11=np.na
         result += oneD_gauss(x, parameters[i])
     return result
 
-def twoD_Gaussian(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):          # Changed from "x, y, amplitude,..." to  "(x, y), amplitude,..." on 20190528 after curve fit failed. Does it depend on the scipy version for curve fit?
+def twoD_Gaussian((x, y), amplitude, xo, yo, sigma_x, sigma_y, theta, offset):          # Changed from "x, y, amplitude,..." to  "(x, y), amplitude,..." on 20190528 after curve fit failed. Does it depend on the scipy version for curve fit? (x,y) doesn't work with python3
     """
     Calculates the Gauss in 2 dimensions
     :param (x,y): lists of the x- and y- values for which the Gauss should be calculated
@@ -1295,7 +1295,7 @@ def twoD_Gaussian(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):      
     :param theta: rotation of the Gauss compared to the x-axis
     :param offset: zero level of the Gauss
     """
-    [x,y] = xy
+    #[x,y] = xy
     xo = float(xo)
     yo = float(yo)    
     a = (np.cos(theta)**2)/(2.*sigma_x**2) + (np.sin(theta)**2)/(2.*sigma_y**2)

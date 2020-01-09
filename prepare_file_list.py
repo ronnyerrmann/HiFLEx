@@ -69,6 +69,9 @@ def create_parameters(conf_data, warn, param, textparam, parcals, exist_bias, ex
 def add_new_rawfiles_file_list(params, file_list=[]):
     for raw_data_path in params['raw_data_paths']:
         for root, dirs, files in os.walk(raw_data_path, followlinks=True):
+            if root.find(' ') != -1:
+                logger('Warn: Folder contains a space and will be ignored: {0}'.format(root))
+                continue
             for file in files:
                 matchin_fileending = False                      # has the file the correct ending?
                 for fileending in params['raw_data_file_endings']:
@@ -82,6 +85,9 @@ def add_new_rawfiles_file_list(params, file_list=[]):
                 #if not os.path.exists(params['raw_data_path'] + filename):                  # that should never be a problem
                 #    continue
                 filename = os.path.join(root, file)                                         # Full folders and filenames
+                if file.find(' ') != -1:
+                    logger('Warn: File contains a space and will be ignored: {0}'.format(file))
+                    continue
                 new = True                                      # is it a new file
                 for entry in file_list:
                     if entry[0].find(filename) == 0 or entry[0].find(' '+filename) >= 0 or entry[0].find('#'+filename) >= 0:    # spaces are replaced in convert_readfile, so shouldn't be a problem
