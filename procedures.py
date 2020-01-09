@@ -408,7 +408,7 @@ def add_text_to_file(text, filename):
     if exists == False:
         add_text_file(text, filename)
         
-def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignorelines=[], expand_input=False):
+def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignorelines=[], expand_input=False, ignore_badlines=False):
     """
     Can be used convert a read table into entries with the correct format. E.g integers, floats
         Ignories the lines which have less entries than entries in textformats
@@ -453,6 +453,7 @@ def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignor
             logger('Error: Programming error: replaces which where hand over to convert_readfile are wrong. '+\
                    'It has to be a list consisting of strings and/or 2-entry lists of strings. Please check replaces: {0}'.format(replaces))
     # Convert the text
+    error = {False:'Error:',True:'Warn'}[ignore_badlines]
     result_list = []
     for entry in input_list:
         notuse = False
@@ -465,7 +466,7 @@ def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignor
         for replce in replaces:
             entry = entry.replace(replce[0],replce[1])
         entry = entry.split(delimiter)
-        if len(entry) < len(textformats):
+        if len(entry) < len(textformats):           # add extra fields, if not enough
             if expand_input:
                 entry += [''] * ( len(textformats) - len(entry) )
             else:
@@ -476,12 +477,15 @@ def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignor
                     if type(entry[index]) == datetime.datetime:
                         epoch = datetime.datetime.utcfromtimestamp(0)
                         entry[index] = (entry[index] - epoch).total_seconds()         # (obsdate - epoch) is a timedelta
-                    entry[index] = textformat(entry[index])
+                    try:
+                        entry[index] = textformat(entry[index])
+                    except:
+                        logger(error+' Cannot convert {0} into a {1}. The problem happens in list line {2} at index {3}.'.format(entry[index], textformat, entry, index))
                 elif type(textformat) == str:
                     try:
                         entry[index] = datetime.datetime.strptime(entry[index], textformat)
                     except:
-                        logger('Error: Cannot convert {0} into a datetime object using the format {1}'.format(entry[index], textformat))
+                        logger(error+' Cannot convert {0} into a datetime object using the format {1}. The problem happens in list line {2} at index {3}.'.format(entry[index], textformat, entry, index))
                 else:
                     logger('Error: Programming error: textformats which where hand over to convert_readfile are wrong. It has to be a type or a string')
         result_list.append(entry)
@@ -608,13 +612,13 @@ def read_file_calibration(params, filename, level=0):
             warn_images_not_same([im, calimages[entry]], [filename,entry])
             im = im / (calimages[entry] / np.median(calimages[entry]) )
             logtxt, headtxt = ['flat correction applied with normalised flat (rflat)'], ['redu{0}d'.format(level), 'Flat']
-        elif entry.lower().find('background') > -1 and not entry.lower().find('localbackground') > -1:
-            if entry not in calimages:
-                 calimages[entry] = read_background(params, params[entry+'filename'])
-            warn_images_not_same([im, calimages[entry]], [filename,params[entry+'filename']])
-            im = im - calimages[entry]*exptime
-            logger('Info: {1}: background correction applied: {0}'.format(params[entry], level))
-            im_head['HIERARCH HiFLEx redu{0}e'.format(level)] = 'Background: {0}'.format(params[entry])
+        #elif entry.lower().find('background') > -1 and not entry.lower().find('localbackground') > -1:
+        #    if entry not in calimages:
+        #         calimages[entry] = read_background(params, params[entry+'filename'])
+        #    warn_images_not_same([im, calimages[entry]], [filename,params[entry+'filename']])
+        #    im = im - calimages[entry]*exptime
+        #    logger('Info: {1}: background correction applied: {0}'.format(params[entry], level))
+        #    im_head['HIERARCH HiFLEx redu{0}e'.format(level)] = 'Background: {0}'.format(params[entry])
         elif entry.lower().find('badpx_mask') > -1:
             if entry not in calimages:
                 calimages[entry] = read_badpx_mask(params)
@@ -634,7 +638,7 @@ def read_file_calibration(params, filename, level=0):
                     im[nonzeroind[0][i],nonzeroind[1][i]] = np.median(section)  #replace bad px with the median of each surrounding area
             logger('Info: {1}: badpx correction applied: {0}'.format(entry, level))
             im_head['HIERARCH HiFLEx redu{0}f'.format(level)] = 'Bad-pixel-mask: {0}'.format(entry)
-        elif entry.lower().find('localbackground') > -1:
+        elif entry.lower().find('background') > -1:         # was localbackground before 20200108, this search covers *background
             if 'sci_trace' in calimages.keys() and 'cal_trace' in calimages.keys():
                 logger('Step: Performing the background fit')
                 sci_tr_poly, xlows, xhighs, widths = calimages['sci_trace']
@@ -1279,7 +1283,7 @@ def oneD_blended_gauss(x, parameters, p01=0, p02=0, p03=0, p10=np.nan, p11=np.na
         result += oneD_gauss(x, parameters[i])
     return result
 
-def twoD_Gaussian((x, y), amplitude, xo, yo, sigma_x, sigma_y, theta, offset):          # Changed from "x, y, amplitude,..." to  "(x, y), amplitude,..." on 20190528 after curve fit failed. Does it depend on the scipy version for curve fit?
+def twoD_Gaussian(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):          # Changed from "x, y, amplitude,..." to  "(x, y), amplitude,..." on 20190528 after curve fit failed. Does it depend on the scipy version for curve fit?
     """
     Calculates the Gauss in 2 dimensions
     :param (x,y): lists of the x- and y- values for which the Gauss should be calculated
@@ -1291,6 +1295,7 @@ def twoD_Gaussian((x, y), amplitude, xo, yo, sigma_x, sigma_y, theta, offset):  
     :param theta: rotation of the Gauss compared to the x-axis
     :param offset: zero level of the Gauss
     """
+    [x,y] = xy
     xo = float(xo)
     yo = float(yo)    
     a = (np.cos(theta)**2)/(2.*sigma_x**2) + (np.sin(theta)**2)/(2.*sigma_y**2)
@@ -3501,7 +3506,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     Extracts the spectra and stores it in a fits file
     
     """
-    if 'HiFLEx BCKNOISE' not in im_head.keys():        # if not already done because localbackground is in parameters
+    if 'HiFLEx BCKNOISE' not in im_head.keys():        # if not already done because background is in parameters
         bck_noise_std, bck_noise_var = prepare_measure_background_noise(params, im, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths)
         if np.isnan(bck_noise_var):
             bck_noise_var = -1
@@ -3523,8 +3528,9 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     
     # Change the path to the object_file to the result_path, if necessary
     object_files = [ params['object_file'] ]
+    object_file_no_path = params['object_file'].split('/')[-1]
     for entry in [ params['result_path'] ] + params['raw_data_paths']:      # Check also the result and raw data paths for object names
-        object_files.append( entry + params['object_file'] )
+        object_files.append( entry + object_file_no_path )
     for object_file in object_files:
         ra2, dec2, epoch, pmra, pmdec, obnames, dummy = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using ceres to calculated BCV
         if ra2 !=0 or dec2 != 0:                                           # Found the object
@@ -6229,7 +6235,7 @@ def iau_cal2jd(IY,IM,ID):               # from CERES, modified                  
             logger('Error: The month of the observation is not defined: {0}'.format(IM))
     return DJM0, DJM"""
 
-def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True):               # from CERES, heavily modified
+def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True, ignore_values=False):               # from CERES, heavily modified
     """
     1-  name of the target as specified in the image header.
     2-  right ascension of the target (J2000) with format hh:mm:ss or as float in degrees.
@@ -6242,6 +6248,8 @@ def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True):  
     old7-  mask that will be used to compute the CCF. Allowed entries are G2, K5 and M2.
     old8-  velocity width in km/s that is used to broaden the lines of the binary mask.
         It should be similar to the standard deviation of the Gaussian that is fitted to the CCF.
+        
+    :params ignore_values: Just checks for the object name, but not any of the other fields, just creates a list of strings
     """
     RA0, DEC0, PMRA, PMDEC, epoch = 0., 0., 0., 0., 2000.
     
@@ -6250,56 +6258,63 @@ def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True):  
         return RA0, DEC0, epoch, PMRA, PMDEC, obnames
     # !!! Use read files with split already available
     lines_txt = read_text_file(filen, no_empty_lines=True, warn_missing_file=False)
-    lines = convert_readfile(lines_txt, [str, str, str, float, float, float, float, str, str], delimiter=',', replaces=[['\t',',']], expand_input=True)
-    if len(lines) < len(lines_txt):
-        logger('Warn: {1} line(s) could not be read in the reference coordinates file: {0}. Please check that columns 4 to 7 (starting counting with 1) are numbers'.format(filen, len(lines_txt)-len(lines) ))
+    if ignore_values:
+        lines = convert_readfile(lines_txt, [str, str, str, str,   str,   str,   str,   str, str], delimiter=',', replaces=[['\t',',']], expand_input=True)
+    else:                       # Standard
+        lines = convert_readfile(lines_txt, [str, str, str, float, float, float, float, str, str], delimiter=',', replaces=[['\t',',']], expand_input=True, ignore_badlines=True)
+        if len(lines) < len(lines_txt):
+            logger('Warn: {1} line(s) could not be read in the reference coordinates file: {0}. Please check that columns 4 to 7 (starting counting with 1) are numbers'.format(filen, len(lines_txt)-len(lines) ))
     found = False
     for cos in lines:
-        if abs(cos[6]) < 0.9:         # disabled
-            continue
+        if not ignore_values:
+            if abs(cos[6]) < 0.9:         # disabled
+                continue
         for obname in obnames:
             if cos[0].lower() == obname.lower() or cos[0].lower().replace('_','') == obname.lower() or cos[0].lower().replace('-','') == obname.lower() or cos[0].lower().replace(' ','') == obname.lower():
-                if cos[1].find(':') > 0 or cos[1].find(' ') > 0:
-                    cos[1] = cos[1].replace(' ',':')
-                    cos1 = cos[1].split(':')
-                    try:
-                        RA0 = (float(cos1[0]) + float(cos1[1])/60. + float(cos1[2])/3600.) * 360. / 24.
-                    except:
-                        logger('Warn: Problem with the right ascension of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
-                        break
-                else:           # Already stored as float (asuming degree)
-                    try:
-                        RA0 = float(cos[1])
-                    except:
-                        logger('Warn: Problem with the right ascension of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
-                        break
-                if cos[2].find(':') > 0 or cos[2].find(' ') > 0:
-                    cos[2] = cos[2].replace(' ',':')
-                    cos2 = cos[2].split(':')
-                    try:
-                        DEC0 = np.absolute(float(cos2[0])) + float(cos2[1])/60. + float(cos2[2])/3600.
-                    except:
-                        logger('Warn: Problem with the declination of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
-                        break
-                    if cos2[0][0] == '-':       # negative Declination
-                        DEC0 = -DEC0
-                else:
-                    try:
-                        DEC0 = float(cos[2])
-                    except:
-                        logger('Warn: Problem with the declination of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
-                        break
-                PMRA = float(cos[3])    # mas/yr
-                PMDEC = float(cos[4])   # mas/yr
-                
-                """ # Steps to adjust the coordinates to the correct position, not necessary anymore because not using CERES routines to get BCVel and the barycorrpy package takes care of it
-                mjdepoch = 2451545.0 - constants.MJD0 + (float(cos[5]) - 2000.)
-    
-                RA  = RA0 + (PMRA/1000./3600.)*(mjd-mjdepoch)/365.
-                DEC = DEC0 + (PMDEC/1000./3600.)*(mjd-mjdepoch)/365."""
+                if not ignore_values:
+                    if cos[1].find(':') > 0 or cos[1].find(' ') > 0:
+                        cos[1] = cos[1].replace(' ',':')
+                        cos1 = cos[1].split(':')
+                        try:
+                            RA0 = (float(cos1[0]) + float(cos1[1])/60. + float(cos1[2])/3600.) * 360. / 24.
+                        except:
+                            logger('Warn: Problem with the right ascension of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
+                            break
+                    else:           # Already stored as float (asuming degree)
+                        try:
+                            RA0 = float(cos[1])
+                        except:
+                            logger('Warn: Problem with the right ascension of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
+                            break
+                    if cos[2].find(':') > 0 or cos[2].find(' ') > 0:
+                        cos[2] = cos[2].replace(' ',':')
+                        cos2 = cos[2].split(':')
+                        try:
+                            DEC0 = np.absolute(float(cos2[0])) + float(cos2[1])/60. + float(cos2[2])/3600.
+                        except:
+                            logger('Warn: Problem with the declination of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
+                            break
+                        if cos2[0][0] == '-':       # negative Declination
+                            DEC0 = -DEC0
+                    else:
+                        try:
+                            DEC0 = float(cos[2])
+                        except:
+                            logger('Warn: Problem with the declination of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
+                            break
+                    PMRA = float(cos[3])    # mas/yr
+                    PMDEC = float(cos[4])   # mas/yr
+                    
+                    """ # Steps to adjust the coordinates to the correct position, not necessary anymore because not using CERES routines to get BCVel and the barycorrpy package takes care of it
+                    mjdepoch = 2451545.0 - constants.MJD0 + (float(cos[5]) - 2000.)
+        
+                    RA  = RA0 + (PMRA/1000./3600.)*(mjd-mjdepoch)/365.
+                    DEC = DEC0 + (PMDEC/1000./3600.)*(mjd-mjdepoch)/365."""
                 obnames = [obname]
                 found = True
                 break
+        if found:
+            break       # otherwise cos will change
     if not found:
         cos = []
         if warn_notfound:
@@ -6391,7 +6406,7 @@ def get_object_site_from_header(params, im_head, obnames, obsdate):
             jephem.compute(gobs)
             params['ra'] = -999                                             # If not changed this means the object coordinates were made up
             for obname in obnames:
-                if obname.lower().find('sun') == 0:
+                if obname.lower().find('sun') == 0:     # check with prepare_file_list.py: calibration_parameters_coordinates_UI(), creating the widgets
                     params['ra']          = sephem.ra
                     params['dec']         = sephem.dec
                     source_radec = 'The object coordinates are derived from the calculated solar ephermeris.'

@@ -591,7 +591,7 @@ class TkCanvasGrid:                                             # Completely new
         canvas.config(width=width_data, height=height_data)
         canvas.update()     # adds the winfo information
 
-        #print self.master.winfo_height(), self.master.winfo_width(), self.master.winfo_screenwidth(), self.master.winfo_screenheight(), self.master.winfo_geometry(), self.master.geometry()   # all of these only show a size of 1x1
+        #print(self.master.winfo_height(), self.master.winfo_width(), self.master.winfo_screenwidth(), self.master.winfo_screenheight(), self.master.winfo_geometry(), self.master.geometry())   # all of these only show a size of 1x1
         if self.wprops.get('fullscreen', False):
             self.master.geometry(screeen_geometry)
 
@@ -655,20 +655,20 @@ class TkCanvasGrid:                                             # Completely new
             columnspan = widgets[widget].get('columnspan', 1)
             orientation = widgets[widget].get('orientation', None)
             wraplength = widgets[widget].get('wraplength', None)
+            state = widgets[widget].get('state', None)
 
-            if kind == 'Label':                     #added by ronny
-                w = Tk.Label(parent, text=label, wraplength=wraplength)    #added by ronny
+            if kind == 'Label':
+                w = Tk.Label(parent, text=label, wraplength=wraplength)
             elif kind == 'TextEntry':
                 if name not in self.data:
                     self.data[name] = start
                 w = self.add_TextEntry(parent, name=name, fmt=fmt, minval=minval,
-                                       maxval=maxval,
-                                       valid_function=vfunc, width=width)
-            elif kind == 'CheckBox':                    #added by ronny
-                if name not in self.data:                #added by ronny
-                    self.data[name] = start                #added by ronny
+                                       maxval=maxval, valid_function=vfunc, width=width, state=state)
+            elif kind == 'CheckBox':
+                if name not in self.data:
+                    self.data[name] = start
                 w = self.add_CheckBox(parent, name=name, desc=label,
-                                      comment=comment)                #added by ronny
+                                      comment=comment, state=state)
             elif kind == 'ExitButton':
                 if result is not None:
                     self.data[name] = result
@@ -704,6 +704,7 @@ class TkCanvasGrid:                                             # Completely new
         minval = kwargs.get('minval', None)
         maxval = kwargs.get('maxval', None)
         vfunc = kwargs.get('valid_function', None)
+        state = kwargs.get('state', None)
 
         if fmt == int:
             entryv = Tk.StringVar(value=self.data[name])
@@ -718,7 +719,7 @@ class TkCanvasGrid:                                             # Completely new
         vcmd += self.vcmdargs + [minval, maxval, fmt, name, self.data[name]]
         entry = Tk.Entry(master, textvariable=entryv, bg=background,
                          fg=foreground, width=width,
-                         validate="all", validatecommand=tuple(vcmd))
+                         validate="all", validatecommand=tuple(vcmd), state=state)
         entry.focus_set()
         self.validation[name] = True
         self.add_entry(name, entry, vfunc)
@@ -727,9 +728,10 @@ class TkCanvasGrid:                                             # Completely new
         return entry
 
     def add_CheckBox(self, master, name, desc, **kwargs):     # added by ronny
+        state = kwargs.get('state', None)
         self.entries[name] = Tk.IntVar()                                # added by ronny
         self.funcs[name] = lambda x: x                                  # added by ronny
-        checkbox = Tk.Checkbutton(master, text=desc, variable=self.entries[name], onvalue=True, offvalue=False)     # added by ronny, variable has to be set before, different to TextEntry
+        checkbox = Tk.Checkbutton(master, text=desc, variable=self.entries[name], onvalue=True, offvalue=False, state=state)     # added by ronny, variable has to be set before, different to TextEntry
         self.entries[name].set(self.data[name])                         # added by ronny, set the startvalue
         self.validation[name] = True
         self.fmts[name] = bool
@@ -1002,7 +1004,7 @@ if __name__ == "__main__":
         y = np.sin(2 * np.pi * x)
         ax.plot(x, y)
         ax.set(xlabel='x', ylabel='y')
-        print testronny,testronny2
+        print(testronny,testronny2)
 
     pkwargs = dict(ax=frame, xlow=xlow, xhigh=xhigh, testronny=testronny, testronny2=testronny2)
 

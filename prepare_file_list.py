@@ -102,7 +102,7 @@ def add_new_rawfiles_file_list(params, file_list=[]):
                 for i in range(len(posi)):
                     if posi2[i] >= 0:
                         fiber2 = 'cont'
-                        if posi[i] <> posi2[i]:                 # both fibers
+                        if posi[i] != posi2[i]:                 # both fibers
                             fiber1 = 'cont'
                     elif posi[i] >= 0:
                         fiber1 = 'cont'
@@ -119,7 +119,7 @@ def add_new_rawfiles_file_list(params, file_list=[]):
                 for i in range(len(posi)):
                     if posi2[i] >= 0:
                         fiber1 = 'wave'
-                        if posi[i] <> posi2[i]:                 # both fibers
+                        if posi[i] != posi2[i]:                 # both fibers
                             fiber2 = 'wave'
                     elif posi[i] >= 0:
                         fiber2 = 'wave'
@@ -138,7 +138,7 @@ def add_new_rawfiles_file_list(params, file_list=[]):
                             not (fnlow.find('arc') == 0 or fnlow.find('thar') == 0 or fnlow.find('th_ar') == 0 or fnlow.find('thorium') == 0 or fnlow.find('une') == 0) and \
                             fiber1 not in ['rflat', 'cont', 'dark', 'bias', 'wave']:
                     fiber1 = 'science'
-                    if fnlow.find('harps') <> -1:
+                    if fnlow.find('harps') != -1:
                         fiber2 = 'wave'
                 im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
                 extract = ''
@@ -154,13 +154,13 @@ def check_raw_files_infos(params, file_list):
     blazecor_fib2 = 'none'
     exist_bias, exist_rflat, exp_darks = False, False, []
     for entry in file_list:
-        if entry[1] == 'cont' and entry[2] == 'none' and blazecor_fib2 <> 'dark':              # use entry[2] == 'wave' for cont only if entry[2] == 'none' not available
+        if entry[1] == 'cont' and entry[2] == 'none' and blazecor_fib2 != 'dark':              # use entry[2] == 'wave' for cont only if entry[2] == 'none' not available
             sflat_fib2 = 'none'
         if entry[1] == 'cont' and entry[2] == 'dark':              # use entry[2] == 'dark' for cont only if entry[2] == 'none' not available
             sflat_fib2 = 'dark'
         if entry[1] == 'cont' and entry[2] == 'wave':               # use entry[2] == 'none' for arcflat only if entry[2] == 'wave' not available
             blazecor_fib2 = 'wave'
-        if entry[1] == 'cont' and entry[2] == 'dark' and blazecor_fib2 <> 'wave':   # use entry[2] == 'dark' for blazecor only if entry[2] == 'wave' not available
+        if entry[1] == 'cont' and entry[2] == 'dark' and blazecor_fib2 != 'wave':   # use entry[2] == 'dark' for blazecor only if entry[2] == 'wave' not available
             blazecor_fib2 = 'dark'
         if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave') and entry[2] == 'wave':
             cal2_l_exp = max(entry[3], cal2_l_exp)
@@ -280,7 +280,7 @@ def create_configuration_file(params, file_list):
     easy_assignments.append(['w2s' , 'cal2_s'  , 'arc'    ])       # Wavelength calibration (standard)
     easy_assignments.append(['w2l' , 'cal2_l'  , 'arc'    ])       # Wavelength calibration (standard)
     for entry in file_list:                                         # Extraction is set up below
-        #if entry[0].find('#') <> -1:        # comment # found
+        #if entry[0].find('#') != -1:        # comment # found
         #    continue
         #print entry, conf_data
         param = ''
@@ -305,7 +305,7 @@ def create_configuration_file(params, file_list):
                 param = 'wavelengthcal'
                 conf_data, warn = create_parameters(conf_data, warn, param, param, [param], exist_bias, exist_rflat, exp_darks, entry)
                 continue                        # otherwise Warn from below will be triggered
-            if extraction.lower().find('e') <> 0:        # use find as len(extraction) might be 0
+            if extraction.lower().find('e') != 0:        # use find as len(extraction) might be 0
                 # warn.append('Warn: I dont know what to do with the extraction parameter {0} (it doesnt begin with "e") for file {1}. This spectrum will therefore not be extracted. Please check {2} and run the script again, if you perform changes.'.format(extraction, entry[0], params['raw_data_file_list'] ))
                 continue                                # The lines remaining in the for loop are only to be executed when it's about extraction, otherwise something might readded another time
             if extraction.lower().find('ec') == 0:            # combine data before extraction
@@ -470,7 +470,7 @@ def file_list_UI(file_list):
               '-- Further settings (manual): e.g. to combine files\n   before extraction\n'+\
               '(*) not for single fiber spectrographs\n'+\
               '(**) important for unstabilised single fiber\n     spectrographs\n\n'+\
-              'The automatic assignment is based on the parameters\n raw_data_* in conf.txt (and in procedure\n add_new_rawfiles_file_list). '
+              'The automatic assignment is based on the parameters\n raw_data_* in {0} (and in procedure\n add_new_rawfiles_file_list). '.format(CONFIGFILE)
               #'- Type of Science and Calibration\n  fibers are derived from header or\n  filename and can be changed here\n  (optional)\n'+\     # Allows modification of the fiber content
     for ii, commentii in enumerate(explain.split('\n')):
         if len(commentii) > 0:
@@ -483,7 +483,7 @@ def file_list_UI(file_list):
     if len(file_list) > 100:
         logger('Info: A GUI with {0} elements will be created, on some machines that can take up to a few minutes.'.format(len(widgets)))
 
-    gui3 = tkc.TkCanvasGrid(title='HiFlEx: Asigning Files to extraction steps (What file contains what data)', 
+    gui3 = tkc.TkCanvasGrid(title='HiFLEx: Asigning Files to extraction steps (What file contains what data)', 
                             kwargs=pkwargs,widgets=widgets, widgetprops=wprops )
     gui3.master.mainloop()
     
@@ -523,8 +523,9 @@ def get_observed_objects(params, conf_data):
     object_information_full = []
     object_information_head = []
     object_files = [ params['object_file'] ]
+    object_file_no_path = params['object_file'].split('/')[-1]
     for entry in [ params['result_path'] ] + params['raw_data_paths']:      # Check also the result and raw data paths for object names
-        object_files.append( entry + params['object_file'] )
+        object_files.append( entry + object_file_no_path )
     Simbad.add_votable_fields("pmra")  # Store proper motion in RA
     Simbad.add_votable_fields("pmdec")  # Store proper motion in Dec.
     for entry in sorted(conf_data):
@@ -548,11 +549,15 @@ def get_observed_objects(params, conf_data):
             if found:
                 continue
             # Search if the object exists in an availible file
+            allentries_end = ['', '']
             for object_file in object_files:
-                ra2, dec2, epoch, pmra, pmdec, obnames, allentries = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using ceres to calculated BCV
+                ra2, dec2, epoch, pmra, pmdec, obnames, allentries = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False, ignore_values=True)        # mjd=0 because because not using ceres to calculated BCV
                 if ra2 !=0 or dec2 != 0:                                           # Found the object
                     found = True
                     break
+                if len(allentries) > 0:
+                    if len(allentries) == 9:
+                        allentries_end = allentries[7:]
             if not found:
                 # Search the information on Simbad
                 for obname in obnames:
@@ -566,27 +571,184 @@ def get_observed_objects(params, conf_data):
                         #print obname, simbad_results
                         obnames = [obname]
                         # Simbad quaries standard in J2000, this might change in future
-                        allentries = [ obname, simbad_results[0]['RA'], simbad_results[0]['DEC'], 2000, simbad_results[0]['PMRA'], simbad_results[0]['PMDEC'], 1, '', '' ]
+                        allentries = [ obname, simbad_results[0]['RA'], simbad_results[0]['DEC'], simbad_results[0]['PMRA'], simbad_results[0]['PMDEC'], 2000, 1] + allentries_end
                         found = True
                         break
             if not found:               # Create an empty list
-                allentries = [obnames[0]] + ['']*8
+                allentries = [obnames[0]] + ['']*6 + allentries_end
             allentries.append([im_name])
             # Get the information from the header
             im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)
             parms, source_radec, source_obs, mephem = get_object_site_from_header(params, im_head, obnames, obsdate_midexp)
             head_info = ['']*5
-            if source_radec.find('') != -1:
+            if source_radec.find('from the image header') != -1:
                 head_info = [ params['ra'] , params['dec'], params['pmra'], params['pmdec'], params['epoch'] ]
             #Put the information into a list
             object_information_full.append(allentries)
             object_information_head.append(head_info)
     return object_information_full, object_information_head
 
-def  calibration_parameters_coordinates_UI(conf_data, object_information_full, object_information_head):
+def calibration_parameters_coordinates_UI(conf_data, object_information_full, object_information_head):
+    max_length = 1024
+    def add_widgets(widgets, pkwargs, ii, ftype, doneftype):
+        if '{0}_rawfiles'.format(ftype) not in conf_data.keys() or ftype in doneftype:
+            return widgets, pkwargs, ii, doneftype
+            
+        widgets['type_{0}'.format(ii)] = dict(label=ftype, kind='Label', row=ii, column=0, columnspan=1, orientation=Tk.W)
+        if 'master_{0}_filename'.format(ftype) in conf_data.keys() and (ftype.find('extract') == -1 or ftype.find('extract_combine') != -1):
+            elname = 'master_{0}_filename'.format(ftype)
+            pkwargs[elname] = conf_data[elname]
+            widgets[elname] = dict(kind='TextEntry', fmt=str, start=pkwargs[elname], width=30, row=ii, column=1, columnspan=3, orientation=Tk.W)
+        elname = '{0}_calibs_create'.format(ftype)
+        pkwargs[elname] = conf_data[elname]
+        widgets[elname] = dict(kind='TextEntry', fmt=str, start=pkwargs[elname], width=50, row=ii, column=4, columnspan=5, orientation=Tk.W)
+        label = conf_data['{0}_rawfiles'.format(ftype)]
+        if len(label) > max_length:
+            label = label[:max_length-3] + '...'        # Otherwise: X Error of failed request:  BadAlloc (insufficient resources for operation)
+        widgets['files_{0}'.format(ii)]  = dict(label=label, kind='Label', row=ii, column=9, columnspan=1000, orientation=Tk.W)
+        doneftype.append(ftype)
+        ii += 1
+        return widgets, pkwargs, ii, doneftype
     
+    def vfunc_float(xs):
+        try:
+            value = float(xs)
+            return True, value
+        except:
+            return False, ('Error, input must be float')
     
+    # define widgets
+    pkwargs = dict()
+    widgets = dict()
     
+    # Add widgets for fits_conf.txt
+    widgets['type']        = dict(label='Type', kind='Label', row=0, column=0, columnspan=1, orientation=Tk.W)
+    widgets['name_master'] = dict(label='Name of Master file', kind='Label', row=0, column=1, columnspan=3, orientation=Tk.W)
+    widgets['calibs']      = dict(label='Calibrations to be applied', kind='Label', row=0, column=4, columnspan=5, orientation=Tk.W)
+    widgets['files_used']  = dict(label='Files included (see last GUI or {0} to change the assigned files)'.format(params['raw_data_file_list']), kind='Label', row=0, column=9, columnspan=1000, orientation=Tk.W)
+    darks = []
+    for entry in sorted(params['exp_darks']):
+        darks.append('dark{0}'.format(entry))
+    doneftype = []
+    ii = 1
+    for ftype in ['bias'] + darks + ['rflat', 'trace1', 'trace2', 'blazecor', 'cal2_l', 'cal2_s', 'cal1_l', 'cal1_s', 'wavelengthcal', 'wavelengthcal2']:
+            widgets, pkwargs, ii, doneftype = add_widgets(widgets, pkwargs, ii, ftype, doneftype)
+    for entry in sorted(conf_data.keys()):
+        if entry.find('_rawfiles') >= 0:
+            ftype = entry.replace('_rawfiles','')
+            widgets, pkwargs, ii, doneftype = add_widgets(widgets, pkwargs, ii, ftype, doneftype)
+    
+    widgets['accept1'] = dict(label='Accept', kind='ExitButton', row=ii+1, column=6, rowspan=2, columnspan=2)
+    ii += 3
+    
+    # Add widgets for object_list.txt
+    widgets['name'] = dict(label='Object\nname', kind='Label', row=ii, column=0, rowspan=2, columnspan=1, orientation=Tk.E)
+    widgets['header_info1'] = dict(label='Header information', kind='Label', row=ii, column=1, columnspan=2, orientation=Tk.E)
+    widgets['header_ra'] = dict(label='RA', kind='Label', row=ii+1, column=1)
+    widgets['header_dec'] = dict(label='DEC', kind='Label', row=ii+1, column=2)
+    widgets['header_info2'] = dict(label='Header information', kind='Label', row=ii, column=3, columnspan=3)
+    widgets['header_pmra'] = dict(label='PMRA', kind='Label', row=ii+1, column=3)
+    widgets['header_pmdec'] = dict(label='PMRA', kind='Label', row=ii+1, column=4)
+    widgets['header_epoch'] = dict(label='Epoch', kind='Label', row=ii+1, column=5)
+    widgets['use_header'] = dict(label='Use\nhead', kind='Label', row=ii, column=6, rowspan=2, columnspan=1)
+    widgets['ra'] = dict(label='RA\n<:>,< >,float', kind='Label', row=ii, column=7, rowspan=2, columnspan=1)
+    widgets['dec'] = dict(label='DEC\n<:>,< >,float', kind='Label', row=ii, column=8, rowspan=2, columnspan=1)
+    widgets['pmra'] = dict(label='PMRA\n[mas/yr]', kind='Label', row=ii, column=9, rowspan=2, columnspan=1)
+    widgets['pmdec'] = dict(label='PMDEC\n[mas/yr]', kind='Label', row=ii, column=10, rowspan=2, columnspan=1)
+    widgets['epoch'] = dict(label='Epoch\n(number)', kind='Label', row=ii, column=11, rowspan=2, columnspan=1)
+    widgets['mask'] = dict(label='Mask (optional)\nG2,K5,M2', kind='Label', row=ii, column=12, rowspan=2, columnspan=1)
+    widgets['rot'] = dict(label='rotation (optional)\n[km/s]', kind='Label', row=ii, column=13, rowspan=2, columnspan=1)
+    ii += 2
+    for jj, entry in enumerate(object_information_full):
+        widgets['name_{0}'.format(jj)]  = dict(label=entry[0], kind='Label', row=ii+jj, column=0, columnspan=1, orientation=Tk.E)
+        state = None
+        if entry[0].lower().find('sun') == 0 or entry[0].lower().find('moon') == 0 or entry[0].lower().find('jupiter') == 0:     # Check with get_object_site_from_header()
+            for i in range(1,6):
+                entry[i] = ''
+            state = Tk.DISABLED
+        pkwargs['ra_{0}'.format(jj)]    = entry[1]
+        widgets['ra_{0}'.format(jj)]    = dict(kind='TextEntry', fmt=str, start=pkwargs['ra_{0}'.format(jj)], width=12, row=ii+jj, column=7, columnspan=1, state=state)
+        pkwargs['dec_{0}'.format(jj)]   = entry[2]
+        widgets['dec_{0}'.format(jj)]   = dict(kind='TextEntry', fmt=str, start=pkwargs['dec_{0}'.format(jj)], width=12, row=ii+jj, column=8, columnspan=1, state=state)
+        pkwargs['pmra_{0}'.format(jj)]  = entry[3]
+        widgets['pmra_{0}'.format(jj)]  = dict(kind='TextEntry', fmt=str, valid_function=vfunc_float, start=pkwargs['pmra_{0}'.format(jj)], width=7, row=ii+jj, column=9, columnspan=1, state=state)
+        pkwargs['pmdec_{0}'.format(jj)] = entry[4]
+        widgets['pmdec_{0}'.format(jj)] = dict(kind='TextEntry', fmt=str, valid_function=vfunc_float, start=pkwargs['pmdec_{0}'.format(jj)], width=7, row=ii+jj, column=10, columnspan=1, state=state)
+        pkwargs['epoch_{0}'.format(jj)] = entry[5]
+        widgets['epoch_{0}'.format(jj)] = dict(kind='TextEntry', fmt=str, valid_function=vfunc_float, start=pkwargs['epoch_{0}'.format(jj)], width=6, row=ii+jj, column=11, columnspan=1, state=state)
+        pkwargs['mask_{0}'.format(jj)]  = entry[7]
+        widgets['mask_{0}'.format(jj)]  = dict(kind='TextEntry', fmt=str, start=pkwargs['mask_{0}'.format(jj)], width=5, row=ii+jj, column=12, columnspan=1)
+        pkwargs['rot_{0}'.format(jj)]   = entry[8]
+        widgets['rot_{0}'.format(jj)]   = dict(kind='TextEntry', fmt=str, valid_function=vfunc_float, start=pkwargs['rot_{0}'.format(jj)], width=5, row=ii+jj, column=13, columnspan=1)
+        # simbad name at end, next to button
+        #pkwargs['simbad_name_{0}'.format(jj)] = entry[0]
+        #widgets['simbad_name_{0}'.format(jj)] = dict(kind='TextEntry', fmt=str, start=pkwargs['simbad_name_{0}'.format(jj)], width=10, row=ii+jj, column=4, columnspan=1, orientation=Tk.W)
+
+        if object_information_head[jj][0] == '':
+            pkwargs['use_header_{0}'.format(jj)]   = False
+            widgets['use_header_{0}'.format(jj)]   = dict(label=None,  kind='CheckBox', start=pkwargs['use_header_{0}'.format(jj)], row=ii+jj, column=6, state=Tk.DISABLED)
+            continue
+        entry = object_information_head[jj]
+        widgets['header_ra_{0}'.format(jj)]    = dict(label=entry[0], kind='Label', row=ii+jj, column=1)
+        widgets['header_dec_{0}'.format(jj)]   = dict(label=entry[1], kind='Label', row=ii+jj, column=2)
+        widgets['header_pmra_{0}'.format(jj)]  = dict(label=entry[2], kind='Label', row=ii+jj, column=3)
+        widgets['header_pmdec_{0}'.format(jj)] = dict(label=entry[3], kind='Label', row=ii+jj, column=4)
+        widgets['header_epoch_{0}'.format(jj)] = dict(label=entry[4], kind='Label', row=ii+jj, column=5)
+        pkwargs['use_header_{0}'.format(jj)]   = True
+        widgets['use_header_{0}'.format(jj)]   = dict(label=None,  kind='CheckBox', start=pkwargs['use_header_{0}'.format(jj)], row=ii+jj, column=6)
+    
+    ii += jj+1
+    widgets['accept2'] = dict(label='Accept', kind='ExitButton', row=ii, column=6, rowspan=2, columnspan=2)
+    ii += 2
+    
+    explain = 'Explanation of upper half:\n'+\
+              '  This assigns the calibration that will be applied to files of the different types before creating the master file or before extracting the spectra. The following comma separated options are possible:\n'+\
+              '     subframe, badpx_mask, bias, dark, flat, background, normalise, combine_mean, combine_sum\n'+\
+              '     Please check the manual for more information on these options.\n'+\
+              '  The assigned calibration steps are read from {0} (*_calibs_create_g)\n'.format(CONFIGFILE)+\
+              '  The information from this part of the GUI will be stored in {0}.\n'.format(params['configfile_fitsfiles'])+\
+              '\nExplanation of the lower half:\n'+\
+              '  For each object to be extracted the coordinates are derived/displayed here. If the header information is available then the information is shown and the user can decide if this information should be used.\n'+\
+              '  The editable coordinates are taken from the file {0}, for which is also checked in the result and raw data path. If the object does not exist in the file, then Simbad is searched using the Object name.\n'.format(params['object_file'])+\
+              '  The user can modify this information, which should be correct to perform correct barycentric correction. The information is then stored in {0}, overwriting the previous information.\n'.format(params['object_file'])+\
+              '     The RA and DEC can be given in hour or degree format. The optional parameters "mask" and "rotation speed" are used if RV analysis with the CERES pipeline is performed.'
+    for jj, commentjj in enumerate(explain.split('\n')):
+        if len(commentjj) > 0:
+            widgets['explain_{0}'.format(jj)] = dict(label=commentjj, kind='Label', row=ii+jj, column=0, columnspan=20, orientation=Tk.W )#, wraplength=100 )      
+    
+    wprops = dict(fullscreen=False )
+    #wprops['width_data'] = 800   # not neccssary, as uses the automatic width
+    
+    gui3 = tkc.TkCanvasGrid(title='HiFLEx: Asigning Calibration and Coordinates', 
+                            kwargs=pkwargs,widgets=widgets, widgetprops=wprops )
+    gui3.master.mainloop()
+    
+    # Get the information from the GUI
+    for entry in conf_data.keys():      # For the conf data
+        if entry in gui3.data.keys():
+            conf_data[entry] = gui3.data[entry]
+            if entry.find('_calibs_create') != -1:
+                if len(conf_data[entry]) > 0:
+                    if conf_data[entry].find('[') + conf_data[entry].find(']') == -2:
+                        conf_data[entry] = '[{0}]'.format(conf_data[entry])                     # add brackets
+    
+    object_information = []
+    for ii in range(len(object_information_full)):
+        enabled = {True:0,False:1}[gui3.data['use_header_{0}'.format(ii)]]
+        if len(object_information_full[ii][1]) >= 3:            # The coordinates were read from a file
+            if abs(object_information_full[ii][6]) < 0.9:
+                enabled = False                                 # Object was disabled before
+        if ( len(gui3.data['mask_{0}'.format(ii)]) < 1 and type(gui3.data['rot_{0}'.format(ii)]).__name__ == 'str' ) and ( len(gui3.data['ra_{0}'.format(ii)]) < 3 or len(gui3.data['ra_{0}'.format(ii)]) < 3 ):
+            continue                                            # Both coordinates are not complete and Mask or rotation is not there -> no useful information
+        if (len(gui3.data['ra_{0}'.format(ii)]) >= 3 and len(gui3.data['dec_{0}'.format(ii)]) >= 3):     # Fill pm* and epoch if coordinates are full
+            for entry in ['pmra', 'pmdec']:
+                if type(gui3.data['{1}_{0}'.format(ii, entry)]).__name__ == 'str':
+                    gui3.data['{1}_{0}'.format(ii, entry)] = 0
+            if type(gui3.data['epoch_{0}'.format(ii)]).__name__ == 'str':
+                gui3.data['epoch_{0}'.format(ii)] = 2000
+        object_information.append([ object_information_full[ii][0], gui3.data['ra_{0}'.format(ii)], gui3.data['dec_{0}'.format(ii)], 
+                                    gui3.data['pmra_{0}'.format(ii)], gui3.data['pmdec_{0}'.format(ii)], gui3.data['epoch_{0}'.format(ii)],
+                                    enabled, gui3.data['mask_{0}'.format(ii)], gui3.data['rot_{0}'.format(ii)] ])
     
     return conf_data, object_information
 
@@ -597,10 +759,10 @@ if __name__ == "__main__":
     # get the available list
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
     try:
-        file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' ']) # old way of reading the data, To stay backwards compatible, can be removed in a few versions after v0.4.1
-    except:
         #file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])     #new way of storing the data
         file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '])     #new way of storing the data
+    except:
+        file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' ']) # old way of reading the data, To stay backwards compatible, can be removed in a few versions after v0.4.1
     number_old_entries = len(file_list)
     
     # get the new files
@@ -615,7 +777,10 @@ if __name__ == "__main__":
     file_list = sorted(file_list, key=operator.itemgetter(4,0))           #itemgetter(1,2,3,4,0)
     
     # Show the results in a GUI
-    file_list, file_list_commented = file_list_UI(file_list)
+    if not ('nogui' in sys.argv or '-nogui' in sys.argv or '--nogui' in sys.argv):
+        file_list, file_list_commented = file_list_UI(file_list)
+    else:
+        file_list_commented = file_list
     
     # Save the list, show to user, so the user can disable files, read the list
     file = open(params['raw_data_file_list'],'w')
@@ -646,20 +811,16 @@ if __name__ == "__main__":
         file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5] ))
     file.close()
     
-    """
-    if not ('nocheck' in sys.argv or '-nocheck' in sys.argv or '--nocheck' in sys.argv):
+    # If necessary show the text file instead of the GUI
+    if ('nogui' in sys.argv or '-nogui' in sys.argv or '--nogui' in sys.argv):
         start = time.time()
         rtn = os.system('{1} {0}'.format(params['raw_data_file_list'], params['editor'] ))
-        if rtn <> 0 or time.time()-start < 10:
+        if rtn != 0 or time.time()-start < 10:
             print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
             raw_input('To continue please press Enter\t\t')
-     
-    time.sleep(0.3)
-    file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
-    file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
-    
-    file_list = sorted(file_list, key=operator.itemgetter(4,0))       # itemgetter(1,2,3,0)
-    """
+        file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
+        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
+        file_list = sorted(file_list, key=operator.itemgetter(4,0))       # itemgetter(1,2,3,0)
     
     # Reset the list of parameters in case important data was deleted, e.g. all Darks
     del params['cal2_l_exp']
@@ -676,15 +837,26 @@ if __name__ == "__main__":
     
     # Create the data for fits_conf.txt
     conf_data = create_configuration_file(params, file_list)
-    print(conf_data)
     
     # What objects were observed:
     object_information_full, object_information_head = get_observed_objects(params, conf_data)
     
     # Select the calibration parameters and Object coordinates in a GUI
-    #conf_data, object_information = calibration_parameters_coordinates_UI(conf_data, object_information_full, object_information_head)
+    conf_data, object_information = calibration_parameters_coordinates_UI(conf_data, object_information_full, object_information_head)
     
     # Append information to params['object_file']
+    lines_txt = read_text_file(params['object_file'], no_empty_lines=True, warn_missing_file=False)
+    object_names = convert_readfile(lines_txt, [str], delimiter=',', replaces=[['\t',',']], expand_input=True)
+    new_obj_names = []
+    if len(object_information) > 0:
+        with open(params['object_file'],'w') as file:
+            for entry in object_information:
+                file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5},{6},{7},{8}\n'.format( entry[0], entry[1], entry[2], entry[3], entry[4], entry[5], entry[6], entry[7], entry[8] ))
+                new_obj_names.append(entry[0])
+            for ii in range(len(object_names)):
+                if object_names[ii][0] not in new_obj_names:
+                    file.write(lines_txt[ii]+'\n')
+                    new_obj_names.append(object_names[ii][0])
 
     # ??? Create a GUI that let's the user modify the configuration data and that checks for the coordinates of the objects in Simbad (or header): show simbad -> modify by user, check that header is overwritten by user coordinates in procedures
     
@@ -708,12 +880,12 @@ if __name__ == "__main__":
     file.write('# \n') 
     for paramtype in ['rawfiles', 'calibs_create', 'master']:
         file.write('\n')
-        for entry in sorted(conf_data):
+        for entry in sorted(conf_data.keys()):
             if entry.find(paramtype) >= 0:
                 file.write('{0} = {1} \n'.format(entry.ljust(24), conf_data[entry]))
     file.close()
     
-    logger('Info: The calibration file for handling the raw data has been created. Please check {0} before starting the data reduction (reduction_day.py)'.format(params['configfile_fitsfiles']))
+    logger('Info: The calibration file for handling the raw data has been created. Please check {0} before starting the data reduction (hiflex.py)'.format(params['configfile_fitsfiles']))
     
     
 
