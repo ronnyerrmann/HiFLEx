@@ -32,7 +32,7 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 
-\title{User Manual for Data Reduction using the HiFLEx package\\ Working version: v0.4.2}
+\title{User Manual for Data Reduction using the HiFLEx package\\ Working version: v0.4.3}
 \date{January, 2020}
 \author{Ronny Errmann, EXOhSPEC team\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
@@ -120,7 +120,15 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 \subsection*{v0.4.2}
 \begin{itemize}\setlength\itemsep{0em}
   \item Change to the new name: HiFLEx
+  \item GUI for preparing the files
   \item \textit{localbackground} became \textit{background}
+  \item Bug-Fixing
+\end{itemize}
+
+\subsection*{v0.4.3}
+\begin{itemize}\setlength\itemsep{0em}
+  \item GUI for creating a new wavelength solution
+  \item Bug-Fixing
 \end{itemize}
 % -------------------------------------------------------------------------------------------
 %\noindent
@@ -368,120 +376,143 @@ After checking the results (see Chapter~\ref{section:results_pipeline}), one mig
 
 \subsection{Creating a new wavelength solution}
 \label{section:create_new_wave_solution}
-If no previous wavelength solution exist, then wavelengths and pixel need to correlated manually. In this case the parameter \verb|original_master_wavelensolution_filename| needs to point to a file, which does not exist (e.g. \textit{master\_wavelength\_manual.fits}). Then the python scrip can be run normally. It will perform most of the steps described in Section~\ref{Section:pipeline_steps_general} and stops after searching for the lines in the emission line spectra with the message:
-\begin{lstlisting}[style=base, basicstyle=\small]
-Error: Files for creating the wavelength solution do not exist ...
-\end{lstlisting}
-The order and pixel position of all identified lines, as well as the width and the height of the Gaussian fit, are stored in the file given in parameter \verb|logging_found_arc_lines| (standard: \textit{logging/arc\_lines\_found.txt}). This file can be opened (easiest in a spreadsheet application) and the corresponding wavelengths can be added to some of the lines (see Table~\ref{Tab:create_wavelength_solution}). The lines for each order are sorted by the highest absolute flux value (this is not the height of the Gaussian fit) of the line, the saturated lines are excluded. Please note that sometimes the side-wing of a saturated line is listed in the found lines, these lines should be ignored as well.
-
-The plots of the extracted spectra, which are stored in the file given in \verb|logging_arc_line_identification_spectrum| (extended by the pipeline with \textit{\_manual.pdf}) can be used for visual guiding (for an example see Figure~\ref{Figure:create_wavelength_solution}). 
-Tests have shown that providing about 10 lines every 5 to 10 orders is enough for the pipeline to do the fitting in a good way. However, it is important that the lines cover as much of the CCD image as possible (e.g. covering most of the orders, inclusive the outermost lines of the orders). In case of a completely different setup an iterative approach might be necessary.
+If no previous wavelength solution exist, then wavelengths and pixel need to correlated manually. In this case the parameter \verb|original_master_wavelensolution_filename| needs to point to a file, which does not exist (e.g. \textit{master\_wavelength\_manual.fits}). Then the python scrip can be run normally. It will perform most of the steps described in Section~\ref{Section:pipeline_steps_general} and then open a GUI similar to the one shown in Figure~\ref{Fig:UI_create_manual_wavelengh_solution}.
 
 \begin{figure} 
-  \centering
-  \subfloat[Part of a Th-Ar spectrum without a wavelength solution from a medium resolution spectrograph.]
-  {\includegraphics[height=4.5cm]{./figures/create_wavesol_unknow_spec_MRES_o22}
-  }
-  \qquad
-  \subfloat[Th-Ar spectrum for which the wavelength solution is known from a high-resolution spectrograph. The lines in red are the identified lines, green lines can be ignored.]
-  {\includegraphics[height=4.5cm]{./figures/create_wavesol_know_spec_UH_o26.png}
-  \label{Figure:create_wavelength_solution_identified}  
-  }
-  \caption{The emission lines for a short (orange) and a long (blue) exposure time. The left figure covers about the same wavelength range as the Th-Ar spectrum with known wavelength solution in the right figure. The right image can be used to correlate pixel-positions and wavelengths in the left spectrum (see Table~\ref{Tab:create_wavelength_solution}).
-    \label{Figure:create_wavelength_solution}}
+  \begin{center}
+    \includegraphics[width=\textwidth]{./figures/UI_create_manual_wavelengh_solution}
+  \end{center} 
+  \caption{Window to create a new wavelength solution showing short and long exposed emission line spectrum of the current selected order and the previous and next order above and below, respectively. The bottom of the plot shows the identified lines in pixel and, if a wavelength was given, this wavelength (in the other plots only the wavelength is shown). Red shows lines for which a wavelength was provided. The list on the right show the pixel positions of the identified lines, ordered by peak intensity. \\
+    In this example the user clicked on the line around pixel 4836, this entry is then selected in the list on the right to add the wavelength. Clicking away from a line will make all wavelengths editable again. \\
+    To update the plot or to change the order, the button \textit{Update} can be used. If at least two wavelengths are given for the current order, then a linear fit will be performed. On top of the plot the lines from the emission line catalogue (parameter \textit{reference\_catalog}) are shown for this fit in red or blue (wavelength given or not). The marker gives the relative line strength from the catalogue. The example shows that a linear fit can be only a starting point as it does not fit the data well. The wavelengths from the linear fit is also given in the table of the pixel positions at the end of each line. If this number is off completely, then probably a line was misidentified by the user. \\
+    Once the wavelength for a few lines in a few orders has been given, the wavelength solution can be calculated. The offset between this order and the real order from the grating equation has to provided (the exact number is not needed). The results from the wavelength solution are used to plot the lines of the emission line catalogue in all three orders shown in the plot in red (lines used for the fit and green (lines available (only the brightest 30 lines)). For each pixel position the wavelength is calculated and given after the line properties. If only few orders are given, then low polynomial orders should be used. \\
+    If some of the identified lines should be deleted, then the user can mark the box at the front of the list entries and then update the plot. At the bottom of the list is the possibility to give pixel and wavelength for non-identified lines. After each update of the plot up to 3 entries can be added like this. The GUI is saving the data each time the plot is updated and at when accepting the wavelength solution.
+    \label{Fig:UI_create_manual_wavelengh_solution}}
 \end{figure}
 
-\begin{table}
-  \caption{Transforming the emission lines found by the pipeline into the file from which the pipeline will create the wavelength solution. A plot of the unknown and a reference spectrum can be found in Figure~\ref{Figure:create_wavelength_solution}.}
- \label{Tab:create_wavelength_solution}
-  \tiny
-  \subfloat[Example of the entry of the file from parameter \textbf{logging\_found\_arc\_lines} for one order.]{
-    \begin{tabular}{r r r r}
-22 & 244.85 & 1.02 & 2336.9 \\
-22 & 419.53 & 1.15 & 2085.9 \\
-22 & 365.86 & 1.09 & 1832.9 \\
-22 & 440.14 & 1.19 & 1571 \\
-22 & 186.32 & 0.93 & 1556.1 \\
-22 & 387.96 & 1.08 & 974.8 \\
-22 & 492.43 & 1.22 & 1013.3 \\
-22 & 334.94 & 1.06 & 658.1 \\
-22 & 173.30 & 1.54 & 505 \\
-22 & 503.78 & 1.23 & 368.8 \\
-22 & 298.19 & 1.04 & 316.3 \\
-22 & 276.35 & 0.95 & 247.6 \\
-22 & 351.78 & 1.09 & 197.2 \\
-22 & 532.12 & 1.06 & 108.5 \\
-22 & 464.67 & 1.14 & 123.7 \\
-22 & 142.64 & 0.95 & 161.1 \\
-22 & 233.87 & 0.87 & 56.7 \\
-22 & 91.77 & 1.16 & 80.8 \\
-22 & 397.14 & 1.18 & 47 \\
-22 & 257.30 & 1.15 & 32.4 \\
-22 & 37.76 & 1 & 76.2 \\
-22 & 73.44 & 0.99 & 50.2 \\
-    \end{tabular}}
-  \qquad
-  \subfloat[Example of \textit{pixel\_to\_wavelength.txt} for one order as seen in a spreadsheet. Lines without a wavelength can, but don't have to be deleted. The text in the columns with line type and following are optional. Columns have to be spaced by exactly one tabulator in the exported txt-file.]{
-    \begin{tabular}{ | r | r | r | l | l | l |}
-\hline
-22 & 47 & 244.85 & 6182.6216 & ThI &  \\
-\hline
-22 & 47 & 419.53 &           & 6212.719 & blend, not used \\
-\hline
-22 & 47 & 365.86 & 6203.4924 & Th I &  \\
-\hline
-22 & 47 & 440.14 & 6215.938  & Ar I &  \\
-\hline
-22 & 47 & 186.32 & 6172.2775 & Ar II &  \\
-\hline
-22 & 47 & 387.96 & 6207.22   & ThI &  \\
-\hline
-22 & 47 & 492.43 & 6224.5271 & ThI & faint blending \\
-\hline
-22 & 47 & 334.94 & 6198.2226 & ThI &  \\
-\hline
-22 & 47 & 173.30 &           &  & outside comparison \\
-\hline
-22 & 47 & 503.78 &           &  &  \\
-\hline
-22 & 47 & 298.19 & 6191.9052 &  &  \\
-\hline
-22 & 47 & 276.35 & 6188.125  &  & faint blending \\
-\hline
-22 & 47 & 351.78 &           &  &  \\
-\hline
-22 & 47 & 532.12 &           &  &  \\
-\hline
-22 & 47 & 464.67 &           &  &  \\
-\hline
-22 & 47 & 142.64 &           &  & outside comparison \\
-\hline
-22 & 47 & 233.87 & 6180.7049 & Th I &  \\
-\hline
-22 & 47 & 397.14 & 6208.6872 &  &  \\
-\hline
-22 & 47 & 257.30 & 6184.7897 &  &  \\
-\hline
-    \end{tabular}}
-\end{table}
-
-
-The correlated data needs to be saved into file \textit{pixel\_to\_wavelength.txt} (in the working directory) with the following tab-separated entries (exactly one separator between each column):
+The user can also prepare the correlated data between pixel and wavelength. It needs to be saved into file \textit{pixel\_to\_wavelength.txt} (in the working directory) with the following tab-separated entries (exactly one separator between each column):
 \begin{itemize}
   \item Aperture (starting at 0 for the reddest order)
-  \item Real/physical order from the grating equation (bigger than 0, usually between 40 and 120, doesn't have to be exactly the right one). \textbf{Warn:} the difference between columns 1 (Aperture) and 2 (Real/physical) has to be the same for all lines.
+  \item Real/physical order from the grating equation (bigger than 0, usually between 40 and 120, doesn't have to be exactly the right one). %\textbf{Warn:} the difference between columns 1 (Aperture) and 2 (Real/physical) has to be the same for all lines.
   \item Pixel
   \item Wavelength [\AA] (optional, can be also empty if the user wishes to copy the whole file from \verb|logging_found_arc_lines| and only adds wavelengths to some lines)
-  \item (optional: Type of the line (e.g. ThI, NeII) ).
-  \item (optional: Comments ).
+  \item (optional: Further entries (e.g. ThI, NeII, or comments) ).
 \end{itemize}
 
-Afterwards the script can run again and will use this data to create a new wavelength solution. Afterwards the output or logfile, and the file given in parameter \verb|logging_arc_line_identification_spectrum| (standard: \textit{logging/arc\_line\_identification\_spectrum.pdf}) should be checked. The brightest lines of the reference file should be marked in red with the brightest emission lines of the spectrum (e.g. see Figure~\ref{Figure:create_wavelength_solution_identified}. If some areas of the spectrum (some orders, or the right or left side of some orders) are not fitted well, please add more lines of the problematic area to \textit{pixel\_to\_wavelength.txt} and remove the following files (if standard names are used) before running the pipeline again:
-\begin{lstlisting}[style=base]
-rm master_wavelength*.fits 
-rm master_flat_spec_norm.fits
-rm extracted/*
-\end{lstlisting}
+% and stops after searching for the lines in the emission line spectra with the message:
+%\begin{lstlisting}[style=base, basicstyle=\small]
+%Error: Files for creating the wavelength solution do not exist ...
+%\end{lstlisting}
+%The order and pixel position of all identified lines, as well as the width and the height of the Gaussian fit, are stored in the file given in parameter \verb|logging_found_arc_lines| (standard: \textit{logging/arc\_lines\_found.txt}). This file can be opened (easiest in a spreadsheet application) and the corresponding wavelengths can be added to some of the lines (see Table~\ref{Tab:create_wavelength_solution}). The lines for each order are sorted by the highest absolute flux value (this is not the height of the Gaussian fit) of the line, the saturated lines are excluded. Please note that sometimes the side-wing of a saturated line is listed in the found lines, these lines should be ignored as well.
+%
+%The plots of the extracted spectra, which are stored in the file given in \verb|logging_arc_line_identification_spectrum| (extended by the pipeline with \textit{\_manual.pdf}) can be used for visual guiding (for an example see Figure~\ref{Figure:create_wavelength_solution}). 
+%Tests have shown that providing about 10 lines every 5 to 10 orders is enough for the pipeline to do the fitting in a good way. However, it is important that the lines cover as much of the CCD image as possible (e.g. covering most of the orders, inclusive the outermost lines of the orders). In case of a completely different setup an iterative approach might be necessary.
+%
+%\begin{figure} 
+%  \centering
+%  \subfloat[Part of a Th-Ar spectrum without a wavelength solution from a medium resolution spectrograph.]
+%  {\includegraphics[height=4.5cm]{./figures/create_wavesol_unknow_spec_MRES_o22}
+%  }
+%  \qquad
+%  \subfloat[Th-Ar spectrum for which the wavelength solution is known from a high-resolution spectrograph. The lines in red are the identified lines, green lines can be ignored.]
+%  {\includegraphics[height=4.5cm]{./figures/create_wavesol_know_spec_UH_o26.png}
+%  \label{Figure:create_wavelength_solution_identified}  
+%  }
+%  \caption{The emission lines for a short (orange) and a long (blue) exposure time. The left figure covers about the same wavelength range as the Th-Ar spectrum with known wavelength solution in the right figure. The right image can be used to correlate pixel-positions and wavelengths in the left spectrum (see Table~\ref{Tab:create_wavelength_solution}).
+%    \label{Figure:create_wavelength_solution}}
+%\end{figure}
+%
+%\begin{table}
+%  \caption{Transforming the emission lines found by the pipeline into the file from which the pipeline will create the wavelength solution. A plot of the unknown and a reference spectrum can be found in Figure~\ref{Figure:create_wavelength_solution}.}
+% \label{Tab:create_wavelength_solution}
+%  \tiny
+%  \subfloat[Example of the entry of the file from parameter \textbf{logging\_found\_arc\_lines} for one order.]{
+%    \begin{tabular}{r r r r}
+%22 & 244.85 & 1.02 & 2336.9 \\
+%22 & 419.53 & 1.15 & 2085.9 \\
+%22 & 365.86 & 1.09 & 1832.9 \\
+%22 & 440.14 & 1.19 & 1571 \\
+%22 & 186.32 & 0.93 & 1556.1 \\
+%22 & 387.96 & 1.08 & 974.8 \\
+%22 & 492.43 & 1.22 & 1013.3 \\
+%22 & 334.94 & 1.06 & 658.1 \\
+%22 & 173.30 & 1.54 & 505 \\
+%22 & 503.78 & 1.23 & 368.8 \\
+%22 & 298.19 & 1.04 & 316.3 \\
+%22 & 276.35 & 0.95 & 247.6 \\
+%22 & 351.78 & 1.09 & 197.2 \\
+%22 & 532.12 & 1.06 & 108.5 \\
+%22 & 464.67 & 1.14 & 123.7 \\
+%22 & 142.64 & 0.95 & 161.1 \\
+%22 & 233.87 & 0.87 & 56.7 \\
+%22 & 91.77 & 1.16 & 80.8 \\
+%22 & 397.14 & 1.18 & 47 \\
+%22 & 257.30 & 1.15 & 32.4 \\
+%22 & 37.76 & 1 & 76.2 \\
+%22 & 73.44 & 0.99 & 50.2 \\
+%    \end{tabular}}
+%  \qquad
+%  \subfloat[Example of \textit{pixel\_to\_wavelength.txt} for one order as seen in a spreadsheet. Lines without a wavelength can, but don't have to be deleted. The text in the columns with line type and following are optional. Columns have to be spaced by exactly one tabulator in the exported txt-file.]{
+%    \begin{tabular}{ | r | r | r | l | l | l |}
+%\hline
+%22 & 47 & 244.85 & 6182.6216 & ThI &  \\
+%\hline
+%22 & 47 & 419.53 &           & 6212.719 & blend, not used \\
+%\hline
+%22 & 47 & 365.86 & 6203.4924 & Th I &  \\
+%\hline
+%22 & 47 & 440.14 & 6215.938  & Ar I &  \\
+%\hline
+%22 & 47 & 186.32 & 6172.2775 & Ar II &  \\
+%\hline
+%22 & 47 & 387.96 & 6207.22   & ThI &  \\
+%\hline
+%22 & 47 & 492.43 & 6224.5271 & ThI & faint blending \\
+%\hline
+%22 & 47 & 334.94 & 6198.2226 & ThI &  \\
+%\hline
+%22 & 47 & 173.30 &           &  & outside comparison \\
+%\hline
+%22 & 47 & 503.78 &           &  &  \\
+%\hline
+%22 & 47 & 298.19 & 6191.9052 &  &  \\
+%\hline
+%22 & 47 & 276.35 & 6188.125  &  & faint blending \\
+%\hline
+%22 & 47 & 351.78 &           &  &  \\
+%\hline
+%22 & 47 & 532.12 &           &  &  \\
+%\hline
+%22 & 47 & 464.67 &           &  &  \\
+%\hline
+%22 & 47 & 142.64 &           &  & outside comparison \\
+%\hline
+%22 & 47 & 233.87 & 6180.7049 & Th I &  \\
+%\hline
+%22 & 47 & 397.14 & 6208.6872 &  &  \\
+%\hline
+%22 & 47 & 257.30 & 6184.7897 &  &  \\
+%\hline
+%    \end{tabular}}
+%\end{table}
+%
+%
+%The correlated data needs to be saved into file \textit{pixel\_to\_wavelength.txt} (in the working directory) with the following tab-separated entries (exactly one separator between each column):
+%\begin{itemize}
+%  \item Aperture (starting at 0 for the reddest order)
+%  \item Real/physical order from the grating equation (bigger than 0, usually between 40 and 120, doesn't have to be exactly the right one). \textbf{Warn:} the difference between columns 1 (Aperture) and 2 (Real/physical) has to be the same for all lines.
+%  \item Pixel
+%  \item Wavelength [\AA] (optional, can be also empty if the user wishes to copy the whole file from \verb|logging_found_arc_lines| and only adds wavelengths to some lines)
+%  \item (optional: Type of the line (e.g. ThI, NeII) ).
+%  \item (optional: Comments ).
+%\end{itemize}
+%
+%Afterwards the script can run again and will use this data to create a new wavelength solution. Afterwards the output or logfile, and the file given in parameter \verb|logging_arc_line_identification_spectrum| (standard: \textit{logging/arc\_line\_identification\_spectrum.pdf}) should be checked. The brightest lines of the reference file should be marked in red with the brightest emission lines of the spectrum (e.g. see Figure~\ref{Figure:create_wavelength_solution_identified}. If some areas of the spectrum (some orders, or the right or left side of some orders) are not fitted well, please add more lines of the problematic area to \textit{pixel\_to\_wavelength.txt} and remove the following files (if standard names are used) before running the pipeline again:
+%\begin{lstlisting}[style=base]
+%rm master_wavelength*.fits 
+%rm master_flat_spec_norm.fits
+%rm extracted/*
+%\end{lstlisting}
 You might also want to read Chapter~\ref{Section:FAQ_wavelength_solution}.
 
 
@@ -1278,7 +1309,7 @@ pip install ephem
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/HiFLEx/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/HiFLEx/archive/v0.4.2.tar.gz
+wget https://github.com/ronnyerrmann/HiFLEx/archive/v0.4.3.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
 

@@ -487,7 +487,8 @@ def file_list_UI(file_list):
     #wprops['width_data'] = 800   # not neccssary, as uses the automatic width
     
     if len(file_list) > 100:
-        logger('Info: A GUI with {0} elements will be created, on some machines that can take up to a few minutes.'.format(len(widgets)))
+        logger('Info: A GUI with {0} elements will be created, on some machines that can take up to a few minutes.\n'.format(len(widgets))+\
+               '\tIf you want to use an editor instead of the GUI, please kill the process and run the script with parameter "nogui", e.g. python {0} nogui'.format(sys.argv[0]))
 
     gui3 = tkc.TkCanvasGrid(title='HiFLEx: Asigning Files to extraction steps (What file contains what data)', 
                             kwargs=pkwargs,widgets=widgets, widgetprops=wprops )
@@ -601,7 +602,7 @@ def calibration_parameters_coordinates_UI(conf_data, object_information_full, ob
             return widgets, pkwargs, ii, doneftype
             
         widgets['type_{0}'.format(ii)] = dict(label=ftype, kind='Label', row=ii, column=0, columnspan=1, orientation=Tk.W)
-        if 'master_{0}_filename'.format(ftype) in conf_data.keys() and (ftype.find('extract') == -1 or ftype.find('extract_combine') != -1):
+        if 'master_{0}_filename'.format(ftype) in conf_data.keys() and (ftype.find('extract') == -1 or ftype.find('extract_combine') != -1) and ftype.find('wavelengthcal') == -1:
             elname = 'master_{0}_filename'.format(ftype)
             pkwargs[elname] = conf_data[elname]
             widgets[elname] = dict(kind='TextEntry', fmt=str, start=pkwargs[elname], width=30, row=ii, column=1, columnspan=3, orientation=Tk.W)
@@ -665,6 +666,7 @@ def calibration_parameters_coordinates_UI(conf_data, object_information_full, ob
     widgets['mask'] = dict(label='Mask (optional)\nG2,K5,M2', kind='Label', row=ii, column=12, rowspan=2, columnspan=1)
     widgets['rot'] = dict(label='rotation (optional)\n[km/s]', kind='Label', row=ii, column=13, rowspan=2, columnspan=1)
     ii += 2
+    jj = 0                              # if no object to extract, jj will not exist, but is needed later
     for jj, entry in enumerate(object_information_full):
         widgets['name_{0}'.format(jj)]  = dict(label=entry[0], kind='Label', row=ii+jj, column=0, columnspan=1, orientation=Tk.E)
         state = None
@@ -723,7 +725,7 @@ def calibration_parameters_coordinates_UI(conf_data, object_information_full, ob
             widgets['explain_{0}'.format(jj)] = dict(label=commentjj, kind='Label', row=ii+jj, column=0, columnspan=20, orientation=Tk.W )#, wraplength=100 )      
     
     wprops = dict(fullscreen=False )
-    #wprops['width_data'] = 800   # not neccssary, as uses the automatic width
+    #wprops['width_GUI'] = 800   # not neccssary, as uses the automatic width
     
     gui3 = tkc.TkCanvasGrid(title='HiFLEx: Asigning Calibration and Coordinates', 
                             kwargs=pkwargs,widgets=widgets, widgetprops=wprops )
@@ -789,33 +791,32 @@ if __name__ == "__main__":
         file_list_commented = file_list
     
     # Save the list, show to user, so the user can disable files, read the list
-    file = open(params['raw_data_file_list'],'w')
-    file.write('### This file contains the information for all the fits files in the raw_data_paths: {0} and its/their subfolders.\n'.format(params['raw_data_paths']))
-    file.write('### Each line contains the following information, separated by one tab:\n')
-    file.write('###   - Fill filename \n')
-    file.write('###   - Type of fiber 1 (science fiber)\n')
-    file.write('###   - Type of fiber 2 (calibration fiber)\n')
-    file.write('###   - Exposure time in seconds (from the header, if the information is not in the header, then from the filename)\n')
-    file.write('###   - Mid-exposure observation time in UTC (from header)\n')
-    file.write('###   - Flags: Mark the files to be used for calibration the data (comma-separated list):\n')
-    file.write('###        "b", Bias.\n')
-    file.write('###        "d", Dark.\n')
-    file.write('###        "a", real Flat of the detector.\n')
-    file.write('###        "z", Spectrum for the blaze correction, e.g. of a continuum source.\n')
-    file.write('###        "t1", Spectrum to find the trace [of the science fiber], e.g. a continuum source.\n')
-    file.write('###        "t2", Spectrum to find the trace of the calibration fiber.\n')
-    file.write('###        "w2l, w2s", Spectruum to find the wavelength solution (long and short exposure time) [of the calibration fiber].\n')
-    file.write('###        "w1l, w1s", Spectruum to find the wavelength solution of the science fiber.\n')
-    file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n')
-    file.write('###             Combination of images before the extraction is possible, please refer to the manual for more information\n')
-    file.write('###        "w" or "w2", if the spectrum contains wavelength information (in case of a spectrograph with single fiber input or\n')
-    file.write('###                     to find the time dependent offset between both fibers of a bifurcated fiber).\n')
-    file.write('###             Used to mark the files with calibration spectrum taken before or after the science observation.\n')
-    file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
-    file.write('### -> When finished with the editing, save the file and close the editor \n\n')
-    for entry in file_list_commented:
-        file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5] ))
-    file.close()
+    with open(params['raw_data_file_list'], 'w') as file:
+        file.write('### This file contains the information for all the fits files in the raw_data_paths: {0} and its/their subfolders.\n'.format(params['raw_data_paths']))
+        file.write('### Each line contains the following information, separated by one tab:\n')
+        file.write('###   - Fill filename \n')
+        file.write('###   - Type of fiber 1 (science fiber)\n')
+        file.write('###   - Type of fiber 2 (calibration fiber)\n')
+        file.write('###   - Exposure time in seconds (from the header, if the information is not in the header, then from the filename)\n')
+        file.write('###   - Mid-exposure observation time in UTC (from header)\n')
+        file.write('###   - Flags: Mark the files to be used for calibration the data (comma-separated list):\n')
+        file.write('###        "b", Bias.\n')
+        file.write('###        "d", Dark.\n')
+        file.write('###        "a", real Flat of the detector.\n')
+        file.write('###        "z", Spectrum for the blaze correction, e.g. of a continuum source.\n')
+        file.write('###        "t1", Spectrum to find the trace [of the science fiber], e.g. a continuum source.\n')
+        file.write('###        "t2", Spectrum to find the trace of the calibration fiber.\n')
+        file.write('###        "w2l, w2s", Spectruum to find the wavelength solution (long and short exposure time) [of the calibration fiber].\n')
+        file.write('###        "w1l, w1s", Spectruum to find the wavelength solution of the science fiber.\n')
+        file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n')
+        file.write('###             Combination of images before the extraction is possible, please refer to the manual for more information\n')
+        file.write('###        "w" or "w2", if the spectrum contains wavelength information (in case of a spectrograph with single fiber input or\n')
+        file.write('###                     to find the time dependent offset between both fibers of a bifurcated fiber).\n')
+        file.write('###             Used to mark the files with calibration spectrum taken before or after the science observation.\n')
+        file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
+        file.write('### -> When finished with the editing, save the file and close the editor \n\n')
+        for entry in file_list_commented:
+            file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5] ))
     
     # If necessary show the text file instead of the GUI
     if ('nogui' in sys.argv or '-nogui' in sys.argv or '--nogui' in sys.argv):
@@ -873,23 +874,22 @@ if __name__ == "__main__":
     
     # Save the results in a conf_data.txt file
     #print json.dumps(conf_data,sort_keys = False, indent = 4)
-    file = open(params['configfile_fitsfiles'],'w')
-    file.write('# Description of this file:\n#--------------------------\n') 
-    file.write('# This file was created by combining the information in the file {0} and the parameters given in the configuration file {1}\n'.format(params['raw_data_file_list'], CONFIGFILE))
-    file.write('# Changes in here will be overwritten the next time prepare_file_list.py is run, therefore we suggest to make changes in {0} and afterwards run prepare_file_list.py again.\n\n'.format(params['raw_data_file_list']))
-    file.write('# For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create list all corrections that will be applied to the individual files listed in <filetype>_rawfiles. These files will then combined and stored in master_<filetype>_filename (remove/comment the parameter in order to avoid saving.\n') 
-    file.write('#   The following calibrations are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, <background>, normalisation, combine_sum, localbackground\n') 
-    file.write('#   For dark and flat the paramerters can contain the the exposure time in float format (e.g. flat15.0_rawfiles, dark4.0_calibs_create).\n')  
-    file.write('#       If a fixed dark should be used, than the parameter needs to contain "dark" and additional text (e.g. "darkfixed", or if a different exposure time should be used "dark5.0")\n') 
-    file.write('#   For <background> the calibration needs to contain "background" but can contain more information. The key needs to be defined\n') 
-    file.write('#        (e.g. if the "background_image_filename" is used for calibration then the following entry is needed as well here or in the calibration file "background_image_filename = background.fits"\n') 
-    file.write('# \n') 
-    for paramtype in ['rawfiles', 'calibs_create', 'master']:
-        file.write('\n')
-        for entry in sorted(conf_data.keys()):
-            if entry.find(paramtype) >= 0:
-                file.write('{0} = {1} \n'.format(entry.ljust(24), conf_data[entry]))
-    file.close()
+    with open(params['configfile_fitsfiles'], 'w') as file:
+        file.write('# Description of this file:\n#--------------------------\n') 
+        file.write('# This file was created by combining the information in the file {0} and the parameters given in the configuration file {1}\n'.format(params['raw_data_file_list'], CONFIGFILE))
+        file.write('# Changes in here will be overwritten the next time prepare_file_list.py is run, therefore we suggest to make changes in {0} and afterwards run prepare_file_list.py again.\n\n'.format(params['raw_data_file_list']))
+        file.write('# For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create list all corrections that will be applied to the individual files listed in <filetype>_rawfiles. These files will then combined and stored in master_<filetype>_filename (remove/comment the parameter in order to avoid saving.\n') 
+        file.write('#   The following calibrations are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, <background>, normalisation, combine_sum, localbackground\n') 
+        file.write('#   For dark and flat the paramerters can contain the the exposure time in float format (e.g. flat15.0_rawfiles, dark4.0_calibs_create).\n')  
+        file.write('#       If a fixed dark should be used, than the parameter needs to contain "dark" and additional text (e.g. "darkfixed", or if a different exposure time should be used "dark5.0")\n') 
+        file.write('#   For <background> the calibration needs to contain "background" but can contain more information. The key needs to be defined\n') 
+        file.write('#        (e.g. if the "background_image_filename" is used for calibration then the following entry is needed as well here or in the calibration file "background_image_filename = background.fits"\n') 
+        file.write('# \n') 
+        for paramtype in ['rawfiles', 'calibs_create', 'master']:
+            file.write('\n')
+            for entry in sorted(conf_data.keys()):
+                if entry.find(paramtype) >= 0:
+                    file.write('{0} = {1} \n'.format(entry.ljust(24), conf_data[entry]))
     
     logger('Info: The calibration file for handling the raw data has been created. Please check {0} before starting the data reduction (hiflex.py)'.format(params['configfile_fitsfiles']))
     

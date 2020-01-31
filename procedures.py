@@ -114,18 +114,17 @@ def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logf
     """
     if show:
         print(message)
-    file = open(logfile, 'a')
-    file.write('{0} - {1} - {2}\n'.format( time.strftime("%Y%m%d%H%M%S", time.localtime()), os.getpid(), message ))
-    if printarrayformat != [] and printarray != []:
-        for line in printarray:
-            text = ''
-            for i,printformat in enumerate(printarrayformat):
-                #print printformat,line[i]
-                text += printformat%line[i] + '\t'
-            file.write(text[:-1]+'\n')
-            if show:
-                print(text)
-    file.close()
+    with open(logfile, 'a') as file:
+        file.write('{0} - {1} - {2}\n'.format( time.strftime("%Y%m%d%H%M%S", time.localtime()), os.getpid(), message ))
+        if printarrayformat != [] and printarray != []:
+            for line in printarray:
+                text = ''
+                for i,printformat in enumerate(printarrayformat):
+                    #print printformat,line[i]
+                    text += printformat%line[i] + '\t'
+                file.write(text[:-1]+'\n')
+                if show:
+                    print(text)
     if message.find('Error') == 0:
         print('\t-> exiting')
         if 'params' in locals() or 'params' in globals(): 
@@ -391,13 +390,12 @@ def add_text_file(text, filename):
     """
     Adds a line or lines of text to a file
     """
-    file = open(filename,'a')
-    file.write(text+'\n')
-    file.close()
+    with open(filename, 'a') as file:
+        file.write(text+'\n')
 
 def add_text_to_file(text, filename):
     """
-    If the text is not yet in the file, the test is added
+    If the text is not yet in the file, the text is added
     """
     oldtext = read_text_file(filename)
     exists = False
@@ -408,7 +406,7 @@ def add_text_to_file(text, filename):
     if exists == False:
         add_text_file(text, filename)
         
-def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignorelines=[], expand_input=False, ignore_badlines=False):
+def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignorelines=[], expand_input=False, shorten_input=False, ignore_badlines=False, replacewithnan=False):
     """
     Can be used convert a read table into entries with the correct format. E.g integers, floats
         Ignories the lines which have less entries than entries in textformats
@@ -480,7 +478,10 @@ def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignor
                     try:
                         entry[index] = textformat(entry[index])
                     except:
-                        logger(error+' Cannot convert {0} into a {1}. The problem happens in list line {2} at index {3}.'.format(entry[index], textformat, entry, index))
+                        if replacewithnan:
+                            entry[index] = np.nan
+                        else:
+                            logger(error+' Cannot convert {0} into a {1}. The problem happens in line {2} at index {3}.'.format(entry[index], textformat, entry, index))
                 elif type(textformat) == str:
                     try:
                         entry[index] = datetime.datetime.strptime(entry[index], textformat)
@@ -488,39 +489,46 @@ def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignor
                         logger(error+' Cannot convert {0} into a datetime object using the format {1}. The problem happens in list line {2} at index {3}.'.format(entry[index], textformat, entry, index))
                 else:
                     logger('Error: Programming error: textformats which where hand over to convert_readfile are wrong. It has to be a type or a string')
+        if shorten_input and len(entry) > len(textformats):
+            del entry[len(textformats):]
         result_list.append(entry)
     return result_list
 
-def read_badpx_mask(params): 
+def read_badpx_mask(params, imageshape): 
     """
     Reads the bad-pixel-mask and applies the corrections to it
     :param params: Dictionary with all the parameters: 
                 badpx_mask_filename is used in order to get the bad px mask. If it doesn't exist, than all pixels are fine
-                calibs is used in order to if a subframe of the image is used. In this case
-                subframe is used to find the area used
+                calibs is used in order to if a subframe of the image is used. In this case subframe is used to find the area used
+    :param imageshape: tuple of two integers, gives the shape of the image to which the badpixel mask should be applied
     :return badpx_mask: 2d numpy array of the bad pixel mask
     """
     filename = params['badpx_mask_filename']
-    subframe = params['subframe']
     if os.path.isfile(filename) == True:
         badpx_mask = np.array(fits.getdata(filename), dtype=np.float64)
         badpx_mask = rotate_flip_frame(badpx_mask, params )
-        if subframe != [] and badpx_mask.shape != (subframe[0],subframe[1]):
-            badpx_mask = badpx_mask[subframe[2]: subframe[0]+subframe[2], subframe[3]: subframe[1]+subframe[3]]
-        logger('Info: badpixel mask loaded: {0}'.format(filename))
+        if badpx_mask.shape != imageshape:
+            if subframe in params.keys():
+                subframe = params['subframe']
+                if len(subframe) >= 4:
+                    badpx_mask = badpx_mask[subframe[2]: subframe[0]+subframe[2], subframe[3]: subframe[1]+subframe[3]]
+        if badpx_mask.shape != imageshape:
+            logger('Warn: The loaded badpixel mask {0} has a different format than the image file: {1} vs {2} (image file)'.format(filename, badpx_mask.shape, imageshape))
+        else:
+            logger('Info: badpixel mask loaded: {0}'.format(filename))
     else:
-        logger('Warn: No bad pixelmask found ({0}). Assuming no bad pixels'.format(filename))
-        badpx_mask = np.ones((subframe[0],subframe[1]))
+        logger('Warn: No badpixel mask found ({0}). Assuming no bad pixels'.format(filename))
+        badpx_mask = np.ones(imageshape)
         
     return badpx_mask
 
-def read_background(params, filename): 
-    """
+"""def read_background(params, filename):               # not used anymore as not really useful
+    "#""
     Reads the background map and applies the corrections to it
     :param params: Dictionary with all the parameters
     :param filename: path and name of the background file
     :return background: 2d numpy array of the background, normalised to 1s exposure time
-    """
+    "#""
     imtype = 'background'
     params['calibs'] = params['calibs_read']
     if '{0}_calibs_read'.format(imtype) in params.keys():
@@ -529,7 +537,7 @@ def read_background(params, filename):
     exptime = im_head[params['raw_data_exptim_keyword']]
     background = im/exptime
     
-    return background
+    return background"""
 
 def warn_images_not_same(ims, names):
     if len(ims) <= 1:
@@ -584,8 +592,9 @@ def read_file_calibration(params, filename, level=0):
         logtxt, headtxt = [], []
         if entry.lower().find('subframe') > -1:
             subframe = params[entry]
-            if im.shape != (subframe[0],subframe[1]):                   # only apply subframe if the file doesn't have the size already
-                im = im[subframe[2]: subframe[0]+subframe[2], subframe[3]: subframe[1]+subframe[3]]
+            if len(subframe) >= 4:
+                if im.shape != (subframe[0],subframe[1]):                   # only apply subframe if the file doesn't have the size already
+                    im = im[subframe[2]: subframe[0]+subframe[2], subframe[3]: subframe[1]+subframe[3]]
             logger('Info: {1}: subframe applied: {0} ({2})'.format(entry, level, subframe))
             im_head['HIERARCH HiFLEx redu{0}a'.format(level)] = 'Subframe: {0}'.format(entry)
         elif entry.lower().find('bias') > -1:
@@ -621,7 +630,7 @@ def read_file_calibration(params, filename, level=0):
         #    im_head['HIERARCH HiFLEx redu{0}e'.format(level)] = 'Background: {0}'.format(params[entry])
         elif entry.lower().find('badpx_mask') > -1:
             if entry not in calimages:
-                calimages[entry] = read_badpx_mask(params)
+                calimages[entry] = read_badpx_mask(params, ims)
             warn_images_not_same([im, calimages[entry]], [filename,entry])
             im = im * calimages[entry]
             ims =  im.shape
@@ -659,6 +668,7 @@ def read_file_calibration(params, filename, level=0):
                                         [params['logging_path']+'background_subtracted-'+filename.rsplit('/',1)[-1]+'.png'],\
                                          1, False, [0.05,0.95,0.95,0.05], 'difference between image and background fit')
                 im = im - bck_im
+                bck_px[ bck_px==0 ] = np.nan
                 bck_noise_std, bck_noise_var = measure_background_noise(im * bck_px)
                 if np.isnan(bck_noise_var):
                     bck_noise_var = -1
@@ -1840,9 +1850,9 @@ def estimate_width(im):
     logger('Info: The median Gaussian width of the orders when testing {0} positions is {1} pixel.'.format( len(widths), round(width,2) ))
     return width
 
-def find_trace_orders(params, im):
+def find_trace_orders(params, im, imageshape):
     """
-    :param params: Dictionary with all the parameters. 'binx', 'biny', 'subframe', and 'polynom_order_apertures' are required
+    :param params: Dictionary with all the parameters. 'binx', 'biny', and 'polynom_order_apertures' are required
     :param im: 2d numpy array
     return: array of the parameters for the polynomial, orders ordered from left
     return: minimum and maximum position of the trace in dispersion direction
@@ -2015,7 +2025,7 @@ def find_trace_orders(params, im):
             im[positions[goodpos,0].astype(int),yarr[goodpos]+i] = breakvalue
         goodpos = (yarr>=0) & (yarr<=ims[1]-1)
         im_traces[positions[goodpos,0].astype(int),yarr[goodpos]] = 1
-        traces.append([[cen_px]+list(pfs), min(positions[:,0])*binx, min(params['subframe'][0],(max(positions[:,0])+1)*binx-1), np.polyval(pfs, cen_px)])
+        traces.append([[cen_px]+list(pfs), min(positions[:,0])*binx, min(imageshape[0],(max(positions[:,0])+1)*binx-1), np.polyval(pfs, cen_px)])
         logger('Step: order found at central pixel: {0} / {3} (frame/trace). The trace was identified between Pixels {1} and {2}'.format(round(np.polyval(pfs, cen_px),1),
                                                 round(traces[-1][1]), round(traces[-1][2]), round(np.polyval(pfs, np.mean(traces[-1][1:3]) ),1) ))
     # sort
@@ -2044,7 +2054,7 @@ def find_trace_orders(params, im):
 def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
     """
     Re-traces the position of the orders
-    :param params: Dictionary with all the parameters. 'binx', 'biny', 'subframe', and 'polynom_order_apertures' are required
+    :param params: Dictionary with all the parameters. 'binx', 'biny', and 'polynom_order_apertures' are required
     :param im: 2d numpy array of floats, binned image
     :param im_unbinned: original image without binning
     :param pfits: list, length same as number of orders, polynomial values
@@ -2238,7 +2248,7 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
     logger('Step: extracting spectra', show=False)
     badpx_mask_name = 'badpx_mask'
     if badpx_mask_name not in calimages:
-        calimages[badpx_mask_name] = read_badpx_mask(params)
+        calimages[badpx_mask_name] = read_badpx_mask(params, image.shape)
     badpx_mask = calimages[badpx_mask_name]
     spec, good_px_mask, widths_o = [], [], []
     xarr = range(0, image.shape[0])
@@ -2490,12 +2500,13 @@ def find_bck_px(im, pfits, xlows, xhighs, widths, w_mult):
 def measure_background_noise(im):
     """
     Measures the background noise in an image by binning it into 10x10 sized areas and measuring the median and std of the noise in these 100px small areas
-    :param im: 2d array of float, the traces are already removed
+    :param im: 2d array of float, the traces are already removed and set to np.nan
     :return median(sim): float, median of the standard deviations from parts of the images
     :return std(sim): float, variation of the standard deviations from parts of the images
     """
-    im[im == 0.0] = np.nan                                                              # Replace zeros with NaNs
-    im[im == 0] = np.nan                                                              # Replace zeros with NaNs
+    #if np.nanmedian(im) >= 10:          # Images with dark correction or images with zero bias level might be set to completely NaN otherwise
+    #    im[im == 0.0] = np.nan                                                              # Replace zeros with NaNs
+    #    im[im == 0] = np.nan                                                              # Replace zeros with NaNs
     #plot_img_spec.plot_image(im, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'orig')
     bim, gim, sim = bin_im(im, [10, 10])          # gim: number of eleements, sim: standard deviation
     #plot_img_spec.plot_image(bim, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_im')
@@ -2902,38 +2913,38 @@ def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
     reference_names = []
     if os.path.isfile(filename) == False:
         logger('Error: file {0} does not exist'.format(filename) )
-    file = open(filename, 'r')
-    for line in file:
-        line = line[:-1].split('\t')
-        if len(line) < 3:
-            continue
-        if line[2].replace(' ','') not in arc_lines:        # if Ar IV
-            continue
-        try:
-            line[0] = float(line[0])*wavelength_muliplier   # wavelength in Angstrom
-        except:
-            logger('Warn: Wavelength {0} of line {1} in file {2} cannot be transformed to float'.format(line[0], line, filename))
-            continue                                        # wavelength can't be transformed to float
-        for i in range(len(line[1])+1)[::-1]:               # Make intensity into a number, intensity can contain text at the end
+    with open(filename, 'r') as file:
+        for line in file:
+            line = line[:-1].split('\t')
+            if len(line) < 3:
+                continue
+            if line[2].replace(' ','') not in arc_lines:        # if Ar IV
+                continue
             try:
-                line[1] = float(line[1][:i])                # It's a number
-                break
+                line[0] = float(line[0])*wavelength_muliplier   # wavelength in Angstrom
             except:
-                continue                                    # Try without the last character
-        if i == 0:
-            line[1] = 1.
-        if line[1] < 0:
-            logger('Warn: Line intensity cannot be smaller than 0.0, check line {0} in {1}'.format(line, filename))
-            line[1] = 1.
-        if line[1] == 0:
-            line[1] = 0.1
-        reference_names.append(line[2])
-        line = line[0:2]
-        if reference_names[-1].find('Ar I') == 0:
-            line[1] *= 50
-        line.append(len(reference_catalog))
-        reference_catalog.append(line)   # wavelength in Angstrom, relative intensity of the line, index of line in reference_names
-    file.close()
+                logger('Warn: Wavelength {0} of line {1} in file {2} cannot be transformed to float'.format(line[0], line, filename))
+                continue                                        # wavelength can't be transformed to float
+            for i in range(len(line[1])+1)[::-1]:               # Make intensity into a number, intensity can contain text at the end
+                try:
+                    line[1] = float(line[1][:i])                # It's a number
+                    break
+                except:
+                    continue                                    # Try without the last character
+            if i == 0:
+                line[1] = 1.
+            if line[1] < 0:
+                logger('Warn: Line intensity cannot be smaller than 0.0, check line {0} in {1}'.format(line, filename))
+                line[1] = 1.
+            if line[1] == 0:
+                line[1] = 0.1
+            reference_names.append(line[2])
+            line = line[0:2]
+            if reference_names[-1].find('Ar I') == 0:
+                line[1] *= 50
+            line.append(len(reference_catalog))
+            reference_catalog.append(line)   # wavelength in Angstrom, relative intensity of the line, index of line in reference_names
+
     if reference_catalog == []:
         logger('Error: no reference lines found in {0} for the requested lines {1}'.format(filename, arc_lines))
     reference_catalog = np.array(reference_catalog)
@@ -2971,7 +2982,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
     #logger('Step: Finding the wavelength shift for this exposure')
-    if np.max(wavelength_solution[:,-1]) < 100:                 # pseudo solution, wavelength of the central pixel is < 100 Angstrom
+    if np.max(wavelength_solution[:,-1]) < 1000:                 # pseudo solution, wavelength of the central pixel is < 1000 Angstrom
         return copy.deepcopy(wavelength_solution), 0., im_head               # No shift is necessary
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0 and np.nansum(aspectra) == 0:         # science and calibration traces are at the same position and it's not the calibration spectrum
         wavelength_solution_shift, shift, im_head = shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname, im_head)
@@ -3212,7 +3223,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
         save_im_fits(params, sim_sflat, im_sflat_head, params['logging_trace1_binned'])
      
         # Search for orders in the small image
-        polyfits, xlows, xhighs = find_trace_orders(params, sim_sflat)
+        polyfits, xlows, xhighs = find_trace_orders(params, sim_sflat, im_sflat.shape)
         polyfits = unify_pord(polyfits)
         # save parameters of the polynoms into a fitsfile (from Neil)
         save_fits_width(polyfits, xlows, xhighs, [], params['logging_traces_binned'])
@@ -3259,7 +3270,8 @@ def prepare_measure_background_noise(params, im, sci_tr_poly, xlows, xhighs, wid
     bck_px_cal = find_bck_px(im, cal_tr_poly, axlows, axhighs, awidths, params['background_width_multiplier'][1])
     bck_px = bck_px_sci * bck_px_cal
     bad_values = ( im*bck_px > np.percentile(im[bck_px==1],95) )
-    bck_px[bad_values] = 0
+    bck_px[ bck_px==0 ] = np.nan
+    bck_px[bad_values] = np.nan
     bck_noise_std, bck_noise_var = measure_background_noise(im * bck_px)
     return bck_noise_std, bck_noise_var
 
@@ -3727,11 +3739,10 @@ def save_spec_csv(spec, wavelengths, good_px_mask, fname):
     wave = copy.copy(wavelengths)
     wave[np.isnan(wave)] = 0
     fname = fname.replace('.csv','') + '.csv'
-    file = open(fname, 'w')
-    for order in range(specs[0]):
-        for px in range(specs[1]):
-            file.write('{0},{1},{2}\n'.format(order, wave[order,px], spec_cor[order,px]) )
-    file.close()
+    with open(fname, 'w') as file:
+        for order in range(specs[0]):
+            for px in range(specs[1]):
+                file.write('{0},{1},{2}\n'.format(order, wave[order,px], spec_cor[order,px]) )
     #print order,px
 
 def wavelength_solution_harps(params, head, wavelengths):
@@ -3989,6 +4000,13 @@ def plot_overlapping_orders(order, x_full, y1_full, y2_full=None, labels=[]):
             color.insert(0, 'silver')
     return x_data, y_data, label, color
 
+def adjust_data_log(data):
+    if np.nanmin(data) < 1:
+        data += 1 - np.nanmin(data)       # minus to cancel negative minimum
+    data = np.log10(data)
+    
+    return data
+
 def plot_wavelength_solution_spectrum(spec1, spec2, fname, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=False):
     """
     Creates a pdf with one page for each ThAr spectrum and adds the identified and further catalogue lines to the plots
@@ -4009,15 +4027,10 @@ def plot_wavelength_solution_spectrum(spec1, spec2, fname, wavelength_solution, 
     y_title = 'extracted flux [ADU]'
     titel_f = 'Order {0}, real Order {1}\nmarked (proportional to line strength) are the identified reference lines (red, {2} lines) and\na subset of the omitted reference lines (green, showing the brightes {3} out of {4} lines)'
     
-    spec1, spec2 = copy.copy(spec1), copy.copy(spec2)
     if plot_log:
         y_title = 'log10 ( {0} )'.format(y_title)
-        if np.nanmin(spec1) < 1:
-            spec1 += 1 - np.nanmin(spec1)       # minus to cancel negative minimum
-        if np.nanmin(spec2) < 1:
-            spec2 += 1 - np.nanmin(spec2)       # minus to cancel negative minimum
-        spec1 = np.log10(spec1)
-        spec2 = np.log10(spec2)
+        spec1 = adjust_data_log(spec1)
+        spec2 = adjust_data_log(spec2)
     reference_catalog = np.array(sorted(reference_catalog, key=operator.itemgetter(1), reverse=True ))          # Sort by intensity in reverse order
     wavelengths = create_wavelengths_from_solution(wavelength_solution, spec1)
     
@@ -4048,10 +4061,11 @@ def plot_wavelength_solution_spectrum(spec1, spec2, fname, wavelength_solution, 
             #y_range = ymax - ymin
             #xmin, xmax = axes.get_xlim()        # wavelengths contains also values for nans
             # Redifine the axis using only the current order
-            good_data = ~np.isnan(spec1[order,:])
-            xmin, xmax = np.nanmin(wavelengths[order,good_data]), np.nanmax(wavelengths[order,good_data])
-            ymin1, ymax1 = np.nanmin(spec1[order,good_data]), np.nanmax(spec1[order,good_data])
-            ymin2, ymax2 = np.nanmin(spec2[order,good_data]), np.nanmax(spec2[order,good_data])
+            pctl = 5./len(spec1[order,:])*100                   # Exclude the five highest and five lowest points
+            xmin, xmax = np.nanmin(wavelengths[order,:]), np.nanmax(wavelengths[order,:])
+            ymin1, ymax1 = np.nanpercentile(spec1[order,:], pctl), np.nanpercentile(spec1[order,:], 100-pctl)
+            ymin2, ymax2 = np.nanpercentile(spec2[order,:], pctl), np.nanpercentile(spec2[order,:], 100-pctl)
+            ymin, ymax = min(ymin1, ymin2), max(ymax1, ymax2)
             ymin, ymax = min(ymin1, ymin2), max(ymax1, ymax2)
             y_range = ymax - ymin
             x_range = xmax - xmin
@@ -4229,6 +4243,436 @@ def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=T
     #gui3.destroy 
     plt.close()
     return im_bck_px, params
+
+def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, reference_catalog, reference_names, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01] ):   
+    """
+    :param arc_lines_px: numpy arry of floats: order, pixel, width, height of the line
+    """
+
+    px_to_wave_txt = read_text_file(params['px_to_wavelength_file'], no_empty_lines=True, warn_missing_file=False)              # list of strings
+    if len(px_to_wave_txt) == 0:
+        px_to_wave_txt = read_text_file(params['logging_path']+'tmp_'+params['px_to_wavelength_file'], no_empty_lines=True, warn_missing_file=False)              # list of strings
+    px_to_wave = np.array( convert_readfile(px_to_wave_txt, [int, int, float, float], delimiter='\t', replaces=['\n',''], shorten_input=True, replacewithnan=True ))     # order, real order, px, wave
+
+    nr_entries = len(px_to_wave)
+    if nr_entries > 0:
+        order_offset = np.nan
+        if np.prod( np.isnan(px_to_wave[:,1]) ) == 0:
+            order_offset = int(np.nanmedian(px_to_wave[:,1] - px_to_wave[:,0]))
+        px_to_wave = np.hstack(( px_to_wave, np.zeros((nr_entries,2))*np.nan, np.arange(nr_entries).reshape((nr_entries,1)), np.zeros((nr_entries,1))*np.nan  ))     # order, real order, px, wave, width, height of line, index, nan
+        order = -1E6
+        for entry in arc_lines_px:
+            if entry[0] != order:       # So this step is only done when neccessary 
+                order = entry[0]
+                px_to_wave_sub = px_to_wave[ px_to_wave[:,0] == order, : ]
+            diff = np.abs(px_to_wave_sub[:,2] - entry[1])
+            posi = np.where(diff < 2)[0]
+            if len(posi) >= 1:
+                index = int(px_to_wave_sub[posi[0], 6])      # first entry as highest signal, not min(diff)
+                px_to_wave[index,4] = entry[2]
+                px_to_wave[index,5] = entry[3]
+            else:
+                px_to_wave = np.vstack(( px_to_wave, [order, order+order_offset, entry[1], np.nan, entry[2], entry[3], len(px_to_wave), np.nan ] ))
+    else:
+        order_offset = np.nan
+        tmp = arc_lines_px[:,0]*np.nan
+        px_to_wave = np.vstack(( arc_lines_px[:,0], tmp, arc_lines_px[:,1], tmp, arc_lines_px[:,2], arc_lines_px[:,3], tmp, tmp )).T
+    
+    px_to_wave[np.isnan(px_to_wave[:,4]),4] = -1
+    px_to_wave[np.isnan(px_to_wave[:,5]),5] = -1
+    px_to_wave[:,6] = np.nan
+    order = int(len(cal_l_spec)/2)
+    
+    fig, ax = plt.subplots(3, 1, gridspec_kw={'height_ratios': [2, 5, 2]})
+    gui3 = tkc.TkCanvasGrid(figure=None, ax=None, func=None, title='HiFLEx: Test', kwargs=dict(), widgets=dict(), widgetprops=dict() )      # Only to get the display size
+    dpi=100
+    fig.set_dpi(dpi)
+    fig.set_size_inches( (int(gui3.screen_w_h[0]) - 400)/dpi, (int(gui3.screen_w_h[1])-90)/dpi, forward=True)     # Make the plot as big as possible
+    tkc.TkCanvasGrid.end(gui3)
+    plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
+    pkwargs = dict()
+    
+    def mark_line_in_GUI(px):
+        gui3.repopulate()
+        px_to_wave = pkwargs['px_to_wave']
+        px_to_wave_sub = px_to_wave[ px_to_wave[:,0] == pkwargs['order'], : ]
+        match = np.where( np.abs(px_to_wave_sub[:,2] - px) < 20)[0]
+        if len(match) == 0:
+            unmark_line_in_GUI()
+        else:
+            index = match[0]
+            for widget in gui3.ws.keys():
+                if widget.find('wave_') > -1:
+                    try:
+                        number = int(widget.replace('wave_',''))
+                    except:
+                        continue
+                    if number != index:
+                        gui3.ws[widget].config(state=Tk.DISABLED)
+        
+    def unmark_line_in_GUI():
+        gui3.repopulate()
+    
+    def onclick(event):
+        #print('clicked',event.xdata, event.ydata, event.inaxes)
+        if event.xdata is None or event.ydata is None:
+            unmark_line_in_GUI()
+        else:
+            px = event.xdata
+            mark_line_in_GUI(px)
+
+    def plot(ax, cal_l_spec, cal_s_spec, px_to_wave, order, **pkwarks):
+        max_reflines = 30
+        for ii in range(3):
+            ax[ii].clear()
+            ordii = order+ii-1
+            if ordii < 0 or ordii >= len(cal_l_spec):         # outside of useful range
+                continue
+            y1 = adjust_data_log( cal_l_spec[ordii,:] )
+            y2 = adjust_data_log( cal_s_spec[ordii,:] )
+            x = list(range(len(y1)))
+            title   = None
+            labels  = []
+            x_title = ''
+            y_title = 'log ( Flux [ADU] )'
+            if ii == 0:
+                title = 'Plot of the spectrum for previous ({0}), actual ({1}), and next order ({2})'.format(order-1, order, order+1)
+                labels = ['long\nexp', 'short\nexp']
+            if ii == 2:
+                x_title = 'Dispersion direction [px]'
+            ax[ii] = plot_img_spec.plot_points([x,x], [y1,y2], labels, [], show=False, adjust=[0.05,0.99,0.97,0.05, 0.92,1.2], title='', return_frame=True, frame=ax[ii], x_title=x_title, y_title=y_title, linestyle="-", marker="")
+            
+            pctl = 2./len(y1)*100                   # Exclude the two highest and two lowest points
+            xmin, xmax = np.nanmin(x), np.nanmax(x)
+            ymin1, ymax1 = np.nanpercentile(y1, pctl), np.nanpercentile(y1, 100-pctl)
+            ymin2, ymax2 = np.nanpercentile(y2, pctl), np.nanpercentile(y2, 100-pctl)
+            ymin, ymax = min(ymin1, ymin2), max(ymax1, ymax2)
+            y_range = ymax - ymin
+            x_range = xmax - xmin
+            ax[ii].set_ylim([ymin-y_range*0.01, ymax+y_range*0.01])
+            ax[ii].set_xlim([xmin-x_range*0.02, xmax+x_range*0.02])
+            title = {0:'Previous', 1:'', 2:'Next'}[ii]
+            ax[ii].set_title('{0} Order: {1}'.format(title, ordii), fontsize=11)
+            
+            px_to_wave_sub = px_to_wave[ px_to_wave[:,0] == ordii, : ]
+            if ii == 1:
+                goodentries = 0
+            else:
+                goodentries = 1E6           # to only plot the identified lines
+            for jj, entry in enumerate(px_to_wave_sub):
+                if entry[3] is np.nan or str(entry[3]) == 'nan':
+                    if goodentries > max_reflines:
+                        continue
+                    text = '{0}'.format(round(entry[2],1))
+                    color = 'g'
+                    goodentries += 1
+                else:
+                    if ii == 1:
+                        text = '{0} - {1}'.format(round(entry[2],1), round(entry[3],4))     # px and wave
+                    else:
+                        text = '{0}'.format(round(entry[3],4))                              # wave
+                    color = 'r'
+                ax[ii].plot( [entry[2],entry[2]], [ymin,ymin+y_range*0.01], color=color )
+                ax[ii].text( entry[2], ymin+y_range*0.015, text, fontsize=8, 
+                                    horizontalalignment='center', verticalalignment='bottom', rotation=90, color=color, zorder=5 )
+
+            x_f = np.arange(xmin-x_range*0.02, xmax+x_range*0.02, 0.01)
+            w_fa, w_fl = [], []
+            if 'poly_lin_{0}'.format(ordii) in pkwargs.keys() and ii == 1:
+                    w_fl = np.polyval(pkwargs['poly_lin_{0}'.format(ordii)], x_f)
+            if 'wavelength_solution' in pkwargs.keys():       # when wavelength solution is not available
+                    wavelength_solution = pkwargs['wavelength_solution']
+                    w_fa = np.polyval(wavelength_solution[ordii,2:], x_f-wavelength_solution[ordii,1])
+            if len(reference_catalog) == 0:
+                    continue
+            pos_index = 0
+            ytop = ymax+y_range*0.01
+            for kk, w_f in enumerate([w_fl, w_fa]):
+                if len(w_f) < 10:
+                    continue
+                inorder = (reference_catalog[:,0] >= min(w_f)) & (reference_catalog[:,0] <= max(w_f))
+                reference_catalog_sub = np.array(sorted(reference_catalog[inorder,:], key=operator.itemgetter(1), reverse=True ))
+                if len(reference_catalog_sub) == 0:
+                    continue
+                y_scale = y_range / (max(reference_catalog_sub[:,1])+0.0)
+                pos_index += 1
+                num_notident = 1
+                for color in {0:['b', 'r'], 1:['g', 'r']}[kk]:        # plot the green/blue lines before the red ones
+                    for jj,refline in enumerate(reference_catalog_sub):
+                        if np.nanmin(np.abs(refline[0] - px_to_wave_sub[:,3])) < 1E-2:
+                            if color != 'r':
+                                continue        # don't plot a matching line when it's not red lines to be plotted
+                        else:
+                            if color == 'r':
+                                continue        # don't plot the non matching lines when red lines to be plotted
+                            if num_notident > max_reflines:
+                                break           # stop plot non-matching lines
+                            num_notident += 1   
+                        index = np.argmin(np.abs(refline[0] - w_f))
+                        x_pos = x_f[index]
+                        #if np.isnan(spec1[order, x_position]):
+                        #    continue
+                        #y_position = np.nanmax(spec1[order, max(0,x_position-2):min(len(spec1[order,:]),x_position+2)])
+                        #??? = max(y_pos, y_position+0.23*y_range)
+                        text = '{0} - {1}'.format( round(refline[0],2+2*kk), reference_names[int(refline[2])] )
+                        if kk == 0:                                         # Text below marker
+                            y1 = [ymax, ymax+y_range*0.005+y_scale*0.03*refline[1]]
+                            y2 = ymax
+                            align = 'top'
+                            ytop = max(y1[1], ytop)
+                        else:                                               # Text above marker
+                            y_pos = ymax - y_range*0.47                        # where is the second line
+                            y1 = [y_pos-y_scale*0.03*refline[1]-y_range*0.005, y_pos]
+                            y2 = y_pos+y_range*0.01
+                            align = 'bottom'
+                        ax[ii].plot( [x_pos,x_pos], y1, color=color )
+                        ax[ii].text( x_pos, y2, text, fontsize=8, horizontalalignment='center', verticalalignment=align, rotation=90, color=color, zorder=5 )
+            ax[ii].set_ylim([ymin-y_range*0.01, ytop])
+    
+    def calculate_linear_solution(pkwargs, order=None):
+        px_to_wave = pkwargs['px_to_wave']
+        if order is None:
+            orders = np.unique(px_to_wave[:,0]).astype(int)
+        else:
+            orders = [order]
+        for order in orders:
+            inorder = px_to_wave[:,0] == order
+            px_to_wave_sub = px_to_wave[ inorder, : ]
+            good_values = ~np.isnan(px_to_wave_sub[:,3])
+            if np.sum(good_values) <= 1:
+                px_to_wave[inorder,7] = np.nan
+                if 'poly_lin_{0}'.format(order) in pkwargs.keys():
+                    del pkwargs['poly_lin_{0}'.format(order)]
+                continue
+            poly = np.polyfit( px_to_wave_sub[good_values,2], px_to_wave_sub[good_values,3], 1)     # 1 for linear fit
+            px_to_wave[inorder,7] = np.polyval(poly, px_to_wave[inorder,2])
+            pkwargs['poly_lin_{0}'.format(order)] = poly
+        pkwargs['px_to_wave'] = px_to_wave
+        return pkwargs
+    
+    def calculate_wavesolution_calc(px_to_wave, cal_l_spec):
+        px_to_wave_sub = px_to_wave[ ~np.isnan(px_to_wave[:,3]), : ]
+
+        wavelength_solution, wavelength_solution_arclines = fit_basic_wavelength_solution(params, px_to_wave_sub, cal_l_spec, 'GUI')
+        
+        for order in range(len(wavelength_solution)):
+            values_order = px_to_wave[:,0] == order
+            px_to_wave_sub = px_to_wave[ values_order, : ]
+            px_to_wave[ values_order, 6 ] = np.polyval(wavelength_solution[order,2:], px_to_wave[ values_order, 2 ]-wavelength_solution[order,1])
+        return px_to_wave, wavelength_solution, wavelength_solution_arclines
+    
+    def calculate_wavesolution():
+        update_order()                      # To make sure the data is read again
+        px_to_wave = pkwargs['px_to_wave']
+        if np.sum(np.isnan(px_to_wave[:,1])) > 0:
+            gui3.prompt('The order offset is not yet defined.\n\nPlease insert the correct number.')
+            return
+        pkwargs['wavelength_solution_info'] = True
+        px_to_wave, wavelength_solution, wavelength_solution_arclines = calculate_wavesolution_calc(px_to_wave, cal_l_spec)
+        
+        pkwargs['px_to_wave']                   = px_to_wave
+        pkwargs['wavelength_solution']          = wavelength_solution
+        pkwargs['wavelength_solution_arclines'] = wavelength_solution_arclines
+        # Replot
+        """gui3.funkwargs['notclose'] = True
+        tkc.TkCanvasGrid.end(gui3)          # will update also the plot"""
+        if pkwargs['wavelength_solution_info']:
+            gui3.prompt_info(calimages['wavelength_solution_result_text'], width=500)
+            pkwargs['wavelength_solution_info'] = False
+        update_order()                      # To update the wavelengths
+        
+    def remove_widgets():
+        variables = [gui3.validation, gui3.fmts, gui3.entries, gui3.funcs, gui3.onclickvalue, gui3.data]
+        for entry in pkwargs['widgets_change'].keys():
+            if entry in pkwargs.keys():
+                del pkwargs[entry]
+            gui3.ws[entry].destroy()
+            for variable in variables:
+                if entry in variable.keys():
+                    del variable[entry]
+    
+    def add_widgets(pkwargs):
+        order = pkwargs['order']
+        px_to_wave = pkwargs['px_to_wave']
+        px_to_wave_sub = px_to_wave[ px_to_wave[:,0] == order, : ]
+        wid_sub = dict()
+        offset = 4
+        ii = 0              # if the order doesn't contain any entries
+        for ii, entry in enumerate(px_to_wave_sub):
+            pkwargs['delete_{0}'.format(ii)]   = False
+            wid_sub['delete_{0}'.format(ii)]   = dict(label=None,  kind='CheckBox', start=pkwargs['delete_{0}'.format(ii)], row=ii+offset, column=0)
+            wid_sub['px_pos_{0}'.format(ii)] = dict(label=str(round(entry[2],1)), kind='Label', row=ii+offset, column=1, rowspan=1, columnspan=1, orientation=Tk.W)
+            wave = {True:'', False:str(round(entry[3],6))}[entry[3] is np.nan or str(entry[3]) == 'nan']
+            pkwargs['wave_{0}'.format(ii)] = wave
+            wid_sub['wave_{0}'.format(ii)] = dict(kind='TextEntry', fmt=str, start=pkwargs['wave_{0}'.format(ii)], width=10, row=ii+offset, column=2, columnspan=2)
+            text = '{0}  {1}'.format('%4.1f'%entry[4], '%5.1i'%entry[5])
+            wid_sub['lineprop_{0}'.format(ii)] = dict(label=text, kind='Label', row=ii+offset, column=4, rowspan=1, columnspan=2, orientation=Tk.W)
+            text = ''
+            if np.isnan(entry[6]) == False and entry[6] > 1000 and entry[6] < 1E6:
+                # Add button to copy the value
+                text += '%8.3f'%entry[6]
+            text += ' - '
+            if np.isnan(entry[7]) == False and entry[7] > 1000 and entry[7] < 1E6:
+                text += '%8.3f'%entry[7]
+            wid_sub['wave_sol_{0}'.format(ii)] = dict(label=text, kind='Label', row=ii+offset, column=6, rowspan=1, columnspan=2, orientation=Tk.W)
+        for jj in range(3):
+            pkwargs['px_pos_extra_{0}'.format(jj)] = ''
+            wid_sub['px_pos_extra_{0}'.format(jj)] = dict(kind='TextEntry', fmt=str, start=pkwargs['px_pos_extra_{0}'.format(jj)], width=6, row=ii+1+jj+offset, column=1, columnspan=1)
+            pkwargs['wave_extra_{0}'.format(jj)] = ''
+            wid_sub['wave_extra_{0}'.format(jj)] = dict(kind='TextEntry', fmt=str, start=pkwargs['wave_extra_{0}'.format(jj)], width=10, row=ii+1+jj+offset, column=2, columnspan=2)
+        
+        pkwargs['widgets_change'] = wid_sub
+        return pkwargs, wid_sub
+    
+    def read_data(gui3):
+        oldorder = gui3.funkwargs['oldorder']
+        px_to_wave = gui3.funkwargs['px_to_wave']
+        params['tmp_polynom_order_traces'] = [gui3.funkwargs['disporder']]
+        params['tmp_polynom_order_intertraces'] = [gui3.funkwargs['crossdisporder']]
+        keep = np.ones(( len(px_to_wave) )).astype(bool)
+        # Read the results
+        indexes = np.where(px_to_wave[:,0] == oldorder)[0]
+        for ii,index in enumerate(indexes):
+            #if 'wave_{0}'.format(ii) not in gui3.data.keys():       # can be empty when adding the extra stuff
+            #    continue
+            if gui3.data['delete_{0}'.format(ii)]:                  # delete
+                keep[index] = False
+            data = gui3.data['wave_{0}'.format(ii)]
+            good_data = False
+            if len(data) > 0:
+                try:
+                    data = float(data)
+                    good_data = True
+                except:
+                    print('Warn: Can not convert entry into a number: {0}'.format(data))
+            if good_data:
+                px_to_wave[index,3] = data
+            else:
+                px_to_wave[index,3] = np.nan
+        px_to_wave = px_to_wave[keep,:]
+        for jj in range(3):
+            good_data = False
+            px = gui3.data['px_pos_extra_{0}'.format(jj)]
+            wave = gui3.data['wave_extra_{0}'.format(jj)]
+            if len(px) > 0 and len(wave) > 0:
+                try:
+                    px = float(px)
+                    good_data = True
+                except:
+                    print('Warn: Can not convert entry into a number: {0}'.format(data))
+                try:
+                    wave = float(wave)
+                except:
+                    good_data = False
+                    print('Warn: Can not convert entry into a number: {0}'.format(data))
+            if good_data:
+                px_to_wave = np.vstack(( px_to_wave, [oldorder, np.nan, px, wave, -1, -1, np.nan, np.nan ] ))
+        if type(gui3.funkwargs['order_offset']).__name__ == 'int':
+            px_to_wave[:,1] = px_to_wave[:,0] + gui3.funkwargs['order_offset']
+        save_px_to_wave(px_to_wave, params['logging_path']+'tmp_'+params['px_to_wavelength_file'])
+        gui3.funkwargs['px_to_wave'] = px_to_wave
+        gui3.funkwargs = calculate_linear_solution(gui3.funkwargs, order=oldorder)
+        
+        #print 'new', gui3.data['order'], 'old', gui3.funkwargs['oldorder'], gui3.funkwargs['px_to_wave'][:,3]
+    
+    def update_order():
+        tkc.TkCanvasGrid.update(gui3)               # Update order, get the new wavelengths
+        read_data(gui3)              # read the new wavelengths, necessary here, as switched off at closing the gui
+        remove_widgets()
+        gui3.funkwargs['oldorder'] = copy.copy(gui3.data['order'])
+        gui3.funkwargs, wid_sub = add_widgets(gui3.funkwargs)
+        gui3.widgets = wid_sub
+        gui3.add_widgets(parent=gui3.scrollable_frame)
+        tkc.TkCanvasGrid.update(gui3)               # Update to get the plot with the new fitted wavelengths
+    
+    def save_px_to_wave(px_to_wave, fname):
+        with open(fname,'w') as file:
+            for entry in px_to_wave:
+                entry = list(entry)
+                for i in [1,3]:
+                    if entry[i] is np.nan or str(entry[i]) == 'nan':
+                        entry[i] = ''
+                    elif i == 1:
+                        entry[i] = int(entry[i])
+                file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t\n'.format( int(entry[0]), entry[1], round(entry[2],2), entry[3], entry[4], entry[5] ))
+    # define valid_function
+    # input is one variable (the string input)
+    # return is either:
+    #   True and values
+    # or
+    #   False and error message
+    def vfunc_int(xs):
+        try:
+            value = int(xs)
+            return True, value
+        except:
+            return False, ('Error, input must be integer\n')
+    def vfunc_float(xs):
+        try:
+            value = float(xs)
+            return True, value
+        except:
+            return False, ('Error, input must be float\n')
+    
+    # get kwargs
+    pkwargs = dict(ax=ax, cal_l_spec=cal_l_spec, cal_s_spec=cal_s_spec, px_to_wave=px_to_wave, order=order, order_offset=order_offset)
+    pkwargs['wavelength_solution_info'] = False
+    if np.sum(np.isnan(px_to_wave[:,1])) == 0:
+        px_to_wave, wavelength_solution, wavelength_solution_arclines = calculate_wavesolution_calc(px_to_wave, cal_l_spec)
+        pkwargs['wavelength_solution'] = wavelength_solution
+        pkwargs['px_to_wave']          = px_to_wave
+        pkwargs = calculate_linear_solution(pkwargs)
+    # run initial update plot function
+    plot(**pkwargs)
+    # define widgets
+    widgets = dict()
+    widgets['ordertext']  = dict(label='Order:', kind='Label', row=0, column=0, rowspan=1, columnspan=4, orientation=Tk.W)
+    pkwargs['order'] = order
+    pkwargs['oldorder'] = order
+    widgets['order'] = dict(kind='TextEntry', fmt=int, start=pkwargs['order'], valid_function=vfunc_int, minval=-1E-9, maxval=len(cal_l_spec)-1+1E-9, width=5, row=0, column=4, columnspan=1)
+    widgets['update'] = dict(label='Update', kind='CommandButton', command=update_order, row=0, column=5, columnspan=2, width=9)
+    widgets['accept'] = dict(label='Accept', kind='ExitButton', row=0, column=7, width=4)     # Replace by new fuction, as issue will occur if use changed the order but didn't updata
+    widgets['order_offsettext']  = dict(label='Order offset between arbitary\nnumbering (starting at 0)\nand real physical order:', kind='Label', row=1, column=0, rowspan=1, columnspan=4, orientation=Tk.W)
+    pkwargs['order_offset'] = {True:pkwargs['order_offset'], False:''}[pkwargs['order_offset'] is not np.nan]
+    widgets['order_offset'] = dict(kind='TextEntry', fmt=int, start=pkwargs['order_offset'], valid_function=vfunc_int, minval=-1000, maxval=1000, width=5, row=1, column=4, columnspan=1)
+    widgets['calculate_wavesolution'] = dict(label='Calculate\nWavelength\nsolution', kind='CommandButton', command=calculate_wavesolution, row=1, column=5, columnspan=2, width=9)
+    widgets['disptxt']   = dict(label='Polynom-order for\ndispersion direction:', kind='Label', row=2, column=0, rowspan=1, columnspan=3, orientation=Tk.W)
+    pkwargs['disporder'] = max(params.get('tmp_polynom_order_traces' ,params['polynom_order_traces']))
+    widgets['disporder'] = dict(kind='TextEntry', fmt=int, start=pkwargs['disporder'], valid_function=vfunc_int, minval=1-1E-9, maxval=100, width=4, row=2, column=3, columnspan=1)
+    widgets['crossdisptxt']   = dict(label='Polynom-order for cross-\ndispersion direction:', kind='Label', row=2, column=4, rowspan=1, columnspan=3, orientation=Tk.W)
+    pkwargs['crossdisporder'] = max(params.get('tmp_polynom_order_intertraces' ,params['polynom_order_intertraces']))
+    widgets['crossdisporder'] = dict(kind='TextEntry', fmt=int, start=pkwargs['crossdisporder'], valid_function=vfunc_int, minval=1-1E-9, maxval=100, width=4, row=2, column=7, columnspan=1)
+    widgets['txtdelete']   = dict(label='Del-\nete', kind='Label', row=3, column=0, rowspan=1, columnspan=1, orientation=Tk.W)
+    widgets['txtpx_pos']   = dict(label='Pixel', kind='Label', row=3, column=1, rowspan=1, columnspan=1, orientation=Tk.W)
+    widgets['txtwave']     = dict(label='Wavelength', kind='Label', row=3, column=2, rowspan=1, columnspan=2, orientation=Tk.W)
+    widgets['txtlineprop'] = dict(label='Line width\n+ height', kind='Label', row=3, column=4, rowspan=1, columnspan=2, orientation=Tk.W)   # Can't be float, as otherwise deleting an entry wouldn't work
+    widgets['txtwave_sol'] = dict(label='Wavelenght-solution\nglobal - linear', kind='Label', row=3, column=6, rowspan=1, columnspan=2, orientation=Tk.W)   # Can't be float, as otherwise deleting an entry wouldn't work
+    pkwargs, wid_sub = add_widgets(pkwargs)
+    widgets.update(wid_sub)
+    
+    wprops = dict(fullscreen=False )
+    gui3 = tkc.TkCanvasGrid(figure=fig, ax=ax, func=plot, title='HiFLEx: Create a new wavelength solution', 
+                            kwargs=pkwargs, widgets=widgets, widgetprops=wprops )
+    cid = fig.canvas.callbacks.connect('button_press_event', onclick)       # It works with GUI
+    fig.set_size_inches( (int(gui3.screen_w_h[0]) - gui3.width_GUI-50)/dpi, (int(gui3.screen_w_h[1])-90)/dpi, forward=True)     # Make the plot as big as possible
+        
+    gui3.master.mainloop()
+        
+    read_data(gui3)             # read the new wavelengths only when closing the window
+    
+    px_to_wave = gui3.funkwargs['px_to_wave']
+    if os.path.isfile(params['px_to_wavelength_file']):
+        os.system('mv {0} old_{0}'.format(params['px_to_wavelength_file']))
+    save_px_to_wave(px_to_wave, params['px_to_wavelength_file'])
+    del params['tmp_polynom_order_traces']
+    del params['tmp_polynom_order_intertraces']
+    
+    if np.sum(np.isnan(px_to_wave[:,1])) == 0:
+        px_to_wave, wavelength_solution, wavelength_solution_arclines = calculate_wavesolution_calc(px_to_wave, cal_l_spec)
+    else:
+        logger('Error: Not able to find a wavelength solution with the information provided by the user. Please rerun the program.')
+    
+    return wavelength_solution, wavelength_solution_arclines
 
 def correlate_px_wave_result_UI(im, arc_lines_wavelength, reference_catalog, arc_lines_px, reference_names, wavelength_solution, wavelength_solution_arclines, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01]):
     ims = im.shape
@@ -4753,7 +5197,7 @@ def create_pseudo_wavelength_solution(number_orders):
     """
     wavelength_solution, wavelength_solution_arclines = [], []
     for order in range(number_orders):
-        wavelength_solution.append([order, 0., 1., 0. ])
+        wavelength_solution.append([order, 0., 1., 1. ])
         wavelength_solution_arclines.append([0])     #The wavelength of the reference lines
     return np.array(wavelength_solution), np.array(wavelength_solution_arclines)
 
@@ -5375,6 +5819,8 @@ def find_order_offset(orders, cenwave):
     """
     slope_real_order = []
     for order_offset in range(-200,201):
+        if np.min(np.abs(order_offset+orders)) < 1:     # Order 0 shouldn't be covered by Echelle Spectrograph
+            continue
         y = (order_offset+orders)*cenwave   #(order_offset+order)*central_wavelength
         p = np.polyfit(orders, y, 1)
         slope_real_order.append( [abs(p[0]), order_offset ] + list(p) )
@@ -5413,43 +5859,49 @@ def find_real_center_wavelength_solution(order_offset, orders, cenwave, cen_px, 
     #print np.vstack([real_cent, cenwave, cen_px, cen_px_nofit]).T[ [0,1,21,41,61,81,-2,-1], :], p_real_cent, poly
     return cen_px, poly
 
-def read_fit_wavelength_solution(params, filename, im):
+def read_fit_wavelength_solution(params, filename, spec):
     """
     Reads the file with pixel - wavelength corellation and fits a 2d array against it to create a rough wavelength solution
     :params filename: string to a textfile with the following data: order (starting at 0), real order, pixel, wavelength. If one of the information is missing, this line will be skipped.
     """
     arc_lines_wavelength = []
-    file = open(filename, 'r')
-    for line in file:
-        line = line[:-1].split('\t')
-        if len(line) < 4:
-            continue
-        if line[0]!='' and line[1]!='' and line[2]!='' and line[3]!='':
-            # get the order, real order, pixel, and wavelength
-            try:
-                arc_lines_wavelength.append([ int(line[0]), int(line[1]), float(line[2]), float(line[3]),0 ])
-            except:
-                print( 'Problems to convert to int/float:', line )
-    file.close()
+    with open(filename, 'r') as file:
+        for line in file:
+            line = line[:-1].split('\t')
+            if len(line) < 4:
+                continue
+            if line[0]!='' and line[1]!='' and line[2]!='' and line[3]!='':
+                # get the order, real order, pixel, and wavelength
+                try:
+                    arc_lines_wavelength.append([ int(line[0]), int(line[1]), float(line[2]), float(line[3]),0 ])
+                except:
+                    print( 'Problems to convert to int/float:', line )
     if len(arc_lines_wavelength) == 0:
         logger(('Error: No useful information was found in {0}. Please make sure the entries in the file contain of the tab-separated '+\
                 '(exactly one tab between each column) values: order (starting at 0), real order, pixel, wavelength').format(filename))
     arc_lines_wavelength = np.array(arc_lines_wavelength)
+    
+    wavelength_solution, wavelength_solution_arclines = fit_basic_wavelength_solution(params, arc_lines_wavelength, spec, filename)
+    
+    return wavelength_solution, wavelength_solution_arclines
+    
+def fit_basic_wavelength_solution(params, arc_lines_wavelength, spec, filename):
     if 0.0 in arc_lines_wavelength[:,1]:
-        logger('Error: The second coloumn (real order) in file {1} was not set correctly as it contains a zero. '+\
+        logger('Error: The second coloumn (real order) in {0} was not set correctly as it contains a zero. '+\
                'Please use the (estimated) real order (from grating equation).'.format(filename))
     orig_lines = arc_lines_wavelength.shape[0]
     
     order_offset = arc_lines_wavelength[:,1] - arc_lines_wavelength[:,0]
     orders = np.arange(max(arc_lines_wavelength[:,0])+1, dtype=int)
     if np.std(order_offset, ddof=1) != 0:
-        logger('Error: There is an inconsistency between coloumn 1 (order/aperture) and coloumn 2 (real/physical order) in the file {0}. '+\
+        logger('Error: There is an inconsistency between coloumn 1 (order/aperture) and coloumn 2 (real/physical order) in {0}. '+\
                'Please check that the difference between these two columns is always the same.'.format(filename))
     order_offset = order_offset[0]
-    polynom_order_trace = max(2, max(params['polynom_order_traces']) )
-    polynom_order_intertrace = max(1, max(params['polynom_order_intertraces']) )
     
-    cen_px = np.repeat([im.shape[0]/2.], len(orders))       # cen_px needs to be float, cen_px defines the zeropoint of np.polyfit
+    polynom_order_trace = max(2, max(params.get('tmp_polynom_order_traces', params['polynom_order_traces'])) )                  # Try to read the tmp values and if they don't exist, use the standard values
+    polynom_order_intertrace = max(1, max(params.get('tmp_polynom_order_intertraces', params['polynom_order_intertraces'])) )
+    
+    cen_px = np.repeat([spec.shape[1]/2.], len(orders))       # cen_px needs to be float, cen_px defines the zeropoint of np.polyfit
     cen_px_old = copy.copy(cen_px)
     deleted_lines = ''
     for dummy in range(20):
@@ -5502,13 +5954,15 @@ def read_fit_wavelength_solution(params, filename, im):
     arc_line_wave_fit = polynomial_value_2d(x, y, polynom_order_trace, polynom_order_intertrace, poly2d_params)
     arc_line_res = np.abs(arc_line_wave_fit - arc_lines_wavelength[:,3])
     p_cen_px = np.round(p_cen_px,3)
-    logger( ('Info: The standard deviation of the residual of the fit to the manual wavelength solution is {1} Angstrom (average is {0} Angstrom). '+\
-             'Only input data, for which the residuals were less than 1 Angstrom have been used. '+\
-             '{2} of {5} lines have been used to calculate the solution for a 2d polynom fit with {3} orders in dispersion direction (along the traces) '+\
-             'and {4} orders in cross-dispersion direction. To fulfil the grating equation the central pixel of the individual orders needs to be '+\
-             '{6} + {7}*order + {8}*order**2.').format( round(np.mean(arc_line_res),4), 
+    text = ('Info: The standard deviation of the residual of the fit to the manual wavelength solution is {1} Angstrom (average is {0} Angstrom). '+\
+            'Only input data, for which the residuals were less than 1 Angstrom have been used. '+\
+            '{2} of {5} lines have been used to calculate the solution for a 2d polynom fit with {3} orders in dispersion direction (along the traces) '+\
+            'and {4} orders in cross-dispersion direction. To fulfil the grating equation the central pixel of the individual orders needs to be '+\
+            '{6} + {7}*order + {8}*order**2.').format( round(np.mean(arc_line_res),4), 
                             round(np.std(arc_line_res, ddof=polynom_order_trace+polynom_order_intertrace+1),4), arc_lines_wavelength.shape[0], 
-                            polynom_order_trace, polynom_order_intertrace, orig_lines, p_cen_px[2], p_cen_px[1], p_cen_px[0] ))
+                            polynom_order_trace, polynom_order_intertrace, orig_lines, p_cen_px[2], p_cen_px[1], p_cen_px[0] )
+    logger(text)
+    calimages['wavelength_solution_result_text'] = text
     if len(deleted_lines) > 0:
         logger('Warn: The following lines from {0} have not been used: {1}'.format(filename, deleted_lines) )
     
@@ -6794,9 +7248,8 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem):
                 try:
                     T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils/Correlation/')     # Fails, because our spectrum doesn't cover the hard coded wavelength
                     line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
-                    f = open(pars_file,'w')
-                    f.write(line)
-                    f.close()
+                    with open(pars_file, 'w') as f:
+                        f.write(line)
                     loadtxt = ''
                 except:
                     loadtxt = 'Warn: could not determine the stelar parameters. This is probably caused because of the availble wavelength range. Do not worry about it'

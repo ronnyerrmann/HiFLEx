@@ -38,7 +38,6 @@ raw_data_paths           = /local/home/ronny/data_EXOhSPEC/20190205/
   # for Moravian, SBIG:               rotate_frame = 180 or rotate_frame = 0; flip_frame = True
   # for HARPS:                        rotate_frame = 180
   # for MRES:                         rotate_frame = 270
-  # for Narit:                        rotate_frame = 90, flip_frame = True
 rotate_frame    = 90
 flip_frame      = False
 
