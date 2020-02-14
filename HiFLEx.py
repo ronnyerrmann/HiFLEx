@@ -142,8 +142,10 @@ if __name__ == "__main__":
         if params['original_master_wavelensolution_filename'].lower() != 'pseudo':                  # Create the master files
             im_cal_l, im_arclhead = create_image_general(params, calib[1]+'_l')
             if calib[1] == 'cal2':
-                cal_l_spec, good_px_mask_l, extr_width = extract_orders(params, im_cal_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
+                shift_cal2, im_arclhead = find_shift_images(params, im_cal_l, im_trace1, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, extract=True, im_head=im_arclhead)
+                cal_l_spec, good_px_mask_l, extr_width = extract_orders(params, im_cal_l, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift_cal2)
             else:
+                shift_cal1, im_arclhead = find_shift_images(params, im_cal_l, im_trace1, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, extract=True, im_head=im_arclhead, offset=shift_cal1)
                 cal_l_spec, good_px_mask_l, extr_width = extract_orders(params, im_cal_l, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'])
         if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']) == True:
             logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution'+calib[0]+'_filename']))
@@ -154,9 +156,9 @@ if __name__ == "__main__":
         else:
             im_cal_s, im_arcshead = create_image_general(params, calib[1]+'_s')
             if calib[1] == 'cal2':
-                cal_s_spec, good_px_mask_s, extr_width = extract_orders(params, im_cal_s, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'])
+                cal_s_spec, good_px_mask_s, extr_width = extract_orders(params, im_cal_s, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift_cal2)
             else:
-                cal_s_spec, good_px_mask_s, extr_width = extract_orders(params, im_cal_s, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'])
+                cal_s_spec, good_px_mask_s, extr_width = extract_orders(params, im_cal_s, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift_cal1)
             # Begin: This bit is not necessary once the procedure has been written
             im_name = 'master_'+calib[1]+'_long'
             if 'master_'+calib[1]+'_l_filename' in params.keys():
