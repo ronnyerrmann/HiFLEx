@@ -600,7 +600,7 @@ def read_file_calibration(params, filename, level=0):
         elif entry.lower().find('bias') > -1:
             if entry not in calimages:
                  create_image_general(params, entry, level=level+1)
-            warn_images_not_same([im, calimages[entry]], [filename,entry])
+            warn_images_not_same([im, calimages[eimsntry]], [filename,entry])
             if np.percentile(calimages[entry], 90) > 2000 or np.percentile(calimages[entry], 10) < -100:
                 logger('Warn: The bias ({0}) has unphysical values: 10%-percentile = {1}, 90%-percentile = {2}'.format(entry, np.percentile(calimages[entry], 10), np.percentile(calimages[entry], 90)))
             im = im - calimages[entry]
@@ -629,11 +629,11 @@ def read_file_calibration(params, filename, level=0):
         #    logger('Info: {1}: background correction applied: {0}'.format(params[entry], level))
         #    im_head['HIERARCH HiFLEx redu{0}e'.format(level)] = 'Background: {0}'.format(params[entry])
         elif entry.lower().find('badpx_mask') > -1:
+            ims =  im.shape
             if entry not in calimages:
                 calimages[entry] = read_badpx_mask(params, ims)
             warn_images_not_same([im, calimages[entry]], [filename,entry])
             im = im * calimages[entry]
-            ims =  im.shape
             nonzeroind = np.nonzero(1-calimages[entry])       #find the indexes where the badpx mask is zero
             for i in range(len(nonzeroind[0])):         #find a suitable amound of surrounding pixels
                 for j in range(1,5):                    # try to find it in the surrounding 8, 24, 48, 80, 120 pixel
@@ -2302,6 +2302,8 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
                     fracpixparam = [[lowers[xrow], 'l'] , [uppers[xrow],'u']]
                 for [borderpos, pos] in fracpixparam:
                     x = np.arange(max(0,np.floor(borderpos-1)), min(maxpx,np.ceil(borderpos+1))+1, dtype=int)
+                    if len(x) <= 1:
+                    	continue
                     good_px = asign_bad_px_value(params, good_px, badpx_mask, image, (xrow, x) )
                     y = image[xrow, x]
                     weight = 1./(np.abs(x-borderpos)+0.1)**2                   # weight the values so that the data around the fraction of the pixel is used most
@@ -3133,13 +3135,19 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
                     'Please re-run prepare_file_list.py and asign "w" and "w2" to the emission line spectra of the calibration and science fiber, respectively.')
             return copy.deepcopy(wavelength_solution), 0.               # No shift is possible
         all_shifts = []
-        for entry in all_shifts_sci:
-            diff = np.abs(entry[0] - all_shifts_cal[:,0])           # difference in jd_midexp
-            if np.min(diff) > 1 * 3600:                             # difference less than one hour
-                continue
-            index = np.argmin(diff)                                    # the closest entry
-            all_shifts.append([ np.mean([entry[0], all_shifts_cal[index,0]]), entry[1]-all_shifts_cal[index,1], np.sqrt(entry[1]**2+all_shifts_cal[index,1]**2) ])
-            # mean of obsdate, diff between two fibers (sci-cal), error of the shift
+        for hours in range(1,24):
+            for entry in all_shifts_sci:
+                diff = np.abs(entry[0] - all_shifts_cal[:,0])           # difference in jd_midexp
+                if np.min(diff) > hours * 3600:                             # difference less than one hour
+                    continue
+                index = np.argmin(diff)                                    # the closest entry
+                all_shifts.append([ np.mean([entry[0], all_shifts_cal[index,0]]), entry[1]-all_shifts_cal[index,1], np.sqrt(entry[1]**2+all_shifts_cal[index,1]**2) ])
+                # mean of obsdate, diff between two fibers (sci-cal), error of the shift
+            if len(all_shifts) > 0:									# if found than this hour is fine
+                break
+        if len(all_shifts) == 0:
+            logger('Warn: No overlapping wavelength solutions between science and calibration fiber found within 24 hours')
+            all_shifts.append([ 0, 0, 0 ])
         all_shifts = np.array(all_shifts)
         if params['wavelength_solution_type'] == 'sci-fiber':       # Test on 20190307 indicates that it should be sci-fiber
             all_shifts[:,1] = -1 * all_shifts[:,1]
@@ -3419,7 +3427,7 @@ def get_obsdate(params, im_head):
     jd_midexp = get_julian_datetime(obsdate_midexp)
     jd_begin = get_julian_datetime(obsdate)
     im_head['HIERARCH HiFLEx DATE-OBS']   = (obsdate.strftime("%Y-%m-%dT%H:%M:%S.%f"), 'UTC, Begin of expose')
-    im_head['HIERARCH HiFLEx DATE-MID']   = (obsdate_midexp.strftime("%Y-%m-%dT%H:%M:%S.%f"), 'UTC, Begin of expose')
+    im_head['HIERARCH HiFLEx DATE-MID']   = (obsdate_midexp.strftime("%Y-%m-%dT%H:%M:%S.%f"), 'UTC, Middle of expose')
     im_head['HIERARCH HiFLEx EXPOSURE']   = (exposure_time, 'Exposure time in s')
     im_head['HIERARCH HiFLEx EXP_FRAC']   = (fraction, 'Normalised mean exposure time')
     im_head['HIERARCH HiFLEx JD']         = (round(jd_midexp,6), 'mid-exposure Julian date')             # MJD = JD - 2400000.5 from http://www.csgnetwork.com/julianmodifdateconv.html
@@ -4387,6 +4395,8 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
                     continue
             pos_index = 0
             ytop = ymax+y_range*0.01
+            if np.sum(~np.isnan(px_to_wave_sub[:,3])) == 0:
+                px_to_wave_sub[0,3] = -10000                    # Dummy wavelength
             for kk, w_f in enumerate([w_fl, w_fa]):
                 if len(w_f) < 10:
                     continue
@@ -4501,7 +4511,7 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
         for ii, entry in enumerate(px_to_wave_sub):
             pkwargs['delete_{0}'.format(ii)]   = False
             wid_sub['delete_{0}'.format(ii)]   = dict(label=None,  kind='CheckBox', start=pkwargs['delete_{0}'.format(ii)], row=ii+offset, column=0)
-            wid_sub['px_pos_{0}'.format(ii)] = dict(label=str(round(entry[2],1)), kind='Label', row=ii+offset, column=1, rowspan=1, columnspan=1, orientation=Tk.W)
+            wid_sub['px_pos_{0}'.format(ii)] = dict(label='%6.1f'%entry[2], kind='Label', row=ii+offset, column=1, rowspan=1, columnspan=1, orientation=Tk.W)
             wave = {True:'', False:str(round(entry[3],6))}[entry[3] is np.nan or str(entry[3]) == 'nan']
             pkwargs['wave_{0}'.format(ii)] = wave
             wid_sub['wave_{0}'.format(ii)] = dict(kind='TextEntry', fmt=str, start=pkwargs['wave_{0}'.format(ii)], width=10, row=ii+offset, column=2, columnspan=2)

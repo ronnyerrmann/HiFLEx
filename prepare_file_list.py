@@ -572,7 +572,13 @@ def get_observed_objects(params, conf_data):
                     for i in range(1,len(obname)-1):    # Simbad requires the space in the object: e.g. Tau Ceti
                         obnames_space.append(obname[:i]+' '+obname[i:])
                     warnings.filterwarnings("ignore", category=UserWarning)
-                    simbad_results = Simbad.query_objects(obnames_space)
+                    for ii in range(3):
+                        try:
+                            simbad_results = Simbad.query_objects(obnames_space)
+                            break
+                        except:
+                            simbad_results = None
+                            logger('Warn: Could not get the coordinates from Simbad for objects {0}. Will try another {1} time(s).'.format(obname, 2-ii))
                     warnings.filterwarnings("default", category=UserWarning)
                     if simbad_results is not None:
                         #print obname, simbad_results
