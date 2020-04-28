@@ -4,8 +4,8 @@
 
 # Configuration file for:
 #   create_badpx_mask.py
-#   prepare_file_list.py
-#   reduction_day.py
+#   file_assignment.py
+#   HiFLEx.py
 #   remove_orders.py
 #   live_extraction.py
 
@@ -136,7 +136,6 @@ resolution_offset_pct = 1
   #                                                                If no wavelength solution is necessay, it can be set to "pseudo".
 original_master_wavelensolution_filename = /data/ronny/Reduced/20190205/master_wavelength.fits
 
-
   ## To determine the background
   # background_width_multiplier defines the area which is excluded for determining the background. It has the same settings as extraction_width_multiplier/arcextraction_width_multiplier.
   # The first value is for the science and the second for the calibration traces
@@ -146,13 +145,30 @@ background_width_multiplier = [1.2, 0.5]
   #                 format: list of two integers
 polynom_bck = [4, 4]
 
-
+  ## Extraction of the spectra:
+  # Before the spectra are extracted, the traces of the orders can be shifted. This is necessary for an unstabilised spectrograph, when the orders move in cross-dispersion direction.
+  #         format: float or integer
+  #         Gives the maximum allowed shift. Set to 0 if shift shouldn't be measured. 
+  #         Shift can't be larger as the minimum distance between consecutive orders (single fiber) or between science and calibration orders (bifurcated fiber input).
+extraction_shift = 10
+  # Orders, which are only partially identified can be ignored for the extraction.
+  #         format: int or float between 0 and 100
+  #         To disable set extraction_min_ident_part_of_trace_percent to 0. A value of 25 will mean orders that have a length of less than 25% compared to the longest order are ignored.
+extraction_min_ident_part_of_trace_percent = 25
+  # Precission on how to extract the fractional pixel at the edges of the trace.
+  #         standard: using the fraction of the flux of the fractional pixel
+  #         linfit:   do a linear fit around the fractional pixel
+extraction_precision = standard
   # extraction_width_multiplier times the average width of the gaussian fit to the traces of the orders defines how many pixel of either side to extract.
   #         format: float or integer
   #         if width_percentile < 20 then the *extraction_width_multiplier should probably be 1, otherwise they can be higher
   #         extraction_width_multiplier is for the science traces, arcextraction_width_multiplier for the calibration traces
 extraction_width_multiplier = 1
 arcextraction_width_multiplier = 1
+  # Optional sigmaclipping of the normalised spectrum is possible. Empty to disable. Should be disabled for observed objects with emission features.
+  #         format: array of one intger and two floats or integers: sigma to clip absorption lines AND sigma to clip emission lines or cosmics
+  #         default: [ 10 , 20 , 4 ] : fit a polynom of 10th order, Don't clip absorption lines (20 sigma), clip emission lines that are stronger than 4 sigma
+sigmaclip_spectrum = []
   # In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom
 wavelength_scale_resolution = 0.01
 
@@ -274,7 +290,7 @@ max_good_value  = 63000
 
   ## extracted data:
   #-----------------
-  # path for the extracted data (ceres format / single files / HARPS format for extracted spectrum and wavelength). path_extraction and path_extraction_single will be relative to the result_path.
+  # path for the extracted data (CERES format / single files / HARPS format for extracted spectrum and wavelength). path_extraction and path_extraction_single will be relative to the result_path.
 path_extraction             = extracted
 path_extraction_single      = extracted/single
 path_harpsformat            = extracted/HARPS_format
@@ -304,18 +320,21 @@ background_filename             = background.fits
 
   ## RV analysis:
   #--------------
-  # Using the Ceres pipeline to do a cross-correlation. Needs to point to the base folder of Ceres. 
-  #       If path_ceres does not exist on the machine, then no radial velocity analysis using this method will be used.
-  # path_rv is used to store the results from the Ceres pipeline. path_rv will be relative to the result_path.
-path_ceres                      = /home/exohspec/software/ceres-master/
-path_ceres                      = /home/ronny/software/ceres-master/
-  # Output of the Ceres cross-correlation
-path_rv_ceres                   = ceres_rv_output
-  # Using the Terra pipeline to create a template spectrum and then use that template to do the radial velocity analysis. Need to point to the PRV.jar file.
+  # Using the TERRA pipeline to create a template spectrum and then use that template to do the radial velocity analysis. Need to point to the PRV.jar file.
   #       If terra_jar_file does not exist on the machine, then no radial velocity analysis using this method will be used.
 terra_jar_file                  = /home/ronny/software/terra/PRV.jar
-  # csv files for Terra. path_csv_terra will be relative to the result_path. The csv files will be saved in the <object_name>/data/ folder under path_csv_terra
+  # csv files for TERRA. path_csv_terra will be relative to the result_path. The csv files will be saved in the <object_name>/data/ folder under path_csv_terra.
+  #       It will contain the normalised flux
 path_csv_terra                  = terra_rv_data
+  # Using SERVAL 
+  path_serval                   = Todo!!!
+  # Using the CERES pipeline to do a cross-correlation with template spectra (using the normalised spectrum). Needs to point to the base folder of CERES. 
+  #       If path_ceres does not exist on the machine, then no radial velocity analysis using this method will be used.
+  # path_rv is used to store the results from the CERES pipeline. path_rv will be relative to the result_path.
+path_ceres                      = /home/exohspec/software/ceres-master/
+path_ceres                      = /home/ronny/software/ceres-master/
+  # Output of the CERES cross-correlation
+path_rv_ceres                   = logging/ceres_rv_output
 
   ## Logging:
   #----------
@@ -325,6 +344,7 @@ logging_trace1_binned               = mstr_trace1_binned.fits
 logging_traces_binned               = sci_trace1_binned.fits
 logging_traces_im_binned            = traces_in_master_trace1_binned.png
 logging_traces_im                   = traces_in_master_trace1.png
+logging_traces_bisector             = bisector_traces1.png
 logging_find_arc_traces             = arctraces_find.png
 logging_arctraces_im                = arctraces_in_master_trace2.png
 logging_map_shift_orders            = map_shifts.fits

@@ -16,7 +16,7 @@ params = textfileargs(params, CONFIGFILE)
 params['folder_original_traces'] = 'original_traces'
 
 if __name__ == "__main__":
-    logger('Info: Starting removing traces')
+    logger('\nInfo: Starting removing traces')
     log_params(params)
     
     if not os.path.exists(params['folder_original_traces']):
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     if len(polyfits) == len(polyfits[fmask]):
         logger('Info: No change made, therefore finished removing traces')
         exit(0)
-    
+    logger('Info: Removed the following orders: {0}'.format( np.where(fmask == False)[0] ))
     polyfits, xlows, xhighs, widths = polyfits[fmask], xlows[fmask], xhighs[fmask], widths[fmask]
     
     # Move original data into a sub-folder

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import os
@@ -525,7 +525,7 @@ if __name__ == "__main__":
         filenames = ['plot_files.lst']
     for filename in filenames:
         rpath = ''
-        files = read_text_file(filename)
+        files = read_text_file(filename, no_empty_lines=True, warn_missing_file=True)
         for line in files:
             if line[0] != '#':
                 fitsfiles.append([line,0,'sg'])

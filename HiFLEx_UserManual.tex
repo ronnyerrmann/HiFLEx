@@ -1,4 +1,5 @@
 \documentclass[10pt,a4paper]{article}
+\usepackage[a4paper, bindingoffset=0.5cm, left=2cm,right=2cm,top=2cm,bottom=2cm,]{geometry}
 
 \usepackage{listings}              % Only used for this template to display code, can delete
 \usepackage[usenames,dvipsnames,svgnames,table]{xcolor}    %Driver-independent color extensions
@@ -32,8 +33,8 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 
-\title{User Manual for Data Reduction using the HiFLEx package\\ Working version: v0.4.3}
-\date{January, 2020}
+\title{User Manual for Data Reduction using the HiFLEx package\\ Working version: v1.0.0}
+\date{April, 2020}
 \author{Ronny Errmann, EXOhSPEC team\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -98,25 +99,6 @@ In order to work with the spectra, the following steps have to be done:
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
 
-\subsection*{v0.4.1}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Switched to barycentric correction (radial velocity and BJDTDB) from \url{https://github.com/shbhuk/barycorrpy}.
-  \item Added parameter \verb|raw_data_mid_exposure_keys| to conf.txt.
-  \item Added parameter \verb|raw_data_object_name_keys| to conf.txt
-  \item Added parameter \verb|path_harpsformat| to conf.txt
-  \item Changed parameter \verb|raw_data_path| to \verb|raw_data_paths|, allowing list of folders.
-  \item Renamed parameter \verb|maxshift| to \verb|maxshift_orders|.
-  \item Renamed parameter \verb|update_widths| to \verb|update_width_orders|.
-  \item Renamed parameter \verb|master_flat_spec_norm_filename| to \verb|master_blaze_spec_norm_filename|.
-  \item Renamed parameter \verb|raw_data_imtyp_flatarc| to \verb|raw_data_imtyp_blaze|.
-  \item Script \verb|prepare_file_list.py| changed to allow for easy GUI development. Files can be assigned directly to calibration within the script. 
-  \item Time format in the file from parameter \verb|configfile_fitsfiles| created by \verb|prepare_file_list.py| changed.
-  \item Improved determination of shift between current frame and the reference frame.
-  \item Improved Error messages.
-  \item Improvement of the way how the new header values are stored.
-  \item Improvement of the GUI and plotting the spectra.
-\end{itemize}
-
 \subsection*{v0.4.2}
 \begin{itemize}\setlength\itemsep{0em}
   \item Change to the new name: HiFLEx
@@ -130,6 +112,17 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
   \item GUI for creating a new wavelength solution
   \item Bug-Fixing
 \end{itemize}
+
+\subsection*{v1.0.0}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Rename of \verb|prepare_file_list.py| to \verb|file_assignment.py|
+  \item Rename of \verb|reduction_day.py| to \verb|hiflex.py|
+  \item Added parameters \verb|logging_traces_bisector|, \verb|extraction_shift|, \verb|extraction_min_ident_part_of_trace_percent|, \verb|extraction_precision|, \verb|sigmaclip_spectrum|
+  \item Fixed a bug with CERES RVs
+  \item Format of the object list was changed to keep compatibility with CERES. To convert run \verb|transform_coordinate_file_before_v0.4.4_202004.py| before running any other Script. % When installing this version at Narit Change also GLOBALutils there
+  \item Improved code, general bugfixes, aditional features
+\end{itemize}
+
 % -------------------------------------------------------------------------------------------
 %\noindent
 \section{Quick starting Guide}
@@ -144,9 +137,9 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
     \item Create a new folder and copy the \verb|conf.txt| into that folder and open the file in an editor.
     \item Change parameter \verb|raw_data_paths| to point to the folder or folders with your raw or pre-reduced fits-files. The data can be stored in sub-folders.
     \item Set the parameter \verb|badpx_mask_filename| if a bad-pixel-mask exists (see Chapter~\ref{Section:create_badpxmask}). Otherwise leave empty or 'NA'.
-    \item Modify the header-parameters, if necessary (see Cahpter~\ref{Section:prepare_files}).
-    \item Adjust \verb|rotate_frame| and \verb|flip_frame| so that the orders are up to down (blue wavelength on top) and red orders are on the right. The pipeline will first rotate and then flip, the flip is swapping left and right.
-    \item Adjust parameter \verb|subframe| to the full CCD size or a subframe, if only part of the CCD should be used. % Small picture showing the orders and wavelength (arrows blue to red)
+    \item Adjust \verb|rotate_frame| and \verb|flip_frame| so that the orders are up to down (blue wavelength on top) and red orders are on the left. The pipeline will first rotate and then flip, the flip is swapping left and right (Fig.~\ref{Fig:apertures_in_master_flat} shows the orientation).
+    \item Adjust parameter \verb|subframe| to a subframe, if only part of the CCD should be used. Otherwise leave empty or set to the full detector size.
+    % Small picture showing the orders and wavelength (arrows blue to red)
   \end{itemize}
  
   \item Finding the traces of the science fiber: \vspace*{-\itemsep}
@@ -157,24 +150,24 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
   
   \item Finding the traces of the calibration fiber: \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
-    \item The side of the calibration traces compared to the science traces is given in parameter \verb|arcshift_side|. Set it to center for a single fiber spectrograph.
+    \item The side of the calibration traces compared to the science traces is given in parameter \verb|arcshift_side| (left or right). Set it to center for a single fiber spectrograph.
   \end{itemize}
   
-  \item Create a new wavelength solution (in case no wavelength solution is required, set \verb|master_wavelensolution_filename| to \verb|pseudo| and skip the other steps under this bullet point): \vspace*{-\itemsep}
+  \item Create a new wavelength solution (in case no wavelength solution is required, set \verb|original_master_wavelensolution_filename| to \verb|pseudo| and with the next numbered point): \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
     \item Change the path to the catalogue of the reference lines (\verb|reference_catalog|), if necessary. The file must contain one entry per line, each entry consists of tab-separated wavelength, line strength, and element. Line strength can be empty.
     \item Set parameter \verb|original_master_wavelensolution_filename =| \\
           \verb|master_wavelength_manual.fits|.
-    \item To find a wavelength solution a file which provides the wavelength for some (extracted) pixel and wavelengths needs to be given (called \textit{pixel\_to\_wavelength.txt}. Until a GUI is available within the pipeline, a way to create the list is described in Chapter~\ref{section:create_new_wave_solution}.
+    \item To find a wavelength solution a file which provides the wavelength for some (extracted) pixel and wavelengths can be given optionally (called \textit{pixel\_to\_wavelength.txt}, Chapter~\ref{section:create_new_wave_solution}).
     \item The number of degrees of freedom for the wavelength solution (2-dimensional polynomial fit) can be adjusted with \verb|polynom_order_traces| (polynomial orders along the dispersion direction) and \verb|polynom_order_intertraces| (polynomial orders between the traces).
     %\item Decrease \verb|diff_pxs| to create a more precise solution (but strong lines might be rejected).
   \end{itemize}
   
   \item Setting up the header keywords: \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
-    \item Adjust the parameters starting with \verb|raw_data_*|. The example script shows the settings for data taken with MaximDL and for data from the HARPS spectrograph.
+    \item Adjust the parameters starting with \verb|raw_data_*|. The example configuration file shows the settings for data taken with MaximDL and for data from the HARPS spectrograph. See als Chapter~\ref{Section:prepare_files}.
   \end{itemize}
-  
+     
   \item Setting up the data reduction steps: \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
     \item Adjust the parameters \verb|*_calibs_create_g| to define the reduction steps which should be applied. Please refer to Chapter~\ref{Section:parameters_CCD_proc} for further information. Some of the \verb|*_calibs_create_g| parameters might not be relevant, e.g. if no \textit{dark} or \textit{rflat} (real flatfield) corrections should be applied. An example for the parameters with additional explanation is shown in Figure~\ref{Fig:example_calibs_create_g}.
@@ -185,16 +178,17 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
     \item The parameters \verb|site|, \verb|altitude|, \verb|latitude| (negative for west), and \verb|longitude| need to be set, if the information is not stored in the fits-header (see also Chapter~\ref{Section:barycentric_correction}).
   \end{itemize}
   
-  \item Create the file \textit{object\_list.txt}: See Chapter~\ref{Section:create_object_list_file}.
+%  \item Create the file \textit{object\_list.txt}: See Chapter~\ref{Section:create_object_list_file}.
+  \item For RV analysis: Set path \verb|path_ceres| to the home folder of the CERES pipeline. Set path \verb|terra_jar_file| to the TERRA \textit{PRV.jar} file
   
-  \item Run the scrip \verb|prepare_file_list.py| (see Chapter~\ref{Section:prepare_files} below for more information): \vspace*{-\itemsep}
+  \item Run the scrip \verb|file_assignment.py| (see Chapter~\ref{Section:prepare_files} below for more information): \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
     \item Define what files should be used for what calibration.
-    \item Define what files to extract (and measure RVs)
+    \item Define what files to extract (and in which RVs will be measured).
     \item Please note that you can use already reduced images. In this case the reduction steps as defined in \verb|conf.txt| should be empty for the file type (e.g. dark or real flats) to avoid a second application of the correction.
   \end{itemize}
   
-  \item Run the scrip \verb|HiFLEx.py|: \vspace*{-\itemsep}
+  \item Run the scrip \verb|hiflex.py|: \vspace*{-\itemsep}
   \begin{itemize}[leftmargin=*]\setlength\itemsep{0em}
     \item Afterwards: check the output in the \verb|logfile|, the images in the logging path, or in results in the extracted files.
   \end{itemize}
@@ -217,11 +211,6 @@ The pipeline reads the parameters from the configuration file \verb|conf.txt|. T
 \end{figure}
 
 
-\subsection{Create a bad pixel mask}
-\label{Section:create_badpxmask}
-\noindent The bad pixel masked used by the pipeline is fits file which consists of a 2 dimensional image consisting of '1' for good data and '0' for bad pixels. It can be created by the script \verb|create_badpx_mask.py|, but this is script is really work in progress at the moment.
-
-
 \subsection{Reducing data with the same setup for different nights}
 \label{Section:further_configuration}
 After all the calibration steps have been performed for a given instrument (see Chapter~\ref{Section:first_configuration}), this information can be used to extract data of different nights more easily, as long as the instrument itself stays untouched. Here it is assumed that files to find the traces of science and calibration fiber, files to adjust the wavelength solution, and files to find the blaze function are available.
@@ -241,11 +230,16 @@ After all the calibration steps have been performed for a given instrument (see 
       \item[resolution\_offset\_pct] Gives the expected change of resolution in percent between the current setup and the previous wavelength solution. The pipeline will test 11 resolutions between 0\% and the value given in parameter \verb|resolution_offset_pct|.
     \end{description}
     
-  \item Run the scrip \verb|prepare_file_list.py| to define what files should be used for what calibration.
+  \item Run the scrip \verb|file_assignment.py| to define what files should be used for what calibration.
     
-  \item Run the scrip \verb|HiFLEx.py|.
+  \item Run the scrip \verb|hiflex.py|.
 
 \end{itemize}
+
+
+\subsection{Create a bad pixel mask}
+\label{Section:create_badpxmask}
+\noindent The bad pixel masked used by the pipeline is fits file which consists of a 2 dimensional image consisting of '1' for good data and '0' for bad pixels. It can be created by the script \verb|create_badpx_mask.py|, but this is script is really work in progress at the moment.
 
 
 \subsection{Possible parameters for the CCD processing}
@@ -254,9 +248,9 @@ After all the calibration steps have been performed for a given instrument (see 
 \begin{description}
   \item[subframe] : The subframe as given in the parameter \verb|subframe| will be applied, only a section of the CCD will be used.
   \item[badpx\_mask] : Apply the bad pixel mask, given in parameter \verb|badpx_mask_filename|. If the file doesn't exist, all pixels are assumed to be good. The file must contain a 2-dimensional image with 1 for good and 0 for bad pixel.
-  \item[bias] : Apply a master bias. This can be either a pre-reduced image, or it can be created by the pipeline. %, which will be created from the files given in the parameter \verb|bias_rawfiles| by using the settings given in the parameter \verb|bias_calibs_create|. These two parameters are created automatically by the script \verb|prepare_file_list.py| if bias frames exist in the raw data path.
-  \item[dark] : Apply a master dark. A dark with the same exposure time as read from the fits header will be applied. %The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
-  \item[rflat] : Apply a master true flat. %The necessary parameters are created automatically by the script \verb|prepare_file_list.py|.
+  \item[bias] : Apply a master bias. This can be either a pre-reduced image, or it can be created by the pipeline. %, which will be created from the files given in the parameter \verb|bias_rawfiles| by using the settings given in the parameter \verb|bias_calibs_create|. These two parameters are created automatically by the script \verb|file_assignment.py| if bias frames exist in the raw data path.
+  \item[dark] : Apply a master dark. A dark with the same exposure time as read from the fits header will be applied. %The necessary parameters are created automatically by the script \verb|file_assignment.py|.
+  \item[rflat] : Apply a master true flat. %The necessary parameters are created automatically by the script \verb|file_assignment.py|.
   %\item[background] : Applies background correction using the filename given in the parameter \verb|background_filename|. The background image will be scaled by the exposure time of the scientific image, before its subtracted from the scientific image.
   \item[background] : Applies background correction by fitting a 2d polynomial against the current reduced image, excluding the area of the science and calibration traces. The fitted 2d-image is then subtracted from the current image.
 \end{description}
@@ -282,7 +276,7 @@ After all the calibration steps have been performed for a given instrument (see 
 \subsection{Assigning the observed data and calibration data to the pipeline}
 \label{Section:prepare_files}
 
-The script \verb|prepare_file_list.py| reads all files in the folders (and subfolders) given in parameter \verb|raw_data_paths|. The file name and header information are used to determine the type of file and if it can be used for calibration. The header parameters are thereby defined by the following parameters in the configuration file:
+The script \verb|file_assignment.py| reads all files in the folders (and subfolders) given in parameter \verb|raw_data_paths|. The file name and header information are used to determine the type of file and if it can be used for calibration. The header parameters are thereby defined by the following parameters in the configuration file:
 
 \begin{description}
   \item[raw\_data\_imtyp\_keyword:] Header keyword if the image type (standard: \\ \mbox{IMAGETYP}),
@@ -371,7 +365,7 @@ After the assignment which files to be used for which calibration the data reduc
 
 
 \subsection{Removing wrongly identified traces}
-After checking the results (see Chapter~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to it's big flexibility. The orders can be removed in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the depending steps of \verb|HiFLEx.py| will run again.
+After checking the results (see Chapter~\ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to its high flexibility. The orders can be removed in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the depending steps of \verb|hiflex.py| will run again.
 
 
 \subsection{Creating a new wavelength solution}
@@ -536,11 +530,11 @@ You might also want to read Chapter~\ref{Section:FAQ_wavelength_solution}.
 % -------------------------------------------------------------------------------------------
 
 
-\newpage
-\section{More information about how the pipeline works}
+%\newpage
+%\section{More information about how the pipeline works}
 
 
-\subsection{Steps performed by the pipeline}
+\subsection{Detailed steps performed by the pipeline}
 \label{Section:pipeline_steps_general}
 
 \noindent The following steps will be performed on a new set of data:
@@ -590,13 +584,20 @@ The following steps give an overview about additional parameters which are not c
 
 \begin{description}
   \item[GUI] : If set to true, this allows manipulation of some parameters in a graphical user interface (GUI) during the runtime of the script. (not tested recently)
-  \item[width\_percentile] Only pixel with more flux than the value given in \verb|width_percentile| (of the maximum flux) will be extracted. The extraction width can be varied later using the parameters \verb|extraction_width_multiplier| and \verb|arcextraction_width_multiplier|. The covered area can be checked in the logged images given in the parameters \verb|logging_traces_im| and \verb|logging_arctraces_im|. % show image explaining width_percentile %In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
+  \item[width\_percentile] Only pixel with more flux than the value given in \verb|width_percentile| (of the maximum flux) will be extracted (see Fig.~\ref{Fig:traces_description}). The extraction width can be varied later using the parameters \verb|extraction_width_multiplier| and \verb|arcextraction_width_multiplier|. The covered area can be checked in the logged images given in the parameters \verb|logging_traces_im| and \verb|logging_arctraces_im|. %In case of a real Gaussian profile, the full width at half maximum and Gaussian width are connected with $FWHM = 2.35482\cdot w_{\mathrm{Gauss}}$.
   \item[raw\_data\_exptim\_keyword, raw\_data\_dateobs\_keyword] : Use the right header keywords for the exposure time and the observation date. The format for the observation date should be \verb|%Y-%m-%dT%H:%M:%S.%f| or\footnote{\url{https://docs.python.org/2/library/datetime.html\#strftime-and-strptime-behavior}} \verb|%Y-%m-%dT%H:%M:%S|. More formats can be added in the procedure \textit{get\_obsdate}.
   \item[raw\_data\_timezone\_cor] In the unlikely case, that the date and time stored in \verb|raw_date_timezone_cor| is not UTC, the time zone correction can be given here. Numbers will be positive east of UTC and negative west of UTC, e.g. +7 for Bangkok time or -10 for Hawaii.
   \item[standard\_calibs\_create] : Define the standard CCD processing, if necessary (see Chapter~\ref{Section:parameters_CCD_proc} for options).
 %  \item[] : 
 \end{description}
 
+\begin{figure} 
+  \begin{center}
+    \includegraphics[width=0.8\textwidth]{./figures/traces_description}
+  \end{center} 
+  \caption{A cross section through one order in a frame to determine the traces of the orders (solid black). The centre of the order is determinded from the highest flux in a polynomial fit (red dotted vertical lines and red dashed line). The extraction boundarys (black dotted-dashed vertical lines) are set to where the flux reaches 5\% of the flux range (\textbf{width\_percentile = 5}), using the minimum flux as zero point.
+    \label{Fig:traces_description}}
+\end{figure}
 
 
 \subsection{Necessary CCD images}
@@ -643,17 +644,17 @@ In order to calculate the barycentric correction the time of the observation (or
 
 \subsection{Creating a list of objects}
 \label{Section:create_object_list_file}
-If the coordinates of the object are not stored in the fits header, then they can be given using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_paths| (the first one has higher priority, in case different file exists in the two folders only the first file will be read). The file must contain one line per object. For each object the following tab-separated or comma-separated values need to be given (exactly one separator between each column):
+This is done in the procedure \verb|file_assignment.py|. However, the user can also provide their own list using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_paths| (the first one has higher priority, in case different file exists in the two folders only the first file will be read). The file must contain one line per object. For each object the following comma-separated values need to be given:
 \begin{enumerate}\setlength\itemsep{0em}
  \item Object name (the filename should start with the object name in order to be used)
  \item RA (hh:mm:ss.ss or hh mm ss.ss or as one number in degrees)
  \item DEC ($\pm$dd:mm:ss.ss or $\pm$dd mm ss.ss or as one number in degrees)
  \item PM RA (mas/year, can be 0 in the most cases)
  \item PM DEC (mas/year, can be 0 in the most cases)
- \item Epoch of the coordinates (only the number, e.g. 2000 or 2015.5)
  \item Enable/Disable flag (1 for enabled)
- \item Mask to use for the CERES radial velocities. At the moment G2, K5, or M2 are possible options. Can be empty.
- \item Velocity width to broaden the lines of the binary mask. Can be empty.
+ \item Mask to use for the CERES radial velocities. At the moment G2, K5, or M2 are possible options. If empty G2 is used.
+ \item Velocity width to broaden the lines of the binary mask in CERES. Can be empty.
+ \item Epoch of the coordinates (only the number, e.g. 2000 or 2015.5)
 \end{enumerate}
 
 Please note that the position of Moon, Jupiter, and Sun are calculated by the pipeline using the mid-exposure time. This requires that the filename contains the (case-insensitive) object name. Therefore the object is not required in the object list.
@@ -662,12 +663,12 @@ Please note that the position of Moon, Jupiter, and Sun are calculated by the pi
 \subsection{Format of the extracted files}
 Different types of extracted files are created. They are described in the following subsections.
 
-\subsubsection{raw-data filename}
+\subsubsection{raw-data filename in path\_extraction}
 \label{section:extraction_data_format}
 The final fits file contains the original header and some additional information, for example the calibration steps which were applied and some information about the flux collected in the different apertures. The data in the file is stored in a 3D array in the form: data type, aperture, and pixel. The data types are similar to the ones created by the CERES pipeline and are the following:
 \begin{enumerate}
   \setcounter{enumi}{-1}
-  \item 2D array with the wavelength for each aperture and pixel.
+  \item 2D array with the wavelength for each aperture and pixel in barycentric system.
   \item Extracted spectrum without any modification.
   \item Measurement of the error the extracted spectrum (using the scatter of the residuals after fitting a 2d polynomalial to the background areas (noise in the dark/bias))
   \item Blaze corrected spectrum, calculated by dividing the extracted spectrum and the normalised flat spectrum.
@@ -682,11 +683,12 @@ The final fits file contains the original header and some additional information
     \item[0.2] bad pixel in the extracted spectrum
   \end{itemize}
   \item Spectrum of the calibration fiber, e.g. of the emission line lamp.
+  \item Wavelength for each order and pixel without barycentric correction.
 \end{enumerate}
 
 These files can be plotted with the pipeline. Please find instructions in Chapter~\ref{Section:Plotting_extracted_files}.
 
-\subsubsection{raw-data filename + \_harps\_e2ds}
+\subsubsection{path\_harpsformat + Object name}
 This file contains the extracted spectrum without any modification in the same form as the \textit{e2ds} files created by the HARPS pipeline. The wavelength solution is stored in the header.
 
 \subsubsection{raw-data filename + \_lin}
@@ -696,7 +698,7 @@ The extracted spectrum is linearised using a wavelength step as given in paramet
 \subsubsection{raw-data filename + \_lin\_cont}
 This file contains data in the same form as described in Chapter~\ref{Section:linearised_spectrum}, only that the continuum corrected data was linearised.
 
-\subsubsection{inside single folder}
+\subsubsection{path\_extraction\_single}
 All the files are 2D arrays with the order/aperture as first and number of pixel in second dimension.
 \begin{description}
  \item[raw-data filename + \_extr] Extracted spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
@@ -734,7 +736,7 @@ The identification of the traces can be checked easily in the file given in para
 
 \begin{figure} 
   \begin{center}
-    \includegraphics[width=\textwidth]{./figures/orders_in_master_flat}
+    \includegraphics[width=\textwidth]{./figures/orders_in_master_flat_marker}
   \end{center} 
   \caption{Reduced CCD image of a white light flat (log10 gray scale) with the marked traces of the identified scientific orders/apertures (red). The extraction width (determined from the width given in parameter \textbf{width\_percentile} of the order multiplied with the value in parameter \textbf{extraction\_width\_multiplier}) is given in the dashed lines.
     \label{Fig:apertures_in_master_flat}}
@@ -836,7 +838,7 @@ This step is only done, if the Ceres pipeline is installed and \verb|path_ceres|
 \label{Section:files_folders_csv_for_terra}
 The data of the individual objects are stored in this folder in the subfolder \textit{object name + /data/}. If Terra is installed and \verb|terra_jar_file| is set correctly to the Terra \textit{PRV.jar}-file, then Terra will be run on each \textit{object name} within the folder. The results of the radial velocity analysis will be stored in \textit{object name + /results/synthetic.rv}.
 
-It is possible to include the information from previous nights of the same object by linking or copying the \textit{.csv}-files into the corresponding \textit{data/}-folders and rerunning \verb|python <path to scripts>/HiFLEx.py|. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
+It is possible to include the information from previous nights of the same object by linking or copying the \textit{.csv}-files into the corresponding \textit{data/}-folders and rerunning \verb|python <path to scripts>/hiflex.py|. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
 
 
 
@@ -845,7 +847,7 @@ It is possible to include the information from previous nights of the same objec
 \begin{enumerate}
   \item The script has some hard coded values in the *.py files (normally at the beginning of a procedure). These values can be changed for testing, but usually do not need any changes.
   \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|), given at the beginning of the python scripts. Some of the parameters in the configuration file need adjustment on a regular basis (see Chapter~\ref{Section:first_configuration} and ~\ref{Section:further_configuration}).
-  \item Furthermore, the pipeline reads the configuration file given in parameter \verb|configfile_fitsfiles| (standard: \verb|fits_conf.txt|), which is automatically created by the pipeline when running \verb|prepare_file_list.py|.
+  \item Furthermore, the pipeline reads the configuration file given in parameter \verb|configfile_fitsfiles| (standard: \verb|fits_conf.txt|), which is automatically created by the pipeline when running \verb|file_assignment.py|.
   \item The parameters which are set in the configuration file(s) can be overwritten with a command line input when a python script is started (e.g. \verb|python bla.py argument1=valueX argument2=valueY|).
   \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
 \end{enumerate}
@@ -894,6 +896,7 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
   \textbf{f} & The Fourier transformation is plotted against the period (in pixel).    \\
   \textbf{l} & The Lomb-Scargle-Periodogram is plotted against the period (in pixel).   \\
   \textbf{wl} & The Lomb-Scargle-Periodogram is plotted against the period (in wavelength). If you look for periodic signals in the spectrum, this is what you very probably should use.    \\
+  \textbf{w9} & (w followed by number): The plot is done against the wavelength (stored in data type 9/number).   \\
  \end{tabularx}
 \end{table}
 
@@ -970,7 +973,7 @@ python extract_single_chip.py
   \item \verb|polynom_order_intertraces = 2,3|
 \end{itemize}
 
-\noindent Afterwards, \verb|prepare_file_list.py| and \verb|HiFLEx.py| can be run as described above.
+\noindent Afterwards, \verb|file_assignment.py| and \verb|hiflex.py| can be run as described above.
 
 \subsubsection{HARPS data reduced by the CERES pipeline}
 The results can also be compared with the results from the CERES pipeline (\url{https://ui.adsabs.harvard.edu/#abs/2017PASP..129c4002B/abstract}, \url{https://github.com/rabrahm/ceres}). The extraction can be run with:
@@ -1106,7 +1109,7 @@ In the following Chapters a few ideas of how to check and fix common problems ar
 \end{itemize}
 If you modified the parameters, please use yours instead of the given ones in the following Chapters.
 
-If parameters are changed while working through the following steps. Some of the already created files need to be removed before the pipeline can re-run with the better settings. In the following chapters, each correction step should name the first value of the following list, that need to be removed (error messages because of missing files can be ignored). Afterwards \verb|HiFLEx.py| can be run again.
+If parameters are changed while working through the following steps. Some of the already created files need to be removed before the pipeline can re-run with the better settings. In the following chapters, each correction step should name the first value of the following list, that need to be removed (error messages because of missing files can be ignored). Afterwards \verb|hiflex.py| can be run again.
 \begin{lstlisting}[style=base]
 rm master_*
 rm logging/sci_trace1_binned.fits
@@ -1315,8 +1318,8 @@ tar -xzvf v*.tar.gz
 
 \noindent The following files should be available now in the program folder:
 \begin{description}
- \item[prepare\_file\_list.py] Script to automatically assign the fits files into the corresponding calibration steps.
- \item[HiFLEx.py] Script which needs to be run on each new set of data. It creates the data, which is necessary in order to extract the scientific spectra. Afterwards it extracts the Echelle spectra of the science images.
+ \item[file\_assignment.py] Script to automatically assign the fits files into the corresponding calibration steps.
+ \item[hiflex.py] Script which needs to be run on each new set of data. It creates the data, which is necessary in order to extract the scientific spectra. Afterwards it extracts the Echelle spectra of the science images.
  \item[procedures.py] Contains all the procedures for the data analysis.
  \item[tkcanvas.py] Contains the plotting routines to create the user interfaces (UI).
  \item[plot\_img\_spec.py] This script controls plotting of CCD images, graphs, and the extracted spectra.
@@ -1370,6 +1373,25 @@ To install Serval please follow the instructions as given on\\ \url{https://gith
 \section{Changelog (old)}
 \label{Section:Changelog_old}
 Please found the changes of newer versions in Chapter~\ref{Section:Changelog_new}.
+
+\subsection*{v0.4.1}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Switched to barycentric correction (radial velocity and BJDTDB) from \url{https://github.com/shbhuk/barycorrpy}.
+  \item Added parameter \verb|raw_data_mid_exposure_keys| to conf.txt.
+  \item Added parameter \verb|raw_data_object_name_keys| to conf.txt
+  \item Added parameter \verb|path_harpsformat| to conf.txt
+  \item Changed parameter \verb|raw_data_path| to \verb|raw_data_paths|, allowing list of folders.
+  \item Renamed parameter \verb|maxshift| to \verb|maxshift_orders|.
+  \item Renamed parameter \verb|update_widths| to \verb|update_width_orders|.
+  \item Renamed parameter \verb|master_flat_spec_norm_filename| to \verb|master_blaze_spec_norm_filename|.
+  \item Renamed parameter \verb|raw_data_imtyp_flatarc| to \verb|raw_data_imtyp_blaze|.
+  \item Script \verb|prepare_file_list.py| changed to allow for easy GUI development. Files can be assigned directly to calibration within the script. 
+  \item Time format in the file from parameter \verb|configfile_fitsfiles| created by \verb|prepare_file_list.py| changed.
+  \item Improved determination of shift between current frame and the reference frame.
+  \item Improved Error messages.
+  \item Improvement of the way how the new header values are stored.
+  \item Improvement of the GUI and plotting the spectra.
+\end{itemize}
 
 \subsection*{v0.4.0}
 \begin{itemize}\setlength\itemsep{0em}

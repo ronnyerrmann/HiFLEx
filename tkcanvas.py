@@ -3,9 +3,10 @@
 """
 Created on 06/07/17 at 4:56 PM
 
-Last Modified on July 11 2017 19:26
+Last Modified on March 31 2020
 
 @author: Neil Cook
+@modified extensively: Ronny Errmann
 
 Version 0.0.11
 """
@@ -21,7 +22,6 @@ except:     # before version 2.2
 from matplotlib.backend_bases import cursors
 import matplotlib.backends.backend_tkagg as tkagg
 
-import threading
 import time
 
 if sys.version_info[0] < 3:
@@ -526,7 +526,7 @@ class TkCanvas:
         win.geometry('%dx%d+%d+%d' % (width, height, x1, y1))
         
 # =============================================================================
-# Start of code
+# Grid class
 # ============================================================================= 
 class TkCanvasGrid:                                             # Completely new by Ronny
     def __init__(self, figure=None, ax=None, **kwargs):         # "=None" added by Ronny; to use it just as text field
@@ -584,9 +584,11 @@ class TkCanvasGrid:                                             # Completely new
         self.onclickvalue = dict()
 
         # populate matplotlib drawing area and buttons
+        self.canvas = canvas    # To allow regular updating and the use of tqdm
         self.populate()
-        
+        #print(time.time(),'before canvas.update()')
         canvas.update()     # adds the winfo information
+        #print(time.time(),'after canvas.update()')
         self.width_GUI  = max(300, min( self.wprops.get('width_GUI' , 1E9), int(self.screen_w_h[0])-50, scrollable_frame.winfo_width() ) )
         self.height_GUI = max(200, min( self.wprops.get('height_GUI', 1E9), int(self.screen_w_h[1])-90, scrollable_frame.winfo_height() ) )
         canvas.config(width=self.width_GUI, height=self.height_GUI)
@@ -632,7 +634,24 @@ class TkCanvasGrid:                                             # Completely new
         self.ws = dict()
         
         window_size = [0, 0]
-        for widget in widgets:
+        
+        # Used tqdm, if installed and if the number of data is worth it to use
+        def no_tqdm(input, desc=''):
+            """
+            In order to switch between tqdm on and off, this is needed
+            """
+            return input
+        try:
+            from tqdm import tqdm
+        except:
+            tqdm = no_tqdm
+        if len(widgets) > 1500:
+            plot_tqdm = tqdm
+        else:
+            plot_tqdm = no_tqdm
+            
+        for ii,widget in enumerate(plot_tqdm(widgets, desc='The statusbar might stop updating for 60s')):
+            #print(time.time(),widget)
             kind = widgets[widget].get('kind', 'TextEntry')
             name = widget
             label = widgets[widget].get('label', 'Enter {0}'.format(name))
@@ -694,6 +713,9 @@ class TkCanvasGrid:                                             # Completely new
                 w.grid(row=row, column=column, rowspan=rowspan, columnspan=columnspan, sticky=orientation)
                 #print('row,column',row,column)
                 self.ws[name] = w
+                if len(widgets) > 1500:
+                    if np.remainder(ii, 128) == 0:
+                        self.canvas.update()
 
     #---------------------------------------------------------------------------
     #define sub widgets
@@ -845,6 +867,7 @@ class TkCanvasGrid:                                             # Completely new
         self.update()   # Update everything (first gui3.data, afterwards kwargs (self.update() calls self.update_plot()) before exiting - Added by Ronny
         
         self.master.quit()
+        time.sleep(1)
         self.master.destroy()
 
     def allbind(self, entry, update):
