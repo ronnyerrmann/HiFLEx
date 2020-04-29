@@ -533,10 +533,7 @@ def file_list_UI(file_list):
 def get_observed_objects(params, conf_data):
     object_information_full = []
     object_information_head = []
-    object_files = [ params['object_file'] ]
-    object_file_no_path = params['object_file'].split('/')[-1]
-    for entry in [ params['result_path'] ] + params['raw_data_paths']:      # Check also the result and raw data paths for object names
-        object_files.append( entry + object_file_no_path )
+    object_files, object_files_full = find_file_in_allfolders(params['object_file'], [params['result_path']] + params['raw_data_paths'])
     Simbad.add_votable_fields("pmra")  # Store proper motion in RA
     Simbad.add_votable_fields("pmdec")  # Store proper motion in Dec.
     for entry in sorted(conf_data):
@@ -550,7 +547,7 @@ def get_observed_objects(params, conf_data):
             # Check if already in the list
             for obname in obnames:
                 for index, obname_found in enumerate(object_information_full):        # Same objectname doesn't need to be done again
-                    if obname == obname_found[0]:
+                    if obname in [obname_found[0], obname_found[0].replace('_',''), obname_found[0].replace('-',''), obname_found[0].replace('_','').replace('-','')]:
                         if im_name not in object_information_full[index][-1]:
                             object_information_full[index][-1].append(im_name)
                         found = True
@@ -871,7 +868,7 @@ if __name__ == "__main__":
     
     # Select the calibration parameters and Object coordinates in a GUI
     conf_data, object_information = calibration_parameters_coordinates_UI(conf_data, object_information_full, object_information_head)
-    
+
     # Append information to params['object_file']
     lines_txt = read_text_file(params['object_file'], no_empty_lines=True, warn_missing_file=False)
     object_names = convert_readfile(lines_txt, [str], delimiter=',', replaces=[['\t',',']], expand_input=True)
@@ -885,12 +882,6 @@ if __name__ == "__main__":
                 if object_names[ii][0] not in new_obj_names:
                     file.write(lines_txt[ii]+'\n')
                     new_obj_names.append(object_names[ii][0])
-
-    
-
-    
-    
-    
     
     # Save the results in a conf_data.txt file
     #print json.dumps(conf_data,sort_keys = False, indent = 4)

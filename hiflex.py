@@ -29,7 +29,7 @@ if __name__ == "__main__":
     #blazecor, cal2_l, cal2_s: at a later step to know the orders for localbackground -> cont1cal2
     
     # Load the reference catalogue. Note that the Ar I lines are rescaled!
-    reference_catalog, reference_names = read_reference_catalog(params['reference_catalog'], params['catalog_file_wavelength_muliplier'], params['use_catalog_lines'])
+    reference_catalog, reference_names = read_reference_catalog(params)
     
     # Create or read the file with the orders for this night
     if os.path.isfile(params['master_trace_sci_filename']) == True:

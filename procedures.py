@@ -253,9 +253,9 @@ def textfileargs(params, textfile=None):
     text_selection = ['arcshift_side', 'extraction_precision']
     results = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_csv_terra', 
                'path_harpsformat', 'master_blaze_spec_norm_filename']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
-    full_filenames = ['badpx_mask_filename', 'original_master_traces_filename', 'original_master_wavelensolution_filename', 'reference_catalog',
+    full_filenames = ['badpx_mask_filename', 'original_master_traces_filename', 'original_master_wavelensolution_filename',
                 'configfile_fitsfiles', 'raw_data_file_list', 'terra_jar_file']    # deal with full filenames -> nothing to do
-    texts = ['editor', 'extracted_bitpix', 'site', 'object_file', 'raw_data_imtyp_keyword', 
+    texts = ['editor', 'extracted_bitpix', 'site', 'reference_catalog', 'object_file', 'raw_data_imtyp_keyword', 
              'raw_data_imtyp_bias', 'raw_data_imtyp_dark', 'raw_data_imtyp_flat', 'raw_data_imtyp_trace1', 'raw_data_imtyp_blaze', 'raw_data_imtyp_trace2',
              'raw_data_exptim_keyword', 'raw_data_dateobs_keyword', 'raw_data_timezone_cor']      # -> nothing to do
     paths, loggings = [], []
@@ -1600,6 +1600,8 @@ def sigmaclip(data, x=[], nc=1, sub=[], ll=3., lu=3., repeats=5, exclude_absorpt
     if len(data) == 0:
         logger('Warn: empty array for sigma clipping.')
         return np.array([]), poly
+    if len(np.array(data).shape) > 1:
+        logger('Warn: Data array for sigma clipping is not 1-dimensional ({0}). This is a programming error and will most likely lead to a crash.'.format(np.array(data).shape))
     if len(x) != len(data):
         if len(x) > 0:
             logger('Warn: Got different sized arrays for sigma clipping (y: {0}, x: {1}). This is a programming error and should not happen.'.format(len(data), len(x)))
@@ -1840,7 +1842,7 @@ def find_center(imslice, oldcenter, x, maxFWHM, border_pctl=0, significance=3.0,
         
         # Fit the centre with a polynomial as well, using 50% of the flux
         if centerfit > 0 and width > 0 and polymax:
-            cen_poly, poly = fit_poly_center(sub_slice)
+            cen_poly, poly,l,r = fit_poly_center(sub_slice)
             cen_poly += leftmin
 
         # Redefine the borders of the order
@@ -1851,7 +1853,7 @@ def find_center(imslice, oldcenter, x, maxFWHM, border_pctl=0, significance=3.0,
 
     return centerfit, cen_poly, width, leftmin,rightmin
 
-def fit_poly_center(imslice, x=[]):
+def fit_poly_center(imslice, x=[], border_pctl=75):
     """
     Fits a third order polynomial against a non-gaussian curve to find the maximum
     :param imslice: list or array of floats, non-gaussian line 
@@ -1864,7 +1866,7 @@ def fit_poly_center(imslice, x=[]):
         x = np.arange(len(imslice))
     data = np.vstack((x,imslice))
     data = data[:, data[0,:].argsort() ]            # sort by x
-    left, right = find_border_pctl(data[1,:], border_pctl=75, full_px=True)     # The pixels before and after the flux is above 75% of max
+    left, right = find_border_pctl(data[1,:], border_pctl=border_pctl, full_px=True)     # The pixels before and after the flux is above 75% of max
     if right - left >= 3:
         x = np.arange(data.shape[1])
         mask = ( ( x >= left ) & ( x <= right ) )
@@ -1888,7 +1890,7 @@ def fit_poly_center(imslice, x=[]):
                 y_crit = np.polyval(poly, crit)
                 cen_poly = crit[y_crit.argmax()]"""
                 
-    return cen_poly, poly
+    return cen_poly, poly, left, right
 
 def measure_noise(spectra, p_order=16, semi_window=10):
     """
@@ -2782,11 +2784,13 @@ def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_
                 shifts.append( np.abs(sci_tr_poly[start_order  :  ,0,-1] - cal_tr_poly[start_order  :  ,0,-1]) )    # not when science and calibration at the same position
             shifts.append( np.abs(sci_tr_poly[start_order+1:  ,0,-1] - cal_tr_poly[start_order  :-1,0,-1]) )        # calibration fiber could be left or right of science fiber
             shifts.append( np.abs(sci_tr_poly[start_order  :-1,0,-1] - cal_tr_poly[start_order+1:  ,0,-1]) )        # calibration fiber could be left or right of science fiber
-            if sci_tr_poly.shape[0] >= 3:
+            if sci_tr_poly.shape[0] >= 4:           # If enough data, then do a polyfit
                 for i in range(len(shifts)):
                     poly = np.polyfit(range(len(shifts[i])), shifts[i], 2)
                     shifts[i] = np.polyval(poly, range(len(shifts[i])) )
-            shift = min( np.min(shifts, axis=1) )
+            for i in range(len(shifts)):
+                shifts[i] = np.min(shifts[i])
+            shift = min(shifts)
         shift = min(shift, 20 * max(widths[:,2]))
         if shift >= 3:              
             break
@@ -2853,7 +2857,8 @@ def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_
             # Do the gaussian fit again, although changes are less than 1%
             popt = centroid_order(shifts,fluxdiff,shifts[np.argmax(fluxdiff)],max(shifts)-min(shifts))    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
             shift, width = round(popt[1],2), round(popt[2],2)
-            shift_poly, poly = round(fit_poly_center(fluxdiff, x=shifts),2)
+            shift_poly, poly,l,r = fit_poly_center(fluxdiff, x=shifts)
+            shift_poly = round(shift_poly, 2)
             mshift = round( best_shifts[-1], 2)                 # find the maximum
             comment = ' The center of the gauss was shifted by {0} px, the center of a third order polynomial was shifted by {2} px, and the maximum flux found at a shift of {1} px.'.format(shift, mshift, shift_poly)
             im_head['HIERARCH HiFLEx CD_SHIFT_GAUSS']  = (shift, 'Shift of the Gauss-centre in C-D [px]')        # (value, comment)
@@ -2931,7 +2936,7 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
     fluxes = np.array(fluxes)
     # Find the center in each order: where is the flux the highest
     gauss, goodvalues = [], []
-    label_datapoins, label_gauss, label_centroids = [],[],[]
+    label_datapoins, label_gauss, label_poly, label_centroids = [],[],[],[]
     for order in orders:
         if cen_pos_diff != []:                          # Automatic determination of the search area
             for i in range(5):                          # If the cen_pos_diff is NaN for this order then check neightboring orders
@@ -2971,12 +2976,19 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
         if len(popts) != 0:
             goodvalues.append(True)
             popts = sorted(popts, key=operator.itemgetter(0))               # Minimum deviation from the fit
-            gauss.append(popts[0][1])      #shift=popt[1]
+            popt = popts[0][1]
+            mask = ( np.abs(x-popt[1]) < 5*popt[2] )                        # Within +- 5* width
+            cen_poly, poly,l,r = fit_poly_center(y[mask], x[mask], border_pctl=50)
+            if np.isnan(cen_poly):       #cen_poly - gauss[-1][1] < 3:         
+                cen_poly = popt[1]
+                poly = [np.nan]*4
+            gauss.append(popt+[cen_poly,l,r]+list(poly))      #shift=popt[1]
         else:
             goodvalues.append(False)
-            gauss.append([0,0,0,0])
+            gauss.append([np.nan]*9)
         label_datapoins.append('extracted flux in order {0}'.format('%2.2i'%order))
         label_gauss.append('fitted gauss in order {0}'.format('%2.2i'%order))
+        label_poly.append('fitted 3rd order polynomial\n in order {0}'.format('%2.2i'%order))
         label_centroids.append('final center in order {0}'.format('%2.2i'%order))
     
     gauss = np.array(gauss)
@@ -2987,7 +2999,7 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
         poly, diff, min_gauss, max_gauss, used_orders = [0], [0], 0, 0, 0
     else:
         # Fit a polynomial to the center
-        goodval, poly = sigmaclip(gauss, x=orders, nc=2, sub=goodvalues, ll=sigma, lu=sigma, repeats=5)
+        goodval, poly = sigmaclip(gauss[:,4], x=orders, nc=2, sub=goodvalues, ll=sigma, lu=sigma, repeats=5, x_cen=0)
         shifts = np.round(np.polyval(poly, orders),2)
         diff = shifts[goodvalues*goodval] - gauss[goodvalues*goodval,1]
         min_gauss, max_gauss = round(min(gauss[goodvalues,2][goodval]),2), round(max(gauss[goodvalues,2][goodval]),2)
@@ -2995,7 +3007,7 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
     # Log the results
     arcshifts = np.repeat([arcshifts],len(orders),axis=0)
     title = 'Determining the shift of the calibration traces'
-    plot_gauss_data_center(arcshifts, fluxes.T, label_datapoins, gauss, label_gauss, shifts, label_centroids, params['logging_find_arc_traces'], title=title)
+    plot_gauss_data_center(arcshifts, fluxes.T, label_datapoins, gauss[:,:4], label_gauss, shifts, label_centroids, params['logging_find_arc_traces'], title=title, poly=gauss[:,5:], label_poly=label_poly)
     logger(('Info: The shift between science traces and calibration orders is between {0} and {1} px. '+\
             'The average residuals to the 2nd order polynomial is {6} px (standard deviation of {4} px), {5} orders were used. '+\
             'The gaussian width of the arc lines in spacial direction is between {2} and {3} px').format(min(shifts), max(shifts), 
@@ -3077,7 +3089,7 @@ def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None
     
     return lines
 
-def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
+def read_reference_catalog(params, filename=None, wavelength_muliplier=None, arc_lines=None):
     """
     Reads the reference catalogue from a file and extracts the lines which should be used
     :param filename: text, filename of the catalogue file. The file needs to consist of 3 columns: wavelength of the line, 
@@ -3087,46 +3099,51 @@ def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
     :return reference_catalog: 2d array with one entry for each line. Each entry contains the wavelength, the intensity of the line, and the index in the catalogue
     :return reference_names: list with same length as reference_catalog, name of each line
     """
+    if filename is None:                filename = params['reference_catalog']
+    if wavelength_muliplier is None:    wavelength_muliplier = params['catalog_file_wavelength_muliplier']
+    if arc_lines is None:               arc_lines = params['use_catalog_lines']
     for i in range(len(arc_lines)):
         arc_lines[i] = arc_lines[i].replace(' ','')
-    reference_catalog = []
-    reference_names = []
-    if os.path.isfile(filename) == False:
-        logger('Error: file {0} does not exist'.format(filename) )
-    with open(filename, 'r') as file:
-        for line in file:
-            line = line[:-1].split('\t')
-            if len(line) < 3:
-                continue
-            if line[2].replace(' ','') not in arc_lines:        # if Ar IV
-                continue
-            try:
-                line[0] = float(line[0])*wavelength_muliplier   # wavelength in Angstrom
-            except:
-                logger('Warn: Wavelength {0} of line {1} in file {2} cannot be transformed to float'.format(line[0], line, filename))
-                continue                                        # wavelength can't be transformed to float
-            for i in range(len(line[1])+1)[::-1]:               # Make intensity into a number, intensity can contain text at the end
+    reference_catalog, reference_names = [], []
+    refernce_files, refernce_files_full = find_file_in_allfolders(filename, [params['result_path']] + params['raw_data_paths'] + [os.path.realpath(__file__).rsplit('/',1)[0]+'/'])
+    if len(refernce_files) == 0:
+        logger('Error: file for the reference coordinates does not exist. Checked: {0}'.format(refernce_files_full) )
+    for refernce_file in refernce_files:
+        with open(refernce_file, 'r') as file:
+            for line in file:
+                line = line[:-1].split('\t')
+                if len(line) < 3:
+                    continue
+                if line[2].replace(' ','') not in arc_lines:        # if Ar IV
+                    continue
                 try:
-                    line[1] = float(line[1][:i])                # It's a number
-                    break
+                    line[0] = float(line[0])*wavelength_muliplier   # wavelength in Angstrom
                 except:
-                    continue                                    # Try without the last character
-            if i == 0:
-                line[1] = 1.
-            if line[1] < 0:
-                logger('Warn: Line intensity cannot be smaller than 0.0, check line {0} in {1}'.format(line, filename))
-                line[1] = 1.
-            if line[1] == 0:
-                line[1] = 0.1
-            reference_names.append(line[2])
-            line = line[0:2]
-            if reference_names[-1].find('Ar I') == 0:
-                line[1] *= 50
-            line.append(len(reference_catalog))
-            reference_catalog.append(line)   # wavelength in Angstrom, relative intensity of the line, index of line in reference_names
-
-    if reference_catalog == []:
-        logger('Error: no reference lines found in {0} for the requested lines {1}'.format(filename, arc_lines))
+                    logger('Warn: Wavelength {0} of line {1} in file {2} cannot be transformed to float'.format(line[0], line, refernce_file))
+                    continue                                        # wavelength can't be transformed to float
+                for i in range(len(line[1])+1)[::-1]:               # Make intensity into a number, intensity can contain text at the end
+                    try:
+                        line[1] = float(line[1][:i])                # It's a number
+                        break
+                    except:
+                        continue                                    # Try without the last character
+                if i == 0:
+                    line[1] = 1.
+                if line[1] < 0:
+                    logger('Warn: Line intensity cannot be smaller than 0.0, check line {0} in {1}'.format(line, refernce_file))
+                    line[1] = 1.
+                if line[1] == 0:
+                    line[1] = 0.1
+                reference_names.append(line[2])
+                line = line[0:2]
+                if reference_names[-1].find('Ar I') == 0:
+                    line[1] *= 50
+                line.append(len(reference_catalog))
+                reference_catalog.append(line)   # wavelength in Angstrom, relative intensity of the line, index of line in reference_names
+        if len(reference_catalog) > 0:
+            break
+    if len(reference_catalog) == 0:
+        logger('Error: no reference lines found in {0} for the requested lines {1}'.format(refernce_files, arc_lines))
     reference_catalog = np.array(reference_catalog)
     arcs = reference_catalog.shape
     # Remove the faintest lines, if too many lines are in the catalogue
@@ -3137,7 +3154,7 @@ def read_reference_catalog(filename, wavelength_muliplier, arc_lines):
             if keep[i] == False:
                 del reference_names[i]                      # remove the names
         reference_catalog = reference_catalog[keep,:]       # remove the wavelengths, intensities
-        logger('Info The faintest {0} of {1} entries in the arc reference file {2} will not be used '.format(arcs[0]-reference_catalog.shape[0], arcs[0], filename ))
+        logger('Info The faintest {0} of {1} entries in the arc reference file {2} will not be used '.format(arcs[0]-reference_catalog.shape[0], arcs[0], refernce_file ))
     return reference_catalog, reference_names
 
 def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=20.0, in_shift=0, fib='cal', fine=False, im_head=dict()):
@@ -3703,6 +3720,25 @@ def get_possible_object_names(filename, header, header_keywords, replacements=['
                     
     return obnames
 
+def find_file_in_allfolders(filename, folders=[]):
+    """
+    Returns a list of places where to find the filename, both alone and checked in all folders
+    :param filename: string: filename, can contain a path
+    :param folders: list of strings: paths in which the filename and the filename without its path should be searched
+    :return pathfiles: list of strings: All places in which the file was found
+    """
+    filename_no_path = filename.rsplit('/',1)[-1]
+    pathfiles, pathfiles_full = [], []
+    for folder in [''] + folders:      # Check also the result and raw data paths for object names
+        for fname in [filename, filename_no_path]:
+            totest = folder+fname
+            if totest not in pathfiles_full:
+                pathfiles_full.append( totest )
+                if os.path.isfile(totest):
+                    pathfiles.append( totest )
+    
+    return pathfiles, pathfiles_full
+    
 def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace):
     """
     Extracts the spectra and stores it in a fits file
@@ -3727,18 +3763,16 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     #not necessary anymore: obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
     obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
     
-    
     # Change the path to the object_file to the result_path, if necessary
-    object_files = [ params['object_file'] ]
-    object_file_no_path = params['object_file'].split('/')[-1]
-    for entry in [ params['result_path'] ] + params['raw_data_paths']:      # Check also the result and raw data paths for object names
-        object_files.append( entry + object_file_no_path )
+    object_file = params['object_file']         # needed later
+    object_files, object_files_full = find_file_in_allfolders(object_file, [params['result_path']] + params['raw_data_paths'])      # Check also the result and raw data paths for object names
+    ra2, dec2, pmra, pmdec, epoch = 0., 0., 0., 0., 2000.
     for object_file in object_files:        # Will be run in any case, even if empty
         ra2, dec2, epoch, pmra, pmdec, obnames, dummy = getcoords_from_file(obnames, 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using CERES to calculated BCV
         if ra2 !=0 or dec2 != 0:                                           # Found the objects -> obnames becomes the single entry which matched entry in params['object_file']
             break
     if ra2 ==0 and dec2 == 0:
-        logger('Warn: Reference coordinates files {0} do not exist or object not found within them.'.format(object_files))
+        logger('Warn: Reference coordinates files do not exist or object can not be found within them. Checked: {0}'.format(object_files_full))
     im_head['HIERARCH HiFLEx OBJNAME'] = (obnames[0], 'Used object name')
     
     # Get the baycentric velocity
@@ -4164,7 +4198,7 @@ def scale_data(y, x=[], mode='gauss'):
     elif mode == 'min':
         True        # Already all confirmed
     elif mode == 'poly3':
-        cen_poly, popt = fit_poly_center(-y, x)
+        cen_poly, popt,l,r = fit_poly_center(-y, x)
         if not np.isnan(cen_poly):
             miny = -np.polyval(popt, cen_poly)
             rangey = maxy - miny
@@ -6615,7 +6649,7 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
     plt.close()
     return fmask, pfits, widths
 
-def plot_gauss_data_center(datapoints_x, datapoints, label_datapoins, gauss, label_gauss, centroids, label_centroids, filename='', title=''):
+def plot_gauss_data_center(datapoints_x, datapoints, label_datapoins, gauss, label_gauss, centroids, label_centroids, filename='', title='', poly=None, label_poly=None):
     """
     Plot a 1D Gaussian to data
     """
@@ -6629,20 +6663,31 @@ def plot_gauss_data_center(datapoints_x, datapoints, label_datapoins, gauss, lab
         plot_img_spec.plot_points(datapoints_x[datarange,:], datapoints[datarange,:], np.array(label_datapoins)[datarange], '', show=False, adjust=adjust, title='', return_frame=True, frame=frame, x_title='Pixel', y_title='Flux')
         ymin1, ymax1 = axes.get_ylim()
         plt.gca().set_prop_cycle(None)          #Reset the color cycle
-        gauss_x, gauss_y = [], []
+        gauss_x, gauss_y, poly_x, poly_y = [], [], [], []
         for i in datarange:
             x = np.linspace(min(datapoints_x[i,:]), max(datapoints_x[i,:]), len(datapoints_x[i,:])*20 )
             y = oneD_gauss(x,gauss[i,:])
             gauss_x.append(x)
             gauss_y.append(y)
+            if poly is not None:
+                mask = ( ( x >= poly[i,0] ) & ( x <= poly[i,1]  ) )                        # Within +- 5* width
+                poly_x.append( x[mask] )
+                poly_y.append( np.polyval(poly[i,2:],x[mask]) )
         plot_img_spec.plot_points(gauss_x, gauss_y, np.array(label_gauss)[datarange], '', show=False, adjust=adjust, title='', return_frame=True, frame=frame, x_title='Pixel', y_title='Flux', linestyle="-", marker="")
         ymin2, ymax2 = axes.get_ylim()
         xmin, xmax = axes.get_xlim()
+        if poly is not None:
+            plt.gca().set_prop_cycle(None)          #Reset the color cycle
+            label = np.array(label_poly)[datarange]
+            label[1:] = ''
+            plot_img_spec.plot_points(poly_x, poly_y, label, '', show=False, adjust=adjust, title='', return_frame=True, frame=frame, x_title='Pixel', y_title='Flux', linestyle=":", marker="")
         plt.gca().set_prop_cycle(None)          #Reset the color cycle
         ymin, ymax = min(ymin1,ymin2), max(ymax1,ymax2)
         centr_x = np.repeat([centroids[datarange]],2,axis=0).T
         centr_y = np.repeat([[ymin, ymax]], len(datarange), axis=0)
-        plot_img_spec.plot_points(centr_x, centr_y, np.array(label_centroids)[datarange], '', show=False, adjust=adjust, title='', return_frame=True, frame=frame, x_title='Pixel', y_title='Flux', linestyle="--", marker="")
+        label = np.array(label_centroids)[datarange]
+        label[1:] = ''
+        plot_img_spec.plot_points(centr_x, centr_y, label, '', show=False, adjust=adjust, title='', return_frame=True, frame=frame, x_title='Pixel', y_title='Flux', linestyle="--", marker="")
         axes.set_ylim(ymin,ymax)
         axes.set_xlim(xmin,xmax)
         frame.set_title(title, fontsize=16)
@@ -6735,6 +6780,7 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
             #print order, step, len(data[1,sub[4,:]]), len(data[4,sub[4,:]]), sum(np.isnan(data[1,sub[4,:]])), sum(np.isnan(data[4,sub[4,:]])), data[1,sub[4,:]]-x_cen, data[4,sub[4,:]], min(step,nc)
             # New, puttting sigmaclipping into own thing
             sub[4,:], p = sigmaclip(data[4,:], x=data[1,:], nc=min(step,nc), sub=sub[4,:], ll=ll, lu=lu, repeats=1, exclude_absorption=True, x_cen=x_cen)
+            sub[4,:] *= sub[0,:]            # Remove the nan values again
             # data[5] is not needed
             
             # Old, having sigmaclipping here

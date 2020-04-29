@@ -1,13 +1,12 @@
 ## How to used the Scripts
-# prepare filelist: run prepare_file_list.py
-# every day: run reduction_day.py   : shift orders, determine background, create wavelength solution for the day, create normalised extracted spectrum, extract the spectrum
+# prepare filelist: run file_assignment.py
+# every day: run HiFLEx.py   : shift orders, create wavelength solution for the day, create normalised extracted spectrum, extract the spectrum
 
 # Configuration file for:
 #   create_badpx_mask.py
 #   file_assignment.py
 #   HiFLEx.py
 #   remove_orders.py
-#   live_extraction.py
 
 ## Format of the parameters:
 #---------------------------
@@ -178,9 +177,11 @@ wavelength_scale_resolution = 0.01
 badpx_mask_filename = /data/ronny/Reduced/NA/bad_px_mask.fits
 
 
-  # Path and filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. The values can be used as given from the NIST database, e.g. 6550.653 \t 140* \t Ne II 
-reference_catalog = /home/ronny/Scripts/exohspec/reference_lines_UNe.txt
-reference_catalog = /home/ronny/Scripts/exohspec/reference_lines_ThAr.txt
+  # Path and filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. 
+  #             The values can be used as given from the NIST database, e.g. 6550.653 \t 140* \t Ne II
+  #             The file will be looked for in the position given, in the reduction folder, and in the HiFLEx folder
+reference_catalog = reference_lines_UNe.txt
+reference_catalog = reference_lines_ThAr.txt
   # The Script runs arc solution in Angstrom. Give the multiplier for the wavelength to get Angstrom, e.g. catalog_file_wavelength_muliplier=10 for the reference_catalog in [nm]
 catalog_file_wavelength_muliplier = 1
   # Which lines of the catalogue should be used (duplicates are not a problem)
