@@ -77,7 +77,7 @@ if __name__ == "__main__":
             logger('\t\torder\tleft\tright\tgausswidth\tpctlwidth\tpositio\tmin_tr\tmax_tr\t(positio: position of the trace at the center of the image, pctlwidth: median full width of the trace at {0}% of maximum)'\
                       .format(params['width_percentile']),printarrayformat=printarrayformat, printarray=data)
             # Do a bisector analysis: plot position as fuction of flux
-    #bisector_measurements_orders(im_trace1,  params['logging_traces_bisector'], sci_tr_poly, xlows, xhighs, widths)
+            bisector_measurements_orders(im_trace1,  params['logging_traces_bisector'], sci_tr_poly, xlows, xhighs, widths)
         
     """Not really useful
     # Create the background map, if it doesn't exist

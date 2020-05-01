@@ -2862,7 +2862,8 @@ def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_
             mshift = round( best_shifts[-1], 2)                 # find the maximum
             comment = ' The center of the gauss was shifted by {0} px, the center of a third order polynomial was shifted by {2} px, and the maximum flux found at a shift of {1} px.'.format(shift, mshift, shift_poly)
             im_head['HIERARCH HiFLEx CD_SHIFT_GAUSS']  = (shift, 'Shift of the Gauss-centre in C-D [px]')        # (value, comment)
-            im_head['HIERARCH HiFLEx CD_SHIFT_POLY']   = (shift_poly, 'Shift of the polynom maximum in C-D [px]')        # (value, comment)
+            if not np.isnan(shift_poly):
+                im_head['HIERARCH HiFLEx CD_SHIFT_POLY']   = (shift_poly, 'Shift of the polynom maximum in C-D [px]')        # (value, comment)
             im_head['HIERARCH HiFLEx CD_SHIFT_MAXFLUX']  = (mshift, 'Shift of the maximum flux in C-D [px]')        # (value, comment)
             #shift = np.mean([shift,mshift]     # if not symetrical traces then, a big shift
             if not np.isnan(shift_poly):
@@ -4165,7 +4166,7 @@ def scale_data(y, x=[], mode='gauss'):
     """
     Scales the data to be between 0 and 1
     :param y: list or array of floats or ints with the data
-    if mode=='gauss', then should be absorption line
+    if mode=='gauss' or 'poly3', then should be absorption line
     """
     if type(y).__name__ != 'ndarray':
         y = np.array(y)
@@ -4187,7 +4188,7 @@ def scale_data(y, x=[], mode='gauss'):
         try:
             popt,pcov = curve_fit(oneD_gauss,x,-y,p0=p0, bounds=bounds)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
             #maxy = -popt[3]        # use not in case the line is not in the form of a Gauss
-            print miny, maxy,rangey, popt
+            #print miny, maxy,rangey, popt
             diff = np.abs( ( oneD_gauss( x, popt ) - y ) / y )
             if np.percentile(diff, 75) < 0.1:
                 maxy = -popt[3]
@@ -4213,9 +4214,10 @@ def scale_data(y, x=[], mode='gauss'):
 
 def linear_interpolation(x, y, x_search):
     """
-    Linear euqation to interpolate
+    Linear equation to interpolate. Similar to y_x=f(x_search); f=scipy.interpolate.interp1d(x,y,kind='linear'), but at least for single numbers it needs only 20% of time
     :param x, y: list or array of floats
     :param x_search: list or array of floats (one entry less than x,y) or float
+    :return y_x: array or float (depending on type of x_seach), the interpolated x_search value.
     """
     numer = False
     if type(y).__name__ != 'ndarray':
@@ -4234,16 +4236,24 @@ def linear_interpolation(x, y, x_search):
     
     return y_x
 
-def create_grid_data(y, x=[], ysteps=20, xrang=10):
+def create_grid_data(y, x=[], ysteps=20):
     """
-    Grids the data into ysteps. First the data is fitted by polynomials, using xrang,
-        afterwards the polynomials are combined and then the y-values interpolated
+    Grids the data into ysteps. First the data is fitted by a cubic spline
+        (https://docs.scipy.org/doc/scipy/reference/tutorial/interpolate.html),
+        afterwards the y-values interpolated to the gridded values
     :param y: list or array of floats or ints with the data, should be sorted
     :param ysteps: integer, number of steps for y
-    :param xrang: float or integer, what xrange to model with a polynomial
+    :return data_g[0,:], data_g[1,:]: 1d arrays of the curve with values only at y
     """
     if len(x) != len(y):
         x = np.arange(len(y))
+    # Fit a cubic spline
+    if len(y) <= 3: kind = 'linear'
+    else:           kind = 'cubic'
+    f = scipy.interpolate.interp1d(x, y, kind=kind)
+    xf = np.linspace( np.min(x), np.max(x), len(y)*1E2, endpoint=True ) 
+    data = np.vstack(( xf,f(xf) ))
+    """ Do it manually instead of just using a cubic spline: using a stepwise polynomial of grade 2
     start = x[0]
     data = np.zeros(0)
     data.shape = (3,0)
@@ -4266,14 +4276,12 @@ def create_grid_data(y, x=[], ysteps=20, xrang=10):
         #bfit = scipy.interpolate.splrep( x[mask],y[mask],k=min(3,sum(mask)-1) )       # Get the B-sline of the flux
         #y_f = scipy.interpolate.splev(x[mask],bfit)            # Apply the B-spline -> this will create the same points as the original points
         
-        """fig, frame = plt.subplots(1,2)
-        frame[0].plot(x,y)
-        frame[0].plot(x[mask],y[mask])
-        frame[0].plot(x[mask], y_f)
-        frame[1].plot(y,x)
-        frame[1].plot(y[mask],x[mask])
-        frame[1].plot(y[mask], x_f)
-        plt.show()"""
+        #"#""
+        fig, frame = plt.subplots(1,1)
+        frame.plot(x,y)
+        frame.plot(x[mask],y[mask])
+        frame.plot(xf, y_f)
+        plt.show()#"#""
         
         # Prepare the next step
         if start+xrang*multi >= max(x):
@@ -4289,24 +4297,25 @@ def create_grid_data(y, x=[], ysteps=20, xrang=10):
     data.shape = (3, len_data, step)            # Reorder the data to use np
     x = np.average( data[0,:,:], weights=data[2,:,:], axis=1 )
     y = np.average( data[1,:,:], weights=data[2,:,:], axis=1 )
-    data = np.vstack((x,y))
+    data = np.vstack((x,y))"""
     miny = np.nanmin(data[1,:])
     maxy = np.nanmax(data[1,:])
     y_values = np.linspace(miny, maxy, ysteps+1, endpoint=True)  # last entry is not necessary but for range
     #y_values = np.linspace(miny, maxy, ysteps, endpoint=False)  # without last entry
-
+    
     # Find the y values
     data_g = np.zeros(0)
     data_g.shape = (2,0)
-    if True:
-        for yy in y_values:
-            diffsign = np.sign( data[1,:] - yy )
-            signchange = (np.roll(diffsign, 1) - diffsign) != 0
-            signchange[0] = False               # As last and first element are checked by np.roll
-            signchangepos = np.where(signchange)[0]
-            for ii in signchangepos:
-                x_interp = linear_interpolation(data[1,ii-1:ii+1], data[0,ii-1:ii+1], yy) # Interpolate
-                data_g = np.hstack(( data_g, np.vstack((x_interp, yy)) ))
+    for yy in y_values:
+        diffsign = np.sign( data[1,:] - yy )
+        signchange = (np.roll(diffsign, 1) - diffsign) != 0
+        signchange[0] = False               # As last and first element are checked by np.roll
+        signchangepos = np.where(signchange)[0]
+        for ii in signchangepos:
+            x_interp = linear_interpolation(data[1,ii-1:ii+1], data[0,ii-1:ii+1], yy)   # Interpolate, takes 2.5E-5s
+            #f = scipy.interpolate.interp1d(data[1,ii-1:ii+1], data[0,ii-1:ii+1], kind='linear')     # together with next step takes 1.5E-4s
+            #x_interp2= f(yy)                                                           # result is the same as with linear_interpolation
+            data_g = np.hstack(( data_g, np.vstack((x_interp, yy)) ))
 
     data_g = data_g[:,data_g[0,:].argsort()]
     
@@ -4373,9 +4382,12 @@ def create_grid_data(y, x=[], ysteps=20, xrang=10):
 def find_overlap(stats):
     """
     Find the overlap-ordering of data with different data ranges
-    :return 
+    :param stats: 2d array: min and max as columns, indexes as third column is optional
+    :return indexes: list of list of integers: order of the indexes, with the best index starting, and then continuing
     stats: 0=min, 1=max, 2=global index, 3=index, 4=diff, 5=sorted, 6=mask
     """
+    if stats.shape[0] == 0:
+        return [[]]
     if stats.shape[1] == 2:
         stats = np.vstack(( stats.T, np.arange(stats.shape[0]) )).T                  # Add global index, if necessary
     stats = np.vstack(( stats.T, np.arange(stats.shape[0]) , stats[:,1] - stats[:,0], np.argsort(stats[:,1] - stats[:,0]), np.ones(stats.shape[0]) )).T     # Add index, range, sort by longest range, mask
@@ -4405,118 +4417,168 @@ def find_overlap(stats):
         
     return indexes
 
-def calculate_bisector_multiple(data, data_x, deg=2):
+def calculate_bisector_multiple(data, data_x):
     """
+    Combines the bisector measurement of different slices
     :param data: list of lists/arrays of floats, e.g. the flux of an absorption line. The feature needs to have lower flux than the continuum
     :param data_x: list of lists/arrays of floats, e.g. pixel or wavelength or velocity
+    :return bisecs: 2d array (x,y as rows): All datapoints from the bisector mesurements, sorted by y
+    :return bisec_fit: 2d array (x,y as rows): Fitted bisectors using a high order polynomial, sorted by y
+    :return lines: 2d array (x,y as rows): The absorption lines, sorted by x
     """
     if len(data) == 0:
-        return np.zeros(0), np.zeros(0)             # Empty array
+        return np.zeros(0), np.zeros(0), np.zeros(0)             # Empty array
     if type(data[0]).__name__ not in ['list','ndarray']:
         data = [data]
         data_x = [data_x]
     # Fold the data into a one-D curve by rescaling and fitting the centre
-    bisecs_sub = []
+    bisecs_sub, line_data = [], []
     bisecs_stat = np.zeros(0)
     bisecs_stat.shape = (3,0)
     for ii in range(len(data)):
-        bisec = calculate_bisector(data[ii], data_x[ii])        # 2d array with x and y
+        bisec, norm_line = calculate_bisector(data[ii], data_x[ii])        # 2d array with x and y
         if bisec.shape[1] > 3:
             bisecs_sub.append(bisec)
             bisecs_stat = np.hstack(( bisecs_stat, np.vstack(( np.min(bisec[1,:]), np.max(bisec[1,:]), bisecs_stat.shape[1] )) ))     # min, max, index
+            line_data.append( norm_line )
     # Combine the bisectors from each measurement using overlapping areas
     #print('find overlapping indexes')
+    if bisecs_stat.shape[1] == 0:
+        return np.zeros(0), np.zeros(0), np.zeros(0)             # Empty array
     indexes = find_overlap(bisecs_stat.T)
     #print('finished', indexes)
+    lines = np.zeros(0)
+    lines.shape = (2,0)
     bisecs = np.zeros(0)
     bisecs.shape = (3,0)
     for ii in range(len(indexes)):
-        bisecs_part = np.vstack(( bisecs_sub[0], np.arange(bisecs_sub[0].shape[1]) ))
+        line_part = line_data[indexes[ii][0]]
+        bisecs_part = np.vstack(( bisecs_sub[indexes[ii][0]], np.arange(bisecs_sub[indexes[ii][0]].shape[1]) ))
         for index in indexes[ii][1:]:
-            for ii in range(bisecs_part.shape[1]-1):
-                if bisecs_part[1,ii] == bisecs_part[1,ii+1]:
-                    bisecs_part[1,ii+1] += 1E-9
-                    #print ii, bisecs_part[1,ii:ii+2]
-            f = scipy.interpolate.UnivariateSpline(bisecs_part[1,:], bisecs_part[0,:], s=0)       # y becomes x in this setting
-            offset = np.median( f(bisecs_sub[index][1,:]) - bisecs_sub[index][0,:] )                            # calculate the difference in x
-            bisecs_sub[index][0,:] += offset
-            bisecs_part = np.hstack(( bisecs_part, np.vstack(( bisecs_sub[index], np.arange(bisecs_sub[index].shape[1])+bisecs_part.shape[1] )) ))
+            for jj in range(bisecs_part.shape[1]-1):                # Avoid having the same y values
+                if bisecs_part[1,jj] == bisecs_part[1,jj+1]:
+                    bisecs_part[1,jj+1] *= (1+1E-9)
+                    #print jj, bisecs_part[1,jj:jj+2]
+            #f = scipy.interpolate.UnivariateSpline(bisecs_part[1,:], bisecs_part[0,:], s=0)       # y becomes x in this setting, this is no linear interpolation and does bad things
+            f = scipy.interpolate.interp1d(bisecs_part[1,:], bisecs_part[0,:])                      # y becomes x in this setting
+            bisec_new = bisecs_sub[index]
+            mask = ( ( bisec_new[1,:] >= np.min(bisecs_part[1,:]) ) & ( bisec_new[1,:] <= np.max(bisecs_part[1,:]) ) )        # Only use values in the old array
+            offset = np.median( f(bisec_new[1,mask]) - bisec_new[0,mask] )                            # calculate the difference in x
+            """print ii, index, offset, np.median( bisecs_part[0,:]) - np.median( bisec_new[0,:] )
+            fig, frame = plt.subplots(1,1)
+            y_temp = np.arange(np.min(bisecs_part[1,:]), np.max(bisecs_part[1,:]), 0.001)
+            frame.plot( f(y_temp), y_temp, label='Spline')
+            frame.plot(bisecs[0,:], bisecs[1,:], label='bisecs')
+            frame.plot(bisecs_part[0,:], bisecs_part[1,:], label='bisecs_part')
+            frame.plot(bisec_new[0,:], bisec_new[1,:], label='new before')"""
+            bisec_new[0,:] += offset
+            """frame.plot(bisec_new[0,:], bisec_new[1,:], label='new after')
+            frame.plot(line_part[0,:], line_part[1,:], label='line_part')
+            frame.plot(line_data[index][0,:], line_data[index][1,:], label='line before')
+            frame.legend(loc='upper right')
+            plt.show()         # This shows that the result with higher scatter make sense"""
+            bisecs_part = np.hstack(( bisecs_part, np.vstack(( bisec_new, np.arange(bisec_new.shape[1])+bisecs_part.shape[1] )) ))
             bisecs_part = bisecs_part[:,np.argsort(bisecs_part[1,:])]
+            line_data[index][0,:] += offset
+            line_part = np.hstack(( line_part, line_data[index] ))
         if bisecs.shape[1] > 0:
             offset = np.median( bisecs[0,:] - bisecs_part[0,:] )
             bisecs_part[0,:] += offset
+            line_part[0,:] += offset
         bisecs = np.hstack(( bisecs, bisecs_part ))
+        lines = np.hstack(( lines, line_part ))
     bisecs = bisecs[0:2,np.argsort(bisecs[1,:])]        # sort by y
+    lines = lines[:,np.argsort(lines[0,:])]        # sort by x
     # Fit a polynom, find the unvertainties
+    nc = max(0,min(8,min(np.unique(bisecs[1,:]).shape[0], np.unique(bisecs[0,:]).shape[0])-2))
+    poly = np.polyfit(bisecs[1,:], bisecs[0,:], nc)
+    y = np.linspace(np.min(bisecs[1,:]), np.max(bisecs[1,:]), min(bisecs.shape[1]-2, max(10,int(0.1*bisecs.shape[1]))) )
+    x = np.polyval(poly, y)
+    med_x = np.median(x)
+    diff_fit = np.polyval(poly, bisecs[1,:]) - bisecs[0,:]      # difference from fit
+    maskl, maskr = (diff_fit < 0), (diff_fit > 0)               # left and right side
+    x -= med_x
+    bisecs[0,:] -= med_x
+    lines[0,:] -= med_x
+    polyl = np.polyfit(bisecs[1,maskl], bisecs[0,maskl], nc)
+    polyr = np.polyfit(bisecs[1,maskr], bisecs[0,maskr], nc)
+    xl = np.polyval(polyl, y)
+    xr = np.polyval(polyr, y)
+    bisec_fit = np.vstack(( x, y, xl, xr ))
     
     """fig, frame = plt.subplots(1,1)
     frame.plot(bisecs[0,:], bisecs[1,:])
     frame.plot(bisec[0,:], bisec[1,:])
     plt.show()"""
     
-    return bisecs
+    return bisecs, bisec_fit, lines
     
 def calculate_bisector(y, x):
     """
-    Calculates the bisector in an array of data given by interpolating a 
-    
+    Calculates the bisector in an array of data given by interpolating the normalised data into a grid of y-values
+    :params y: 1d list or array of floats: y-values of an absorption line
+    :params x: 1d list or array of floats: x-values for the y values
     :return bisec: 2d array with x and y of the bisector (y=[1,:])
+    :return (x, ys): 2d array with x and y of the normalised lines
     """
     x, y = np.array(x), np.array(y)
     # Rescale to between 1 (continuum) and 0 (absortion)
     ys, popt = scale_data(y, x, mode='poly3')       #mode='gauss')
     # Create a grid of the y data
-    diffy = np.abs(ys[:-1]-ys[1:])
-    diffy = diffy[diffy > 0]
-
-    ysteps = int(5./np.nanpercentile(diffy, 90))
-    xrang = np.max(x[1:]-x[:-1])*4.      # 4 times the maximum difference (at least 4 points)
-    xg, yg = create_grid_data(ys, x, ysteps=ysteps, xrang=xrang)
+    diffy = np.abs(ys[:-1]-ys[1:])          # Spacing between consecutive data points
+    diffy = diffy[diffy > 0]                # consecutive values could have 0 at continuum level
+    ysteps = int(10./np.nanpercentile(diffy, 90))        # 5 steps per step
+    xg, yg = create_grid_data(ys, x, ysteps=ysteps)
     
     # Find for each yy the points left and right of the absorption line
     indmin = np.argmin(yg)
-    mask = ( ( yg >= 0.05 ) & ( yg <= 0.95 ) )
+    x = x - xg[indmin]
+    xg -= xg[indmin]
+    mask = ( ( yg >= 0.02 ) & ( yg <= 0.95 ) )
     yys = np.unique(yg[mask])
     bisec = np.vstack(( yys*np.nan, yys ))
     #print y,x,ys, min(ys), max(ys), yg,xg,ysteps, xrang, indmin, xg[indmin], popt
     #print min(ys), max(ys), ysteps, xrang, indmin, xg[indmin], popt
     for ii in range(bisec.shape[1]):
-        index = np.where( yg == bisec[1,ii] )[0]
+        index = np.where( yg == bisec[1,ii] )[0]        # which indexes have the correct y value
         maskl = (index <= indmin)
         maskr = (index >= indmin)
         if np.sum(maskl) == 0 or np.sum(maskr) == 0:
             continue
         xl = xg[index[maskl][-1]]
         xr = xg[index[maskr][0]]
-        bisec[0,ii] = 0.5*(xr+xl) - xg[indmin]     # Centre, corrected by the Gaussian centre
-    #print bisec
-    #fig, frame = plt.subplots(1,1)
-    #frame.plot(x - xg[indmin],ys)
-    #frame.plot(xg - xg[indmin],yg)
-    #frame.plot(bisec[0,:], bisec[1,:])
-    #plt.show()
+        bisec[0,ii] = 0.5*(xr+xl)     # Centre, corrected by the Gaussian centre
+    """print bisec
+    fig, frame = plt.subplots(1,1)
+    frame.plot(x,ys)
+    frame.plot(xg,yg)
+    frame.plot(bisec[0,:], bisec[1,:])
+    plt.show()#"""
     
-    return bisec[:,~np.isnan(bisec[0,:])]
+    return bisec[:,~np.isnan(bisec[0,:])], np.vstack(( x, ys ))
 
 def bisector_measurements_orders(im, fname, pfits, xlows, xhighs, widths=[]):
     """
-    
+    Measures the bisector at different areas of the image and plots the data
     """
     no = len(pfits)
     no2 = int(no/2)
-    if no >= 8:
+    no4 = int(no/4)
+    if no >= 20:
+        orders_to_check = [[0,1,2], [no4-1,no4,no4+1], [no2-1,no2,no2+1], [3*no4-1,3*no4,3*no4+1], [no-3,no-2,no-1]]    # Modify by user, if wanted
+        #orders_to_check = [[0], [no4], [no2], [3*no4], [no-1]]
+    elif no >= 8:
         orders_to_check = [[0,1,2], [no2-1,no2,no2+1], [no-3,no-2,no-1]]    # Modify by user, if wanted
-        orders_to_check = [[0,1,2], [10,11,12], [no2-1,no2,no2+1], [no-13,no-12,no-11], [no-3,no-2,no-1]]    # Modify by user, if wanted
     elif no >= 3:
         orders_to_check = [[0], [no2], [no-1]]
     else:
         orders_to_check = [[0], [no-1]]
-    number_of_positions = 9                         # Modify by user, if wanted
-    number_of_pixel = 10                            # Modify by user, if wanted
-    #number_of_positions = 1                 ###
+    number_of_positions = 7                         # Modify by user, if wanted
+    number_of_pixel = 20                            # Modify by user, if wanted
+    x_label = 'Position relative to centre [px], (line (blue) was rescaled to 10% width)'
+    y_label = 'Flux (normalised)'
     xmin = min(xlows[ np.array(orders_to_check).flatten() ])
     xmax = max(xhighs[ np.array(orders_to_check).flatten() ])
-    xposis = np.linspace(xmin, xmax-number_of_pixel, number_of_positions, endpoint=True, dtype=int)
     if number_of_positions == 1:
         xposis = np.array( [0.5*(xmax-number_of_pixel + xmin)], dtype=int )
     else:
@@ -4527,10 +4589,11 @@ def bisector_measurements_orders(im, fname, pfits, xlows, xhighs, widths=[]):
         leftfit = pfits[:,1,:]
         rightfit = pfits[:,2,:]
         pfits = pfits[:,0,:]
-    if widths == []:
-        widths = np.repeat([[0,0,0]], len(pfits), axis=0)
         
-    fig, frame = plt.subplots(len(orders_to_check), len(xposis), sharex=True, sharey=True)
+    x_range = np.zeros(0)
+    lx, ly = len(xposis), len(orders_to_check)
+    fig, frame = plt.subplots(ly, lx, sharex=True, sharey=True, figsize=(2*lx, 2*ly) )
+    plt.subplots_adjust(left=max(0.04,0.19-0.02*lx), right=min(0.98,0.90+0.01*lx), top=min(0.96,0.92+.0067*ly), bottom=max(0.04,0.17-0.023*ly), wspace=0., hspace=0.)
     for ii, order_range in enumerate(orders_to_check):
         for jj, posi in enumerate(xposis):
             imslices = []
@@ -4541,24 +4604,55 @@ def bisector_measurements_orders(im, fname, pfits, xlows, xhighs, widths=[]):
                     continue
                 yarr = np.polyval(pfits[order,1:], xarr-pfits[order,0])
                 if len(widths) > 0:
-                    yarrl = yarr-widths[order,0]*2
-                    yarrr = yarr+widths[order,1]*2
+                    yarrl = yarr-widths[order,0]
+                    yarrr = yarr+widths[order,1]
                 else:
                     yarrl = np.polyval(leftfit[order, 1:], xarr - leftfit[order, 0])
                     yarrr = np.polyval(rightfit[order, 1:], xarr- rightfit[order, 0])
-                    yarrl, yarrr = adjust_width_orders(yarr, yarrl, yarrr, [2, 2])              # Adjust width, double it to more likely catch the whole trace
+                    yarrl, yarrr = adjust_width_orders(yarr, yarrl, yarrr, [1.5, 1.5])              # Adjust width, double it to more likely catch the whole trace, but too big and problem with MRES red orders
                 for kk,x in enumerate(xarr):
                     imslices.append( -im[x,max(0,int(yarrl[kk])):min(ims[1],int(yarrr[kk]+.99))+1] )    # negative to create absorption line
                     imslices_x.append( range(len(imslices[-1])) )
-            x,y = calculate_bisector_multiple(imslices, imslices_x, deg=2)
+            bisecs, bisec_fit, lines = calculate_bisector_multiple(imslices, imslices_x)
             # Plot
-            if len(orders_to_check) == 1:
-                frame[jj].plot(x, 1-y)   # 1-y to revese the creation of absorption line
-            elif len(xposis) == 1:
-                frame[ii].plot(x, 1-y)   # 1-y to revese the creation of absorption line
-            else:
-                frame[ii,jj].plot(x, 1-y)   # 1-y to revese the creation of absorption line
-    plt.show()
+            if len(xposis) == 1 and len(orders_to_check) == 1: frame_temp = frame
+            elif len(orders_to_check) == 1: frame_temp = frame[jj]
+            elif len(xposis) == 1:          frame_temp = frame[ii]
+            else:                           frame_temp = frame[ii,jj]
+            if len(bisecs.shape) != 1:                                              # only when data
+                #frame_temp.plot(bisecs[0,:], 1-bisecs[1,:], color='lightgray')   # 1-y to revese the creation of absorption line
+                x = np.hstack(( bisec_fit[2,:], bisec_fit[3,:]))
+                y = np.hstack(( 1-bisec_fit[1,:], 1-bisec_fit[1,:] ))
+                sort_index = np.argsort(y)
+                frame_temp.plot(x[sort_index], y[sort_index], color='lightgray', linewidth=3)
+                frame_temp.plot(0.1*lines[0,:], 1-lines[1,:], color='blue', marker='o', markersize=1, linestyle='')       #decrese the x-scaling by factor 10
+                frame_temp.plot(bisec_fit[0,:], 1-bisec_fit[1,:], color='k')   # 1-y to revese the creation of absorption line
+                x_range = np.hstack(( x_range, bisec_fit[0,:] ))
+            if ii == 0:
+                secax = frame_temp.twiny()
+                secax.axes.xaxis.set_ticklabels([])     # Disable the tick label
+                secax.tick_params( axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+                secax.set_xlabel('Pixels: {0} - {1}'.format(posi, posi+number_of_pixel-1), fontsize=10)
+                secax.xaxis.set_label_position("top")
+            if jj == len(xposis)-1:
+                secax = frame_temp.twinx()
+                secax.axes.yaxis.set_ticklabels([])     # Disable the tick label
+                secax.tick_params( axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+                secax.set_ylabel('Orders: {0}'.format(str(order_range)[1:-1]), fontsize=10)
+                secax.yaxis.set_label_position("right")
+            frame_temp.tick_params( axis='both', which='both', bottom=True, top=True, right=True, left=True, direction='inout' )           # Have the ticks in all frames
+    
+    if len(xposis) == 1 and len(orders_to_check) == 1: f1, f2 = frame, frame
+    elif len(orders_to_check) == 1: f1, f2 = frame[int(jj/2)] , frame[0]
+    elif len(xposis) == 1:          f1, f2 = frame[-1], frame[int(ii/2)]
+    else:                           f1, f2 = frame[-1,int(jj/2)], frame[int(ii/2),0]
+    f1.set_xlabel(x_label, fontsize=13)
+    f2.set_ylabel(y_label, fontsize=13)
+    x_min, x_max = np.percentile(x_range,2), np.percentile(x_range,98)
+    x_range = x_max - x_min
+    f1.set_xlim(x_min-0.2*x_range,x_max+0.2*x_range)
+    f1.set_ylim(-0.1,1.1)
+    plt.savefig(fname, bbox_inches='tight')
 
 def plot_wavelength_solution_form(fname, xlows, xhighs, wavelength_solution):
     """
