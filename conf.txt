@@ -332,8 +332,8 @@ path_csv_terra                  = terra_rv_data
   # Using the CERES pipeline to do a cross-correlation with template spectra (using the normalised spectrum). Needs to point to the base folder of CERES. 
   #       If path_ceres does not exist on the machine, then no radial velocity analysis using this method will be used.
   # path_rv is used to store the results from the CERES pipeline. path_rv will be relative to the result_path.
-path_ceres                      = /home/exohspec/software/ceres-master/
-path_ceres                      = /home/ronny/software/ceres-master/
+path_ceres                      = /home/exohspec/software/ceres/
+path_ceres                      = /home/ronny/software/ceres/
   # Output of the CERES cross-correlation
 path_rv_ceres                   = logging/ceres_rv_output
 

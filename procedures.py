@@ -9,9 +9,8 @@ import astropy.time as asttime
 import astropy.coordinates as astcoords
 import astropy.units as astunits
 #import astropy.constants as astconst
-import matplotlib    # To avoid crashing when ssh into Narit using putty
-if not 'DISPLAY' in os.environ:
-    matplotlib.use('agg')    # To avoid crashing when ssh into Narit using putty, however this means plots are not shown (test when working in front of uhppc30)
+import matplotlib
+matplotlib.use('agg')    # Otherwise keeps hanging when using CERES; GUIs work, but plt.show() won't; matplotlib.interactive(True) doesn't show
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import sys
@@ -3670,7 +3669,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     ceres_spec = np.array([wavelengths, aspectra, agood_px_mask])
     save_multispec(ceres_spec, params['path_extraction']+im_name, im_head, bitpix=params['extracted_bitpix'])
 
-def get_possible_object_names(filename, header, header_keywords, replacements=['_arc','arc', '_thar','thar', '_une','une']):
+def get_possible_object_names(filename, header, header_keywords, replacements=['_arc','arc', '_thar','thar', '_une','une', 'extract_combine']):
     """
     Analyses the filename in order to find the possible Name of the Object (for exampled stored in parameter object_file
     The filename is subsequently stripped from the "_" or "-" separated entings
@@ -3775,10 +3774,8 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     if ra2 ==0 and dec2 == 0:
         logger('Warn: Reference coordinates files do not exist or object can not be found within them. Checked: {0}'.format(object_files_full))
     im_head['HIERARCH HiFLEx OBJNAME'] = (obnames[0], 'Used object name')
-    
     # Get the baycentric velocity
     params, bcvel_baryc, mephem, im_head = get_barycent_cor(params, im_head, obnames[0], ra2, dec2, epoch, pmra, pmdec, obsdate_midexp)
-    
     
     shift, im_head = find_shift_images(params, im, im_trace, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, im_head=im_head)     # w_mult=1 so that the same area is covered as for the find traces, w_mult=0 so that only the central pixel is extracted
     spectra, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift, header=im_head, var=params['extraction_precision'])
@@ -3790,7 +3787,6 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_solution_arclines, reference_catalog, 
                                                               reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, spectra)
-    
     espectra = combine_photonnoise_readnoise(spectra, im_head['HiFLEx BCKNOISE'] * np.sqrt(extr_width) )     # widths[:,2] is gaussian width
     fspectra = spectra/(flat_spec_norm[2]+0.0)        # 1: extracted flat, 2: low flux removed
     # Doing a wavelength shift for the flat_spec_norm is probably not necessay, as it's only few pixel
@@ -3799,7 +3795,6 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     efspectra = measure_noise(fspectra, p_order=measure_noise_orders, semi_window=measure_noise_semiwindow)             # Noise will be high at areas wih absorption lines
     cspectra, noise_cont = normalise_continuum(fspectra, wavelengths, nc=6, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders)      
     # normalise_continuum measures the noise different than measure_noise
-    
     if len(params['sigmaclip_spectrum']) == 3:        # sigmaclipping
         removed = 0
         for order in range(cspectra.shape[0]):
@@ -3810,7 +3805,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
             removed += np.sum(~good_values)
         logger('Info: Sigmaclipping removed {0} data points for file {1} (normalised spectrum).'.format(removed, im_name))
         im_head['HIERARCH HiFLEx SIGMA_CLEARED']  = (removed, 'points removed from normalised spectrum')
-    
+        
     # Do the CERES-pipeline Radial velocity analysis 
     no_RV_names = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
     do_RV = True
@@ -3831,6 +3826,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         wavelengths_vac = wavelength_air_to_vacuum(wavelengths)                             # change into vacuum wavelengths, needed for ceres RV
         ceres_spec = np.array([wavelengths_vac, spectra, espectra, fspectra, efspectra, cspectra, noise_cont, good_px_mask, aspectra])
         ceres_spec = clip_noise(ceres_spec)
+
         RV, RVerr2, BS, BSerr = rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], object_file, mephem, wavelength_solution)
         if 'HiFLEx BJDTDB' in im_head.keys():
             bjdtdb = im_head['HiFLEx BJDTDB']
@@ -6804,7 +6800,9 @@ def add_specinfo_head(spectra, s_spec, n_spec, w_spec, im_head):
     cenpx = spectra.shape[1]/2.
     px_range = list(range(int(round(0.8*cenpx)),int(round(1.2*cenpx))+1))
     snr1 = np.nanmedian( snr[:,px_range], axis=1)                   # median SNR in the centre of each order: +-10% around 
-    snr2 = np.sqrt( np.nanmedian( s_spec[:,px_range], axis=1) )     # sqrt of flux
+    medflux = np.nanmedian( s_spec[:,px_range], axis=1)
+    medflux[medflux < 0] = 0
+    snr2 = np.sqrt( medflux )     # sqrt of flux
     snr = np.nanmin( np.vstack(( snr1, snr2 )), axis=0 )            # SNR can't be better than sqrt of flux
     snr[np.isnan(snr)] = -1
     width_med = np.nanmedian(w_spec, axis=1)
@@ -7419,15 +7417,15 @@ def get_object_site_from_header(params, im_head, obnames, obsdate):
                     source_obs = 'The site coordinates are derived from the image header.'
     return params, source_radec, source_obs, mephem
 
-def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, obsdate):
+def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, obsdate, leap_update=False):
     """
     Calculates the barycentric correction.
     To do this, position of the telescope and pointing of the telescope need to be known.
     Header vaulues are read, if they are not available, then using 
-    
+    Set leap_update to true, once the servers are available again, see https://github.com/shbhuk/barycorrpy/issues/27
     """
-    params, source_radec, source_obs, mephem = get_object_site_from_header(params, im_head, obnames, obsdate)
     
+    params, source_radec, source_obs, mephem = get_object_site_from_header(params, im_head, obnames, obsdate)
     # mjd,mjd0, mjd_begin = mjd_fromheader(params, im_head)
     mjd = im_head['HIERARCH HiFLEx MJD']
     jd  = im_head['HIERARCH HiFLEx JD']
@@ -7445,7 +7443,7 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
     if type(params['dec']) == ephem.Angle:
         params['dec'] = math.degrees(params['dec'])         # convert into a float
     ra, dec = params['ra'], params['dec']
-    
+
     bcvel_baryc, bjd = 0.0, 0.0
     if source_radec != 'Warn: The object coordinates were made up!':
         """# Using jplephem from CERES pipeline
@@ -7462,19 +7460,15 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
         site = ''
         if params['site'] in barycorrpy.EarthLocation.get_site_names():
             site = params['site']
-        ephemeris2='https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de405.bsp'
-
-        #bcvel_baryc = barycorrpy.get_BC_vel(JDUTC=jd,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
-        #                   pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)
-        #bcvel_baryc = bcvel_baryc[0][0] / 1E3       # in km/s
-        #print "result3", bcvel_baryc
-        #print "result3 RV", bcvel_baryc[0][0]
+        ephemeris2 = 'https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de405.bsp'
+        ephemeris2 = 'de430'        # See https://ssd.jpl.nasa.gov/?planet_eph_export
         # Calculate the barycentric corrections for 60s intervals
         jd_start = im_head['HIERARCH HiFLEx JD_START']
         exposure = im_head['HIERARCH HiFLEx EXPOSURE']
-        jd_range = [jd] + list(np.arange(jd_start, jd_start+exposure/(3600.*24), 60/(3600.*24))) + [jd_start+exposure/(3600.*24)]
-        bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
-                                                  pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)
+        jd_range = [jd] + list(np.arange(jd_start, jd_start+exposure/(3600.*24), 60/(3600.*24))) + [jd_start+exposure/(3600.*24)]   # Every minute
+        bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
+                                                  pmra=params['pmra'],pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],
+                                                  ephemeris=ephemeris2,leap_dir=params['logging_path'], leap_update=leap_update)
         bcvel_baryc_range = bcvel_baryc_range[0] / 1E3       # in km/s
         bcvel_baryc = bcvel_baryc_range[0]
         
@@ -7492,15 +7486,11 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
         
         # Using barycorrpy (https://github.com/shbhuk/barycorrpy), pip install barycorrpy
         bjdtdb = barycorrpy.utc_tdb.JDUTC_to_BJDTDB(JDUTC=jd,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
-                                        pmdec=params['pmdec'],px=0,rv=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=True)           # only precise to 0.2s 
+                                        pmdec=params['pmdec'],px=0,rv=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=leap_update)           # only precise to 0.2s 
         bjd = bjdtdb[0][0]
-        #print "bjdtdb", bjdtdb
-        #print "bjdtdb0", bjdtdb[0][0]
-        
-        # end test
+
         im_head['HIERARCH HiFLEx BJDTDB'] = (round(bjd,6), 'Baryc. cor. JD (incl leap seconds)')     # without leap seconds: remove 32.184+N leap seconds after 1961'
 
-    
     logger(('Info: Using the following data for object name(s) {10}, Observatory site {9}, mid exposure MJD {11}: '+\
                     'altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}, pmra = {13}, pmdec = {14}. {8} {6} '+\
                     'This leads to a barycentric velocity of {7} km/s and a mid-exposure BJD-TDB of {12}').format(params['altitude'], params['latitude'], params['longitude'], 
@@ -7664,7 +7654,9 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     sys.path.append(base+"utils/GLOBALutils")
     sys.path.append(base+"utils/OptExtract")    # for Marsh, at least
     sys.path.append(base+"utils/CCF")           # needed by GLOBALutils.py
+    np.warnings.filterwarnings('ignore')
     import GLOBALutils
+    np.warnings.resetwarnings()
     import correlation
     # Import other stuff
     import statsmodels.api as sm
