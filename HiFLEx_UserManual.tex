@@ -1218,9 +1218,9 @@ After making the change and opening a new terminal, python should point to the f
 %conda remove --name hiflex --all
 \begin{lstlisting}[style=base]
 conda create --name hiflex python=2.7 numpy scipy matplotlib astropy pycurl ephem \
-      rpy2 tqdm psutil statsmodels
+      rpy2 tqdm psutil statsmodels 
 conda activate hiflex
-pip install gatspy barycorrpy==0.2.2.1 PyAstronomy
+pip install gatspy barycorrpy==0.2.2.1 PyAstronomy multiprocessing
 \end{lstlisting}
 
 % For BJD (but not needed anymore):

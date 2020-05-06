@@ -7648,6 +7648,7 @@ def find_shift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_s
 
 
 def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavelength_solution):
+    # Spawns a new subprocess by multiprocessing.Pool in GLOBALutils. Killing the process doesn't help, it is recreated
     base = params['path_ceres']
     # Import the routines from CERES:
     sys.path.append(base+"utils/Correlation")
@@ -7749,208 +7750,208 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
         spec[10,order,:][L] = spec[2,order,:][L]# / (dlambda_dx[L] ** 2)        # used for the analysis in XCor (spec_order=9, iv_order=10)
     #plot_img_spec.plot_spectra_UI(np.array([spec]))
     T_eff, logg, Z, vsini, vel0 = 5777, 4.4374, 0.0134, 2, 0
-    if True:  
-        if np.nanmax(spec[0,:,:], axis=None) > 5500:       # only run for wavelengths bigger than 5500A, as otherwise problems in correlation.CCF
-            #pars_file = params['path_rv_ceres'] + fsim.split('/')[-1][:-4]+'_stellar_pars.txt'
-            pars_file = params['path_rv_ceres'] + obname+'_stellar_pars.txt'                  # same stellar parameters for same object
-            pars_file = params['path_rv_ceres'] + fsim+'_stellar_pars.txt'                    # calculate stellar parameters for each spectrum
 
-            if os.access(pars_file,os.F_OK) == False or force_stellar_pars:
-                Rx = np.around(1./np.sqrt(abs(1./40000.**2 - 1./RESI**2)))
-                spec2 = spec.copy()
-                for i in tqdm(range(spec.shape[1]), desc="Step: Estimating atmospheric parameters"):
-                    IJ = np.where(spec[5,i]!=0.)[0]
-                    spec2[5,i,IJ] = GLOBALutils.convolve(spec[0,i,IJ],spec[5,i,IJ],Rx)
-                try:
-                    T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils/Correlation/')     # Fails, because our spectrum doesn't cover the hard coded wavelength
-                    line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
-                    with open(pars_file, 'w') as f:
-                        f.write(line)
-                    loadtxt = ''
-                except:
-                    loadtxt = 'Warn: could not determine the stelar parameters. This is probably caused because of the availble wavelength range. Do not worry about it'
-                    logger(loadtxt)
-            else:
-                T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
-                loadtxt = ' (Atmospheric parameters loaded from file {0})'.format(pars_file)
-            if loadtxt.find('Warn') != 0:
-                logger('Info: Using the following atmosperic parameters for T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4}{0}'.format(loadtxt, T_eff, logg, Z, vsini, vel0))
-        
-        logger('Step: Radial Velocity analysis:')
-        # assign mask
-        #   obname is the name of the object
-        #   reffile is a reference file: reffile = dirin+'reffile.txt' -> this file doesn't exist
-        sp_type, mask = GLOBALutils.get_mask_reffile(obname,reffile=reffile,base=base+'data/xc_masks/')     # !!! Warn: upper and lower case matters
-        logger("Will use {0} mask for CCF.".format(sp_type))
+    if np.nanmax(spec[0,:,:], axis=None) > 5500:       # only run for wavelengths bigger than 5500A, as otherwise problems in correlation.CCF
+        #pars_file = params['path_rv_ceres'] + fsim.split('/')[-1][:-4]+'_stellar_pars.txt'
+        pars_file = params['path_rv_ceres'] + obname+'_stellar_pars.txt'                  # same stellar parameters for same object
+        pars_file = params['path_rv_ceres'] + fsim+'_stellar_pars.txt'                    # calculate stellar parameters for each spectrum
 
-        # Read in mask
-        ml, mh, weight = np.loadtxt(mask,unpack=True)
-        ml_v = GLOBALutils.ToVacuum( ml )
-        mh_v = GLOBALutils.ToVacuum( mh )
-        av_m = 0.5*( ml_v + mh_v )
-        mask_hw_kms = (GLOBALutils.Constants.c/1e3) * 0.5*(mh_v - ml_v) / av_m
-
-        disp = GLOBALutils.get_disp(obname, reffile=reffile)        # !!! Warn: upper and lower case matters disp is "velocity width in km/s that is used to broaden the lines of the binary mask. It should be similar to the standard deviation of the Gaussian that is fitted to the CCF."
-        if disp == 0:
-            known_sigma = False
-            if vsini != -999 and vsini != 0.:
-                disp = vsini
-            else:
-                disp = 3.
+        if os.access(pars_file,os.F_OK) == False or force_stellar_pars:
+            Rx = np.around(1./np.sqrt(abs(1./40000.**2 - 1./RESI**2)))
+            spec2 = spec.copy()
+            for i in tqdm(range(spec.shape[1]), desc="Step: Estimating atmospheric parameters"):
+                IJ = np.where(spec[5,i]!=0.)[0]
+                spec2[5,i,IJ] = GLOBALutils.convolve(spec[0,i,IJ],spec[5,i,IJ],Rx)
+            try:
+                T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils/Correlation/')     # Fails, because our spectrum doesn't cover the hard coded wavelength
+                line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
+                with open(pars_file, 'w') as f:
+                    f.write(line)
+                loadtxt = ''
+            except:
+                loadtxt = 'Warn: could not determine the stelar parameters. This is probably caused because of the availble wavelength range. Do not worry about it'
+                logger(loadtxt)
         else:
+            T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
+            loadtxt = ' (Atmospheric parameters loaded from file {0})'.format(pars_file)
+        if loadtxt.find('Warn') != 0:
+            logger('Info: Using the following atmosperic parameters for T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4}{0}'.format(loadtxt, T_eff, logg, Z, vsini, vel0))
+    
+    logger('Step: Radial Velocity analysis:')
+    # assign mask
+    #   obname is the name of the object
+    #   reffile is a reference file: reffile = dirin+'reffile.txt' -> this file doesn't exist
+    sp_type, mask = GLOBALutils.get_mask_reffile(obname,reffile=reffile,base=base+'data/xc_masks/')     # !!! Warn: upper and lower case matters
+    logger("Will use {0} mask for CCF.".format(sp_type))
+
+    # Read in mask
+    ml, mh, weight = np.loadtxt(mask,unpack=True)
+    ml_v = GLOBALutils.ToVacuum( ml )
+    mh_v = GLOBALutils.ToVacuum( mh )
+    av_m = 0.5*( ml_v + mh_v )
+    mask_hw_kms = (GLOBALutils.Constants.c/1e3) * 0.5*(mh_v - ml_v) / av_m
+
+    disp = GLOBALutils.get_disp(obname, reffile=reffile)        # !!! Warn: upper and lower case matters disp is "velocity width in km/s that is used to broaden the lines of the binary mask. It should be similar to the standard deviation of the Gaussian that is fitted to the CCF."
+    if disp == 0:
+        known_sigma = False
+        if vsini != -999 and vsini != 0.:
+            disp = vsini
+        else:
+            disp = 3.
+    else:
+        known_sigma = True
+
+    mask_hw_wide = av_m * disp / (GLOBALutils.Constants.c/1.0e3)
+    ml_v = av_m - mask_hw_wide
+    mh_v = av_m + mask_hw_wide 
+
+    logger('Computing the CCF...')
+    cond = True
+
+    if sp_type == 'M5':
+        moon_sig = 4.5
+    elif sp_type == 'K5':
+        moon_sig = 4.2
+    else:
+        moon_sig = 4.0
+
+    while (cond):
+        # first rough correlation to find the minimum
+        #   spec: spectrum in the form [data type, orders, pixel]
+        #   ml_v, mh_v: masks 
+        #   lbary_ltopo = 1.0 + res['frac'][0]
+        # vel_width=600 instead of vel_width=300 changes the results by up to a few 100m/s in MRES
+        # max_vel_rough=600 instead of max_vel_rough=300 changes the results by up to a few 100m/s in MRES
+        vels, xc_full, sn, nlines_ccf, W_ccf = \
+                GLOBALutils.XCor(spec, ml_v, mh_v, weight,\
+                0, lbary_ltopo, vel_width=300, vel_step=3,\
+                spec_order=9, iv_order=10, sn_order=8, max_vel_rough=300)
+        #print(vels, xc_full, sn, nlines_ccf, W_ccf)
+        # W_ccf is a weigth
+        
+        xc_av = GLOBALutils.Average_CCF(xc_full, sn, sn_min=3.0, Simple=True, W=W_ccf)
+        #print 'xc_av, vels, xc_full, sn, nlines_ccf, W_ccf',xc_av, vels, xc_full, sn, nlines_ccf, W_ccf
+        
+        # Normalize the continuum of the CCF robustly with lowess     
+        yy = scipy.signal.medfilt(xc_av,11)
+        pred = lowess(yy, vels,frac=0.4,it=10,return_sorted=False)
+        tck1 = scipy.interpolate.splrep(vels,pred,k=1)
+        xc_av_orig = xc_av.copy()
+        xc_av /= pred
+        vel0_xc = vels[ np.argmin( xc_av ) ] 
+            
+        rvels, rxc_av, rpred, rxc_av_orig, rvel0_xc = \
+                vels.copy(), xc_av.copy(), pred.copy(),\
+                xc_av_orig.copy(), vel0_xc
+
+        xc_av_rough = xc_av
+        vels_rough  = vels
+            
+        vel_width = np.maximum( 20.0, 6*disp )                      # Adjusted in order to avoid crashes because of unphysical disp
+        #print vel_width, disp, vsini       # problem with vel_width, due to disp, due to p1gau below
+        vels, xc_full, sn, nlines_ccf, W_ccf =\
+                GLOBALutils.XCor(spec, ml_v, mh_v, weight,\
+                vel0_xc, lbary_ltopo, vel_width=vel_width,\
+                vel_step=0.1, spec_order=9, iv_order=10, sn_order=8,max_vel_rough=300)
+
+        xc_av = GLOBALutils.Average_CCF(xc_full, sn, sn_min=3.0, Simple=True, W=W_ccf)
+        pred = scipy.interpolate.splev(vels,tck1)
+        xc_av /= pred
+        #print 'min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig', min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig
+        if max(np.abs(xc_av)) > 10:
+            logger('Warn: stopped RV fit because of too big absolute value in xc_av: min(xc_av) = {0} , max(xc_av) = {1} , len(xc_av) = {2}'.format(min(xc_av),max(xc_av),len(xc_av)))
+            return -999.0, 999.0, -999.0, 999.0
+        # vels are in 100 m/s steps, see "vel_step=0.1" above, changing it to 0.01 changed the RVs only by <1.4m/s, average 0.14m/s (HARPS blue on CERES)
+        p1,XCmodel,p1gau,XCmodelgau,Ls2 = \
+                GLOBALutils.XC_Final_Fit( vels, xc_av, sigma_res = 4,\
+                 horder=8, moonv=refvel, moons=moon_sig, moon=False)
+        #print 'plgau 345', p1gau
+
+        moonmatters = False
+        if (know_moon and here_moon):
+            moonmatters = True
+            ismoon = True
+            confused = False
+            p1_m,XCmodel_m,p1gau_m,XCmodelgau_m,Ls2_m = GLOBALutils.XC_Final_Fit( vels, xc_av, \
+            sigma_res = 4, horder=8, moonv = refvel, moons = moon_sig, moon = True)
+            moon_flag = 1
+        else:
+            confused = False
+            ismoon = False
+            p1_m,XCmodel_m,p1gau_m,XCmodelgau_m,Ls2_m = p1,XCmodel,p1gau,XCmodelgau,Ls2
+            moon_flag = 0
+
+        bspan = GLOBALutils.calc_bss(vels,xc_av)
+        SP = bspan[0]
+        
+        if (not known_sigma):
+            disp = np.floor(p1gau[2])
+            if (disp < 3.0): 
+                disp = 3.0
+            mask_hw_wide = av_m * disp / (GLOBALutils.Constants.c/1.0e3)
+            ml_v = av_m - mask_hw_wide
+            mh_v = av_m + mask_hw_wide            
             known_sigma = True
-
-        mask_hw_wide = av_m * disp / (GLOBALutils.Constants.c/1.0e3)
-        ml_v = av_m - mask_hw_wide
-        mh_v = av_m + mask_hw_wide 
-
-        logger('Computing the CCF...')
-        cond = True
-
-        if sp_type == 'M5':
-            moon_sig = 4.5
-        elif sp_type == 'K5':
-            moon_sig = 4.2
         else:
-            moon_sig = 4.0
-
-        while (cond):
-            # first rough correlation to find the minimum
-            #   spec: spectrum in the form [data type, orders, pixel]
-            #   ml_v, mh_v: masks 
-            #   lbary_ltopo = 1.0 + res['frac'][0]
-            # vel_width=600 instead of vel_width=300 changes the results by up to a few 100m/s in MRES
-            # max_vel_rough=600 instead of max_vel_rough=300 changes the results by up to a few 100m/s in MRES
-            vels, xc_full, sn, nlines_ccf, W_ccf = \
-                    GLOBALutils.XCor(spec, ml_v, mh_v, weight,\
-                    0, lbary_ltopo, vel_width=300, vel_step=3,\
-                    spec_order=9, iv_order=10, sn_order=8, max_vel_rough=300)
-            #print(vels, xc_full, sn, nlines_ccf, W_ccf)
-            # W_ccf is a weigth
+            cond = False
             
-            xc_av = GLOBALutils.Average_CCF(xc_full, sn, sn_min=3.0, Simple=True, W=W_ccf)
-            #print 'xc_av, vels, xc_full, sn, nlines_ccf, W_ccf',xc_av, vels, xc_full, sn, nlines_ccf, W_ccf
+        if p1gau[2] > 1E3:
+            cond = False
             
-            # Normalize the continuum of the CCF robustly with lowess     
-            yy = scipy.signal.medfilt(xc_av,11)
-            pred = lowess(yy, vels,frac=0.4,it=10,return_sorted=False)
-            tck1 = scipy.interpolate.splrep(vels,pred,k=1)
-            xc_av_orig = xc_av.copy()
-            xc_av /= pred
-            vel0_xc = vels[ np.argmin( xc_av ) ] 
-                
-            rvels, rxc_av, rpred, rxc_av_orig, rvel0_xc = \
-                    vels.copy(), xc_av.copy(), pred.copy(),\
-                    xc_av_orig.copy(), vel0_xc
+    xc_dict = {'vels':vels,'xc_av':xc_av,'XCmodelgau':XCmodelgau,'Ls2':Ls2,'refvel':refvel,\
+           'rvels':rvels,'rxc_av':rxc_av,'rpred':rpred,'rxc_av_orig':rxc_av_orig,\
+           'rvel0_xc':rvel0_xc,'xc_full':xc_full, 'p1':p1, 'sn':sn, 'p1gau':p1gau,\
+           'p1_m':p1_m,'XCmodel_m':XCmodel_m,'p1gau_m':p1gau_m,'Ls2_m':Ls2_m,\
+           'XCmodelgau_m':XCmodelgau_m}
 
-            xc_av_rough = xc_av
-            vels_rough  = vels
-                
-            vel_width = np.maximum( 20.0, 6*disp )                      # Adjusted in order to avoid crashes because of unphysical disp
-            #print vel_width, disp, vsini       # problem with vel_width, due to disp, due to p1gau below
-            vels, xc_full, sn, nlines_ccf, W_ccf =\
-                    GLOBALutils.XCor(spec, ml_v, mh_v, weight,\
-                    vel0_xc, lbary_ltopo, vel_width=vel_width,\
-                    vel_step=0.1, spec_order=9, iv_order=10, sn_order=8,max_vel_rough=300)
+    #moon_dict = {'moonmatters':moonmatters,'moon_state':moon_state,'moonsep':moonsep,\
+    #     'lunation':lunation,'mephem':mephem,'texp':im_head['EXPTIME']}
+    moon_dict = {'moonmatters':moonmatters,'moon_state':'dummy','moonsep':0,\
+         'lunation':0,'mephem':mephem,'texp':0}
 
-            xc_av = GLOBALutils.Average_CCF(xc_full, sn, sn_min=3.0, Simple=True, W=W_ccf)
-            pred = scipy.interpolate.splev(vels,tck1)
-            xc_av /= pred
-            #print 'min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig', min(vels),max(vels),len(vels), min(xc_av),max(xc_av),len(xc_av), refvel, moon_sig
-            if max(np.abs(xc_av)) > 10:
-                logger('Warn: stopped RV fit because of too big absolute value in xc_av: min(xc_av) = {0} , max(xc_av) = {1} , len(xc_av) = {2}'.format(min(xc_av),max(xc_av),len(xc_av)))
-                return -999.0, 999.0, -999.0, 999.0
-            # vels are in 100 m/s steps, see "vel_step=0.1" above, changing it to 0.01 changed the RVs only by <1.4m/s, average 0.14m/s (HARPS blue on CERES)
-            p1,XCmodel,p1gau,XCmodelgau,Ls2 = \
-                    GLOBALutils.XC_Final_Fit( vels, xc_av, sigma_res = 4,\
-                     horder=8, moonv=refvel, moons=moon_sig, moon=False)
-            #print 'plgau 345', p1gau
+    #pkl_xc = params['path_rv_ceres'] + fsim.split('/')[-1][:-4]+obname+'_XC_'+sp_type+'.pkl'
+    pkl_xc = params['path_rv_ceres'] + fsim+'_XC_'+sp_type+'.pkl'      # without filename ending
+    pickle.dump( xc_dict, open( pkl_xc, 'w' ) )
 
-            moonmatters = False
-            if (know_moon and here_moon):
-                moonmatters = True
-                ismoon = True
-                confused = False
-                p1_m,XCmodel_m,p1gau_m,XCmodelgau_m,Ls2_m = GLOBALutils.XC_Final_Fit( vels, xc_av, \
-                sigma_res = 4, horder=8, moonv = refvel, moons = moon_sig, moon = True)
-                moon_flag = 1
-            else:
-                confused = False
-                ismoon = False
-                p1_m,XCmodel_m,p1gau_m,XCmodelgau_m,Ls2_m = p1,XCmodel,p1gau,XCmodelgau,Ls2
-                moon_flag = 0
+    #ccf_pdf = params['logging_path'] + fsim.split('/')[-1][:-4] + obname + '_XCs_' + sp_type + '.pdf'       # dirout + 'logging/'
+    #ccf_pdf = params['logging_path'] + fsim + '_XCs_' + sp_type + '.pdf'       # without filename ending
+    ccf_pdf = params['path_rv_ceres'] + fsim + '_XCs_' + sp_type + '.pdf'             # without filename ending
+    GLOBALutils.plot_CCF(xc_dict,moon_dict,path=ccf_pdf)
 
-            bspan = GLOBALutils.calc_bss(vels,xc_av)
-            SP = bspan[0]
-            
-            if (not known_sigma):
-                disp = np.floor(p1gau[2])
-                if (disp < 3.0): 
-                    disp = 3.0
-                mask_hw_wide = av_m * disp / (GLOBALutils.Constants.c/1.0e3)
-                ml_v = av_m - mask_hw_wide
-                mh_v = av_m + mask_hw_wide            
-                known_sigma = True
-            else:
-                cond = False
-                
-            if p1gau[2] > 1E3:
-                cond = False
-                
-        xc_dict = {'vels':vels,'xc_av':xc_av,'XCmodelgau':XCmodelgau,'Ls2':Ls2,'refvel':refvel,\
-               'rvels':rvels,'rxc_av':rxc_av,'rpred':rpred,'rxc_av_orig':rxc_av_orig,\
-               'rvel0_xc':rvel0_xc,'xc_full':xc_full, 'p1':p1, 'sn':sn, 'p1gau':p1gau,\
-               'p1_m':p1_m,'XCmodel_m':XCmodel_m,'p1gau_m':p1gau_m,'Ls2_m':Ls2_m,\
-               'XCmodelgau_m':XCmodelgau_m}
+    #SNR_5130 = np.median(spec[8,28,1900:2101] ) This wavelength is not covered in exohspec
+    #SNR_5130 = np.nanmedian(spec[8,0,1900:2101] ) # Set to order 20 artificially
+    SNR_5130 = np.nan
+    for cen_wave in [5130,6200,4000,7300,3000,8400,9500]:       # try different wavelengths in case one is not covered
+        subspec, wave = get_spec(spec[8,:,:], spec[0,:,:], cen_wave, 100)
+        if len(subspec) > 0:
+            SNR_5130 = np.nanmedian(subspec)       # 5130 shows significant absorption lines
+            break
+        logger('Warn: The spectra around the wavelength of {0} Angstrom is not covered'.format(cen_wave))
+    
+    B,A = -0.00257864,0.07765779            # from Monte Carlo Simulation, different for each instrument (from CERES for HARPS)
+    #B,A = 0.005, 0.2                       # Tested Ronny before 2/12/2019
+    #print SNR_5130
+    RVerr  =  B + ( 1.6 + 0.2 * p1gau[2] ) * A / np.round(SNR_5130)
+    depth_fact = 1. + p1gau[0]/(p1gau[2]*np.sqrt(2*np.pi))
+    if depth_fact < 0.6:
+        depth_fact = 0.6
+    depth_fact = (1 - 0.6) / (1 - depth_fact)
+    RVerr *= depth_fact
+    #print RVerr, depth_fact, p1gau, SNR_5130
+    if RVerr < 0.002:
+        RVerr = .002
 
-        #moon_dict = {'moonmatters':moonmatters,'moon_state':moon_state,'moonsep':moonsep,\
-        #     'lunation':lunation,'mephem':mephem,'texp':im_head['EXPTIME']}
-        moon_dict = {'moonmatters':moonmatters,'moon_state':'dummy','moonsep':0,\
-             'lunation':0,'mephem':mephem,'texp':0}
+    B,A = -0.00348879, 0.10220848           # from Monte Carlo Simulation, different for each instrument (from CERES for HARPS)
+    BSerr = B + ( 1.6 + 0.2 * p1gau[2] ) * A / np.round(SNR_5130)
+    if BSerr<0.002:
+        BSerr = .002
 
-        #pkl_xc = params['path_rv_ceres'] + fsim.split('/')[-1][:-4]+obname+'_XC_'+sp_type+'.pkl'
-        pkl_xc = params['path_rv_ceres'] + fsim+'_XC_'+sp_type+'.pkl'      # without filename ending
-        pickle.dump( xc_dict, open( pkl_xc, 'w' ) )
-
-        #ccf_pdf = params['logging_path'] + fsim.split('/')[-1][:-4] + obname + '_XCs_' + sp_type + '.pdf'       # dirout + 'logging/'
-        #ccf_pdf = params['logging_path'] + fsim + '_XCs_' + sp_type + '.pdf'       # without filename ending
-        ccf_pdf = params['path_rv_ceres'] + fsim + '_XCs_' + sp_type + '.pdf'             # without filename ending
-        GLOBALutils.plot_CCF(xc_dict,moon_dict,path=ccf_pdf)
-
-        #SNR_5130 = np.median(spec[8,28,1900:2101] ) This wavelength is not covered in exohspec
-        #SNR_5130 = np.nanmedian(spec[8,0,1900:2101] ) # Set to order 20 artificially
-        SNR_5130 = np.nan
-        for cen_wave in [5130,6200,4000,7300,3000,8400,9500]:       # try different wavelengths in case one is not covered
-            subspec, wave = get_spec(spec[8,:,:], spec[0,:,:], cen_wave, 100)
-            if len(subspec) > 0:
-                SNR_5130 = np.nanmedian(subspec)       # 5130 shows significant absorption lines
-                break
-            logger('Warn: The spectra around the wavelength of {0} Angstrom is not covered'.format(cen_wave))
-        
-        B,A = -0.00257864,0.07765779            # from Monte Carlo Simulation, different for each instrument (from CERES for HARPS)
-        #B,A = 0.005, 0.2                       # Tested Ronny before 2/12/2019
-        #print SNR_5130
-        RVerr  =  B + ( 1.6 + 0.2 * p1gau[2] ) * A / np.round(SNR_5130)
-        depth_fact = 1. + p1gau[0]/(p1gau[2]*np.sqrt(2*np.pi))
-        if depth_fact < 0.6:
-            depth_fact = 0.6
-        depth_fact = (1 - 0.6) / (1 - depth_fact)
-        RVerr *= depth_fact
-        #print RVerr, depth_fact, p1gau, SNR_5130
-        if RVerr < 0.002:
-            RVerr = .002
-
-        B,A = -0.00348879, 0.10220848           # from Monte Carlo Simulation, different for each instrument (from CERES for HARPS)
-        BSerr = B + ( 1.6 + 0.2 * p1gau[2] ) * A / np.round(SNR_5130)
-        if BSerr<0.002:
-            BSerr = .002
-
-        RV     = np.around(p1gau_m[1],4)  
-        BS     = np.around(SP,4)   
-        RVerr2 = np.around(RVerr,4)
-        BSerr  = np.around(BSerr,4)
-
-        return RV, RVerr2, BS, BSerr
+    RV     = np.around(p1gau_m[1],4)  
+    BS     = np.around(SP,4)   
+    RVerr2 = np.around(RVerr,4)
+    BSerr  = np.around(BSerr,4)
+    
+    return RV, RVerr2, BS, BSerr
 
 def header_results_to_texfile(params, header_keywords=[]):
     if len(header_keywords) == 0:
