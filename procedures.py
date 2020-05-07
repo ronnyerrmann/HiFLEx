@@ -7648,7 +7648,9 @@ def find_shift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_s
 
 
 def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavelength_solution):
-    # Spawns a new subprocess by multiprocessing.Pool in GLOBALutils. Killing the process doesn't help, it is recreated
+    #import pickle
+    #with open('temp.pkl', 'wb') as f:
+    #    pickle.dump([params, spec, im_head, fitsfile, obname, reffile, wavelength_solution], f, 0)
     base = params['path_ceres']
     # Import the routines from CERES:
     sys.path.append(base+"utils/Correlation")
@@ -7697,7 +7699,7 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     spec = np.vstack(( spec, np.zeros([11-specs[0], specs[1], specs[2]]) ))
     spec[7:11,:,:] = np.nan
     lbary_ltopo = 1
-    npools = 1
+    npools = 2          # number of subprocesses
     refvel = 0
     know_moon = False
     here_moon = False
@@ -7750,33 +7752,28 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
         spec[10,order,:][L] = spec[2,order,:][L]# / (dlambda_dx[L] ** 2)        # used for the analysis in XCor (spec_order=9, iv_order=10)
     #plot_img_spec.plot_spectra_UI(np.array([spec]))
     T_eff, logg, Z, vsini, vel0 = 5777, 4.4374, 0.0134, 2, 0
-
-    if np.nanmax(spec[0,:,:], axis=None) > 5500:       # only run for wavelengths bigger than 5500A, as otherwise problems in correlation.CCF
-        #pars_file = params['path_rv_ceres'] + fsim.split('/')[-1][:-4]+'_stellar_pars.txt'
-        pars_file = params['path_rv_ceres'] + obname+'_stellar_pars.txt'                  # same stellar parameters for same object
-        pars_file = params['path_rv_ceres'] + fsim+'_stellar_pars.txt'                    # calculate stellar parameters for each spectrum
-
-        if os.access(pars_file,os.F_OK) == False or force_stellar_pars:
+    pars_file = params['path_rv_ceres'] + obname+'_stellar_pars.txt'                  # same stellar parameters for same object
+    pars_file = params['path_rv_ceres'] + fsim+'_stellar_pars.txt'                    # calculate stellar parameters for each spectrum
+    if os.access(pars_file,os.F_OK) and not force_stellar_pars:
+        T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
+        loadtxt = ' (Atmospheric parameters loaded from file {0})'.format(pars_file)
+    else:
+        good_orders = (np.nanmin(spec[0,:,:],axis=1) > 00)
+        req1 = (np.nanmax(spec[0,:,:],axis=1) < 5150).any()         # At least one order with values below 5150
+        if np.sum(good_orders) > 3 and req1:
             Rx = np.around(1./np.sqrt(abs(1./40000.**2 - 1./RESI**2)))
-            spec2 = spec.copy()
-            for i in tqdm(range(spec.shape[1]), desc="Step: Estimating atmospheric parameters"):
-                IJ = np.where(spec[5,i]!=0.)[0]
-                spec2[5,i,IJ] = GLOBALutils.convolve(spec[0,i,IJ],spec[5,i,IJ],Rx)
-            try:
-                T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils/Correlation/')     # Fails, because our spectrum doesn't cover the hard coded wavelength
-                line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
-                with open(pars_file, 'w') as f:
-                    f.write(line)
-                loadtxt = ''
-            except:
-                loadtxt = 'Warn: could not determine the stelar parameters. This is probably caused because of the availble wavelength range. Do not worry about it'
-                logger(loadtxt)
+            spec2 = spec[:,good_orders,:]
+            spec2[np.isnan(spec2)] = 0
+            for i in tqdm(range(spec2.shape[1]), desc="Step: Estimating atmospheric parameters"):
+                IJ = np.where(spec2[5,i]!=0.)[0]
+                spec2[5,i,IJ] = GLOBALutils.convolve(spec2[0,i,IJ],spec2[5,i,IJ],Rx)
+            T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils/Correlation/')    # uses scipy.integrate.simps which can create negative values which makes math.sqrt(<0) fail (https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve); but don't use try - except, as correlation.CCF is called with Pool and crashes. When it crashes the pool isn't closed/terminated, hence processes are building up, try except doesn't solve this
+            line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
+            with open(pars_file, 'w') as f:
+                f.write(line)
+            logger('Info: Using the following atmosperic parameters for {0}: T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4} {5}'.format(fsim, T_eff, logg, Z, vsini, vel0))
         else:
-            T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
-            loadtxt = ' (Atmospheric parameters loaded from file {0})'.format(pars_file)
-        if loadtxt.find('Warn') != 0:
-            logger('Info: Using the following atmosperic parameters for T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4}{0}'.format(loadtxt, T_eff, logg, Z, vsini, vel0))
-    
+            logger('Warn: could not determine the stelar parameters as the wavelength range below 5150 is not available')
     logger('Step: Radial Velocity analysis:')
     # assign mask
     #   obname is the name of the object

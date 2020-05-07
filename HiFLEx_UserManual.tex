@@ -828,7 +828,7 @@ The last lines give the information for all apertures. Columns, for which no use
 
 \subsubsection{Extracting the science data and radial velocity analysis}
 \paragraph{Files in folder given in parameter path\_rv\_ceres (standard: ceres\_rv\_output/}
-This step is only done, if the Ceres pipeline is installed and \verb|path_ceres| is set correctly to the base folder of Ceres and the sub-folders \textit{utils/Correlation}, \textit{utils/GLOBALutils}, \textit{utils/OptExtract}, and \textit{utils/CCF} exist.
+This step is only done, if the CERES pipeline is installed and \verb|path_ceres| is set correctly to the base folder of CERES and the sub-folders \textit{utils/Correlation}, \textit{utils/GLOBALutils}, \textit{utils/OptExtract}, and \textit{utils/CCF} exist.
 
 \begin{description}
   \item[*\_$<$mask$>$.pdf:] Cross-correlation function between object spectrum and the template.
@@ -920,7 +920,7 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
 \subsection{Extracting HARPS data}
 
 \subsubsection{Getting the data}
-% Ceres observations with HARPS: http://www.eso.org/public/archives/releases/sciencepapers/eso1609/eso1609a.pdf
+%  observations with HARPS: http://www.eso.org/public/archives/releases/sciencepapers/eso1609/eso1609a.pdf
 % HD 10180: G1V star with 7 planets: http://adsabs.harvard.edu/abs/2011A%26A...528A.112L
 Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*fits.Z) can be extracted with:
 \begin{lstlisting}[style=base]
@@ -1331,8 +1331,8 @@ When running the scripts for the first time, python will create a new file calle
 \subsection{External packages for Radial velocity analysis (optional)}
 The pipeline creates extracted spectra in different formats, which then can be further analysed using available software. Additionally the pipeline can use available packages to find the radial velocity of the object. Below are described the requirements of the external software.
 
-\subsubsection{Terra}
-Terra can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}~. It only has to be extracted. To check that all dependencies are installed on the system one can run.
+\subsubsection{TERRA}
+TERRA can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}~. It only has to be extracted. To check that all dependencies are installed on the system one can run.
 \begin{lstlisting}[style=base]
 java -jar <path to terra>/terra/PRV.jar
 \end{lstlisting}
@@ -1346,9 +1346,9 @@ java --version
 To install Serval please follow the instructions as given on\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. Serval only works with python~2.7.
 
 
-\subsubsection{Ceres Pipeline}
+\subsubsection{CERES Pipeline}
 \label{Section:Explanation_CERES_pipeline}
-Authors: Rafael Brahm, Andr{\'e}s Jord{\'a}n, N{\'e}stor Espinoza. If you make use of the Radial Velocity analysis from the Ceres , please cite Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/\#abs/2017PASP..129c4002B/abstract}}.
+Authors: Rafael Brahm, Andr{\'e}s Jord{\'a}n, N{\'e}stor Espinoza. If you make use of the Radial Velocity analysis from the CERES , please cite Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/\#abs/2017PASP..129c4002B/abstract}}.
 
 The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres}. To make it work, please follow the Installation Chapter in the README.md. CERES requires python 2.7. Please note that the compilers in the CERES install process ignore any anconda settings and go straight to the system packages (e.g. for SSEPhem), hence you might want to install it when anaconda is not loaded. The following lines worked in Mai 2020:
 \begin{lstlisting}[style=base]
@@ -1368,7 +1368,8 @@ sudo apt-get install libgfortran3 libgsl-dev
 \end{lstlisting}
 
 
-\paragraph{Problems that might occur when installing Ceres}
+\paragraph{Problems that might occur when installing CERES} \\
+
 To solve \verb|from pip import main  ImportError: cannot import name main|:
 \begin{lstlisting}[style=base]
 sudo python -m pip uninstall pip
@@ -1377,8 +1378,20 @@ sudo python -m pip install pip
 
 To solve \verb|jplephem.cc:2:10: fatal error: arrayobject.h: No such file or directory| rename in \verb|utils/SSEphem/jplephem.cc| line 2 from \verb|#include "arrayobject.h"| to \verb|#include "numpy/arrayobject.h"|~.
 
+\paragraph{Problemfixing CERES} \\
 
-
+If the script crashes with:
+\begin{lstlisting}[style=base]
+  File "/.../ceres/utils/Correlation/correlation.py", line xxx, in xxx
+    CCF  = CCF+(a/math.sqrt(b*c))*(Ll[-2]-Ll[1])
+ValueError: math domain error
+\end{lstlisting}
+The problem is that the variable \verb|c| is negative (scipy.integrate.simps can create negative values\footnote{\url{https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve}}). You might want to search for math.sqrt and put the line with CCF in an if clause, e.g.:
+\begin{lstlisting}[style=base]
+	if c > 0:
+	    CCF  = CCF+(a/math.sqrt(b*c))*(Ll[-2]-Ll[1])
+	    NOR = NOR+Ll[-2]-Ll[1]
+\end{lstlisting}
 
 % -------------------------------------------------------------------------------------------
 
@@ -1413,7 +1426,7 @@ Please found the changes of newer versions in Chapter~\ref{Section:Changelog_new
 \subsection*{v0.4.0}
 \begin{itemize}\setlength\itemsep{0em}
   \item Included the comparison between the wavelength solutions in science and calibration fiber.
-  \item Improved radial velocity analysis using Terra.
+  \item Improved radial velocity analysis using TERRA.
   \item Renamed \verb|arc_l| and \verb|arc_s| into \verb|cal2_l| and \verb|cal2_s|.
   \item Better way of getting the object name from the filename.
   \item Added parameter \verb|path_ceres| to conf.txt.
