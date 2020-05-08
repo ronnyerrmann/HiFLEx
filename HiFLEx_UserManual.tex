@@ -1382,13 +1382,11 @@ To solve \verb|jplephem.cc:2:10: fatal error: arrayobject.h: No such file or dir
 
 If the script crashes with:
 \begin{lstlisting}[style=base]
-  File "/.../ceres/utils/Correlation/correlation.py", line xxx, in xxx
-    CCF  = CCF+(a/math.sqrt(b*c))*(Ll[-2]-Ll[1])
 ValueError: math domain error
 \end{lstlisting}
-The problem is that the variable \verb|c| is negative (scipy.integrate.simps can create negative values\footnote{\url{https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve}}). You might want to search for math.sqrt and put the line with CCF in an if clause, e.g.:
+The problem is that the variable \verb|c| is negative (scipy.integrate.simps can create negative values\footnote{\url{https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve}}. This is a problem if there are big gaps in wavelength). You might want to search for math.sqrt in \verb|ceres/utils/Correlation/correlation.py| and put the line with CCF in an \textit{if clause}, e.g. around line 110 and 160:
 \begin{lstlisting}[style=base]
-	if c > 0:
+	if b*c >= 0:
 	    CCF  = CCF+(a/math.sqrt(b*c))*(Ll[-2]-Ll[1])
 	    NOR = NOR+Ll[-2]-Ll[1]
 \end{lstlisting}

@@ -7648,9 +7648,9 @@ def find_shift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_s
 
 
 def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavelength_solution):
-    #import pickle
-    #with open('temp.pkl', 'wb') as f:
-    #    pickle.dump([params, spec, im_head, fitsfile, obname, reffile, wavelength_solution], f, 0)
+    import pickle                                       # For tests
+    with open('temp.pkl', 'wb') as f:                   # For tests
+        pickle.dump([params, spec, im_head, fitsfile, obname, reffile, wavelength_solution], f, 0)
     base = params['path_ceres']
     # Import the routines from CERES:
     sys.path.append(base+"utils/Correlation")
@@ -7727,7 +7727,6 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
     8: spectrum of the emission line lamp'
     """
-    spec[5,np.isnan(spec[5,:])] = 0     # 5 -> 9, GLOBALutils.XCor expects 0, not NaN -> otherwise higher RV scatter
     #spec[6,np.isnan(spec[6,:])] = 0     # doesn't make a difference
     #spec[2,np.isnan(spec[2,:])] = 0     # doesn't make a difference
     for order in range(spec.shape[1]):
@@ -7754,33 +7753,37 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     T_eff, logg, Z, vsini, vel0 = 5777, 4.4374, 0.0134, 2, 0
     pars_file = params['path_rv_ceres'] + obname+'_stellar_pars.txt'                  # same stellar parameters for same object
     pars_file = params['path_rv_ceres'] + fsim+'_stellar_pars.txt'                    # calculate stellar parameters for each spectrum
-    if os.access(pars_file,os.F_OK) and not force_stellar_pars:
-        T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
-        loadtxt = ' (Atmospheric parameters loaded from file {0})'.format(pars_file)
-    else:
-        good_orders = (np.nanmin(spec[0,:,:],axis=1) > 00)
+    if not os.path.isfile(pars_file) or force_stellar_pars:
         req1 = (np.nanmax(spec[0,:,:],axis=1) < 5150).any()         # At least one order with values below 5150
-        if np.sum(good_orders) > 3 and req1:
+        req2 = (np.nanmax(spec[0,:,:],axis=1) > 5600).any()
+        if req1 and req2:
+            good_orders = (np.nanmin(spec[0,:,:],axis=1) > 00)
             Rx = np.around(1./np.sqrt(abs(1./40000.**2 - 1./RESI**2)))
-            spec2 = spec[:,good_orders,:]
-            spec2[np.isnan(spec2)] = 0
+            spec2 = copy.copy(spec)
             for i in tqdm(range(spec2.shape[1]), desc="Step: Estimating atmospheric parameters"):
-                IJ = np.where(spec2[5,i]!=0.)[0]
-                spec2[5,i,IJ] = GLOBALutils.convolve(spec2[0,i,IJ],spec2[5,i,IJ],Rx)
+                good_values = ~np.isnan(spec2[5,i,:])
+                if sum(good_values) < 10:                               # If not enough values, then ignore the order
+                    good_orders[i] = False
+                    continue
+                spec2[5,i,good_values] = GLOBALutils.convolve(spec2[0,i,good_values],spec2[5,i,good_values],Rx)
+            spec2 = spec2[:,good_orders,:]
+            
             T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils/Correlation/')    # uses scipy.integrate.simps which can create negative values which makes math.sqrt(<0) fail (https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve); but don't use try - except, as correlation.CCF is called with Pool and crashes. When it crashes the pool isn't closed/terminated, hence processes are building up, try except doesn't solve this
             line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
             with open(pars_file, 'w') as f:
                 f.write(line)
-            logger('Info: Using the following atmosperic parameters for {0}: T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4} {5}'.format(fsim, T_eff, logg, Z, vsini, vel0))
+            text = 'Info: Using the following atmosperic parameters for {0}'.format(fsim)
         else:
-            logger('Warn: could not determine the stelar parameters as the wavelength range below 5150 is not available')
-    logger('Step: Radial Velocity analysis:')
-    # assign mask
-    #   obname is the name of the object
-    #   reffile is a reference file: reffile = dirin+'reffile.txt' -> this file doesn't exist
-    sp_type, mask = GLOBALutils.get_mask_reffile(obname,reffile=reffile,base=base+'data/xc_masks/')     # !!! Warn: upper and lower case matters
-    logger("Will use {0} mask for CCF.".format(sp_type))
-
+            text = 'Warn: could not determine the stelar parameters as the wavelength range below 5150 is not available. Using the hard coded values'
+    else:
+        T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
+        text = 'Info: Atmospheric parameters loaded from file {0}'.format(pars_file)
+    # assign mask, obname is the name of the object
+    sp_type, mask = GLOBALutils.get_mask_reffile(obname,reffile=reffile,base=base+'data/xc_masks/')     # !!! Warn: upper and lower case matters for obname
+    logger('{0}: T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4} {5}. Will use {6} mask for CCF.'.format(text, T_eff, logg, Z, vsini, vel0, sp_type))
+    
+    spec[5,np.isnan(spec[5,:])] = 0     # 5 -> 9, GLOBALutils.XCor expects 0, not NaN -> otherwise higher RV scatter; but CCF expects nan
+    
     # Read in mask
     ml, mh, weight = np.loadtxt(mask,unpack=True)
     ml_v = GLOBALutils.ToVacuum( ml )
@@ -7788,7 +7791,7 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     av_m = 0.5*( ml_v + mh_v )
     mask_hw_kms = (GLOBALutils.Constants.c/1e3) * 0.5*(mh_v - ml_v) / av_m
 
-    disp = GLOBALutils.get_disp(obname, reffile=reffile)        # !!! Warn: upper and lower case matters disp is "velocity width in km/s that is used to broaden the lines of the binary mask. It should be similar to the standard deviation of the Gaussian that is fitted to the CCF."
+    disp = GLOBALutils.get_disp(obname, reffile=reffile)        # !!! Warn: upper and lower case matters, disp is "velocity width in km/s that is used to broaden the lines of the binary mask. It should be similar to the standard deviation of the Gaussian that is fitted to the CCF."
     if disp == 0:
         known_sigma = False
         if vsini != -999 and vsini != 0.:
@@ -7802,7 +7805,7 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     ml_v = av_m - mask_hw_wide
     mh_v = av_m + mask_hw_wide 
 
-    logger('Computing the CCF...')
+    logger('Step: Computing the CCF... for the RV measurement')
     cond = True
 
     if sp_type == 'M5':
