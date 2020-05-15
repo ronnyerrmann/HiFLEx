@@ -6,7 +6,7 @@ pat = '*.fits'              # Pattern of the file name
 # obsname = (28.75728, -17.88508, 2382) from wiki
 obsname = "hiflex" # for barycorrpy, not import if the BJD is in the header
 
-iomax = 1000          # flexible, needs to change for each setup before running serval
+iomax = 1000          # stupidly big number for orders. Real control is done with -oset
 
 maskfile = 'telluric_mask_atlas.dat'
 
@@ -40,7 +40,7 @@ def scan(self, s, pfits=True):
       self.mjd = hdr.get(HIERHIFLEX + 'MJD')
       # for HiFLEx spectra the drift is already included in the wavelength solution
       #self.drift = hdr.get(HIERHIFLEX+'D_SHIFT_KMS', np.nan)    
-      #self.e_drift = hdr.get(HIERHIFLEX+'CARACAL DRIFT FP E_RV', np.nan)                            # Adapt HiFLEx
+      #self.e_drift = hdr.get(HIERHIFLEX+'CARACAL DRIFT FP E_RV', np.nan)                         # Adapt HiFLEx so this value could be given
       self.sn55 = hdr.get(HIERHIFLEX + 'SN_order%2.2i'%(int(iomax/2)), 50)                        # Modfied, flexible, maybe fix it to one order in HiFLEx
       self.fileid = self.timeid = hdr.get(HIERHIFLEX + 'DATE-OBS', 0)
       self.calmode = "%s,%s,%s" % (hdr.get('SCI-OBJ', ''), hdr.get('CAL-OBJ', ''), hdr.get('SKY-OBJ', ''))

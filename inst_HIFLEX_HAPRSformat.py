@@ -7,8 +7,7 @@ pat = '*.fits'              # Pattern of the file name
 # obsname = (28.75728, -17.88508, 2382) from wiki
 obsname = "testobsname" # for barycorrpy, not import if the BJD is in the header
 
-#pmax = 2048         # flexible
-iomax = 46          # flexible, needs to change for each setup
+iomax = 1000          # stupidly big number for orders. Real control is done with -oset
 
 maskfile = 'telluric_mask_atlas.dat'
 
@@ -34,6 +33,7 @@ def scan(self, s, pfits=True, verb=False):
       #k_tmmean = {'HARPS': HIERINST + 'INS DET1 TMMEAN', 'HARPN': HIERINST + 'EXP1 TMMEAN'}[inst]
       if 1:
          self.HIERDRS = HIERDRS = HIERINST + 'DRS '
+         iomax = hdr['NAXIS2']
          k_sn55 = HIERDRS + 'SPE EXT SN{0}'.format(int(iomax/2))            # Was 30 and changes the results
          k_berv = HIERDRS + 'BERV'
          k_bjd = HIERDRS + 'BJD'
@@ -67,8 +67,8 @@ def scan(self, s, pfits=True, verb=False):
       self.de = hdr['DEC']
       self.utc = datetime.datetime.strptime(self.dateobs, '%Y-%m-%dT%H:%M:%S.%f')
 
-      self.obs.lon = -70.7345
-      self.obs.lat = -29.2584
+      self.obs.lon = -70.7345               # Maybe adapt HiFLEx to get from header, shouldn't be used
+      self.obs.lat = -29.2584               # Maybe adapt HiFLEx to get from header, shouldn't be used
 
       self.tmmean = hdr.get(k_tmmean, 0.5)
 
