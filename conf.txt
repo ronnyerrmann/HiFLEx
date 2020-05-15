@@ -319,23 +319,27 @@ background_px_filename          = background_px.fits
   # master file for the background correction. Created by reduction_day.py
 background_filename             = background.fits
 
-  ## RV analysis:
+  ## RV analysis: please read the manual to check how to install the packages.
   #--------------
-  # Using the TERRA pipeline to create a template spectrum and then use that template to do the radial velocity analysis. Need to point to the PRV.jar file.
+  # Using TERRA to create a template spectrum and then use that template to do the relative radial velocity analysis. Need to point to the PRV.jar file.
   #       If terra_jar_file does not exist on the machine, then no radial velocity analysis using this method will be used.
 terra_jar_file                  = /home/ronny/software/terra/PRV.jar
-  # csv files for TERRA. path_csv_terra will be relative to the result_path. The csv files will be saved in the <object_name>/data/ folder under path_csv_terra.
+  # csv files for TERRA. path_rv_terra will be relative to the result_path. The csv files will be saved in the <object_name>/data/ folder under path_csv_terra.
   #       It will contain the normalised flux
-path_csv_terra                  = terra_rv_data
-  # Using SERVAL 
-  path_serval                   = Todo!!!
-  # Using the CERES pipeline to do a cross-correlation with template spectra (using the normalised spectrum). Needs to point to the base folder of CERES. 
+path_rv_terra                   = terra_rv
+
+  # Using SERVAL to create a template spectrum and then do relative radial velocity against this. The path in which the python and serval folders are located needs to be given.
+path_serval                     = /home/ronny/software/mzechmeister/
+    # Output of the SERVAL cross-correlation
+path_rv_serval                  = serval_rv
+
+  # Using CERES to do a cross-correlation with template spectra (using the normalised spectrum). Needs to point to the base folder of CERES. 
   #       If path_ceres does not exist on the machine, then no radial velocity analysis using this method will be used.
   # path_rv is used to store the results from the CERES pipeline. path_rv will be relative to the result_path.
 path_ceres                      = /home/exohspec/software/ceres/
 path_ceres                      = /home/ronny/software/ceres/
   # Output of the CERES cross-correlation
-path_rv_ceres                   = logging/ceres_rv_output
+path_rv_ceres                   = ceres_rv
 
   ## Logging:
   #----------

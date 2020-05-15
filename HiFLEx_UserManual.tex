@@ -99,25 +99,14 @@ In order to work with the spectra, the following steps have to be done:
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
 
-\subsection*{v0.4.2}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Change to the new name: HiFLEx
-  \item GUI for preparing the files
-  \item \textit{localbackground} became \textit{background}
-  \item Bug-Fixing
-\end{itemize}
-
-\subsection*{v0.4.3}
-\begin{itemize}\setlength\itemsep{0em}
-  \item GUI for creating a new wavelength solution
-  \item Bug-Fixing
-\end{itemize}
-
 \subsection*{v1.0.0}
 \begin{itemize}\setlength\itemsep{0em}
   \item Rename of \verb|prepare_file_list.py| to \verb|file_assignment.py|
   \item Rename of \verb|reduction_day.py| to \verb|hiflex.py|
   \item Added parameters \verb|logging_traces_bisector|, \verb|extraction_shift|, \verb|extraction_min_ident_part_of_trace_percent|, \verb|extraction_precision|, \verb|sigmaclip_spectrum|
+  \item Added parameter \verb|path_rv_serval|
+  \item Renamed parameter \verb|path_csv_terra| to \verb|path_rv_terra|
+  \item Added SERVAL radial velocity analysis
   \item Fixed a bug with CERES RVs
   \item Format of the object list was changed to keep compatibility with CERES. To convert run \verb|transform_coordinate_file_before_v0.4.4_202004.py| before running any other Script. % When installing this version at Narit Change also GLOBALutils there
   \item Improved code, general bugfixes, aditional features
@@ -1341,9 +1330,18 @@ This should produce the entry \textit{*** TERRA v1.8 ***} before failing. If not
 java --version
 \end{lstlisting}
 
-\subsubsection{Serval}
+\subsubsection{SERVAL}
 \label{Section:serval_package}
 To install Serval please follow the instructions as given on\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. Serval only works with python~2.7.
+
+Serval can be controlled with an instrument file. This has to be provided in the serval \verb|src| folder. Below is a way to create a soft link it when following the installing instructions.
+\begin{lstlisting}[style=base]
+ln -s <path/to/hiflex>/inst_HIFLEX.py $SERVALHOME/serval/src/
+\end{lstlisting}
+Alternatively, the following line can be used:
+\begin{lstlisting}[style=base]
+ln -s <path/to/hiflex>/inst_HIFLEX.py <path/to/mzechmeister>/serval/src/
+\end{lstlisting}
 
 
 \subsubsection{CERES Pipeline}
@@ -1401,6 +1399,20 @@ The problem is that the variable \verb|c| is negative (scipy.integrate.simps can
 \section{Changelog (old)}
 \label{Section:Changelog_old}
 Please found the changes of newer versions in Chapter~\ref{Section:Changelog_new}.
+
+\subsection*{v0.4.3}
+\begin{itemize}\setlength\itemsep{0em}
+  \item GUI for creating a new wavelength solution
+  \item Bug-Fixing
+\end{itemize}
+
+\subsection*{v0.4.2}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Change to the new name: HiFLEx
+  \item GUI for preparing the files
+  \item \textit{localbackground} became \textit{background}
+  \item Bug-Fixing
+\end{itemize}
 
 \subsection*{v0.4.1}
 \begin{itemize}\setlength\itemsep{0em}

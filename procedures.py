@@ -37,7 +37,17 @@ import plot_img_spec
 import psutil
 import ephem
 import math
-import barycorrpy
+import urllib2
+success = False
+for ii in range(5):
+    try:
+        import barycorrpy
+        success = True
+        break
+    except urllib2.URLError as e:
+        print('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+if not success:
+    print('Error: barrycorrpy could not be loaded. It needs an active internet connection in order to download the IERS_B file. This failure will lead to a crash of the program later!\n')
 import glob
 
 # Necessary because of https://github.com/astropy/astropy/issues/9427
@@ -136,7 +146,7 @@ def log_params(params):
     """
     # Finding the python files
     text = ''
-    list_of_files = glob.glob('{0}/*.py'.format(os.path.realpath(__file__).rsplit('/',1)[0]))
+    list_of_files = glob.glob('{0}/*.py'.format(os.path.realpath(__file__).rsplit(os.sep,1)[0]))
     list_of_files = sorted(list_of_files, key=os.path.getmtime, reverse=True)
     for fname in list_of_files:
         filedata1 = read_text_file(fname, no_empty_lines=False)
@@ -250,10 +260,10 @@ def textfileargs(params, textfile=None):
               'altitude', 'latitude', 'longitude', 'in_shift', 'extraction_shift', 'extraction_min_ident_part_of_trace_percent']
     bools = ['flip_frame', 'update_width_orders', 'GUI']
     text_selection = ['arcshift_side', 'extraction_precision']
-    results = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_csv_terra', 
+    results = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_rv_terra', 'path_rv_serval',
                'path_harpsformat', 'master_blaze_spec_norm_filename']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
     full_filenames = ['badpx_mask_filename', 'original_master_traces_filename', 'original_master_wavelensolution_filename',
-                'configfile_fitsfiles', 'raw_data_file_list', 'terra_jar_file']    # deal with full filenames -> nothing to do
+                'configfile_fitsfiles', 'raw_data_file_list', 'terra_jar_file']   # deal with full filenames -> nothing to do
     texts = ['editor', 'extracted_bitpix', 'site', 'reference_catalog', 'object_file', 'raw_data_imtyp_keyword', 
              'raw_data_imtyp_bias', 'raw_data_imtyp_dark', 'raw_data_imtyp_flat', 'raw_data_imtyp_trace1', 'raw_data_imtyp_blaze', 'raw_data_imtyp_trace2',
              'raw_data_exptim_keyword', 'raw_data_dateobs_keyword', 'raw_data_timezone_cor']      # -> nothing to do
@@ -288,8 +298,8 @@ def textfileargs(params, textfile=None):
     undeclared_params = ''
     # Important settings first, as other things depend on them:
     for entry in paths:
-        if entry in params.keys():
-            params[entry] = (params[entry]+'/').replace('//', '/')      # Add a / at the end in case the user didn't
+        if entry in params.keys() and entry not in list_txt:
+            params[entry] = (params[entry]+os.sep).replace(os.sep+os.sep, os.sep)      # Add a / at the end in case the user didn't
     for entry in results:
         if entry in params.keys():                                            # deal with result filenames/folders -> add result_path
             params[entry] = params['result_path'] + params[entry]
@@ -335,7 +345,10 @@ def textfileargs(params, textfile=None):
                 else:
                     logger(emsg + 'Parameter "{0}" (value of "{1}") must be one of the following: {2}'.format(entr, params[entry], standards+linfits))
         if entry in paths:                                              # Create folders
-            if entry in ['raw_data_paths', 'path_ceres', 'terra_jar_file']:         # raw_data_paths is list, hence has to be checked before
+            if type(params[entry]).__name__ in ['list']:    
+                for ii in range(len(params[entry])):
+                    params[entry][ii] = (params[entry][ii]+os.sep).replace(os.sep+os.sep, os.sep)      # Add a / at the end in case the user didn't
+            if entry in ['raw_data_paths', 'path_ceres', 'path_serval']:         # raw_data_paths is list, hence has to be checked before
                 continue
             if not os.path.exists(params[entry]) and params[entry].lower() not in ['na/', params['result_path']+'na/', params['result_path']+'/na/']:
                 try:                                                    # Create folders, if necessary
@@ -671,7 +684,7 @@ def read_file_calibration(params, filename, level=0):
                 #plot_img_spec.plot_image(bck_im, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bck_im')
                 #plot_img_spec.plot_image(im-bck_im, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'diff')
                 plot_img_spec.plot_image((im - bck_im)*bck_px, \
-                                        [params['logging_path']+'background_subtracted-'+filename.rsplit('/',1)[-1]+'.png'],\
+                                        [params['logging_path']+'background_subtracted-'+filename.rsplit(os.sep,1)[-1]+'.png'],\
                                          1, False, [0.05,0.95,0.95,0.05], 'difference between image and background fit')
                 im = im - bck_im
                 bck_px[ bck_px==0 ] = np.nan
@@ -694,7 +707,7 @@ def read_file_calibration(params, filename, level=0):
             im_head['HIERARCH HiFLEx '+headtxt[0]] = '{3}: {0}, median={1}, std={2}'.format(entry, im_median, im_std, headtxt[1])
     #logger('Info: image loaded and processed: {0}'.format(filename))
     if os.path.exists(params['path_reduced']) and params['path_reduced'].lower() != 'na/':       # Save the reduced image
-        fname = filename.rsplit('/',1)
+        fname = filename.rsplit(os.sep,1)
         save_im_fits(params, im, im_head,  params['path_reduced']+fname[-1])
     return im, im_head
 
@@ -836,9 +849,9 @@ def save_im_fits(params, im, im_head, filename):
     :param im_head: header of the 2d array
     :param filename: filename in which to save the fits file
     """
-    if len(filename.rsplit('/',1)) == 1:     # no path is in the filename
+    if len(filename.rsplit(os.sep,1)) == 1:     # no path is in the filename
         logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( filename, os.getcwd() ))
-    elif not os.path.exists(filename.rsplit('/',1)[0]):
+    elif not os.path.exists(filename.rsplit(os.sep,1)[0]):
         logger('Error: Folder to save {0} does not exists.'.format(filename))
     im = rotate_flip_frame(im, params, invert=True)
     #im = get_minimum_data_type(im, allow_unsigned=False)   #That doen't make the fits files smaller for uint16, int16, or float32. Additionally, plotting a file with uint16 or int16 with ds9 or gaia doesn't show the data correctly
@@ -934,9 +947,9 @@ def save_fits_width(pfits, xlows, xhighs, widths, filename):
     :param widths: 2d list, length same as number of orders, each entry contains left border, right border, and Gaussian width of the lines, as estimated in the master flat
     :param filename: string, location and file name of the file containing the polynomial fits
     """
-    if len(filename.rsplit('/',1)) == 1:     # no path is in the filename
+    if len(filename.rsplit(os.sep,1)) == 1:     # no path is in the filename
         logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( filename, os.getcwd() ))
-    elif not os.path.exists(filename.rsplit('/',1)[0]):
+    elif not os.path.exists(filename.rsplit(os.sep,1)[0]):
         logger('Error: Folder to save {0} does not exists.'.format(filename))
         
     data = []
@@ -1022,9 +1035,9 @@ def save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_ar
                                         sorted by the brightest to faintest (in spectrum from which the solution is derived) and 0 to make into an array
     :param filename: string, location and file name of the file
     """
-    if len(filename.rsplit('/',1)) == 1:     # no path is in the filename
+    if len(filename.rsplit(os.sep,1)) == 1:     # no path is in the filename
         logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( filename, os.getcwd() ))
-    elif not os.path.exists(filename.rsplit('/',1)[0]):
+    elif not os.path.exists(filename.rsplit(os.sep,1)[0]):
         logger('Error: Folder to save {0} does not exists.'.format(filename))
     
     data = []
@@ -1093,9 +1106,9 @@ def save_multispec(data, fname, im_head, bitpix='-32'):
     :param im_head: header, which should be written to the fits file
     :param bitpix: Precission in which the data should be stored
     """
-    if len(fname.rsplit('/',1)) == 1:
+    if len(fname.rsplit(os.sep,1)) == 1:
         logger('Warn: No folder is given for the file {0}. File will be stored in the current working directory.'.format(fname))
-    elif not os.path.exists(fname.rsplit('/',1)[0]):
+    elif not os.path.exists(fname.rsplit(os.sep,1)[0]):
         logger('Error: Folder to save {0} does not exists.'.format(fname))
         
     fname = fname.replace('.fits', '')
@@ -3105,7 +3118,7 @@ def read_reference_catalog(params, filename=None, wavelength_muliplier=None, arc
     for i in range(len(arc_lines)):
         arc_lines[i] = arc_lines[i].replace(' ','')
     reference_catalog, reference_names = [], []
-    refernce_files, refernce_files_full = find_file_in_allfolders(filename, [params['result_path']] + params['raw_data_paths'] + [os.path.realpath(__file__).rsplit('/',1)[0]+'/'])
+    refernce_files, refernce_files_full = find_file_in_allfolders(filename, [params['result_path']] + params['raw_data_paths'] + [os.path.realpath(__file__).rsplit(os.sep,1)[0]+os.sep])
     if len(refernce_files) == 0:
         logger('Error: file for the reference coordinates does not exist. Checked: {0}'.format(refernce_files_full) )
     for refernce_file in refernce_files:
@@ -3689,7 +3702,7 @@ def get_possible_object_names(filename, header, header_keywords, replacements=['
     obname = filename + '-'                   # Have at least one run
     while obname.find('_') != -1 or obname.find('-') != -1:
         for splitter in ['-', '_']:
-            obname = obname.rsplit(splitter, 1)
+            obname = obname.rsplit(splitter, 1)     # remove stuff from the right
             if len(obname) == 1:            # Splitter isn't part of filename anymore
                 obname = obname[0]          # remove the list from it
                 continue
@@ -3710,14 +3723,15 @@ def get_possible_object_names(filename, header, header_keywords, replacements=['
                     posi = obnametemp.lower().find(rplc)
                     if posi + len(rplc) == len(obnametemp) and posi != -1:           # the searchtext is at the end of the filename
                         obnametemp = obnametemp[:posi]              # get rid of the Arc in the filename
-                        break
-                if i == 0 and len(obnametemp) < 5:
-                    continue
-                if obnametemp not in obnames and obnametemp.lower() not in replacements:
-                    obnames.append(obnametemp)
-                if i == 4:                            # Use the stripped filename as new filename
+                    if posi == 0:
+                        obnametemp = obnametemp[len(rplc):]
+                    if i == 0 and len(obnametemp) < 5:
+                        continue
+                    if obnametemp not in obnames and obnametemp.lower() not in replacements:
+                        obnames.append(obnametemp)
+                if i == 4:                            # Use the stripped filename as new filename   
                     obname = obnametemp
-                    
+
     return obnames
 
 def find_file_in_allfolders(filename, folders=[]):
@@ -3727,7 +3741,7 @@ def find_file_in_allfolders(filename, folders=[]):
     :param folders: list of strings: paths in which the filename and the filename without its path should be searched
     :return pathfiles: list of strings: All places in which the file was found
     """
-    filename_no_path = filename.rsplit('/',1)[-1]
+    filename_no_path = filename.rsplit(os.sep,1)[-1]
     pathfiles, pathfiles_full = [], []
     for folder in [''] + folders:      # Check also the result and raw data paths for object names
         for fname in [filename, filename_no_path]:
@@ -3757,7 +3771,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     
     im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
     # not anymore: Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
-    obname = im_name.replace('\n','').split('/')    # get rid of the path
+    obname = im_name.replace('\n','').split(os.sep)    # get rid of the path
     im_head['HIERARCH HiFLEx NAME'] = (obname[-1], 'original filename')       # To know later what was the original filename
     #not necessary anymore: obname = obname.split('-')  # remove the numbering and exposure time from the filename
     #not necessary anymore: obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
@@ -3866,62 +3880,62 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     save_multispec(spectra[::-1,:],                 params['path_extraction_single']+im_name+'_extr_bluefirst',  im_head_iraf_format_bluefirst, bitpix=params['extracted_bitpix'])
     save_multispec(fspectra[::-1,:],                params['path_extraction_single']+im_name+'_blaze_bluefirst', im_head_iraf_format_bluefirst, bitpix=params['extracted_bitpix'])
     
-    # CSV file for terra
-    fname = params['path_csv_terra']+obnames[0].lower()+'/data/'+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
-    os.system('rm -f {0}{1}/results/synthetic.rv'.format(params['path_csv_terra'],obnames[0].lower()) )     # Delete the old solution, as won't be created otherwise
-    save_spec_csv(cspectra, wavelengths_bary, good_px_mask, fname)
-    
-    # Harps format
-    im_head_harps_format = wavelength_solution_harps(params, im_head_harps_format, wavelengths[::-1,:])        # [::-1,:] -> Blue orders first      # 20190509: wavelengths instead of wavelengths_bary
-    serval_keys = []
-    #serval_keys.append(['INSTRUME', 'HARPS',                                                    'added for Serval'])
-    serval_keys.append(['INSTRUME', 'EXOHSPEC',                                                    'added for Serval'])
-    serval_keys.append(['EXPTIME',  im_head_harps_format['HiFLEx EXPOSURE'],    'Exposure time, for Serval'])
-    serval_keys.append(['DATE-OBS', im_head_harps_format['HiFLEx DATE-OBS'],                  'UT start, for Serval'])
-    serval_keys.append(['MJD-OBS',  im_head_harps_format['HiFLEx MJD_START'],                 'MJD start ({0})'.format(im_head_harps_format['HiFLEx DATE-OBS']) ])
-    if 'HiFLEx BJDTDB' in im_head.keys():
-        serval_keys.append(['HIERARCH ESO DPS BJD',     im_head_harps_format['HiFLEx BJDTDB'],        'Barycentric Julian Day'])      # DRS produces them without leap seconds, e.g. 68.2s earlier at 2015
-    if 'HiFLEx RA' in im_head_harps_format.keys():
-        serval_keys.append(['RA',       im_head_harps_format['HiFLEx RA'],                            'RA start, for Serval'])
-    if 'HiFLEx DEC' in im_head_harps_format.keys():
-        serval_keys.append(['DEC',      im_head_harps_format['HiFLEx DEC'],                           'DEC start, for Serval'])
-    if 'HiFLEx BCV' in im_head_harps_format.keys():
-        serval_keys.append(['HIERARCH ESO DRS BERV',     im_head_harps_format['HiFLEx BCV'],          'Barycentric Earth Radial Velocity'])
-        serval_keys.append(['HIERARCH ESO DRS BERVMX',   im_head_harps_format['HiFLEx BCV MAX'],      'Maximum BERV'])
-        serval_keys.append(['HIERARCH ESO DRS BERVMN',   im_head_harps_format['HiFLEx BCV MIN'],      'Minimum BERV'])
-    serval_keys.append(['HIERARCH ESO DPR TECH',         'ECHELLE ',        'Observation technique'])
-    serval_keys.append(['HIERARCH ESO INS MODE',         'HARPS',           'Instrument mode used.'])
-    serval_keys.append(['HIERARCH ESO DRS CAL LOC NBO',  spectra.shape[0],  'nb orders localised'])
-    serval_keys.append(['HIERARCH ESO OBS TARG NAME',    obnames[0],        'OB target name'])
-    serval_keys.append(['OBJECT',                        obnames[0],        'OB target name'])
-    serval_keys.append(['HIERARCH ESO INS DET1 TMMEAN',  im_head_harps_format['HiFLEx EXP_FRAC'],     'Normalised mean exposure time'])
-    serval_keys.append(['HIERARCH ESO INS DET2 TMMEAN',  im_head_harps_format['HiFLEx EXP_FRAC'],     'Normalised mean exposure time'])
-    #serval_keys.append(['HIERARCH ESO DRS BLAZE FILE',   'HARPS.2007-04-03T20:57:37.400_blaze_A.fits',  'Bla'])        # not necessary
-    #serval_keys.append(['HIERARCH ESO DRS DRIFT RV USED',0.,                'Used RV Drift [m/s]'])                    # not necessary
-    #serval_keys.append(['',         '',        ''])
-    for order in orders:
-        serval_keys.append([ 'HIERARCH ESO DRS SPE EXT SN{0}'.format(order), im_head['HiFLEx SN_order{0}'.format('%2.2i'%order)], 'S_N order center{0}'.format(order) ])
-    for [newkey, value, comment] in serval_keys:
-        if newkey not in im_head_harps_format.keys():
-            im_head_harps_format[newkey] = (value, comment)
-    if 'COMMENT' in im_head_harps_format.keys():
-        del im_head_harps_format['COMMENT']                 # Serval can't read comments
-    for entry in im_head_harps_format.keys():
-        #print "key, value, comment",(entry, im_head_harps_format[entry], im_head_harps_format.comments[entry])
-        if im_head_harps_format.comments[entry] == '':
-            im_head_harps_format.comments[entry] = '/'      # Serval can't read header keywords without comment, for NAXISj this needs to be done in save_multispec
-    fname = params['path_harpsformat']+obnames[0].lower()+'/'+'HARPS.{0}_e2ds_A.fits'.format(im_head_harps_format['HiFLEx DATE-OBS'][:-3])
-    if len(fname.rsplit('/',1)) == 1:     # no path is in the filename
-        logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( fname, os.getcwd() ))
-    elif not os.path.exists(fname.rsplit('/',1)[0]):
-        try:
-            os.makedirs(fname.rsplit('/',1)[0])
-        except:
-            logger('Error: Folder to save {0} does not exists and cannot be created.'.format(fname))
-    #for entry in im_head_harps_format.keys():
-    #    if entry.find('AXIS') != -1:
-    #        print "key, value, comment",(entry, im_head_harps_format[entry], im_head_harps_format.comments[entry]) 
-    save_multispec(spectra[::-1,:], fname, im_head_harps_format, bitpix=params['extracted_bitpix'])                 # [::-1,:] -> Blue orders first
+    if do_RV:
+        # CSV file for terra
+        fname = params['path_rv_terra']+obnames[0].lower()+'/data/'+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
+        os.system('rm -f {0}{1}/results/synthetic.rv'.format(params['path_rv_terra'],obnames[0].lower()) )     # Delete the old solution, as won't be created otherwise
+        save_spec_csv(cspectra, wavelengths_bary, good_px_mask, fname)
+        
+        # Harps format
+        im_head_harps_format = wavelength_solution_harps(params, im_head_harps_format, wavelengths[::-1,:])        # [::-1,:] -> Blue orders first      # 20190509: wavelengths instead of wavelengths_bary
+        serval_keys = []
+        serval_keys.append(['INSTRUME', 'HIFLEX',                                                 'added for Serval'])
+        serval_keys.append(['EXPTIME',  im_head_harps_format['HiFLEx EXPOSURE'],                  'Exposure time, for Serval'])
+        serval_keys.append(['DATE-OBS', im_head_harps_format['HiFLEx DATE-OBS'],                  'UT start, for Serval'])
+        serval_keys.append(['MJD-OBS',  im_head_harps_format['HiFLEx MJD_START'],                 'MJD start ({0})'.format(im_head_harps_format['HiFLEx DATE-OBS']) ])
+        if 'HiFLEx BJDTDB' in im_head.keys():
+            serval_keys.append(['HIERARCH ESO DRS BJD',     im_head_harps_format['HiFLEx BJDTDB'],        'Barycentric Julian Day'])      # DRS produces them without leap seconds, e.g. 68.2s earlier at 2015
+        if 'HiFLEx RA' in im_head_harps_format.keys():
+            serval_keys.append(['RA',       im_head_harps_format['HiFLEx RA'],                            'RA start, for Serval'])
+        if 'HiFLEx DEC' in im_head_harps_format.keys():
+            serval_keys.append(['DEC',      im_head_harps_format['HiFLEx DEC'],                           'DEC start, for Serval'])
+        if 'HiFLEx BCV' in im_head_harps_format.keys():
+            serval_keys.append(['HIERARCH ESO DRS BERV',     im_head_harps_format['HiFLEx BCV'],          'Barycentric Earth Radial Velocity'])
+            serval_keys.append(['HIERARCH ESO DRS BERVMX',   im_head_harps_format['HiFLEx BCV MAX'],      'Maximum BERV'])
+            serval_keys.append(['HIERARCH ESO DRS BERVMN',   im_head_harps_format['HiFLEx BCV MIN'],      'Minimum BERV'])
+        serval_keys.append(['HIERARCH ESO DPR TECH',         'ECHELLE ',        'Observation technique'])
+        serval_keys.append(['HIERARCH ESO INS MODE',         'HARPS',           'Instrument mode used.'])
+        serval_keys.append(['HIERARCH ESO DRS CAL LOC NBO',  spectra.shape[0],  'nb orders localised'])
+        serval_keys.append(['HIERARCH ESO OBS TARG NAME',    obnames[0],        'OB target name'])
+        serval_keys.append(['OBJECT',                        obnames[0],        'OB target name'])
+        serval_keys.append(['HIERARCH ESO INS DET1 TMMEAN',  im_head_harps_format['HiFLEx EXP_FRAC'],     'Normalised mean exposure time'])
+        serval_keys.append(['HIERARCH ESO INS DET2 TMMEAN',  im_head_harps_format['HiFLEx EXP_FRAC'],     'Normalised mean exposure time'])
+        #serval_keys.append(['HIERARCH ESO DRS BLAZE FILE',   'HARPS.2007-04-03T20:57:37.400_blaze_A.fits',  'Bla'])        # not necessary
+        #serval_keys.append(['HIERARCH ESO DRS DRIFT RV USED',0.,                'Used RV Drift [m/s]'])                    # not necessary
+        #serval_keys.append(['',         '',        ''])
+        for order in orders:
+            serval_keys.append([ 'HIERARCH ESO DRS SPE EXT SN{0}'.format(order), im_head['HiFLEx SN_order{0}'.format('%2.2i'%order)], 'S_N order center{0}'.format(order) ])
+        for [newkey, value, comment] in serval_keys:
+            if newkey not in im_head_harps_format.keys():
+                im_head_harps_format[newkey] = (value, comment)
+        if 'COMMENT' in im_head_harps_format.keys():
+            del im_head_harps_format['COMMENT']                 # Serval can't read comments
+        for entry in im_head_harps_format.keys():
+            #print "key, value, comment",(entry, im_head_harps_format[entry], im_head_harps_format.comments[entry])
+            if im_head_harps_format.comments[entry] == '':
+                im_head_harps_format.comments[entry] = '/'      # Serval can't read header keywords without comment, for NAXISj this needs to be done in save_multispec
+        fname = params['path_harpsformat']+obnames[0].lower()+os.sep+'HARPS.{0}_e2ds_A.fits'.format(im_head_harps_format['HiFLEx DATE-OBS'][:-3])
+        if len(fname.rsplit(os.sep,1)) == 1:     # no path is in the filename
+            logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( fname, os.getcwd() ))
+        elif not os.path.exists(fname.rsplit(os.sep,1)[0]):
+            try:
+                os.makedirs(fname.rsplit(os.sep,1)[0])
+            except:
+                logger('Error: Folder to save {0} does not exists and cannot be created.'.format(fname))
+        #for entry in im_head_harps_format.keys():
+        #    if entry.find('AXIS') != -1:
+        #        print "key, value, comment",(entry, im_head_harps_format[entry], im_head_harps_format.comments[entry]) 
+        save_multispec(spectra[::-1,:], fname, im_head_harps_format, bitpix=params['extracted_bitpix'])                 # [::-1,:] -> Blue orders first
     
     # Create a linearised solution for the input spectrum and the continuum corrected spectrum
     logger('Step: Linearising the spectrum (commented out)')
@@ -3929,6 +3943,12 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     #save_multispec([wavelenghts_lin,spectrum_lin], params['path_extraction']+im_name+'_lin', im_head)
     #wavelenghts_lin, spectrum_lin = linearise_wavelength_spec(params, wavelength_solution_shift, cspectra, method='weight', weight=espectra)
     #save_multispec([wavelenghts_lin,spectrum_lin], params['path_extraction']+im_name+'_lin_cont', im_head)
+    
+    if do_RV:
+        # Store in a text file for serval
+        numbers_levels = params['path_rv_serval'].count(os.sep, 2)  # 2 to not count './'
+        add_text_to_file('../'*numbers_levels+params['path_extraction']+im_name+'.fits', 
+                         params['path_rv_serval']+'filelist_{0}.txt'.format(obnames[0].lower()) )
     
     # For easier plotting
     add_text_to_file(params['path_extraction']+im_name+'.fits', 'plot_files.lst')
@@ -3957,11 +3977,11 @@ def save_spec_csv(spec, wavelengths, good_px_mask, fname):
     Note: all orders must of of the SAME LENGTH
     [email from Guillem Anglada, 18/10/2018 12:25
     """
-    if len(fname.rsplit('/',1)) == 1:     # no path is in the filename
+    if len(fname.rsplit(os.sep,1)) == 1:     # no path is in the filename
         logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( fname, os.getcwd() ))
-    elif not os.path.exists(fname.rsplit('/',1)[0]):
+    elif not os.path.exists(fname.rsplit(os.sep,1)[0]):
         try:
-            os.makedirs(fname.rsplit('/',1)[0])
+            os.makedirs(fname.rsplit(os.sep,1)[0])
         except:
             logger('Error: Folder to save {0} does not exists and cannot be created.'.format(fname))
         
@@ -7466,9 +7486,18 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
         jd_start = im_head['HIERARCH HiFLEx JD_START']
         exposure = im_head['HIERARCH HiFLEx EXPOSURE']
         jd_range = [jd] + list(np.arange(jd_start, jd_start+exposure/(3600.*24), 60/(3600.*24))) + [jd_start+exposure/(3600.*24)]   # Every minute
-        bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
+        success = False
+        for ii in range(5):
+            try:
+                bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
                                                   pmra=params['pmra'],pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],
                                                   ephemeris=ephemeris2,leap_dir=params['logging_path'], leap_update=leap_update)
+                success = True
+                break
+            except urllib2.URLError as e:
+                logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+        if not success:
+            logger('Error: Barycentric velocities could not be calculated.')
         bcvel_baryc_range = bcvel_baryc_range[0] / 1E3       # in km/s
         bcvel_baryc = bcvel_baryc_range[0]
         
@@ -7909,11 +7938,11 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     moon_dict = {'moonmatters':moonmatters,'moon_state':'dummy','moonsep':0,\
          'lunation':0,'mephem':mephem,'texp':0}
 
-    #pkl_xc = params['path_rv_ceres'] + fsim.split('/')[-1][:-4]+obname+'_XC_'+sp_type+'.pkl'
+    #pkl_xc = params['path_rv_ceres'] + fsim.split(os.sep)[-1][:-4]+obname+'_XC_'+sp_type+'.pkl'
     pkl_xc = params['path_rv_ceres'] + fsim+'_XC_'+sp_type+'.pkl'      # without filename ending
     pickle.dump( xc_dict, open( pkl_xc, 'w' ) )
 
-    #ccf_pdf = params['logging_path'] + fsim.split('/')[-1][:-4] + obname + '_XCs_' + sp_type + '.pdf'       # dirout + 'logging/'
+    #ccf_pdf = params['logging_path'] + fsim.split(os.sep)[-1][:-4] + obname + '_XCs_' + sp_type + '.pdf'       # dirout + 'logging/'
     #ccf_pdf = params['logging_path'] + fsim + '_XCs_' + sp_type + '.pdf'       # without filename ending
     ccf_pdf = params['path_rv_ceres'] + fsim + '_XCs_' + sp_type + '.pdf'             # without filename ending
     GLOBALutils.plot_CCF(xc_dict,moon_dict,path=ccf_pdf)

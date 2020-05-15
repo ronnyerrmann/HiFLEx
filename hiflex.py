@@ -18,6 +18,7 @@ params = textfileargs(params, CONFIGFILE)
 if __name__ == "__main__":
     logger('Info: Starting routines for a new night of data, including: finding or shifting orders, find calibration orders, create wavelength solution, and create normalised blaze function')
     log_params(params)
+    params['path_run'] = os. getcwd()
     params['extract_wavecal'] = False
     
     # create the median combined files
@@ -356,7 +357,7 @@ if __name__ == "__main__":
             for wavelengthcal in wavelengthcals:
                 for im_name_full in params[wavelengthcal+'_rawfiles']:
                     # !!! Posible improvement: combine a few files if they are taken close to each other
-                    im_name = im_name_full.rsplit('/')
+                    im_name = im_name_full.rsplit(os.sep)
                     im_name = im_name[-1].rsplit('.',1)         # remove the file ending
                     im_name = im_name[0]
                     im_name_wc = im_name+'_wave'+fib
@@ -376,7 +377,7 @@ if __name__ == "__main__":
     for extraction in extractions:
         if  extraction.find('extract_combine') == -1:     # Single file extraction
             for im_name_full in params[extraction+'_rawfiles']:
-                im_name = im_name_full.rsplit('/')
+                im_name = im_name_full.rsplit(os.sep)
                 im_name = im_name[-1].rsplit('.',1)         # remove the file ending
                 im_name = im_name[0]
                 if os.path.isfile(params['path_extraction']+im_name+'.fits'):
@@ -411,19 +412,20 @@ if __name__ == "__main__":
     header_results_to_texfile(params)           # Save the results from the header in a logfile
     log_params(params)
         
+    no_RV_names = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
     # Do the Terra RVs
-    if os.path.isfile(params['terra_jar_file']) == True and os.path.exists(params['path_csv_terra']):
+    if os.path.isfile(params['terra_jar_file']) == True and os.path.exists(params['path_rv_terra']):
         print('\nInfo: Preparing for the Terra analysis.')
-        for root, dirs, files in os.walk(params['path_csv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
+        for root, dirs, files in os.walk(params['path_rv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
             for file in files:
                 if file.endswith('.csv'):                       # has the file the correct ending?
-                    filename = os.path.join(root, file).replace(params['path_csv_terra'],'')                # Only relative folder and filename
-                    obj_name = filename.split('/')[0]
+                    filename = os.path.join(root, file).replace(params['path_rv_terra'],'')                # Only relative folder and filename
+                    obj_name = filename.split(os.sep)[0]
                     if obj_name not in obj_names:
                         obj_names.append(obj_name)
-        os.chdir(params['path_csv_terra'])
+        logger('For TERRA: changing directory to '+params['path_rv_terra'], show=False)
+        os.chdir(params['path_rv_terra'])
         for obj_name in obj_names:
-            no_RV_names = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
             do_RV = True
             for no_RV_name in no_RV_names:
                 if obj_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
@@ -431,12 +433,54 @@ if __name__ == "__main__":
                     break
             if not do_RV:
                 continue
-            os.system('rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}/" > astrocatalog.example'.format(obj_name))
-            os.system('java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] ) )
-            #print('Warn: Terra commented out')
-            #os.system('gedit {1}{0}/results/synthetic.rv &'.format(obj_name, params['path_csv_terra']))
-        print('\n\nInfo: Finished the Terra analysis. Some errors reported by Terra are expected. The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_csv_terra']))
-        
+            newfile = 'echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}/" > astrocatalog.example'.format(obj_name)
+            logger('For TERRA: creating a new astrocatalog.example with: '+newfile, show=False)
+            os.system('rm -f astrocatalog.example; '+newfile)
+            cmd = 'java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] )
+            logger('For TERRA: running TERRA: '+cmd, show=False)
+            if True:
+                os.system(cmd)
+            else:
+                logger('Warn: TERRA commented out')
+            resultfile = '{2} {1}{0}/results/synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'])
+            logger('For TERRA: results can be opened with: '+resultfile, show=False)
+            
+        os.chdir(params['path_run'])        # Go back to previous folder
+        print('\nInfo: Finished the TERRA analysis. Some errors reported by TERRA are expected. The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_rv_terra']))
+    
+    # Do the Serval RVs
+    if os.path.exists(params['path_serval']) and os.path.exists(params['path_serval']+'serval') and os.path.exists(params['path_serval']+'python'):
+        pypath = ''
+        if 'PYTHONPATH' in os.environ.keys():
+            pypath = os.environ["PYTHONPATH"] + os.pathsep
+        os.environ["PYTHONPATH"] = pypath + params['path_serval']+'python'
+        xran = np.max(xhighs) - np.min(xlows)
+        exclude_x = 0.1         # 0.1: 10% of outermost pixel on each side are excluded
+        pmin = int(np.min(xlows) + 0.1*xran)
+        pmax = int(np.max(xhighs) - 0.1*xran)
+        oset = '{0}:{1}'.format(0,wavelength_solution.shape[0])
+        logger('For SERVAL: changing directory to '+params['path_rv_serval'], show=False)
+        os.chdir(params['path_rv_serval'])
+        for obj_name in obj_names:
+            do_RV = True
+            for no_RV_name in no_RV_names:
+                if obj_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
+                    do_RV = False
+                    break
+            if not do_RV or not os.path.isfile('filelist_{0}.txt'.format(obj_name)):
+                continue
+
+            cmd = params['path_serval']+'serval/src/serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode'.format(pmin, pmax, oset, obj_name)
+            logger('For SERVAL: running SERVAL: '+cmd, show=False)
+            if True:
+                os.system(cmd+'\n\n\n')
+            else:
+                logger('Warn: SERVAL commented out')
+            resultfile = '{2} {1}{0}/{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'])  
+            logger('For SERVAL: results can be opened with: '+resultfile, show=False)
+        os.chdir(params['path_run'])        # Go back to previous folder
+        print('\n\nInfo: Finished the SERVAL analysis. Some errors reported by SERVAL are expected. The results are stored in {0}<object name>/<object name>.rvc.dat'.format(params['path_rv_serval']))
+    
 """ ######### Analysis with terra
 rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD82885/" > astrocatalog.example
 rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD42807/" > astrocatalog.example
