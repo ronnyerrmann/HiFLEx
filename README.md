@@ -7,12 +7,28 @@ For information on how to use the software please check the Manual: [[HiFLEx_Use
 
 If you publish data using the barycentric correction, please cite (https://github.com/shbhuk/barycorrpy#citation).
 
-If you publish radial velocities using [[TERRA](https://ui.adsabs.harvard.edu/abs/2012ApJS..200...15A)], [[SERVAL](http://adsabs.harvard.edu/abs/2017A&A...609A..12Z)], or [[CERES](https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B/abstract)], please cite the packages.
+If you publish radial velocities using [[TERRA](https://adsabs.harvard.edu/abs/2012ApJS..200...15A)], [[SERVAL](http://adsabs.harvard.edu/abs/2017A&A...609A..12Z)], or [[CERES](https://adsabs.harvard.edu/abs/2017PASP..129c4002B)], please cite the packages.
 
 
 ## Recent changes
+* Bugfixing
 
+## Install instruction
 
+Requirements:
+- python 2.7 + numpy, scipy, pyfits, astropy
+- (only tested under linux)
 
+Create a new [[Anaconda](https://www.anaconda.com/distribution/#linux)] environment:
+```conda create --name hiflex python=2.7 numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels 
+conda activate hiflex
+pip install gatspy barycorrpy==0.2.2.1 PyAstronomy multiprocessing
+```
 
+### TERRA (optional RV analysis)
 
+### SERVAL (optional RV analysis)
+
+### CERES (optional RV analysis)
+
+## First steps
