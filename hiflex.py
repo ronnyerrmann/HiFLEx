@@ -423,8 +423,9 @@ if __name__ == "__main__":
                     obj_name = filename.split(os.sep)[0]
                     if obj_name not in obj_names:
                         obj_names.append(obj_name)
-        logger('For TERRA: changing directory to '+params['path_rv_terra'], show=False)
+        logger('For TERRA: changing directory to '+params['path_rv_terra']+' . The steps to run TERRA are given in the logfile in that folder.', show=False)
         os.chdir(params['path_rv_terra'])
+        logger('Info: All data logged in this file is relative to '+params['path_rv_terra'], show=False)
         for obj_name in obj_names:
             do_RV = True
             for no_RV_name in no_RV_names:
@@ -442,7 +443,7 @@ if __name__ == "__main__":
                 os.system(cmd)
             else:
                 logger('Warn: TERRA commented out')
-            resultfile = '{2} {1}{0}/results/synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'])
+            resultfile = '{2} {0}/results/synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'])
             logger('For TERRA: results can be opened with: '+resultfile, show=False)
             
         os.chdir(params['path_run'])        # Go back to previous folder
@@ -454,15 +455,16 @@ if __name__ == "__main__":
         if 'PYTHONPATH' in os.environ.keys():
             pypath = os.environ["PYTHONPATH"] + os.pathsep
         pypath += params['path_serval']+'python'
-        logger('For SERVAL: set variable PYTHONPATH to {0}'.format(pypath))
+        logger('For SERVAL: set variable: bash: export PYTHONPATH={0} ; csh: setenv PYTHONPATH {0}'.format(pypath))
         os.environ["PYTHONPATH"] = pypath
         xran = np.max(xhighs) - np.min(xlows)
         exclude_x = 0.1         # 0.1: 10% of outermost pixel on each side are excluded
         pmin = int(np.min(xlows) + 0.1*xran)
         pmax = int(np.max(xhighs) - 0.1*xran)
         oset = '{0}:{1}'.format(0,wavelength_solution.shape[0])
-        logger('For SERVAL: changing directory to '+params['path_rv_serval'], show=False)
+        logger('For SERVAL: changing directory to '+params['path_rv_serval']+' . The steps to run SERVAL are given in the logfile in that folder.', show=False)
         os.chdir(params['path_rv_serval'])
+        logger('Info: All data logged in this file is relative to '+params['path_rv_serval'], show=False)
         for obj_name in obj_names:
             do_RV = True
             for no_RV_name in no_RV_names:
@@ -471,17 +473,19 @@ if __name__ == "__main__":
                     break
             if not do_RV or not os.path.isfile('filelist_{0}.txt'.format(obj_name)):
                 continue
-
             cmd = params['path_serval']+'serval/src/serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode'.format(pmin, pmax, oset, obj_name)
             logger('For SERVAL: running SERVAL: '+cmd, show=False)
             if True:
                 os.system(cmd+'\n\n\n')
             else:
                 logger('Warn: SERVAL commented out')
-            resultfile = '{2} {1}{0}/{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'])  
+            resultfile = '{2} {0}/{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'])  
             logger('For SERVAL: results can be opened with: '+resultfile, show=False)
         os.chdir(params['path_run'])        # Go back to previous folder
-        print('\n\nInfo: Finished the SERVAL analysis. Some errors reported by SERVAL are expected. The results are stored in {0}<object name>/<object name>.rvc.dat'.format(params['path_rv_serval']))
+        print(('\n\nInfo: Finished the SERVAL analysis. Some errors reported by SERVAL are expected.'+\
+              ' The results are stored in {0}<object name>/<object name>.rvc.dat.'+\
+              ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially red orders).'+\
+              ' The command history can be found in {0}cmdhistory.txt. Before running serval: cd {0}').format(params['path_rv_serval']))
     
 """ ######### Analysis with terra
 rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD82885/" > astrocatalog.example

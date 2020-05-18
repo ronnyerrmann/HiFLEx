@@ -37,6 +37,10 @@ import plot_img_spec
 import psutil
 import ephem
 import math
+# Necessary because of https://github.com/astropy/astropy/issues/9427
+from astropy.utils.iers import conf as iers_conf 
+iers_conf.iers_auto_url = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all' 
+iers_conf.auto_max_age = None 
 import urllib2
 success = False
 for ii in range(5):
@@ -50,10 +54,6 @@ if not success:
     print('Error: barrycorrpy could not be loaded. It needs an active internet connection in order to download the IERS_B file. This failure will lead to a crash of the program later!\n')
 import glob
 
-# Necessary because of https://github.com/astropy/astropy/issues/9427
-from astropy.utils.iers import conf as iers_conf 
-iers_conf.iers_auto_url = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all' 
-iers_conf.auto_max_age = None 
 
 """ only needed for BJD calculation using jplephem and BVC calculation from CERES pipeline
 import jplephem                     # jplehem from the pip install jplehem
@@ -3521,19 +3521,16 @@ def correct_blaze(flat_spec_norm, minflux=0.1):
     fss = flat_spec.shape
     low_flux = np.zeros(fss, dtype=bool)
     # Use global value for minflux
-    #np.warnings.filterwarnings('ignore')
-    #low_flux = ( flat_spec < minflux )          # only use pixels with enough flux, (e.g. flat_spec_norm[1] < 0.1 means flux needs to be at least 10% of median flux)
-    #np.warnings.resetwarnings()
+    #with np.errstate(invalid='ignore'):
+    #    low_flux = ( flat_spec < minflux )          # only use pixels with enough flux, (e.g. flat_spec_norm[1] < 0.1 means flux needs to be at least 10% of median flux)
     # Replace single values which might have a bit more flux than the minflux, but are surrounded by pixels with not enough flux
     for order in range(fss[0]):                                                 # each order
         # Find the low flux in each order
-        np.warnings.filterwarnings('ignore')
-        low_flux[order,:] = ( flat_spec[order,:] < minflux*np.nanmax(flat_spec[order,:]) )          # only use pixels with enough flux, (e.g. flat_spec_norm[1] < 0.1 means flux needs to be at least 10% of median flux)
-        np.warnings.resetwarnings()
+        with np.errstate(invalid='ignore'):
+            low_flux[order,:] = ( flat_spec[order,:] < minflux*np.nanmax(flat_spec[order,:]) )          # only use pixels with enough flux, (e.g. flat_spec_norm[1] < 0.1 means flux needs to be at least 10% of median flux)
         for i in range(1, int(fss[1]/10)):
-            np.warnings.filterwarnings('ignore')
-            nonnan = np.sum(~np.isnan(flat_spec[order,:i+1]))
-            np.warnings.resetwarnings()
+            with np.errstate(invalid='ignore'):
+                nonnan = np.sum(~np.isnan(flat_spec[order,:i+1]))
             if low_flux[order,i] and np.sum(low_flux[order,:i+1]) < nonnan:
                 #print('a', order, i)
                 if nonnan < 20 or np.sum(low_flux[order,:i+1]) > nonnan*0.9:     # 90% data points have low flux or beginning of array
@@ -3556,9 +3553,8 @@ def clip_noise(spectra, maxnoise=10, noisedataset=4, correctdatasets=[5,6]):
     :param correctdatasets: list/array of integers, which data to correct
     """
     spectra = copy.deepcopy(spectra)
-    np.warnings.filterwarnings('ignore')
-    high_noise = (spectra[noisedataset] > maxnoise * np.nanmedian(spectra[noisedataset]) )
-    np.warnings.resetwarnings()
+    with np.errstate(invalid='ignore'):
+        high_noise = (spectra[noisedataset] > maxnoise * np.nanmedian(spectra[noisedataset]) )
     # Smooth the results to have fixed borders
     for i in correctdatasets:
         spectra[i, high_noise] = np.nan
@@ -6938,12 +6934,11 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
         for nc_step in range(1,nc_noise)[::-1]:                                 # Use a lower order, if fit remains stupid
             #print "nc_step", nc_step
             for dummy in range(100):
-                np.warnings.filterwarnings('ignore')
-                if sum(~sub[5,:]*sub[1,:]) > 0:                                     # There are values that can be replaced
-                    index = data[0,sub[1,:]][np.abs(data[6,sub[1,:]] - np.nanmin(data[6,~sub[5,:]]) ) < 1E-4].astype(int)   # Find the position where the fit has the smallest value and the residual there isn't used for the fit
-                else:
-                    index = data[0,~sub[6,:]][np.abs(data[6,~sub[6,:]] - np.nanmin(data[6,~sub[6,:]]) ) < 1E-4].astype(int) # Find the smalles value of the fit, ignore already changed values
-                np.warnings.resetwarnings()
+                with np.errstate(invalid='ignore'):
+                    if sum(~sub[5,:]*sub[1,:]) > 0:                                     # There are values that can be replaced
+                        index = data[0,sub[1,:]][np.abs(data[6,sub[1,:]] - np.nanmin(data[6,~sub[5,:]]) ) < 1E-4].astype(int)   # Find the position where the fit has the smallest value and the residual there isn't used for the fit
+                    else:
+                        index = data[0,~sub[6,:]][np.abs(data[6,~sub[6,:]] - np.nanmin(data[6,~sub[6,:]]) ) < 1E-4].astype(int) # Find the smalles value of the fit, ignore already changed values
                 #print order,index, np.max(data[5,sub[5,:]]), data[5,index], sub[5,index]
                 data[5,index] = np.max(np.abs(data[5,sub[5,:]]))                                            # Replace with the maximum residual as worst case
                 sub[5:7,index] = True                                                                       # use the value for the fit
@@ -6970,9 +6965,8 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
         for i in range(len(fit_flux)-1):
             if fit_flux[i]*fit_flux[i+1] < 0:                           # change of sign
                 fit_flux[max(0,i-semi_window):min(len(fit_flux),i+semi_window+1)] = np.nan     # ignore this data as artificial peaks are introduced due to the division close to 0 in the flat spectrum
-        np.warnings.filterwarnings('ignore')
-        bad_value = ( (fit_sn <= 0) | (fit_flux <= 0) )                                  # Errors smaller than 0, or Flux smaller than 0 (will make absorption lines into emission lines)
-        np.warnings.resetwarnings()
+        with np.errstate(invalid='ignore'):
+            bad_value = ( (fit_sn <= 0) | (fit_flux <= 0) )                                  # Errors smaller than 0, or Flux smaller than 0 (will make absorption lines into emission lines)
         if np.sum(bad_value) > 5:
             logger(('Warn: Normalisation of order {0} had a problem. {1} pixel of the fitted flux are below zero and {2} pixel of the fitted signal-to-noise is below zero. ' +\
                    'Values below 0 should not hapen, use a polynomial with lower order by adjusting measure_noise_orders').format(order, 
@@ -7686,9 +7680,8 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     sys.path.append(base+"utils/GLOBALutils")
     sys.path.append(base+"utils/OptExtract")    # for Marsh, at least
     sys.path.append(base+"utils/CCF")           # needed by GLOBALutils.py
-    np.warnings.filterwarnings('ignore')
-    import GLOBALutils
-    np.warnings.resetwarnings()
+    with np.errstate(invalid='ignore'):
+        import GLOBALutils
     import correlation
     # Import other stuff
     import statsmodels.api as sm
@@ -7761,9 +7754,8 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     for order in range(spec.shape[1]):
         L  = np.where( (spec[1,order,:] != 0) & (~np.isnan(spec[1,order,:])) )              # good values
         #ratio              = np.polyval(ccoefs[order],spec[0,order,:][L])*Rnorms[order]
-        np.warnings.filterwarnings('ignore')
-        ratio = spec[1,order,:][L] / spec[5,order,:][L]                                     # ratio between extracted spectrum and continuum normalised spectrum -> blaze function, cancels absorption lines
-        np.warnings.resetwarnings()
+        with np.errstate(invalid='ignore'):
+            ratio = spec[1,order,:][L] / spec[5,order,:][L]                                     # ratio between extracted spectrum and continuum normalised spectrum -> blaze function, cancels absorption lines
         spec[7,order,:][L] = ratio
         #spec[8,order,:][L] = spec[6,order,:][L]                                             # error continuum (first guess), but not good. #sn_order=8
         spec[8,order,:][L] = spec[2,order,:][L]                                             # error of the extracted data, depending on what is used, the RV changes by few 100 km/s -> > several \AA
@@ -7772,9 +7764,8 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
         #dlambda_dx    = scipy.interpolate.splev(np.arange(WavSol.shape[0]), spl, der=1)
         #NN            = np.average(dlambda_dx)
         #dlambda_dx    /= NN
-        np.warnings.filterwarnings('ignore')
-        LL = np.where(spec[5,order,:] > 1 + 10. / scipy.signal.medfilt(spec[8,order,:],21))[0]          # remove emission lines and cosmics
-        np.warnings.resetwarnings()
+        with np.errstate(invalid='ignore'):
+            LL = np.where(spec[5,order,:] > 1 + 10. / scipy.signal.medfilt(spec[8,order,:],21))[0]          # remove emission lines and cosmics
         spec[5,order,LL] = 1.
         spec[9,order,:][L] = spec[5,order,:][L]# * (dlambda_dx[L] ** 1)         # used for the analysis in XCor (spec_order=9, iv_order=10)
         spec[10,order,:][L] = spec[2,order,:][L]# / (dlambda_dx[L] ** 2)        # used for the analysis in XCor (spec_order=9, iv_order=10)

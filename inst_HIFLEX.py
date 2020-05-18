@@ -70,19 +70,20 @@ def data(self, orders=None, pfits=True):
       data = data.astype(dtype=np.float64)
       f = data[1,orders,:]
       e = data[6,orders,:]
-      #w = data[0,orders,:]         # Wavelength, drift corrected, barycentric correction
-      w = data[9,orders,:]         # Wavelength, drift corrected
-      s = data[7,orders,:]
+      #w = data[0,orders,:]          # Wavelength, drift corrected, barycentric correction
+      w = data[9,orders,:]          # Wavelength, drift corrected
+      s = data[7,orders,:]          # 
 
       bpmap = np.isnan(f).astype(int)   # flag 1 for nan
       e[np.isnan(e)] = 0
-      e[e<=0] = np.median(e[e>0],axis=None)
+      e[e<0] = np.median(e[e>0],axis=None)
 
       with np.errstate(invalid='ignore'):
          bpmap[f <= 0.001] |= flag.neg      # flag 2 for zero and negative flux
          bpmap[f < -3*e] |= flag.neg      # flag 2 for zero and negative flux
          bpmap[s == 0.2] |= flag.neg      # bad-pixel
          bpmap[s == 0.1] |= flag.sat    # saturated
+         bpmap[e==0] |= flag.nan
 
       w = airtovac(w)
       

@@ -31,7 +31,28 @@ git clone https://github.com/ronnyerrmann/hiflex.git
 
 ## First steps
 Create a new folder and copy the `conf.txt` file from your HiFLEx installation path into this folder. Edit the following entries:
+- Change parameter `raw_data_paths` to point to the folder or folders with your raw or pre-reduced fits-files. The data can be stored in sub-folders.
+- Set the parameter `badpx_mask_filename` if a bad-pixel-mask exists. Otherwise leave empty or 'NA'.
+- Adjust `rotate_frame` and `flip_frame` so that the orders are up to down (blue wavelength on top) and red orders are on the left. The pipeline will first rotate and then flip, the flip is swapping left and right.
+- Adjust parameter `subframe` to a subframe, if only part of the CCD should be used. Otherwise leave empty or set to the full detector size.
+- Set parameter `original_master_traces_filename = ` (empty), or to a non-existing file.
+- To increase signal to noise and to speed up the search for the traces of the orders, binning as given in the parameters `bin_search_apertures` (rough estimate) and `bin_adjust_apertures` (fine tuning) can be adjusted. Please note that after binning, the orders should still be well distinguished from each other.
+- The side of the calibration traces compared to the science traces is given in parameter `arcshift_side` (left or right). Set it to center for a single fiber spectrograph.
+- Change the path to the catalogue of the reference lines (`reference_catalog`), if necessary. The file must contain one entry per line, each entry consists of tab-separated wavelength, line strength, and element. Line strength can be empty.
+- Set parameter `original_master_wavelensolution_filename = master_wavelength_manual.fits`. To find a wavelength solution a file which provides the wavelength for some (extracted) pixel and wavelengths can be given optionally (called *pixel_to_wavelength.txt*).
+- The number of degrees of freedom for the wavelength solution (2-dimensional polynomial fit) can be adjusted with `polynom_order_traces` (polynomial orders along the dispersion direction) and `polynom_order_intertraces` (polynomial orders between the traces).
+- Adjust the parameters starting with `raw_data_*`. The example configuration file shows the settings for data taken with MaximDL and for data from the HARPS spectrograph.
+- Adjust the parameters `*_calibs_create_g` to define the reduction steps which should be applied. Some of the `*_calibs_create_g` parameters might not be relevant, e.g. if no *dark* or *rflat* (real flatfield) corrections should be applied.
+- The parameters `site`, `altitude`, `latitude` (negative for west), and `longitude` need to be set, if the information is not stored in the fits-header
+- For optional RV analysis:  Set path `terra_jar_file` to the TERRA *PRV.jar* file. Set paths `path_serval` and `path_ceres` to the home folders of the SERVAL and CERES pipelines.
+- Run the scrip `file_assignment.py`:
+  * Define what files should be used for what calibration.
+  * Define what files to extract (and in which RVs will be measured).
+  * Please note that you can use already reduced images. In this case the reduction steps as defined in `conf.txt` should be empty for the file type (e.g. dark or real flats) to avoid a second application of the correction.
+- Run the scrip `hiflex.py`
+- Afterwards: check the output in the `logfile`, the images in the logging path, or in results in the extracted files.
 
+More information can be found in the [manual](https://github.com/ronnyerrmann/HiFLEx/blob/master/HiFLEx_UserManual.pdf).
 
 ## Optional radial velocity packages
 ### TERRA (optional RV analysis)
