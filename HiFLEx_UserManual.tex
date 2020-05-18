@@ -107,8 +107,8 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
   \item Added parameter \verb|path_rv_serval|
   \item Renamed parameter \verb|path_csv_terra| to \verb|path_rv_terra|
   \item Added SERVAL radial velocity analysis
-  \item Fixed a bug with CERES RVs
-  \item Format of the object list was changed to keep compatibility with CERES. To convert run \verb|transform_coordinate_file_before_v0.4.4_202004.py| before running any other Script. % When installing this version at Narit Change also GLOBALutils there
+  \item Bugfixing CERES RVs
+  \item Format of the object list was changed to keep compatibility with CERES. To convert run \\ \verb|transform_coordinate_file_before_v1.0.0_202004.py| before running any other Script. % When installing this version at Narit Change also GLOBALutils there
   \item Improved code, general bugfixes, aditional features
 \end{itemize}
 
@@ -1174,9 +1174,6 @@ If you observe strange behaviour, please contact Ronny\footnote{r.errmann@herts.
 
 \noindent This program was written to work with modules installed in Anaconda 2 and python 2.7. It is recommended to use an installation of anaconda 2 to use this program (If this is not possible, the whole module dependency is given in Appendix~\ref{section:module_dependency}).
 
-%Similar to the CERES pipeline, the SSEphem package (\url{http://www.cv.nrao.edu/~rfisher/Python/py_solar_system.html}) in connection with the SOFA (\url{http://www.iausofa.org/}) functions are used. 
-
-% -------------------------------------------------------------------------------------------
 
 \subsection{With Anaconda and python 2.7}
 
@@ -1190,13 +1187,13 @@ sh Downloads/Anaconda2-5.0.1-Linux-x86_64.sh
 After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. %
 If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. Check with \verb|echo $0| what environment you are using.
 \begin{description}
-  \item[\textbf{bash}]: add the following line (replace \textit{/home/exohspec} by the path you used for the installation) to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
+  \item[\textbf{bash}]: add the following line (replace \textit{/home/hiflex} by the path you used for the installation) to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
     \begin{lstlisting}[style=base]
-export PATH="/home/exohspec/anaconda2/bin:$PATH"
+export PATH="/home/hiflex/anaconda2/bin:$PATH"
     \end{lstlisting}
-  \item[\textbf{tcsh}]: add the following line (replace \textit{/home/exohspec} by the path you used for the installation) to your \verb|.tcshrc|
+  \item[\textbf{tcsh}]: add the following line (replace \textit{/home/hiflex} by the path you used for the installation) to your \verb|.tcshrc|
     \begin{lstlisting}[style=base]
-setenv PATH /home/exohspec/anaconda2/bin\:$PATH
+setenv PATH /home/hiflex/anaconda2/bin\:$PATH
     \end{lstlisting}
 \end{description}
 
@@ -1243,7 +1240,7 @@ Afterwards, please make sure that \verb|import barycorrpy| works in python.
 %
 %Updating anaconda might also solve it:
 %\begin{lstlisting}[style=base]
-%conda update --prefix /home/exohspec/anaconda2 anaconda
+%conda update --prefix /home/hiflex/anaconda2 anaconda
 %\end{lstlisting}
 %
 %\subsubsection{Upgrading numpy for radial velocity analysis}
@@ -1273,13 +1270,13 @@ Afterwards, please make sure that \verb|import barycorrpy| works in python.
 %(no superuser permissions are needed, the version might need to be changed).
 %
 %After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. %
-%If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| (check with \verb|echo $0| what environment you are using) add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
+%If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| (check with \verb|echo $0| what environment you are using) add the following line (replace \textit{/home/hiflex} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
 %\begin{lstlisting}[style=base]
-%export PATH="/home/exohspec/anaconda3/bin:$PATH"
+%export PATH="/home/hiflex/anaconda3/bin:$PATH"
 %\end{lstlisting}
-%If you use \verb|tcsh| add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.tcshrc|
+%If you use \verb|tcsh| add the following line (replace \textit{/home/hiflex} by the path you used for the installation to your \verb|.tcshrc|
 %\begin{lstlisting}[style=base]
-%setenv PATH /home/exohspec/anaconda3/bin\:$PATH
+%setenv PATH /home/hiflex/anaconda3/bin\:$PATH
 %\end{lstlisting}
 %
 %Please make also sure that the environmental variable \verb|PYTHONPATH| does not point to any python-2.7 folders by checking \verb|echo $PYTHONPATH|~.
@@ -1324,9 +1321,11 @@ When running the scripts for the first time, python will create a new file calle
 The pipeline creates extracted spectra in different formats, which then can be further analysed using available software. Additionally the pipeline can use available packages to find the radial velocity of the object. Below are described the requirements of the external software.
 
 \subsubsection{TERRA}
+If you make use of the Radial Velocity analysis from the SERVAL , please cite Anglada-Escud{\'e} et al. 2012\footnote{\url{https://ui.adsabs.harvard.edu/abs/2012ApJS..200...15A}}.
+
 TERRA can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}~. It only has to be extracted. To check that all dependencies are installed on the system one can run.
 \begin{lstlisting}[style=base]
-java -jar <path to terra>/terra/PRV.jar
+java -jar <full/path/to/terra>/terra/PRV.jar
 \end{lstlisting}
 This should produce the entry \textit{*** TERRA v1.8 ***} before failing. If not, please check that java is installed
 \begin{lstlisting}[style=base]
@@ -1335,21 +1334,23 @@ java --version
 
 \subsubsection{SERVAL}
 \label{Section:serval_package}
+If you make use of the Radial Velocity analysis from the SERVAL , please cite Zechmeister et al. 2018\footnote{\url{http://adsabs.harvard.edu/abs/2018A&A...609A..12Z}}.
+
 To install Serval please follow the instructions as given on\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. Serval only works with python~2.7.
 
 Serval can be controlled with an instrument file. This has to be provided in the serval \verb|src| folder. Below is a way to create a soft link it when following the installing instructions.
 \begin{lstlisting}[style=base]
-ln -s <path/to/hiflex>/inst_HIFLEX.py $SERVALHOME/serval/src/
+ln -s <full/path/to/hiflex>/inst_HIFLEX.py $SERVALHOME/serval/src/
 \end{lstlisting}
 Alternatively, the following line can be used:
 \begin{lstlisting}[style=base]
-ln -s <path/to/hiflex>/inst_HIFLEX.py <path/to/mzechmeister>/serval/src/
+ln -s <full/path/to/hiflex>/inst_HIFLEX.py <path/to/mzechmeister>/serval/src/
 \end{lstlisting}
 
 
 \subsubsection{CERES Pipeline}
 \label{Section:Explanation_CERES_pipeline}
-Authors: Rafael Brahm, Andr{\'e}s Jord{\'a}n, N{\'e}stor Espinoza. If you make use of the Radial Velocity analysis from the CERES , please cite Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/\#abs/2017PASP..129c4002B/abstract}}.
+If you make use of the Radial Velocity analysis from the CERES , please cite Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
 
 The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres}. To make it work, please follow the Installation Chapter in the README.md. CERES requires python 2.7. Please note that the compilers in the CERES install process ignore any anconda settings and go straight to the system packages (e.g. for SSEPhem), hence you might want to install it when anaconda is not loaded. The following lines worked in Mai 2020:
 \begin{lstlisting}[style=base]
