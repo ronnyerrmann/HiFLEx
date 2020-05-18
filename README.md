@@ -20,15 +20,27 @@ Requirements:
 - (only tested under linux)
 
 Create a new [[Anaconda](https://www.anaconda.com/distribution/#linux)] environment:
-```conda create --name hiflex python=2.7 numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels 
+```
+conda create --name hiflex python=2.7 numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels 
 conda activate hiflex
 pip install gatspy barycorrpy==0.2.2.1 PyAstronomy multiprocessing
 ```
 
+## First steps
+
 ### TERRA (optional RV analysis)
+Download the [[TERRA achive](https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view)] and extract. 
+To check that all dependencies are installed on the system one can run.
+```
+java -jar <full/path/to/terra>/terra/PRV.jar
+```
+This should produce the entry \textit{*** TERRA v1.8 ***} before failing. If not, please check that java is installed
+```
+java --version
+```
 
 ### SERVAL (optional RV analysis)
 
 ### CERES (optional RV analysis)
 
-## First steps
+
