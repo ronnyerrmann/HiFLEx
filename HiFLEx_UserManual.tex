@@ -1188,14 +1188,17 @@ sh Downloads/Anaconda2-5.0.1-Linux-x86_64.sh
 (no superuser permissions are needed, the version might need to be changed).
 
 After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. %
-If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| (check with \verb|echo $0| what environment you are using) add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
-\begin{lstlisting}[style=base]
+If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. Check with \verb|echo $0| what environment you are using.
+\begin{description}
+  \item[\textbf{bash}]: add the following line (replace \textit{/home/exohspec} by the path you used for the installation) to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
+    \begin{lstlisting}[style=base]
 export PATH="/home/exohspec/anaconda2/bin:$PATH"
-\end{lstlisting}
-If you use \verb|tcsh| add the following line (replace \textit{/home/exohspec} by the path you used for the installation to your \verb|.tcshrc|
-\begin{lstlisting}[style=base]
+    \end{lstlisting}
+  \item[\textbf{tcsh}]: add the following line (replace \textit{/home/exohspec} by the path you used for the installation) to your \verb|.tcshrc|
+    \begin{lstlisting}[style=base]
 setenv PATH /home/exohspec/anaconda2/bin\:$PATH
-\end{lstlisting}
+    \end{lstlisting}
+\end{description}
 
 After making the change and opening a new terminal, python should point to the file in the Anaconda installation (\verb|which python|).
 
@@ -1460,39 +1463,26 @@ Please found the changes of newer versions in Chapter~\ref{Section:Changelog_new
 \end{itemize}
 
 
-\section{Module dependencies if not using Anaconda (needs update)}
+\section{Module dependencies if not using Anaconda}
 \label{section:module_dependency}
 \noindent This program relies on the following modules in python 2.7
 
 \begin{itemize}\setlength\itemsep{0em}
-\item numpy
-\item os
-\item sys
-\item time
-\item datetime
-\item operator
-\item copy
-\item random
-\item warnings
+\item os, sys, time, datetime
+\item operator, copy, random, warnings
 \item tqdm
-\item pickle
-\item json
-\item astropy
-\item scipy
+\item pickle, json, urllib2
+\item numpy, astropy, scipy, ephem
 \item matplotlib
 %\item[] {\bf if python2:}
 \item Tkinter
 \item collections
 %\item[] {\bf if python3:}
 %\item tkinter
-\item ephem
-\item math.radians
-\item statsmodels.api
-%\item numpy (1.11.2)
-%\item astropy (1.1.2)
-%\item matplotlib (1.5.1)
-%\item tqdm (4.4.0)
-%\item skimage (0.12.3)
+\item math
+\item statsmodels
+\item psutil, glob
+\item barycorrpy
 \end{itemize}
 
 % Other versions may work but these are the ones tested.

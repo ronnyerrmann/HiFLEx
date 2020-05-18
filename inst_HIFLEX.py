@@ -76,8 +76,10 @@ def data(self, orders=None, pfits=True):
 
       bpmap = np.isnan(f).astype(int)   # flag 1 for nan
       e[np.isnan(e)] = 0
+      e[e<=0] = np.median(e[e>0],axis=None)
 
       with np.errstate(invalid='ignore'):
+         bpmap[f <= 0.001] |= flag.neg      # flag 2 for zero and negative flux
          bpmap[f < -3*e] |= flag.neg      # flag 2 for zero and negative flux
          bpmap[s == 0.2] |= flag.neg      # bad-pixel
          bpmap[s == 0.1] |= flag.sat    # saturated

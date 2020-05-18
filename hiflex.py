@@ -453,7 +453,9 @@ if __name__ == "__main__":
         pypath = ''
         if 'PYTHONPATH' in os.environ.keys():
             pypath = os.environ["PYTHONPATH"] + os.pathsep
-        os.environ["PYTHONPATH"] = pypath + params['path_serval']+'python'
+        pypath += params['path_serval']+'python'
+        logger('For SERVAL: set variable PYTHONPATH to {0}'.format(pypath))
+        os.environ["PYTHONPATH"] = pypath
         xran = np.max(xhighs) - np.min(xlows)
         exclude_x = 0.1         # 0.1: 10% of outermost pixel on each side are excluded
         pmin = int(np.min(xlows) + 0.1*xran)
