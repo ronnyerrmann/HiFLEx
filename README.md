@@ -26,10 +26,13 @@ conda activate hiflex
 pip install gatspy barycorrpy==0.2.2.1 PyAstronomy multiprocessing
 ```
 
+Download and extract the [[latest relase](https://github.com/ronnyerrmann/HiFLEx/releases)] or clone the repository
+git clone https://github.com/ronnyerrmann/hiflex.git
+
 ## First steps
 
 ### TERRA (optional RV analysis)
-Download the [[TERRA achive](https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view)] and extract. 
+Download the [[TERRA achive](https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view)] and extract. Set the variable **terra_jar_file** in `conf.txt` to the full path of the *PRV.jar* file.
 To check that all dependencies are installed on the system one can run.
 ```
 java -jar <full/path/to/terra>/terra/PRV.jar
@@ -40,7 +43,23 @@ java --version
 ```
 
 ### SERVAL (optional RV analysis)
+To install Serval please follow the instructions as given on (https://github.com/mzechmeister/serval). It is worth to check that the software is working by running the package on the provided test data. Set the variable **path_serval** in `conf.txt` to the full path of the *mzechmeister* folder, e.g. the path given in *$SERVALHOME*.
+
+Serval can be controlled with an instrument file. This has to be provided in the serval **src** folder. Below is a way to create a soft link it when following the installing instructions.
+```
+ln -s <full/path/to/hiflex>/inst_HIFLEX*.py $SERVALHOME/serval/src/
+```
+Alternatively, the following line can be used:
+```
+ln -s <full/path/to/hiflex>/inst_HIFLEX*.py <path/to/mzechmeister>/serval/src/
+```
 
 ### CERES (optional RV analysis)
+To install Serval please follow the instructions as given on (https://github.com/rabrahm/ceres). Please note that the compilers in the CERES install process ignore any anconda settings and go straight to the system packages (e.g. for SSEPhem), hence you might want to install it when anaconda is not loaded.
+Set the variable **path_ceres** in `conf.txt` to the full path of the *ceres* folder.
+
+
+
+
 
 

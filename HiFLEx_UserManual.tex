@@ -1212,6 +1212,12 @@ conda activate hiflex
 pip install gatspy barycorrpy==0.2.2.1 PyAstronomy multiprocessing
 \end{lstlisting}
 
+This environment has to be loaded in each terminal in which HiFLEx should be run:
+\begin{lstlisting}[style=base]
+conda activate hiflex
+\end{lstlisting}
+
+
 % For BJD (but not needed anymore):
 %pip install jplephem
 %pip install de423
@@ -1321,7 +1327,7 @@ When running the scripts for the first time, python will create a new file calle
 The pipeline creates extracted spectra in different formats, which then can be further analysed using available software. Additionally the pipeline can use available packages to find the radial velocity of the object. Below are described the requirements of the external software.
 
 \subsubsection{TERRA}
-If you make use of the Radial Velocity analysis from the SERVAL , please cite Anglada-Escud{\'e} et al. 2012\footnote{\url{https://ui.adsabs.harvard.edu/abs/2012ApJS..200...15A}}.
+If you make use of the Radial Velocity analysis from the SERVAL , please cite Anglada-Escud{\'e} et al. 2012\footnote{\url{https://adsabs.harvard.edu/abs/2012ApJS..200...15A}}.
 
 TERRA can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}~. It only has to be extracted. To check that all dependencies are installed on the system one can run.
 \begin{lstlisting}[style=base]
@@ -1340,17 +1346,17 @@ To install Serval please follow the instructions as given on\\ \url{https://gith
 
 Serval can be controlled with an instrument file. This has to be provided in the serval \verb|src| folder. Below is a way to create a soft link it when following the installing instructions.
 \begin{lstlisting}[style=base]
-ln -s <full/path/to/hiflex>/inst_HIFLEX.py $SERVALHOME/serval/src/
+ln -s <full/path/to/hiflex>/inst_HIFLEX*.py $SERVALHOME/serval/src/
 \end{lstlisting}
 Alternatively, the following line can be used:
 \begin{lstlisting}[style=base]
-ln -s <full/path/to/hiflex>/inst_HIFLEX.py <path/to/mzechmeister>/serval/src/
+ln -s <full/path/to/hiflex>/inst_HIFLEX*.py <path/to/mzechmeister>/serval/src/
 \end{lstlisting}
 
 
 \subsubsection{CERES Pipeline}
 \label{Section:Explanation_CERES_pipeline}
-If you make use of the Radial Velocity analysis from the CERES , please cite Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
+If you make use of the Radial Velocity analysis from the CERES , please cite Brahm et al. 2017\footnote{\url{https://adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
 
 The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres}. To make it work, please follow the Installation Chapter in the README.md. CERES requires python 2.7. Please note that the compilers in the CERES install process ignore any anconda settings and go straight to the system packages (e.g. for SSEPhem), hence you might want to install it when anaconda is not loaded. The following lines worked in Mai 2020:
 \begin{lstlisting}[style=base]
