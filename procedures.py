@@ -37,6 +37,7 @@ import plot_img_spec
 import psutil
 import ephem
 import math
+import multiprocessing
 # Necessary because of https://github.com/astropy/astropy/issues/9427
 from astropy.utils.iers import conf as iers_conf 
 iers_conf.iers_auto_url = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all' 
@@ -251,7 +252,7 @@ def textfileargs(params, textfile=None):
     params.update(cmdparams)
     list_txt = ['use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys']
     list_int = ['arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
-             'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck']
+             'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck', 'max_cores_used']
     list_float = ['opt_px_range', 'background_width_multiplier', 'sigmaclip_spectrum']
     list_abs = ['arcshift_range']
     ints = ['polynom_order_apertures', 'rotate_frame']
@@ -8023,7 +8024,6 @@ def header_results_to_texfile(params, header_keywords=[]):
             for entry in results:
                 file.write("\t".join(entry)+'\n')
             
- 
 
 
 

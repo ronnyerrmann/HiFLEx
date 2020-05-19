@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
-import numpy as np
-import os
+#import numpy as np
+#import os
 from procedures import *
+import subprocess
+#import multiprocessing
 
 # =============================================================================
 # Define variables
@@ -17,9 +19,10 @@ CONFIGFILE = 'conf.txt'
 params = textfileargs(params, CONFIGFILE)
 if __name__ == "__main__":
     logger('Info: Starting routines for a new night of data, including: finding or shifting orders, find calibration orders, create wavelength solution, and create normalised blaze function')
-    log_params(params)
+    params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)
     params['path_run'] = os. getcwd()
     params['extract_wavecal'] = False
+    log_params(params)
     
     # create the median combined files
     im_trace1, im_trace1_head = create_image_general(params, 'trace1')
@@ -412,7 +415,7 @@ if __name__ == "__main__":
     header_results_to_texfile(params)           # Save the results from the header in a logfile
     log_params(params)
         
-    no_RV_names = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
+    params['no_RV_names'] = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
     # Do the Terra RVs
     if os.path.isfile(params['terra_jar_file']) == True and os.path.exists(params['path_rv_terra']):
         print('\nInfo: Preparing for the Terra analysis.')
@@ -428,7 +431,7 @@ if __name__ == "__main__":
         logger('Info: All data logged in this file is relative to '+params['path_rv_terra'], show=False)
         for obj_name in obj_names:
             do_RV = True
-            for no_RV_name in no_RV_names:
+            for no_RV_name in params['no_RV_names']:
                 if obj_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
                     do_RV = False
                     break
@@ -439,8 +442,8 @@ if __name__ == "__main__":
             os.system('rm -f astrocatalog.example; '+newfile)
             cmd = 'java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] )
             logger('For TERRA: running TERRA: '+cmd, show=False)
-            if True:
-                os.system(cmd)
+            if False:
+                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)
             else:
                 logger('Warn: TERRA commented out')
             resultfile = '{2} {0}/results/synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'])
@@ -451,6 +454,25 @@ if __name__ == "__main__":
     
     # Do the Serval RVs
     if os.path.exists(params['path_serval']) and os.path.exists(params['path_serval']+'serval') and os.path.exists(params['path_serval']+'python'):
+    
+        def run_serval(obj_name):           # create a procedure to run on multicore
+            do_RV = True
+            for no_RV_name in params['no_RV_names']:
+                if obj_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
+                    do_RV = False
+                    break
+            if not do_RV or not os.path.isfile('filelist_{0}.txt'.format(obj_name)):
+                return
+                #continue
+            cmd = params['path_serval']+'serval/src/serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode 2'.format(params['pmin'], params['pmax'], params['oset'], obj_name)
+            logger('For SERVAL: running SERVAL: '+cmd, show=False)
+            if True:
+                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)    # shell=True is necessary
+            else:
+                logger('Warn: SERVAL commented out')
+            resultfile = '{2} {0}/{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'])  
+            logger('For SERVAL: results can be opened with: '+resultfile, show=False)
+            
         pypath = ''
         if 'PYTHONPATH' in os.environ.keys():
             pypath = os.environ["PYTHONPATH"] + os.pathsep
@@ -459,32 +481,25 @@ if __name__ == "__main__":
         os.environ["PYTHONPATH"] = pypath
         xran = np.max(xhighs) - np.min(xlows)
         exclude_x = 0.1         # 0.1: 10% of outermost pixel on each side are excluded
-        pmin = int(np.min(xlows) + 0.1*xran)
-        pmax = int(np.max(xhighs) - 0.1*xran)
-        oset = '{0}:{1}'.format(0,wavelength_solution.shape[0])     # if shape is 9, then oset will lead to 0,1,2,3,4,5,6,7,8 being used
+        params['pmin'] = int(np.min(xlows) + 0.1*xran)
+        params['pmax'] = int(np.max(xhighs) - 0.1*xran)
+        params['oset'] = '{0}:{1}'.format(0,wavelength_solution.shape[0])     # if shape is 9, then oset will lead to 0,1,2,3,4,5,6,7,8 being used
         logger('For SERVAL: changing directory to '+params['path_rv_serval']+' . The steps to run SERVAL are given in the logfile in that folder.', show=False)
         os.chdir(params['path_rv_serval'])
         logger('Info: All data logged in this file is relative to '+params['path_rv_serval'], show=False)
-        for obj_name in obj_names:
-            do_RV = True
-            for no_RV_name in no_RV_names:
-                if obj_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
-                    do_RV = False
-                    break
-            if not do_RV or not os.path.isfile('filelist_{0}.txt'.format(obj_name)):
-                continue
-            cmd = params['path_serval']+'serval/src/serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode'.format(pmin, pmax, oset, obj_name)
-            logger('For SERVAL: running SERVAL: '+cmd, show=False)
-            if True:
-                os.system(cmd+'\n\n\n')
-            else:
-                logger('Warn: SERVAL commented out')
-            resultfile = '{2} {0}/{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'])  
-            logger('For SERVAL: results can be opened with: '+resultfile, show=False)
+        #for obj_name in obj_names:
+        #    run_serval(obj_name)
+        #with multiprocessing.Pool(params['use_cores']) as p:       # only possible in python3
+        #    p.map(run_serval, obj_names)
+        p = multiprocessing.Pool(params['use_cores'])
+        p.map(run_serval, obj_names)
+        p.terminate()
+        
+           
         os.chdir(params['path_run'])        # Go back to previous folder
         print(('\n\nInfo: Finished the SERVAL analysis. Some errors reported by SERVAL are expected.'+\
               ' The results are stored in {0}<object name>/<object name>.rvc.dat.'+\
-              ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially red orders).'+\
+              ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially orders with low SN).'+\
               ' The command history can be found in {0}cmdhistory.txt. Before running serval: cd {0}').format(params['path_rv_serval']))
     
 

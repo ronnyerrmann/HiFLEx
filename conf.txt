@@ -263,7 +263,6 @@ longitude   = -0.2401
 object_file = object_list.txt
 
 
-
   ## Configuration files in which the processing of the raw data fits files is defined
   #-------------------------------------------------------------------------------
   # raw_data_file_list contains the analysis of the raw data files (fiber1 and fiber2, exposure time, what to extract
@@ -271,10 +270,6 @@ raw_data_file_list      = file_list_raw_data.txt
 
   # configfile_fitsfiles contains the information of how to processes the raw data and is created by prepare_file_list.py
 configfile_fitsfiles    = fits_conf.txt
-
-  # editor defines the program which should be used to allow the user to manipulate raw_data_file_list, e.g. vim, emacs, gedit, kwrite
-editor                  = gedit
-
 
 
   ## Result storage information:
@@ -342,6 +337,15 @@ path_ceres                      = /home/exohspec/software/ceres/
 path_ceres                      = /home/ronny/software/ceres/
   # Output of the CERES cross-correlation
 path_rv_ceres                   = ceres_rv
+
+
+  ## General Parameters
+  #--------------------
+  # editor defines the program which should be used to allow the user to manipulate raw_data_file_list, e.g. vim, emacs, gedit, kwrite
+editor                  = gedit
+ # For multiprocessing use at most max_cores_used_pct percent of the available CPU cores, e.g. on an 4 core system "max_cores_used_pct = 80" will use at most 3 cores.
+max_cores_used_pct      = 80
+
 
   ## Logging:
   #----------
