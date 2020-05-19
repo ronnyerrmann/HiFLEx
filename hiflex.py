@@ -442,7 +442,7 @@ if __name__ == "__main__":
             os.system('rm -f astrocatalog.example; '+newfile)
             cmd = 'java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] )
             logger('For TERRA: running TERRA: '+cmd, show=False)
-            if False:
+            if True:
                 p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)
             else:
                 logger('Warn: TERRA commented out')
