@@ -461,7 +461,7 @@ if __name__ == "__main__":
         exclude_x = 0.1         # 0.1: 10% of outermost pixel on each side are excluded
         pmin = int(np.min(xlows) + 0.1*xran)
         pmax = int(np.max(xhighs) - 0.1*xran)
-        oset = '{0}:{1}'.format(0,wavelength_solution.shape[0])
+        oset = '{0}:{1}'.format(0,wavelength_solution.shape[0])     # if shape is 9, then oset will lead to 0,1,2,3,4,5,6,7,8 being used
         logger('For SERVAL: changing directory to '+params['path_rv_serval']+' . The steps to run SERVAL are given in the logfile in that folder.', show=False)
         os.chdir(params['path_rv_serval'])
         logger('Info: All data logged in this file is relative to '+params['path_rv_serval'], show=False)
@@ -487,17 +487,4 @@ if __name__ == "__main__":
               ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially red orders).'+\
               ' The command history can be found in {0}cmdhistory.txt. Before running serval: cd {0}').format(params['path_rv_serval']))
     
-""" ######### Analysis with terra
-rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD82885/" > astrocatalog.example
-rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD42807/" > astrocatalog.example
-rm -f astrocatalog.example; echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       HD140538/" > astrocatalog.example
-java -jar /home/ronny/software/terra/PRV.jar -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV 55
-cat HD*/results/synthetic.rv
 
-############# Gnuplot analysis of part of the RV data:
-f(x) = a2*x**2 + a1*x + a0; a2=0; a1=1; a0=0; fit f(x) 'data_1208' us 1:2 via a2,a1,a0
-plot 'data_1208' us 1:2 , f(x)
-
-
-
-"""

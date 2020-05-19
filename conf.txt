@@ -323,12 +323,14 @@ background_filename             = background.fits
   #--------------
   # Using TERRA to create a template spectrum and then use that template to do the relative radial velocity analysis. Need to point to the PRV.jar file.
   #       If terra_jar_file does not exist on the machine, then no radial velocity analysis using this method will be used.
+terra_jar_file                  = /home/exohspec/software/terra/PRV.jar
 terra_jar_file                  = /home/ronny/software/terra/PRV.jar
   # csv files for TERRA. path_rv_terra will be relative to the result_path. The csv files will be saved in the <object_name>/data/ folder under path_csv_terra.
   #       It will contain the normalised flux
 path_rv_terra                   = terra_rv
 
   # Using SERVAL to create a template spectrum and then do relative radial velocity against this. The path in which the python and serval folders are located needs to be given.
+path_serval                     = /home/exohspec/software/mzechmeister/
 path_serval                     = /home/ronny/software/mzechmeister/
     # Output of the SERVAL cross-correlation
 path_rv_serval                  = serval_rv
