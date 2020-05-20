@@ -38,10 +38,10 @@ import psutil
 import ephem
 import math
 import multiprocessing
-# Necessary because of https://github.com/astropy/astropy/issues/9427
-from astropy.utils.iers import conf as iers_conf 
-iers_conf.iers_auto_url = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all' 
-iers_conf.auto_max_age = None 
+# Necessary because of https://github.com/astropy/astropy/issues/9427       # commented out again on 20/5/2020 after "WARNING: IERSStaleWarning: IERS_Auto predictive values are older than 15.0 days but downloading the latest table did not find newer values [astropy.utils.iers.iers]"
+#from astropy.utils.iers import conf as iers_conf 
+#iers_conf.iers_auto_url = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all' 
+#iers_conf.auto_max_age = None 
 import urllib2
 success = False
 for ii in range(5):
@@ -372,6 +372,8 @@ def textfileargs(params, textfile=None):
     if len(undeclared_params) > 0:
         logger('Warn: The following parameters appear in the configuration files, but the programm did not expect them: {0}'.format(undeclared_params[:-2]))
         
+    params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)
+    
     return params
 
 def update_calibration_memory(key, value):
@@ -1146,7 +1148,7 @@ def rotate_flip_frame(im, params, invert=False):
     #plot_img_spec.plot_image(im, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'result')
 
     return im
-
+    
 def bin_im(im, binxy, method='median'):
     """
     :param im: 2d numpy array
@@ -1154,18 +1156,12 @@ def bin_im(im, binxy, method='median'):
     :return: 2d numpy arrays of the image, the number of elements which are not NaN, and of the standard deviation of each combined pixel
     """
     def bin_im_function(data, method, axis=None):
-        if method == 'median':
-            return np.nanmedian(data, axis=axis)    # median binning
-        elif method == 'mean':
-            return np.nanmean(data, axis=axis)    # averge binning
-        elif method == 'sum':
-            return np.nansum(data, axis=axis)    # sum binning
-        elif method == 'min':
-            return np.nanmin(data, axis=axis)    # min binning
-        elif method == 'max':
-            return np.nanmax(data, axis=axis)    # max binning
-        else:
-            logger('Error: method {0} does not exisit in bin_im_function. This is a programming bug.'.format(method))
+        if method == 'median':  return np.nanmedian(data, axis=axis)    # median binning
+        elif method == 'mean':  return np.nanmean(data, axis=axis)    # averge binning
+        elif method == 'sum':   return np.nansum(data, axis=axis)    # sum binning
+        elif method == 'min':   return np.nanmin(data, axis=axis)    # min binning
+        elif method == 'max':   return np.nanmax(data, axis=axis)    # max binning
+        else:   logger('Error: method {0} does not exisit in bin_im_function. This is a programming bug.'.format(method))
     
     [binx, biny] = binxy
     ims = im.shape
@@ -1174,27 +1170,25 @@ def bin_im(im, binxy, method='median'):
         return im, im*0+1, im*0
     nim, gim, sim = [], [], []
     if binx > 1 and biny > 1:
-        for i in range(int((ims[0]+binx-1)/binx)):
-            nline, gline, sline = [], [], []
-            iline = im[i*binx:min(ims[0],(i+1)*binx),:]
-            for j in range(int((ims[1]+biny-1)/biny)):
-                temdata = iline[:,j*biny:min(ims[1],(j+1)*biny)]
-                if np.sum( ~np.isnan(temdata) ) >= 0.9 * np.prod(temdata.shape):     # only of at least 10% of data points available
-                    nline.append(bin_im_function(temdata, method, axis=None))    # binning
-                else:
-                    nline.append(np.nan) 
-                gtemp = np.sum( ~np.isnan(temdata) )
-                gline.append(gtemp)    # number of the elements not nan
-                if gtemp > 1:
-                    sline.append(np.nanstd(temdata, ddof=1))    # standard deviation
-                elif gtemp == 1:
-                    sline.append(0)
-                else:
-                    sline.append(np.nan)   
+        x_range = list(range(int((ims[0]+binx-1)/binx)))
+        y_range = list(range(int((ims[1]+biny-1)/biny)))
+        data = np.zeros(( len(x_range), len(y_range), 3 ))*np.nan
+        for ii in x_range:
+            iline = im[ii*binx:min(ims[0],(ii+1)*binx),:]
+            for jj in y_range:
+                temdata = iline[:,jj*biny:min(ims[1],(jj+1)*biny)]
+                if np.sum( ~np.isnan(temdata) ) >= 0.9 * np.prod(temdata.shape):    # only of at least 10% of data points available
+                    data[ii,jj,0] = bin_im_function(temdata, method, axis=None)     # binning
+                data[ii,jj,1] = np.sum( ~np.isnan(temdata) )                        # number of the elements not nan
+                if data[ii,jj,1] > 1:
+                    data[ii,jj,2] = np.nanstd(temdata, ddof=1)                      # standard deviation
+                elif data[ii,jj,1] == 1:
+                    data[ii,jj,2] = 0
+                 
                 #nline.append(sum(percentile_list(list((im[i*binx:(i+1)*binx,j*biny:(j+1)*biny]).flat),.2)))   #sum after 80% clipping -> more flux -> more lines find with gauss of height 50
-            nim.append(nline)
-            gim.append(gline)
-            sim.append(sline)
+        nim = data[:,:,0]
+        gim = data[:,:,1].astype(int)
+        sim = data[:,:,2]
     elif binx > 1:
         for i in range(int((ims[0]+binx-1)/binx)):
             temdata = im[i*binx:min(ims[0],(i+1)*binx),:]
@@ -1976,7 +1970,7 @@ def estimate_width(im):
     ims = im.shape
     widths = []
     logger('Info: Estimate the width of the traces')
-    maxtests = max( 200, int(ims[0]*ims[1]/50) )
+    maxtests = max( 200, int(np.prod(ims)/50) )
     for i in range(maxtests):     # Use at least 200 positions in order to be sure to find at least 10
         x = random.randint(int(0.05*ims[0]), int(0.95*ims[0]))
         y = random.randint(int(min(50,0.05*ims[1])), int(max(ims[1]-50,0.95*ims[1])))
@@ -2217,52 +2211,20 @@ def find_trace_orders(params, im, imageshape):
     logger('Info: {0} orders found and traced'.format(traces.shape[0]))
     return traces[:,0], traces[:,1].astype(int), traces[:,2].astype(int)            # polyfits, xlows, xhighs
 
-def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
-    """
-    Re-traces the position of the orders
-    :param params: Dictionary with all the parameters. 'binx', 'biny', and 'polynom_order_apertures' are required
-    :param im: 2d numpy array of floats, binned image
-    :param im_unbinned: original image without binning
-    :param pfits: list, length same as number of orders, polynomial values
-                      (output of np.polyval)
-                      i.e. p where:
-                      p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
-    :param xlows: list, length same as number of orders, the lowest x pixel, minimum is 0
-                   (wavelength direction) used in each order
-    :param xhighs: list, length same as number of orders, the highest x pixel, maximum is the number of pixel+1 -> range(xlows,xhighs) can cover the whole CCD
-                   (wavelength direction) used in each order
-    :return centerfit: 3d numpy array of floats. First dimensions has the same length as number of orders.
-                        The second dimension is dividing between center of the trace and the left and right border of the trace.
-                        Third deminsion contains the central pixel and the polynomial values
-    :return xlows: 1d array of integers, length same as number of orders, minimum position of the trace in dispersion direction
-    :return xhighs: 1d array of integers, length same as number of orders, maximum position of the trace in dispersion direction
-    :return widths: 2d array of floats, length same as number of orders, width of the trace in cross-dispersion direction. 
-                    Each line contains the giving the width to the left, to the right, and the Gaussian width
-    """
-    binx = params['binx']
-    biny = params['biny']
-    ims = im.shape
-    cen_px = int(ims[0]*binx/2)
-    # maxFWHM = 25/biny for old lens
-    # maxFWHM = 15/biny+2            # !! Determine in values of space between orders
-    maxFWHM = max(1, int(round(estimate_width(im)*2.35482*1.5)))   # The average Gaussian width, transformed into a FWHM and extendet, as this is the maximum FWHM
-    if len(pfits) > 1:                              # move at maximum by 20% of the minimum space between the orders, but at old binning in cross-dispersion direction is allowed
-        mask = ( (xlows-10 <= np.percentile(xlows, 80.)) & (xhighs+10 > np.percentile(xhighs, 20.)) )   # use the orders, which cover most of the CCD
-        maxshift = max(params['bin_search_apertures'][1], int(min(np.abs(pfits[mask,-1][1:] - pfits[mask,-1][:-1] ))/5) )
-    else:
-        maxshift = params['bin_search_apertures'][1]    # old binning in cross-dispersion direction
-    trace_pos = [list(range(int(min(xlows)),int(max(xhighs)),binx))]      #x-values as first entry in the array (pixel in the unbinned CCD
-    for order, pfit in enumerate(pfits):
-        trace_pos.append(np.polyval(pfit[1:], trace_pos[0]-pfit[0])/(biny+0.0))       # fit of the trace in binned frame
-        trace_pos[-1][:int((xlows[order]-min(xlows))/binx)] = -1e10     # do not try on bad data
-        trace_pos[-1][int((xhighs[order]-min(xlows)+1)/binx):] = -1e10  # do not try on bad data
-    trace_pos = np.array(trace_pos)
-    trace_pos[0,:] = (trace_pos[0,:]/binx).astype(int)
-    trace_pos = trace_pos[:, trace_pos[0,:] < ims[0] ]              # Due to binning, entries outside the binned images can appear in trace_pos[0,:]
-    #traces = []
-    centerfit, leftfit, rightfit, xlows, xhighs, widths, avg_shifts = [], [], [], [], [], [], []
-    logger('Step: Adjusting orders', show=False)
-    for order in tqdm(range(trace_pos.shape[0]-1), desc='Adjusting orders'):
+def adjust_trace_order(kwargs):
+    [order, kwargs] = kwargs
+    trace_pos = kwargs['trace_pos']
+    maxFWHM = kwargs['maxFWHM']
+    im = kwargs['im']
+    params = kwargs['params']
+    maxshift = kwargs['maxshift']
+    ims = kwargs['ims']
+    binx = kwargs['binx']
+    cen_px = kwargs['cen_px']
+    biny = kwargs['biny']
+    imus = kwargs['imus']
+    
+    if True:
         lastadd = trace_pos[0,0]
         positions, widths_o, shifts = [], [], []
         for j,i in enumerate(trace_pos[0,:].astype(int)):           # each pixel, is is the position in the array and i the real position on the CCD
@@ -2297,7 +2259,7 @@ def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
         #print len(positions), 
         if widths_o == [] or len(shifts) < ims[0]/4.:                # Not enough data for that order
             #print 'len(positions),len(shifts)', len(positions),len(shifts)
-            continue
+            return [], [], [], [], [], [], []
         positions = np.array(positions)
         widths_o = np.array(widths_o)
         # Fit to the original image
@@ -2314,30 +2276,109 @@ def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
         # Fit the borders
         good_vaules = ~np.isnan(positions[:,3])
         if sum(good_vaules) > len(good_vaules)*0.05:        # Position available at least 5% of positions
-            leftfit =  np.polyfit(positions[good_vaules,0]*binx - cen_px, positions[good_vaules,3]*biny, params['polynom_order_apertures'])
+            leftfit_o =  np.polyfit(positions[good_vaules,0]*binx - cen_px, positions[good_vaules,3]*biny, params['polynom_order_apertures'])
             widthleft = np.nanmean(percentile_list(widths_o[:,1],0.1))          # Average of the widths except the 10% highest and lowest
         else:                                                   # left side at FWHM of line
             widthleft = np.nanmean(percentile_list(widths_o[:,3],0.1)) * 2.35482
-            leftfit = copy.deepcopy(pfs)
-            leftfit[-1] -= widthleft
+            leftfit_o = copy.deepcopy(pfs)
+            leftfit_o[-1] -= widthleft
         good_vaules = ~np.isnan(positions[:,4])
         if sum(good_vaules) > len(good_vaules)*0.05:        # Position available at least 5% of positions
-            rightfit = np.polyfit(positions[good_vaules,0]*binx - cen_px, positions[good_vaules,4]*biny, params['polynom_order_apertures'])
+            rightfit_o = np.polyfit(positions[good_vaules,0]*binx - cen_px, positions[good_vaules,4]*biny, params['polynom_order_apertures'])
             widthright = np.nanmean(percentile_list(widths_o[:,2],0.1))         # Average of the widths except the 10% highest and lowest
         else:                                                   # left side at FWHM of line
             widthright = np.nanmean(percentile_list(widths_o[:,3],0.1)) * 2.35482
-            rightfit = copy.deepcopy(pfs)
-            rightfit[-1] += widthright
-        centerfit.append([[cen_px] + list(pfs), [cen_px] + list(leftfit), [cen_px] + list(rightfit)])
+            rightfit_o = copy.deepcopy(pfs)
+            rightfit_o[-1] += widthright
+        centerfit_o = [[cen_px] + list(pfs), [cen_px] + list(leftfit_o), [cen_px] + list(rightfit_o)]
         center = np.polyval(pfs, widths_o[:,0]*binx - cen_px)
-        widths_o[:,1] = center - widths_o[:,1]*biny
-        widths_o[:,2] = widths_o[:,2]*biny - center
-        width = [widthleft, widthright, np.nanmean(percentile_list(widths_o[:,3],0.1))]      #average left, right, and gaussian width
-        xlows.append(max(0,min(positions[:,0])*binx-5))
-        xhighs.append(min(im_unbinned.shape[0],(max(positions[:,0])+1)*binx+5))
-        widths.append(width)
-        avg_shifts.append(np.mean(shifts))
-    """traces = np.array(traces)"""
+        widths_o = [widthleft, widthright, np.nanmean(percentile_list(widths_o[:,3],0.1))]      #average left, right, and gaussian width
+        xlows_o = max(0,min(positions[:,0])*binx-5)
+        xhighs_o = min(imus[0],(max(positions[:,0])+1)*binx+5)
+        avg_shifts_o = np.mean(shifts)
+
+    return centerfit_o, leftfit_o, rightfit_o, xlows_o, xhighs_o, widths_o, avg_shifts_o
+
+def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
+    """
+    Re-traces the position of the orders
+    :param params: Dictionary with all the parameters. 'binx', 'biny', and 'polynom_order_apertures' are required
+    :param im: 2d numpy array of floats, binned image
+    :param im_unbinned: original image without binning
+    :param pfits: list, length same as number of orders, polynomial values
+                      (output of np.polyval)
+                      i.e. p where:
+                      p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
+    :param xlows: list, length same as number of orders, the lowest x pixel, minimum is 0
+                   (wavelength direction) used in each order
+    :param xhighs: list, length same as number of orders, the highest x pixel, maximum is the number of pixel+1 -> range(xlows,xhighs) can cover the whole CCD
+                   (wavelength direction) used in each order
+    :return centerfit: 3d numpy array of floats. First dimensions has the same length as number of orders.
+                        The second dimension is dividing between center of the trace and the left and right border of the trace.
+                        Third deminsion contains the central pixel and the polynomial values
+    :return xlows: 1d array of integers, length same as number of orders, minimum position of the trace in dispersion direction
+    :return xhighs: 1d array of integers, length same as number of orders, maximum position of the trace in dispersion direction
+    :return widths: 2d array of floats, length same as number of orders, width of the trace in cross-dispersion direction. 
+                    Each line contains the giving the width to the left, to the right, and the Gaussian width
+    """
+    binx = params['binx']
+    biny = params['biny']
+    ims = im.shape
+    imus = im_unbinned.shape
+    cen_px = int(ims[0]*binx/2)
+    # maxFWHM = 25/biny for old lens
+    # maxFWHM = 15/biny+2            # !! Determine in values of space between orders
+    maxFWHM = max(1, int(round(estimate_width(im)*2.35482*1.5)))   # The average Gaussian width, transformed into a FWHM and extendet, as this is the maximum FWHM
+    if len(pfits) > 1:                              # move at maximum by 20% of the minimum space between the orders, but at old binning in cross-dispersion direction is allowed
+        mask = ( (xlows-10 <= np.percentile(xlows, 80.)) & (xhighs+10 > np.percentile(xhighs, 20.)) )   # use the orders, which cover most of the CCD
+        maxshift = max(params['bin_search_apertures'][1], int(min(np.abs(pfits[mask,-1][1:] - pfits[mask,-1][:-1] ))/5) )
+    else:
+        maxshift = params['bin_search_apertures'][1]    # old binning in cross-dispersion direction
+    trace_pos = [list(range(int(min(xlows)),int(max(xhighs)),binx))]      #x-values as first entry in the array (pixel in the unbinned CCD
+    for order, pfit in enumerate(pfits):
+        trace_pos.append(np.polyval(pfit[1:], trace_pos[0]-pfit[0])/(biny+0.0))       # fit of the trace in binned frame
+        trace_pos[-1][:int((xlows[order]-min(xlows))/binx)] = -1e10     # do not try on bad data
+        trace_pos[-1][int((xhighs[order]-min(xlows)+1)/binx):] = -1e10  # do not try on bad data
+    trace_pos = np.array(trace_pos)
+    trace_pos[0,:] = (trace_pos[0,:]/binx).astype(int)
+    trace_pos = trace_pos[:, trace_pos[0,:] < ims[0] ]              # Due to binning, entries outside the binned images can appear in trace_pos[0,:]
+    #traces = []
+    centerfit, leftfit, rightfit, xlows, xhighs, widths, avg_shifts = [], [], [], [], [], [], []
+    kwargs = dict(trace_pos=trace_pos, maxFWHM=maxFWHM, im=im, params=params, maxshift=maxshift, ims=ims, binx=binx, cen_px=cen_px, biny=biny, imus=imus)
+    orders = list(range(trace_pos.shape[0]-1))
+    logger('Step: Adjusting orders')
+    if params['use_cores'] > 1:
+        orders2 = [[order, kwargs] for order in orders]
+        p = multiprocessing.Pool(params['use_cores'])
+        results = p.map(adjust_trace_order, orders2)
+        p.terminate()
+    else:
+        results = []
+        for order in tqdm(orders, desc='Adjusting orders'):
+            results.append( adjust_trace_order([order, kwargs]) )
+        
+    for result in results:
+        centerfit_o, leftfit_o, rightfit_o, xlows_o, xhighs_o, widths_o, avg_shifts_o = result
+        if len(centerfit_o) > 0:
+            centerfit.append(centerfit_o)
+            leftfit.append(leftfit_o)
+            rightfit.append(rightfit_o)
+            xlows.append(xlows_o)
+            xhighs.append(xhighs_o)
+            widths.append(widths_o)
+            avg_shifts.append(avg_shifts_o)
+    """
+    for order in tqdm(orders, desc='Adjusting orders'):
+        centerfit_o, leftfit_o, rightfit_o, xlows_o, xhighs_o, widths_o, avg_shifts_o = adjust_trace_order([order, kwargs])
+        if len(centerfit_o) > 0:
+            centerfit.append(centerfit_o)
+            leftfit.append(leftfit_o)
+            rightfit.append(rightfit_o)
+            xlows.append(xlows_o)
+            xhighs.append(xhighs_o)
+            widths.append(widths_o)
+            avg_shifts.append(avg_shifts_o)"""
+
     if len(widths) == 0:
         logger('Error: When adjusting the traces, all traces were rejected due to poor fit. '+\
                'Please check the binned image {0}: Is the orientation and the binning right? Are the orders covering at least half of the CCD (in dispersion correction)'.format(params['logging_trace1_binned'])+\
@@ -2383,58 +2424,25 @@ def no_tqdm(input, desc=''):
     """
     return input
 
-def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset = 0, var='standard', plot_tqdm=True, header=dict() ):
+def extract_order(kwarg):
     """
-    Extract the spectra from each of the orders and return in a numpy array
-    :param params: Dictionary with all the parameters. 'maxgood_value' is required
-    :param image: numpy 2D array, containing the CCD image
-    :param pfits: list, length same as number of orders, polynomial values
-                      (output of np.polyval)
-                      i.e. p where:
-                      p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
-    :param xlows: list, length same as number of orders, the lowest x pixel
-                   (wavelength direction) used in each order
-    :param xhighs: list, length same as number of orders, the highest x pixel
-                   (wavelength direction) used in each order
-    :param widths: (not needed anymore) 2d list, length same as number of orders, each entry contains left border, right border, and Gaussian width of the lines, as estimated in the master flat,
-                   not needed anymore because of the new format of pfits, giving the lower and upper border of the trace
-    :param w_mult: the space between the lower and upper boundary compared to the center of the traces is adjusted by w_mult
-                   (old: w_mult * widths (Gaussian) defines the range on either side of the trace to be extracted)
-                   if 0 or 0.0 then only the full central pixel will be extracted
-    :param offset: allows to shift the spectrum
-    :param var: can be 'standard' or 'linfit'.
-        'standard': extraction of the fraction of the border pixel
-        'linfit': fit a polynomial around the border of the extraction width to extract with higher precission
-    :return spec: list,  length same as number of orders, each containing
-                  a 1D numpy array with the spectrum of each order in
-
+    Extract the spectra for one order
     """
-    if plot_tqdm:
-        plot_tqdm = tqdm
-    else:
-        plot_tqdm = no_tqdm
-    logger('Step: extracting spectra', show=False)
-    # Prepare bad-pixel map
-    badpx_mask_name = 'badpx_mask'
-    if badpx_mask_name not in calimages:
-        calimages[badpx_mask_name] = read_badpx_mask(params, image.shape)
-    badpx_mask = calimages[badpx_mask_name]
-    # Prepare saturated map
-    saturated_mask = ( image < params['max_good_value'] )       # 1 when not saturated, analogue to bad-pixel
-    if 'HIERARCH HiFLEx orig' in header.keys():
-        filename = header['HIERARCH HiFLEx orig']
-    elif 'HiFLEx orig' in header.keys():
-        filename = header['HiFLEx orig']
-    else:
-        filename = ''
-    if '{0}_saturated'.format(filename) in calimages.keys():
-        saturated_mask = saturated_mask*0 + 1
-        x, y = calimages['{0}_saturated'.format(filename)]
-        saturated_mask[x,y] = 0
-    spec, good_px_mask, widths_o = [], [], []
-    xarr = range(0, image.shape[0])
+    [pp, kwargs] = kwarg
+    xarr = kwargs['xarr']
+    image = kwargs['image']
+    badpx_mask = kwargs['badpx_mask']
+    saturated_mask = kwargs['saturated_mask']
+    pfits = kwargs['pfits']
+    xlows = kwargs['xlows']
+    xhighs = kwargs['xhighs']
+    widths = kwargs['widths']
+    w_mult = kwargs['w_mult']
+    offset = kwargs['offset']
+    var = kwargs['var']
     maxpx = image.shape[1]-1                    # End of the image in cross-dispersion direction
-    for pp in plot_tqdm(range(pfits.shape[0]), desc='Extract Spectrum'):        # pp is order
+    #for pp in plot_tqdm(range(pfits.shape[0]), desc='Extract Spectrum'):        # pp is order
+    if True:
         #print('\t Order {0}'.format(pp + 1))
         # find nearest y pixel
         yarr = np.polyval(pfits[pp, 0, 1:], xarr-pfits[pp, 0, 0])+offset
@@ -2448,10 +2456,10 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
         lowers = np.polyval(pfits[pp, 1, 1:], xarr-pfits[pp, 1, 0]) + offset 
         uppers = np.polyval(pfits[pp, 2, 1:], xarr-pfits[pp, 2, 0]) + offset
         lowers, uppers = adjust_width_orders(yarr, lowers, uppers, [w_mult, w_mult])          # Adjust the width of the orders
-        widths_o.append(uppers - lowers)
+        widths_o = uppers - lowers
         #print pp,np.nanmean(uppers-lowers), np.nanmedian(uppers-lowers), np.nansum(uppers-lowers)
         if w_mult == 0.0:                                                       # only the central full pixel
-            widths_o[-1][:] = widths_o[-1][:] * 0 + 1.
+            widths_o = widths_o * 0 + 1.
             order_in_frame = ((yarr[xarr1] <= maxpx) & (yarr[xarr1] >= 0) )     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
             yarr = np.round(yarr).astype(int)
             for xrow in xarr1[order_in_frame]:
@@ -2540,46 +2548,79 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset =
                 ogood_px_mask[xrow] = good_px
                 #if pp == 57 and xrow == 1350:
                 #    print pp,xrow, image[xrow, lowersf[xrow]:uppersf[xrow]+1], image[xrow, lowersr[xrow]], (0.5-lowers[xrow]%1), image[xrow, uppersr[xrow]], (uppers[xrow]%1-.5), ssum
+    
+    return ospecs, ogood_px_mask, widths_o
+     
+def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0, var='standard', plot_tqdm=True, header=dict() ):
+    """
+    Extract the spectra from each of the orders and return in a numpy array
+    :param params: Dictionary with all the parameters. 'maxgood_value' is required
+    :param image: numpy 2D array, containing the CCD image
+    :param pfits: list, length same as number of orders, polynomial values
+                      (output of np.polyval)
+                      i.e. p where:
+                      p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
+    :param xlows: list, length same as number of orders, the lowest x pixel
+                   (wavelength direction) used in each order
+    :param xhighs: list, length same as number of orders, the highest x pixel
+                   (wavelength direction) used in each order
+    :param widths: (not needed anymore) 2d list, length same as number of orders, each entry contains left border, right border, and Gaussian width of the lines, as estimated in the master flat,
+                   not needed anymore because of the new format of pfits, giving the lower and upper border of the trace
+    :param w_mult: the space between the lower and upper boundary compared to the center of the traces is adjusted by w_mult
+                   (old: w_mult * widths (Gaussian) defines the range on either side of the trace to be extracted)
+                   if 0 or 0.0 then only the full central pixel will be extracted
+    :param offset: allows to shift the spectrum
+    :param var: can be 'standard' or 'linfit'.
+        'standard': extraction of the fraction of the border pixel
+        'linfit': fit a polynomial around the border of the extraction width to extract with higher precission
+    :return spec: list,  length same as number of orders, each containing
+                  a 1D numpy array with the spectrum of each order in
 
-        """
-        # new solution, not helpful solution:
-        yarr = np.polyval(pf, xarr)+offset
-        xarr1 = np.arange(xlows[pp], xhighs[pp])
-        width = widths[pp][2]*w_mult
-        # Define the borders of the extraction area
-        lowers = yarr - width
-        uppers = yarr + width
-        lowers[lowers<0] = 0
-        uppers[uppers>maxpx] = maxpx
-        # Define the borders of the fitting area
-        lowerw = np.floor(yarr - max(3, width*2))   #mindestens 3 px in each direction
-        upperw = np.ceil(yarr + max(3, width*2))    #mindestens 3 px in each direction
-        lowerw[lowerw<0] = 0
-        upperw[upperw>maxpx] = maxpx
-        order_in_frame = ((lowerw[xarr1] <= maxpx) & (upperw[xarr1] >= 0) & (upperw[xarr1] - lowerw[xarr1] > 2*width))     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
-        ospecs = np.repeat([np.NaN], image.shape[0])
-        for xrow in xarr1[order_in_frame]:
-            x = np.arange(lowerw[xrow], upperw[xrow]+1, dype=int)
-            y = image[xrow, x]
-            # Better than polynom is spline, and better than fitting everything is fitting only the ends: 
-            # https://stackoverflow.com/questions/17913330/fitting-data-using-univariatespline-in-scipy-python
-            # https://docs.scipy.org/doc/scipy-0.19.1/reference/generated/scipy.interpolate.UnivariateSpline.integral.html
-            #p = np.polyfit(x, y, len(x)/2)
-            #diff = y - np.polyval(p, x)
-            #if xrow in range(500,501):
-            #    print y
-            #    print diff/y
-            #    print np.mean(diff), np.std(diff, ddof=len(x)/2), np.sum(diff),
-            #    diff = np.abs(diff)
-            #    print np.mean(diff), np.std(diff, ddof=len(x)/2), np.sum(diff)
-            #poly = np.poly1d(p)
-            #polyint = poly.integ()
-            #ospecs[xrow] = polyint(uppers[xrow]) - polyint(lowers[xrow])
-        """    
+    """
+    if plot_tqdm:
+        plot_tqdm = tqdm
+    else:
+        plot_tqdm = no_tqdm
+    logger('Step: extracting spectra', show=False)
+    # Prepare bad-pixel map
+    badpx_mask_name = 'badpx_mask'
+    if badpx_mask_name not in calimages:
+        calimages[badpx_mask_name] = read_badpx_mask(params, image.shape)
+    badpx_mask = calimages[badpx_mask_name]
+    # Prepare saturated map
+    saturated_mask = ( image < params['max_good_value'] )       # 1 when not saturated, analogue to bad-pixel
+    if 'HIERARCH HiFLEx orig' in header.keys():
+        filename = header['HIERARCH HiFLEx orig']
+    elif 'HiFLEx orig' in header.keys():
+        filename = header['HiFLEx orig']
+    else:
+        filename = ''
+    if '{0}_saturated'.format(filename) in calimages.keys():
+        saturated_mask = saturated_mask*0 + 1
+        x, y = calimages['{0}_saturated'.format(filename)]
+        saturated_mask[x,y] = 0
+    spec, good_px_mask, widths_m = [], [], []
+    xarr = range(0, image.shape[0])
+    #maxpx = image.shape[1]-1                    # End of the image in cross-dispersion direction
+    kwargs = dict( xarr=xarr, image=image, badpx_mask=badpx_mask, saturated_mask=saturated_mask, 
+                   pfits=pfits, xlows=xlows, xhighs=xhighs, widths=widths, w_mult=w_mult, offset=offset, var=var)
+    orders = list(range(pfits.shape[0]))
+    if w_mult != 0 and params['use_cores'] > 1 and multiprocessing.current_process().name == 'MainProcess':     #var == 'linfit':
+        orders2 = [[pp, kwargs] for pp in orders]
+        p = multiprocessing.Pool(params['use_cores'])
+        results = p.map(extract_order, orders2)
+        p.terminate()
+    else:
+        results = []
+        for pp in plot_tqdm(orders, desc='Extract Spectrum'):        # pp is order
+            results.append( extract_order([pp, kwargs]) )
+    for result in results:
+        ospecs, ogood_px_mask, widths_o = result    
         spec.append(ospecs)
         good_px_mask.append(ogood_px_mask)
+        widths_m.append(widths_o)
     
-    return np.array(spec), np.array(good_px_mask), np.array(widths_o)
+    return np.array(spec), np.array(good_px_mask), np.array(widths_m)
 
 def shift_orders(im, params, sci_tr_poly, xlows, xhighs, oldwidths, in_shift = 0):
     """

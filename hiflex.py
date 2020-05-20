@@ -19,7 +19,6 @@ CONFIGFILE = 'conf.txt'
 params = textfileargs(params, CONFIGFILE)
 if __name__ == "__main__":
     logger('Info: Starting routines for a new night of data, including: finding or shifting orders, find calibration orders, create wavelength solution, and create normalised blaze function')
-    params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)
     params['path_run'] = os. getcwd()
     params['extract_wavecal'] = False
     log_params(params)
@@ -354,9 +353,37 @@ if __name__ == "__main__":
                     flat_spec_norm[:,keep_orders,:]                                                 # remove the bad orders
     
     if ( params['arcshift_side'] == 0 or params['two_solutions'] ) and len(wavelengthcals_cal)+len(wavelengthcals_sci) > 0:         # no calibration spectrum at the same time
+        def wavecal_multicore(parameter):
+                    wavelengthcal, fib, im_name_full = parameter
+                    # !!! Posible improvement: combine a few files if they are taken close to each other
+                    im_name = im_name_full.rsplit(os.sep)
+                    im_name = im_name[-1].rsplit('.',1)         # remove the file ending
+                    im_name = im_name[0]
+                    im_name_wc = im_name+'_wave'+fib
+                    if os.path.isfile(params['path_extraction']+im_name_wc+'.fits'):
+                        logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name_wc, params['path_extraction']))
+                        return
+                    params['calibs'] = params[wavelengthcal+'_calibs_create']
+                    im, im_head = read_file_calibration(params, im_name_full)
+                    extraction_wavelengthcal(params, im, im_name_wc, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
+                                                    wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1, im_name)
+        
+        
         logger('Info: Starting to extract wavelength calibrations')
         params['extract_wavecal'] = True                                                                                # necessary for shift_wavelength_solution so the shift is stored in a file
+        all_wavelengthcals = []
         for [wavelengthcals, fib] in [ [wavelengthcals_cal,'cal'], [wavelengthcals_sci,'sci'] ]:
+            for wavelengthcal in wavelengthcals:
+                for im_name_full in params[wavelengthcal+'_rawfiles']:
+                    all_wavelengthcals.append([ wavelengthcal, fib, im_name_full ])
+        if params['use_cores'] > 1:
+            p = multiprocessing.Pool(params['use_cores'])
+            p.map(wavecal_multicore, all_wavelengthcals)
+            p.terminate()
+        else:
+            for all_wavelengthcal in all_wavelengthcals:
+                wavecal_multicore(all_wavelengthcal)
+        """for [wavelengthcals, fib] in [ [wavelengthcals_cal,'cal'], [wavelengthcals_sci,'sci'] ]:
             for wavelengthcal in wavelengthcals:
                 for im_name_full in params[wavelengthcal+'_rawfiles']:
                     # !!! Posible improvement: combine a few files if they are taken close to each other
@@ -370,14 +397,60 @@ if __name__ == "__main__":
                     params['calibs'] = params[wavelengthcal+'_calibs_create']
                     im, im_head = read_file_calibration(params, im_name_full)
                     extraction_wavelengthcal(params, im, im_name_wc, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
-                                                    wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1, im_name)
+                                                    wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1, im_name)"""
     params['extract_wavecal'] = False
     if len(extractions) == 0:                                               # no extractions to do
         logger('Warn: Nothing to extract. -> Exiting')
         header_results_to_texfile(params)           # Save the results from the header in a logfile
         exit(0)
     logger('Info: Starting to extract spectra')
+    
+    def extraction_multicore(all_extractions):
+        [extraction, im_name_full] = all_extractions
+        if  extraction.find('extract_combine') == -1:     # Single file extraction
+            #for im_name_full in params[extraction+'_rawfiles']:
+            if True:
+                im_name = im_name_full.rsplit(os.sep)
+                im_name = im_name[-1].rsplit('.',1)         # remove the file ending
+                im_name = im_name[0]
+                if os.path.isfile(params['path_extraction']+im_name+'.fits'):
+                    logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
+                    return ''
+                #print extraction, im_name_full, im_name
+                params['calibs'] = params[extraction+'_calibs_create']
+                im, im_head = read_file_calibration(params, im_name_full)
+                
+        else:                                       # Combine files before extraction
+            im_name = extraction
+            if os.path.isfile(params['path_extraction']+im_name+'.fits'):
+                logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
+                return ''
+            im, im_head = create_image_general(params, extraction)
+        obj_name = extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, 
+                                    wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
+        return obj_name.lower()
+    
+    all_extractions = []
     for extraction in extractions:
+        if  extraction.find('extract_combine') == -1:     # Single file extraction
+            for im_name_full in params[extraction+'_rawfiles']:
+                all_extractions.append([extraction, im_name_full])
+        else:
+            all_extractions.append([extraction, extraction])
+    if params['use_cores'] > 1:
+        p = multiprocessing.Pool(params['use_cores'])
+        obj_names = p.map(extraction_multicore, all_extractions)
+        p.terminate()
+    else:
+        for all_extraction in all_extractions:
+            extraction_multicore(all_extraction)
+    print obj_names
+    obj_names = np.unique(obj_names)
+    print obj_names
+    obj_names = list(obj_names[obj_names != ''])
+    print obj_names
+    
+    """for extraction in extractions:
         if  extraction.find('extract_combine') == -1:     # Single file extraction
             for im_name_full in params[extraction+'_rawfiles']:
                 im_name = im_name_full.rsplit(os.sep)
@@ -389,12 +462,6 @@ if __name__ == "__main__":
                 #print extraction, im_name_full, im_name
                 params['calibs'] = params[extraction+'_calibs_create']
                 im, im_head = read_file_calibration(params, im_name_full)
-                """print '!!!!!!!!! WARN: image is modified'
-                print im.shape
-                imtemp = copy.copy(im)
-                imtemp[:-1,:] = im[1:,:]
-                imtemp[ -1,:] = im[0 ,:]
-                im = imtemp"""
                 obj_name = extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
                                                     wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
                 if obj_name not in obj_names:
@@ -409,9 +476,9 @@ if __name__ == "__main__":
                                         wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, flat_spec_norm, im_trace1)
                                         # puts the files in obj_name.lower()
             if obj_name.lower() not in obj_names:
-                obj_names.append(obj_name.lower())
+                obj_names.append(obj_name.lower())"""
     
-    logger('Info: Finished extraction of the science frames. The extracted {0}/*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. Th last entry is the spectrum of the calibration fiber.'.format(params['path_extraction']))
+    logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The nineth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))
     header_results_to_texfile(params)           # Save the results from the header in a logfile
     log_params(params)
         
@@ -442,15 +509,16 @@ if __name__ == "__main__":
             os.system('rm -f astrocatalog.example; '+newfile)
             cmd = 'java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] )
             logger('For TERRA: running TERRA: '+cmd, show=False)
-            if True:
-                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)
+            if False:
+                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)            # This doesn't wait until the procress has been finished
+                time.sleep(1)
             else:
                 logger('Warn: TERRA commented out')
             resultfile = '{2} {0}/results/synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'])
             logger('For TERRA: results can be opened with: '+resultfile, show=False)
             
         os.chdir(params['path_run'])        # Go back to previous folder
-        print('\nInfo: Finished the TERRA analysis. Some errors reported by TERRA are expected. The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_rv_terra']))
+        logger('\nInfo: The TERRA analysis will run in the background. Some errors reported by TERRA are expected. The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_rv_terra']))
     
     # Do the Serval RVs
     if os.path.exists(params['path_serval']) and os.path.exists(params['path_serval']+'serval') and os.path.exists(params['path_serval']+'python'):
@@ -466,13 +534,20 @@ if __name__ == "__main__":
                 #continue
             cmd = params['path_serval']+'serval/src/serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode 2'.format(params['pmin'], params['pmax'], params['oset'], obj_name)
             logger('For SERVAL: running SERVAL: '+cmd, show=False)
-            if True:
+            if False:
                 p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)    # shell=True is necessary
+                p.communicate(input="\n")                                       # This waits until the process needs the enter
             else:
                 logger('Warn: SERVAL commented out')
             resultfile = '{2} {0}/{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'])  
             logger('For SERVAL: results can be opened with: '+resultfile, show=False)
-            
+        
+        for root, dirs, files in os.walk(params['path_rv_serval'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
+            for file in files:
+                if file.endswith('.txt') and file.find('filelist_') == 0:                       # has the filename the correct format?
+                    obj_name = file.split('filelist_')[-1].split('.txt')[0]
+                    if obj_name not in obj_names:
+                        obj_names.append(obj_name)                   
         pypath = ''
         if 'PYTHONPATH' in os.environ.keys():
             pypath = os.environ["PYTHONPATH"] + os.pathsep
@@ -491,15 +566,20 @@ if __name__ == "__main__":
         #    run_serval(obj_name)
         #with multiprocessing.Pool(params['use_cores']) as p:       # only possible in python3
         #    p.map(run_serval, obj_names)
-        p = multiprocessing.Pool(params['use_cores'])
-        p.map(run_serval, obj_names)
-        p.terminate()
+        if params['use_cores'] > 1:
+            p = multiprocessing.Pool(params['use_cores'])
+            p.map(run_serval, obj_names)
+            p.terminate()
+        else:
+            for obj_name in obj_names:
+                run_serval(obj_name)
+        
         
            
         os.chdir(params['path_run'])        # Go back to previous folder
-        print(('\n\nInfo: Finished the SERVAL analysis. Some errors reported by SERVAL are expected.'+\
+        logger(('\n\nInfo: Finished the SERVAL analysis. Some errors reported by SERVAL are expected.'+\
               ' The results are stored in {0}<object name>/<object name>.rvc.dat.'+\
               ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially orders with low SN).'+\
               ' The command history can be found in {0}cmdhistory.txt. Before running serval: cd {0}').format(params['path_rv_serval']))
     
-
+    print obj_names
