@@ -21,6 +21,7 @@ if __name__ == "__main__":
     logger('Info: Starting routines for a new night of data, including: finding or shifting orders, find calibration orders, create wavelength solution, and create normalised blaze function')
     params['path_run'] = os. getcwd()
     params['extract_wavecal'] = False
+    params['no_RV_names'] = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
     log_params(params)
     
     # create the median combined files
@@ -35,13 +36,13 @@ if __name__ == "__main__":
     reference_catalog, reference_names = read_reference_catalog(params)
     
     # Create or read the file with the orders for this night
-    if os.path.isfile(params['master_trace_sci_filename']) == True:
+    if os.path.isfile(params['master_trace_sci_filename']) :
         logger('Info: Using exiting trace solution: {0}'.format(params['master_trace_sci_filename']))
         sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['master_trace_sci_filename'])
     else:
         printresults = False
         # load the original solution
-        if os.path.isfile(params['original_master_traces_filename']) == True:
+        if os.path.isfile(params['original_master_traces_filename']) :
             sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['original_master_traces_filename'])
             # find the shift between the original solution and the current flat
             shift, widths_new, shift_map, shift_error = shift_orders(im_trace1, params, sci_tr_poly, xlows, xhighs, widths, params['in_shift'])
@@ -55,7 +56,7 @@ if __name__ == "__main__":
             printresults = True
         else:
             sci_tr_poly[:,:,-1] += shift                # update the sci_tr_poly parameters
-            if params['update_width_orders'] == True:
+            if params['update_width_orders'] :
                 sci_tr_poly, widths = update_tr_poly_width_multiplicate(sci_tr_poly, widths, [widths_new[:,0]/widths[:,0], widths_new[:,1]/widths[:,1]], xlows, xhighs)
                 widths = widths_new
                 logger('Info: widths of the traces have been updated')
@@ -84,11 +85,11 @@ if __name__ == "__main__":
         
     """Not really useful
     # Create the background map, if it doesn't exist
-    if os.path.isfile(params['background_filename']) == True:
+    if os.path.isfile(params['background_filename']) :
         logger('Info: Background map already exists: {0}'.format(params['result_path']+params['background_filename']))
     else:
         # create the background map
-        if params['GUI'] == True:
+        if params['GUI'] :
             bck_px, params = bck_px_UI(params, im_trace1, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0], params['GUI'])
         else:
             bck_px = find_bck_px(im_trace1, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0])
@@ -102,7 +103,7 @@ if __name__ == "__main__":
         save_im_fits(params, bck_im, im_trace1_head, params['background_filename'])"""
         
     # Create the file for the calibration orders, if it doesn't exist
-    if os.path.isfile(params['master_trace_cal_filename']) == True:
+    if os.path.isfile(params['master_trace_cal_filename']) :
         logger('Info: Arc trace solution already exists: {0}'.format(params['master_trace_cal_filename']))
         cal_tr_poly, axlows, axhighs, awidths = read_fits_width(params['master_trace_cal_filename'])
     else:
@@ -154,7 +155,7 @@ if __name__ == "__main__":
             else:
                 shift_cal1, im_arclhead = find_shift_images(params, im_cal_l, im_trace1, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, extract=True, im_head=im_arclhead)
                 cal_l_spec, good_px_mask_l, extr_width = extract_orders(params, im_cal_l, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift_cal1, header=im_arclhead)
-        if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']) == True:
+        if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']) :
             logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution'+calib[0]+'_filename']))
             wavelength_solution, wavelength_solution_arclines = read_wavelength_solution_from_fits(params['master_wavelensolution'+calib[0]+'_filename'])
         elif params['original_master_wavelensolution_filename'].lower() == 'pseudo':
@@ -180,7 +181,7 @@ if __name__ == "__main__":
             
             # Identify the Emission lines
             fname = params['logging_found_arc_lines'].replace('.txt','')+calib[0]+'.txt'
-            if os.path.isfile(fname) == True:
+            if os.path.isfile(fname) :
                 logger('Info: List of the identified emission lines already exists. Using the information from file: {0}'.format(fname ))
                 arc_lines_px_txt = read_text_file(fname, no_empty_lines=True)              # list of strings, first entry is header 
                 arc_lines_px = np.array( convert_readfile(arc_lines_px_txt[1:], [int, float, float, float], delimiter='\t', replaces=['\n',' ']) )
@@ -305,7 +306,7 @@ if __name__ == "__main__":
     im_blazecor, im_blazecor_head = create_image_general(params, 'blazecor')    # -> cont1cal2
     
     # Extract the flat spectrum and normalise it
-    if os.path.isfile(params['master_blaze_spec_norm_filename']) == True:
+    if os.path.isfile(params['master_blaze_spec_norm_filename']) :
         logger('Info: Normalised flat already exists: {0}'.format(params['master_blaze_spec_norm_filename']))
         # The file is read later on purpose
     else:
@@ -370,6 +371,8 @@ if __name__ == "__main__":
         
         
         logger('Info: Starting to extract wavelength calibrations')
+        if params['use_cores'] > 1:
+            print('Note: Will use multiple cores, hence output will be for several files in parallel')
         params['extract_wavecal'] = True                                                                                # necessary for shift_wavelength_solution so the shift is stored in a file
         all_wavelengthcals = []
         for [wavelengthcals, fib] in [ [wavelengthcals_cal,'cal'], [wavelengthcals_sci,'sci'] ]:
@@ -404,7 +407,8 @@ if __name__ == "__main__":
         header_results_to_texfile(params)           # Save the results from the header in a logfile
         exit(0)
     logger('Info: Starting to extract spectra')
-    
+    if params['use_cores'] > 1:
+        print('Note: Will use multiple cores, hence output will be for several files in parallel')
     def extraction_multicore(all_extractions):
         [extraction, im_name_full] = all_extractions
         if  extraction.find('extract_combine') == -1:     # Single file extraction
@@ -443,12 +447,10 @@ if __name__ == "__main__":
         p.terminate()
     else:
         for all_extraction in all_extractions:
-            extraction_multicore(all_extraction)
-    print obj_names
+            obj_names.append( extraction_multicore(all_extraction) )
+            
     obj_names = np.unique(obj_names)
-    print obj_names
     obj_names = list(obj_names[obj_names != ''])
-    print obj_names
     
     """for extraction in extractions:
         if  extraction.find('extract_combine') == -1:     # Single file extraction
@@ -477,15 +479,38 @@ if __name__ == "__main__":
                                         # puts the files in obj_name.lower()
             if obj_name.lower() not in obj_names:
                 obj_names.append(obj_name.lower())"""
-    
+    logger('')      # To have an empty line
     logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The nineth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))
+    logger('Info: Will try to do the RV analysis in a moment') 
     header_results_to_texfile(params)           # Save the results from the header in a logfile
-    log_params(params)
+    time.sleep(5)
         
-    params['no_RV_names'] = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
-    # Do the Terra RVs
-    if os.path.isfile(params['terra_jar_file']) == True and os.path.exists(params['path_rv_terra']):
-        print('\nInfo: Preparing for the Terra analysis.')
+    # Do the TERRA RVs
+    if np.max(wavelength_solution[:,-1]) > 100:
+     if os.path.isfile(params['terra_jar_file'])  and os.path.exists(params['path_rv_terra']):
+     
+        def run_terra(obj_name):
+            do_RV = True
+            for no_RV_name in params['no_RV_names']:
+                if obj_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
+                    do_RV = False
+                    break
+            if not do_RV:
+                return
+            newfile = 'echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}/" > astrocatalog{0}.example'.format(obj_name)
+            logger('For TERRA: creating a new astrocatalog.example with: '+newfile, show=False)
+            os.system('rm -f astrocatalog{0}.example; '+newfile)
+            cmd = 'java -jar {1} -ASTROCATALOG astrocatalog{2}.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'], obj_name )
+            logger('For TERRA: running TERRA: '+cmd, show=False)
+            if True:
+                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)            # This doesn't wait until the procress has been finished
+                p.communicate()                                                     # This makes it wait until it finished running
+            else:
+                logger('Warn: TERRA commented out')
+            resultfile = '{2} {0}/results/synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'])
+            logger('For TERRA: results can be opened with: '+resultfile, show=False)
+            
+        print('\nInfo: Preparing for the TERRA analysis.')
         for root, dirs, files in os.walk(params['path_rv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
             for file in files:
                 if file.endswith('.csv'):                       # has the file the correct ending?
@@ -496,32 +521,20 @@ if __name__ == "__main__":
         logger('For TERRA: changing directory to '+params['path_rv_terra']+' . The steps to run TERRA are given in the logfile in that folder.', show=False)
         os.chdir(params['path_rv_terra'])
         logger('Info: All data logged in this file is relative to '+params['path_rv_terra'], show=False)
-        for obj_name in obj_names:
-            do_RV = True
-            for no_RV_name in params['no_RV_names']:
-                if obj_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
-                    do_RV = False
-                    break
-            if not do_RV:
-                continue
-            newfile = 'echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}/" > astrocatalog.example'.format(obj_name)
-            logger('For TERRA: creating a new astrocatalog.example with: '+newfile, show=False)
-            os.system('rm -f astrocatalog.example; '+newfile)
-            cmd = 'java -jar {1} -ASTROCATALOG astrocatalog.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'] )
-            logger('For TERRA: running TERRA: '+cmd, show=False)
-            if False:
-                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)            # This doesn't wait until the procress has been finished
-                time.sleep(1)
-            else:
-                logger('Warn: TERRA commented out')
-            resultfile = '{2} {0}/results/synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'])
-            logger('For TERRA: results can be opened with: '+resultfile, show=False)
-            
+        if params['use_cores'] > 1:
+            p = multiprocessing.Pool(params['use_cores'])
+            p.map(run_terra, obj_names)
+            p.terminate()
+        else:
+            for obj_name in obj_names:
+                run_terra(obj_name)
         os.chdir(params['path_run'])        # Go back to previous folder
-        logger('\nInfo: The TERRA analysis will run in the background. Some errors reported by TERRA are expected. The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_rv_terra']))
+        logger('\nInfo: Some errors reported by TERRA are expected (reading DRS ephemeris). The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_rv_terra']))
+     else:
+        logger('TERRA is not installed or the path to the terra_jar_file wrong (currently: {0}), or the path for TERRA csv files does not exist ({1})'.format(params['terra_jar_file'], params['path_rv_terra']))
     
-    # Do the Serval RVs
-    if os.path.exists(params['path_serval']) and os.path.exists(params['path_serval']+'serval') and os.path.exists(params['path_serval']+'python'):
+     # Do the SERVAL RVs
+     if os.path.exists(params['path_serval']+'serval') and os.path.exists(params['path_serval']+'python') and os.path.exists(params['path_rv_serval']):
     
         def run_serval(obj_name):           # create a procedure to run on multicore
             do_RV = True
@@ -532,9 +545,10 @@ if __name__ == "__main__":
             if not do_RV or not os.path.isfile('filelist_{0}.txt'.format(obj_name)):
                 return
                 #continue
-            cmd = params['path_serval']+'serval/src/serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode 2'.format(params['pmin'], params['pmax'], params['oset'], obj_name)
+            cmd = 'ulimit -n 4096 ; {4}serval/src/serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode 2'.format(params['pmin'], 
+                                            params['pmax'], params['oset'], obj_name, params['path_serval'])
             logger('For SERVAL: running SERVAL: '+cmd, show=False)
-            if False:
+            if True:
                 p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)    # shell=True is necessary
                 p.communicate(input="\n")                                       # This waits until the process needs the enter
             else:
@@ -542,6 +556,7 @@ if __name__ == "__main__":
             resultfile = '{2} {0}/{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'])  
             logger('For SERVAL: results can be opened with: '+resultfile, show=False)
         
+        print('\nInfo: Preparing for the SERVAL analysis.')
         for root, dirs, files in os.walk(params['path_rv_serval'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
             for file in files:
                 if file.endswith('.txt') and file.find('filelist_') == 0:                       # has the filename the correct format?
@@ -573,13 +588,167 @@ if __name__ == "__main__":
         else:
             for obj_name in obj_names:
                 run_serval(obj_name)
-        
-        
-           
         os.chdir(params['path_run'])        # Go back to previous folder
         logger(('\n\nInfo: Finished the SERVAL analysis. Some errors reported by SERVAL are expected.'+\
               ' The results are stored in {0}<object name>/<object name>.rvc.dat.'+\
               ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially orders with low SN).'+\
               ' The command history can be found in {0}cmdhistory.txt. Before running serval: cd {0}').format(params['path_rv_serval']))
+     else:
+        logger('SERVAL is not installed (check that serval is installed under {0}), or the folder for the "filelist_* are missing in {1}'.format(params['path_serval'], params['path_rv_serval']))
+     
+     # Do the CERES RVs
+     force_stellar_pars = False
+     force_rvs = False
+     if os.path.exists(params['path_ceres']+'utils/Correlation') and os.path.exists(params['path_ceres']+'utils/GLOBALutils') \
+            and os.path.exists(params['path_ceres']+'utils/OptExtract') and os.path.exists(params['path_ceres']+'utils/CCF'):         # if not pseudo-solution and necessary files exist
+        
+        base = params['path_ceres']
+        models_path = base + 'data/COELHO_MODELS/R_40000b/'
+        load_ceres_modules(params)
+        
+        files_RV = []
+        headers = dict()
+        for file_RV in os.listdir(params['path_extraction']):
+            if file_RV.endswith(".fits"):
+                do_RV = True
+                for no_RV_name in params['no_RV_names']:
+                    if file_RV.lower().find(no_RV_name) in [0,1,2,3,4,5]:
+                        do_RV = False
+                        break
+                if do_RV:
+                    im = fits.open(params['path_extraction']+file_RV)
+                    im_head = im[0].header
+                    headers[file_RV] = im_head
+                    files_RV.append(file_RV)
+        stellar_par = dict()
+        for file_RV in files_RV:
+            im_head = headers[file_RV]
+            if 'HiFLEx OBJNAME' not in im_head.keys():
+                continue
+            T_eff =  im_head.get('HiFLEx CERES Teff', np.nan)
+            logg  =  im_head.get('HiFLEx CERES logg', np.nan)
+            Z     =  im_head.get('HiFLEx CERES Z', np.nan)
+            vsini =  im_head.get('HiFLEx CERES vsini', np.nan)
+            vel0  =  im_head.get('HiFLEx CERES vel0', np.nan)
+            hardcoded =  np.isnan([T_eff, logg, Z, vsini, vel0]).any()      # If one is np.nan -> measure again
+            obname = im_head['HiFLEx OBJNAME']
+            if (hardcoded or force_stellar_pars) and os.path.exists(models_path):       # Don't use the header keywords
+                im = fits.open(params['path_extraction']+file_RV)
+                spec = np.array(im[0].data, dtype=np.float64)
+                spec[0,:,:] = wavelength_air_to_vacuum(spec[9,:,:])     # Vaccuum wavelength
+                spec = clip_noise(spec)
+                T_eff, logg, Z, vsini, vel0, hardcoded = stellar_params_ceres(params, spec, file_RV.replace('.fits',''), wavelength_solution)
+                if not hardcoded:
+                    im_head['HIERARCH HiFLEx CERES Teff']  = (T_eff, 'Teff measured by CERES CCF')
+                    im_head['HIERARCH HiFLEx CERES logg']  = (logg,  'logg measured by CERES CCF')
+                    im_head['HIERARCH HiFLEx CERES Z']     = (Z,     'Z measured by CERES CCF')
+                    im_head['HIERARCH HiFLEx CERES vsini'] = (vsini, 'vsini measured by CERES CCF')
+                    im_head['HIERARCH HiFLEx CERES vel0']  = (vel0,  'vel0 measured by CERES CCF')
+                    headers[file_RV] = im_head
+            if not hardcoded:
+                    if obname in stellar_par.keys():
+                        stellar_par[obname] = np.vstack(( stellar_par[obname], [T_eff, logg, Z, vsini, vel0] ))
+                    else:
+                        stellar_par[obname] = np.array([T_eff, logg, Z, vsini, vel0])
+                        stellar_par[obname].shape = (1,5)       # Otherwise the median later will be a problem
+
+        for obname in stellar_par.keys():
+            nspec = stellar_par[obname].shape[0]
+            ori = copy.deepcopy(stellar_par[obname])
+            stellar_par[obname] = np.round(np.median(stellar_par[obname], axis=0), 2)
+            if nspec >= 2:
+                stdev = np.round(np.std(ori, axis=0, ddof=1), 2)
+                text = 'Teff = {0} +- {5} , logg = {1} +- {6} , Z = {2} +- {7} , vsini = {3} +- {8} , vel0 = {4} +- {9}'.format(stellar_par[obname][0], 
+                         stellar_par[obname][1], stellar_par[obname][2], stellar_par[obname][3], stellar_par[obname][4], stdev[0], stdev[1], stdev[2], stdev[3], stdev[4])
+            else:
+                text = 'Teff = {0} , logg = {1} , Z = {2} , vsini = {3} , vel0 = {4}'.format(stellar_par[obname][0],
+                         stellar_par[obname][1], stellar_par[obname][2], stellar_par[obname][3], stellar_par[obname][4])
+            logger('Info: With the CERES routine the following parameters have been determined for {0} using {1} spectra: {2}'.format(obname, nspec, text))
+        
+        def prepare_ceres_rv(file_RV):
+            
+            #params = kwargs['params']
+            #stellar_par = kwargs['stellar_par']
+            #spec = kwargs['spec']
+            # = kwargs['']
+            # = kwargs['']
+            # = kwargs['']
+            if file_RV not in headers.keys():
+                return
+            im_head = headers[file_RV]
+            if ( 'HiFLEx CERES RV_BARY' in im_head.keys() or 'HiFLEx CERES RV' in im_head.keys() ) and not force_rvs:
+                return
+            if 'HiFLEx OBJNAME' not in im_head.keys():
+                return
+            obname = im_head['HiFLEx OBJNAME']
+            im = fits.open(params['path_extraction']+file_RV)
+            spec = np.array(im[0].data, dtype=np.float64)
+            spec[0,:,:] = wavelength_air_to_vacuum(spec[9,:,:])     # Vaccuum wavelength from the wavelengths not corrected by barycentric velocity
+            spec = clip_noise(spec)
+            
+            if obname not in stellar_par.keys():            # hardcoded values
+                T_eff, logg, Z, vsini, vel0 = 5777, 4.4374, 0.0134, 2, 0
+            else:
+                [T_eff, logg, Z, vsini, vel0] = list(stellar_par[obname])
+            gobs = ephem.Observer()  
+            gobs.name = copy.copy(params['site'])
+            gobs.lat  = math.radians(params['latitude'])     # lat/long in decimal degrees  
+            gobs.long = math.radians(params['longitude'])
+            gobs.elevation = params['altitude']
+            gobs.date = im_head['HiFLEx DATE-MID'].replace('T',' ')  # to make into ('%Y-%m-%d %H:%M:%S')
+            mephem    = ephem.Moon()
+            mephem.compute(gobs)
+            
+            # Change the path to the object_file to the result_path, if necessary
+            object_file = params['object_file']         # needed later
+            object_files, object_files_full = find_file_in_allfolders(object_file, [params['result_path']] + params['raw_data_paths'])      # Check also the result and raw data paths for object names
+            ra2, dec2, pmra, pmdec, epoch = 0., 0., 0., 0., 2000.
+            for object_file in object_files:        # Will be run in any case, even if empty
+                ra2, dec2, epoch, pmra, pmdec, dummy, dummy = getcoords_from_file([obname], 0, filen=object_file, warn_notfound=False)        # mjd=0 because because not using CERES to calculated BCV
+                if ra2 !=0 or dec2 != 0:                                           # Found the objects -> obnames becomes the single entry which matched entry in params['object_file']
+                    break
+            #if ra2 ==0 and dec2 == 0:
+            #    'Was not found, but no problem'
+            RV, RVerr2, BS, BSerr = rv_analysis_ceres(params, spec, file_RV.replace('.fits',''), obname, object_file, mephem, vsini)
+            bjdtdb = im_head.get('HiFLEx BJDTDB', np.nan)
+            bcvel_baryc = im_head.get('HiFLEx BCV', np.nan)
+            if np.isnan(bcvel_baryc):
+                RV_BARY = round(RV,4)
+                im_head['HIERARCH HiFLEx CERES RV'] = (RV_BARY, 'RV in km/s (without BCV)')
+            else:
+                RV_BARY = round(RV+bcvel_baryc,4)
+                im_head['HIERARCH HiFLEx CERES RV'] = (round(RV,4), 'RV in km/s (without BCV)')
+                im_head['HIERARCH HiFLEx CERES RV_BARY'] = (RV_BARY, 'RV including BCV in km/s (measured RV+BCV)')
+            # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf (no, causes 83.15 km/s shift, < 5m/s is between the different models)
+            logger(('Info: The radial velocity (including barycentric correction) for {0} at [ {6} , JD= {8} , BJDTDB= {9} (center)] gives: '+\
+                    'RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s. '+\
+                    'The total extracted flux is {7} counts.').format(file_RV, RV_BARY, round(RVerr2,4), round(BS,4), 
+                            round(BSerr,4), bcvel_baryc, im_head['HiFLEx DATE-MID'], np.nansum(spec[1,:,:]), 
+                            im_head['HiFLEx JD'], bjdtdb ))
+            im_head['HIERARCH HiFLEx CERES RV_ERR']  = (round(RVerr2,4), 'Uncertainty RV')
+            im_head['HIERARCH HiFLEx CERES BS']      = (round(BS,4), 'Bisector')
+            im_head['HIERARCH HiFLEx CERES BS_ERR']  = (round(BSerr,4), 'Uncertainty BS')
+        
+            save_multispec(im[0].data, params['path_extraction']+file_RV, im_head, bitpix=params['extracted_bitpix'])
+        
+        if params['use_cores'] > 1:
+            p = multiprocessing.Pool(params['use_cores'])
+            p.map(prepare_ceres_rv, files_RV)
+            p.terminate()
+        else:
+            for file_RV in files_RV:
+                prepare_ceres_rv(file_RV)
+     else:
+        logger('Warn: CERES RV analysis did not run. Please check that it is installed under {0} and includes the folders: utils/Correlation, utils/GLOBALutils, utils/OptExtract, utils/CCF'.format(params['path_ceres']))
+            
+     rv_templates_hiflex(params)        # also as new script
+    else:
+     logger('Info: Using a pseudo wavelength solution -> no RV analysis')
     
-    print obj_names
+    header_results_to_texfile(params)           # Save the results from the header in a logfile
+    log_params(params)
+    
+
+        
+    
+

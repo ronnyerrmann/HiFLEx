@@ -275,7 +275,7 @@ configfile_fitsfiles    = fits_conf.txt
   ## Result storage information:
   #-----------------------------
   # The folder where the result data is stored. Use the dot (".") for the current folder. The folders given in the following parameters will be created under result_path folder:
-  #               path_extraction, path_extraction_single, path_reduced, path_rv_ceres, path_csv_terra, logging_path
+  #               path_extraction, path_extraction_single, path_reduced, path_rv_ceres, path_rv_terra, logging_path
 result_path = .
 
   # In the reduced images mark pixels above max_good_value as saturated
@@ -320,7 +320,7 @@ background_filename             = background.fits
   #       If terra_jar_file does not exist on the machine, then no radial velocity analysis using this method will be used.
 terra_jar_file                  = /home/exohspec/software/terra/PRV.jar
 terra_jar_file                  = /home/ronny/software/terra/PRV.jar
-  # csv files for TERRA. path_rv_terra will be relative to the result_path. The csv files will be saved in the <object_name>/data/ folder under path_csv_terra.
+  # csv files for TERRA. path_rv_terra will be relative to the result_path. The csv files will be saved in the <object_name>/data/ folder under path_rv_terra.
   #       It will contain the normalised flux
 path_rv_terra                   = terra_rv
 

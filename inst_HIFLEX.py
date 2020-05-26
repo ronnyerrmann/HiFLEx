@@ -68,7 +68,8 @@ def data(self, orders=None, pfits=True):
             scan(self, self.filename)
          data = self.hdulist[0].section[:]
       data = data.astype(dtype=np.float64)
-      f = data[1,orders,:]
+      #f = data[1,orders,:]          # higher scatter of resulting RVs
+      f = data[5,orders,:]          # no information about flux
       e = data[6,orders,:]
       #w = data[0,orders,:]          # Wavelength, drift corrected, barycentric correction
       w = data[9,orders,:]          # Wavelength, drift corrected

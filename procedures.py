@@ -39,9 +39,12 @@ import ephem
 import math
 import multiprocessing
 # Necessary because of https://github.com/astropy/astropy/issues/9427       # commented out again on 20/5/2020 after "WARNING: IERSStaleWarning: IERS_Auto predictive values are older than 15.0 days but downloading the latest table did not find newer values [astropy.utils.iers.iers]"
-#from astropy.utils.iers import conf as iers_conf 
-#iers_conf.iers_auto_url = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all' 
-#iers_conf.auto_max_age = None 
+import astropy
+from astropy.utils.iers import conf as iers_conf 
+#iers_conf.iers_auto_url = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all'         # is too old as of May 2020
+iers_conf.iers_auto_url = 'https://datacenter.iers.org/data/9/finals2000A.all'                          # untested
+iers_conf.iers_auto_url = 'ftp://cddis.gsfc.nasa.gov/pub/products/iers/finals2000A.all'                 # worked on 25 May 2020
+iers_conf.auto_max_age = None 
 import urllib2
 success = False
 for ii in range(5):
@@ -49,12 +52,16 @@ for ii in range(5):
         import barycorrpy
         success = True
         break
-    except urllib2.URLError as e:
+    except (urllib2.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
         print('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+        try:
+            logger('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+        except:
+            logger('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}'.format(4-ii, e))
 if not success:
     print('Error: barrycorrpy could not be loaded. It needs an active internet connection in order to download the IERS_B file. This failure will lead to a crash of the program later!\n')
 import glob
-
+import pickle
 
 """ only needed for BJD calculation using jplephem and BVC calculation from CERES pipeline
 import jplephem                     # jplehem from the pip install jplehem
@@ -78,6 +85,7 @@ tqdm.monitor_interval = 0   #On the virtual machine at NARIT the code raises an 
 calimages = dict()  # dictionary for all calibration images used by create_image_general and read_file_calibration
 # oldorder = 12     used for correlate_UI
 beg_ts = time.time()
+GLOBALutils, correlation, lowess = None, None, None
 
 class Constants:                    # from CERES
     "Here I declare the constants I will use in the different functions"
@@ -125,7 +133,9 @@ def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logf
     if show:
         print(message)
     with open(logfile, 'a') as file:
-        file.write('{0} - {1} - {2}\n'.format( time.strftime("%Y%m%d%H%M%S", time.localtime()), os.getpid(), message ))
+        if multiprocessing.current_process().name == 'MainProcess': pid = os.getpid()
+        else:                                                       pid = '{0}-{1}'.format(os.getppid(), os.getpid())
+        file.write('{0} - {1} - {2}\n'.format( time.strftime("%Y%m%d%H%M%S", time.localtime()), pid, message ))
         if printarrayformat != [] and printarray != []:
             for line in printarray:
                 text = ''
@@ -252,13 +262,13 @@ def textfileargs(params, textfile=None):
     params.update(cmdparams)
     list_txt = ['use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys']
     list_int = ['arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
-             'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck', 'max_cores_used']
+             'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck']
     list_float = ['opt_px_range', 'background_width_multiplier', 'sigmaclip_spectrum']
     list_abs = ['arcshift_range']
     ints = ['polynom_order_apertures', 'rotate_frame']
     floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier',
               'resolution_offset_pct', 'diff_pxs', 'maxshift_orders', 'wavelength_scale_resolution', 'width_percentile', 'raw_data_timezone_cor',
-              'altitude', 'latitude', 'longitude', 'in_shift', 'extraction_shift', 'extraction_min_ident_part_of_trace_percent']
+              'altitude', 'latitude', 'longitude', 'in_shift', 'extraction_shift', 'extraction_min_ident_part_of_trace_percent', 'max_cores_used_pct']
     bools = ['flip_frame', 'update_width_orders', 'GUI']
     text_selection = ['arcshift_side', 'extraction_precision']
     results = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_rv_terra', 'path_rv_serval',
@@ -372,7 +382,7 @@ def textfileargs(params, textfile=None):
     if len(undeclared_params) > 0:
         logger('Warn: The following parameters appear in the configuration files, but the programm did not expect them: {0}'.format(undeclared_params[:-2]))
         
-    params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)
+    params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)     # Use 80% of the CPU cores
     
     return params
 
@@ -3858,42 +3868,6 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         logger('Info: Sigmaclipping removed {0} data points for file {1} (normalised spectrum).'.format(removed, im_name))
         im_head['HIERARCH HiFLEx SIGMA_CLEARED']  = (removed, 'points removed from normalised spectrum')
         
-    # Do the CERES-pipeline Radial velocity analysis 
-    no_RV_names = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
-    do_RV = True
-    for no_RV_name in no_RV_names:
-        if im_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
-            do_RV = False
-            break
-    if np.max(wavelength_solution[:,-1]) > 100 and do_RV and os.path.exists(params['path_ceres']) == True \
-            and os.path.exists(params['path_ceres']+'utils/Correlation') and os.path.exists(params['path_ceres']+'utils/GLOBALutils') \
-            and os.path.exists(params['path_ceres']+'utils/OptExtract') and os.path.exists(params['path_ceres']+'utils/CCF'):           # if not pseudo-solution and not flat and necessary files exist
-        """
-        CERES mask in /home/ronny/software/ceres-master/data/xc_masks/ contain only limited wavelength range (+ additional gaps):
-        G2: 3751 to 6798, 2625 data points/lines
-        K5: 3782 to 6798, 5129 data points/lines
-        M2: 4401 to 6862, 9493 data points/lines
-        Given in the mask is the lower and the higher end of the line, and the weight
-        """
-        wavelengths_vac = wavelength_air_to_vacuum(wavelengths)                             # change into vacuum wavelengths, needed for ceres RV
-        ceres_spec = np.array([wavelengths_vac, spectra, espectra, fspectra, efspectra, cspectra, noise_cont, good_px_mask, aspectra])
-        ceres_spec = clip_noise(ceres_spec)
-
-        RV, RVerr2, BS, BSerr = rv_analysis(params, ceres_spec, im_head, im_name, obnames[0], object_file, mephem, wavelength_solution)
-        if 'HiFLEx BJDTDB' in im_head.keys():
-            bjdtdb = im_head['HiFLEx BJDTDB']
-        else:
-            bjdtdb = 0
-        # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf (no, causes 83.15 km/s shift, < 5m/s is between the different models)
-        logger(('Info: The radial velocity (including barycentric correction) for {0} at [ {6} , JD= {8} , BJDTDB= {9} (center)] gives: '+\
-                'RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s. '+\
-                'The total extracted flux is {7} counts.').format(im_name, round(RV+bcvel_baryc,4), round(RVerr2,4), round(BS,4), 
-                        round(BSerr,4), round(bcvel_baryc,4), obsdate_midexp.strftime("%Y-%m-%dT%H:%M:%S.%f"), np.nansum(spectra), round(jd_midexp,5), round(bjdtdb,5) ))
-        im_head['HIERARCH HiFLEx RV_BARY'] = (round(RV+bcvel_baryc,4), 'RV including BCV in km/s (measured RV+BCV)')
-        im_head['HIERARCH HiFLEx RV_ERR']  = (round(RVerr2,4), 'Uncertainty RV')
-        im_head['HIERARCH HiFLEx BS']      = (round(BS,4), 'Bisector')
-        im_head['HIERARCH HiFLEx BS_ERR']  = (round(BSerr,4), 'Uncertainty BS')
-    
     # Correct wavelength by barycentric velocity
     wavelengths_bary = wavelengths * (1 + bcvel_baryc/(Constants.c/1000.) )
     
@@ -3918,6 +3892,12 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
     save_multispec(spectra[::-1,:],                 params['path_extraction_single']+im_name+'_extr_bluefirst',  im_head_iraf_format_bluefirst, bitpix=params['extracted_bitpix'])
     save_multispec(fspectra[::-1,:],                params['path_extraction_single']+im_name+'_blaze_bluefirst', im_head_iraf_format_bluefirst, bitpix=params['extracted_bitpix'])
     
+    do_RV = True
+    for no_RV_name in params['no_RV_names']:
+        if im_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
+            do_RV = False
+            break
+            
     if do_RV:
         # CSV file for terra
         fname = params['path_rv_terra']+obnames[0].lower()+'/data/'+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
@@ -3975,19 +3955,18 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         #        print "key, value, comment",(entry, im_head_harps_format[entry], im_head_harps_format.comments[entry]) 
         save_multispec(spectra[::-1,:], fname, im_head_harps_format, bitpix=params['extracted_bitpix'])                 # [::-1,:] -> Blue orders first
     
+        # Store in a text file for serval
+        numbers_levels = params['path_rv_serval'].count(os.sep, 2)  # start at 2 to not count './'
+        add_text_to_file('../'*numbers_levels+params['path_extraction']+im_name+'.fits', 
+                         params['path_rv_serval']+'filelist_{0}.txt'.format(obnames[0].lower()) )
+    
     # Create a linearised solution for the input spectrum and the continuum corrected spectrum
     logger('Step: Linearising the spectrum (commented out)')
     #wavelenghts_lin, spectrum_lin = linearise_wavelength_spec(params, wavelength_solution_shift, spectra, method='sum', weight=espectra)
     #save_multispec([wavelenghts_lin,spectrum_lin], params['path_extraction']+im_name+'_lin', im_head)
     #wavelenghts_lin, spectrum_lin = linearise_wavelength_spec(params, wavelength_solution_shift, cspectra, method='weight', weight=espectra)
     #save_multispec([wavelenghts_lin,spectrum_lin], params['path_extraction']+im_name+'_lin_cont', im_head)
-    
-    if do_RV:
-        # Store in a text file for serval
-        numbers_levels = params['path_rv_serval'].count(os.sep, 2)  # 2 to not count './'
-        add_text_to_file('../'*numbers_levels+params['path_extraction']+im_name+'.fits', 
-                         params['path_rv_serval']+'filelist_{0}.txt'.format(obnames[0].lower()) )
-    
+        
     # For easier plotting
     add_text_to_file(params['path_extraction']+im_name+'.fits', 'plot_files.lst')
     # Checked that telluric lines (e.g 7600 Angstom) are at the same position when using wavelength solution without barycentric correction and 
@@ -7530,8 +7509,11 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
                                                   ephemeris=ephemeris2,leap_dir=params['logging_path'], leap_update=leap_update)
                 success = True
                 break
-            except urllib2.URLError as e:
-                logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+            except (urllib2.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
+                try:
+                    logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+                except:
+                    logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}'.format(4-ii, e))
         if not success:
             logger('Error: Barycentric velocities could not be calculated.')
         bcvel_baryc_range = bcvel_baryc_range[0] / 1E3       # in km/s
@@ -7711,25 +7693,215 @@ def find_shift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_s
     
     return shift, shift_err
 
+def header_results_to_texfile(params, header_keywords=[]):
+    if len(header_keywords) == 0:
+        header_keywords.append(['HIERARCH HiFLEx OBJNAME',      'Object name',                  ''  ])
+        header_keywords.append(['HIERARCH HiFLEx EXPOSURE',     'Exposure time',                '[s]'])
+        header_keywords.append(['HIERARCH HiFLEx DATE-OBS',     'UTC, Begin of expose',         ''  ])
+        header_keywords.append(['HIERARCH HiFLEx DATE-MID',     'Middle of exposure',           ''  ])
+        header_keywords.append(['HIERARCH HiFLEx JD',           'JD at middle of exposure',     '[d]'])
+        header_keywords.append(['HIERARCH HiFLEx fsum_all',     'Total extracted flux',         '[ADU]'])
+        header_keywords.append(['HIERARCH HiFLEx BCKNOISE',     'Background noise',             '[ADU]'])
+        header_keywords.append(['HIERARCH HiFLEx CD_SHIFT',     'Shift in Cross-Dispersion',    '[px]'])
+        header_keywords.append(['HIERARCH HiFLEx CD_S_WDTH',    'Width of the shift in CD',     '[px]'])
+        header_keywords.append(['HIERARCH HiFLEx D_SHIFT',      'Shift in Dispersion',          '[px]'])
+        header_keywords.append(['HIERARCH HiFLEx D_SHIFT_ERR',  'Uncertainty of the shift in D','[px]'])
+        header_keywords.append(['HIERARCH HiFLEx D_SHIFT_NUMBER_LINES', 'Number of lines used to calculate the shift', ''])
+        header_keywords.append(['HIERARCH HiFLEx D_WIDTH',      'Gaussian width of the calibration lines',         '[px]'])
+        header_keywords.append(['HIERARCH HiFLEx D_SHIFT_KMS',  'Shift in Dispersion',                             '[km/s]'])
+        header_keywords.append(['HIERARCH HiFLEx DT_SHIFT',     'Shift between science and calibration fiber',     '[px]'])
+        header_keywords.append(['HIERARCH HiFLEx DT_SHIFT_KMS', 'Shift between science and calibration fiber',     '[km/s]'])
+        header_keywords.append(['HIERARCH HiFLEx BJDTDB',       'Barycentric correct JD (incl. leap seconds)',     '[d]'])
+        header_keywords.append(['HIERARCH HiFLEx CERES RV',     'CERES RV (not corrected for BVC)', '[km/s]'])
+        header_keywords.append(['HIERARCH HiFLEx CERES RV_BARY','CERES RV (corrected for BVC)', '[km/s]'])
+        header_keywords.append(['HIERARCH HiFLEx CERES RV_ERR', 'CERES RV error',               '[km/s]'])
+        header_keywords.append(['HIERARCH HiFLEx BCV',          'Barycentric Velocity',         '[km/s]'])
+        header_keywords.append(['HIERARCH HiFLEx CERES BS',     'CERES Bisector',               ''  ])
+        header_keywords.append(['HIERARCH HiFLEx CERES BS_ERR', 'CERES Bisector error',         ''  ])
+        
+    results = []
+    # Create the table header
+    for ii, start in enumerate(['Header keyword:', 'Filename', '']):
+        result = [start]
+        for header_keyword in header_keywords:
+            result.append(header_keyword[ii])
+        results.append(result)
+    # Read the files
+    files = os.listdir(params['path_extraction'])
+    files = [os.path.join(params['path_extraction'], f) for f in files] # add path to each file
+    files.sort(key=os.path.getmtime)
+    for file in files:
+        if not file.endswith(".fits"):
+            continue
+        result = [ file.replace(params['path_extraction'],'') ]         # file name
+        im_head = fits.getheader(file)
+        for header_keyword in header_keywords:
+            result.append(str(im_head.get(header_keyword[0], '')))
+        results.append(result)
+         
+    if len(results) > 2:
+        with open('measurement_table.cvs','w') as file:
+            for entry in results:
+                file.write("\t".join(entry)+'\n')
+        logger('Info: Created {0}'.format('measurement_table.cvs'))
+     
+def rv_templates_hiflex(params):
+    
+    obj_names = []
+    for root, dirs, files in os.walk(params['path_rv_serval'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
+            for file in files:
+                if file == 'template.fits':
+                    [root, obj_name] = root.rsplit(os.sep,1)
+                    if obj_name not in obj_names:
+                        obj_names.append(obj_name)                   
+    for obname in obj_names:
+        convert_serval_master_hiflex(params, obname)
+        
+    obj_names = []
+    for root, dirs, files in os.walk(params['path_rv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
+            for file in files:
+                if file == 'nominal_00':
+                    [root, obj_name, dummy] = root.rsplit(os.sep,2)
+                    if obj_name not in obj_names:
+                        obj_names.append(obj_name)                   
+    for obname in obj_names:
+        convert_terra_master_hiflex(params, obname)
+       
+def convert_serval_master_hiflex(params, obname):
+    serval_template = params['path_rv_serval']+obname+'/template.fits'
+    if not os.path.isfile(serval_template):
+        logger('Warn: SERVAL template {0} does not exist'.format(serval_template))
+        return
+    im = fits.open(serval_template)
+    im_head = im[0].header
+    spec = np.array(im[1].data, dtype=np.float64)
+    wave = np.array(im[2].data, dtype=np.float64)
+    save_multispec(np.array([wave, spec]), params['path_rv_serval']+'serval_template_hiflexformat_'+obname+'.fits', im_head, bitpix=params['extracted_bitpix'])
+    logger('Info: Created {0} from {1}'.format(params['path_rv_serval']+'serval_template_hiflexformat_'+obname+'.fits', serval_template))
+    
+def convert_terra_master_hiflex(params, obname):
+    spec = []
+    wave = []
+    ceres_template = params['path_rv_terra']+obname+'/template/nominal_'
+    for ii in range(1000):
+        if os.path.isfile(ceres_template+'%2.2i'%ii):
+            dataf = read_text_file(ceres_template+'%2.2i'%ii, no_empty_lines=True)
+            dataf = convert_readfile(dataf, [float, float], delimiter=' ', replaces=[['  ',' ']]*10)
+            dataf = np.array(dataf)
+            spec.append(dataf[:,1])
+            wave.append(dataf[:,0])
+        else:
+            break
+    if ii > 0:
+        data=np.array([wave, spec])
+        hdu = fits.PrimaryHDU()
+        save_multispec(np.array([wave, spec]), params['path_rv_terra']+'terra_template_hiflexformat_'+obname+'.fits', hdu.header, bitpix=params['extracted_bitpix'])
+        logger('Info: Created {0} from {1}*'.format(params['path_rv_terra']+'terra_template_hiflexformat_'+obname+'.fits', ceres_template))
 
-def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavelength_solution):
-    import pickle                                       # For tests
-    with open('temp.pkl', 'wb') as f:                   # For tests
-        pickle.dump([params, spec, im_head, fitsfile, obname, reffile, wavelength_solution], f, 0)
+def load_ceres_modules(params):
+        global GLOBALutils
+        global correlation
+        global lowess
+         
+        base = params['path_ceres']
+        # Import the routines from CERES:
+        sys.path.append(base+"utils/Correlation")
+        sys.path.append(base+"utils/GLOBALutils")
+        sys.path.append(base+"utils/OptExtract")    # for Marsh, at least
+        sys.path.append(base+"utils/CCF")           # needed by GLOBALutils.py
+        with np.errstate(invalid='ignore'):
+            import GLOBALutils
+        import correlation
+        # Import other stuff
+        import statsmodels.api as sm
+        lowess = sm.nonparametric.lowess
+
+def stellar_params_ceres_multicore(kwargs):
+    
+    [ii, spec2, Rx] = kwargs
+    
+    good_values = ~np.isnan(spec2[5,ii,:])
+    if sum(good_values) < 10:                               # If not enough values, then ignore the order
+        good_orders = False
+    else:
+        good_orders = True
+        spec2[5,ii,good_values] = GLOBALutils.convolve(spec2[0,ii,good_values],spec2[5,ii,good_values],Rx)
+        
+    return good_orders, spec2[5,ii,:]
+
+def stellar_params_ceres(params, spec, fitsfile, wavelength_solution):
+    
     base = params['path_ceres']
-    # Import the routines from CERES:
-    sys.path.append(base+"utils/Correlation")
-    sys.path.append(base+"utils/GLOBALutils")
-    sys.path.append(base+"utils/OptExtract")    # for Marsh, at least
-    sys.path.append(base+"utils/CCF")           # needed by GLOBALutils.py
-    with np.errstate(invalid='ignore'):
-        import GLOBALutils
-    import correlation
-    # Import other stuff
-    import statsmodels.api as sm
-    lowess = sm.nonparametric.lowess
-    import pickle
+    specs = spec.shape
+    models_path = base + 'data/COELHO_MODELS/R_40000b/'
+    fsim = fitsfile
+    #RESI = 120000.
+    RESI = np.median(wavelength_solution[:,-1]/wavelength_solution[:,-2])     # lambda/d_lambda for the central pixel, for MRES that doesn't seem to make difference
+    npools = max(1, params['use_cores'])
 
+    force_stellar_pars = False
+   
+    """ Data description of the file
+    0: wavelength for each order and pixel'
+    1: extracted spectrum'
+    2: measure of error (photon noise, read noise)'
+    3: flat corrected spectrum'
+    4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_orders)
+    5: continuum normalised spectrum'
+    6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_orders)
+    7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
+    8: spectrum of the emission line lamp'
+    """
+    
+    for order in range(spec.shape[1]):
+        L  = np.where( (spec[1,order,:] != 0) & (~np.isnan(spec[1,order,:])) )              # good values
+        with np.errstate(invalid='ignore'):
+            LL = np.where(spec[5,order,:] > 1 + 10. / scipy.signal.medfilt(spec[2,order,:],21))[0]          # remove emission lines and cosmics
+        spec[5,order,LL] = 1.
+    #plot_img_spec.plot_spectra_UI(np.array([spec]))
+    T_eff, logg, Z, vsini, vel0 = 5777, 4.4374, 0.0134, 2, 0
+    hardcoded = False
+    pars_file = params['path_rv_ceres'] + fsim+'_stellar_pars.txt'                    # calculate stellar parameters for each spectrum
+    if ( not os.path.isfile(pars_file) or force_stellar_pars ):
+        req1 = (np.nanmax(spec[0,:,:],axis=1) < 5150).any()         # At least one order with values below 5150
+        req2 = (np.nanmax(spec[0,:,:],axis=1) > 5600).any()
+        if req1 and req2:
+            good_orders = []
+            Rx = np.around(1./np.sqrt(abs(1./40000.**2 - 1./RESI**2)))
+            spec2 = copy.copy(spec)
+            kwargs = [[ii, spec2, Rx] for ii in range(specs[1])]
+            results = []
+            if params['use_cores'] > 1:
+                p = multiprocessing.Pool(params['use_cores'])
+                results = p.map(stellar_params_ceres_multicore, kwargs)
+                p.terminate()
+            else:
+                for kwarg in kwargs:
+                    results.append( stellar_params_ceres_multicore(kwarg) )
+            for ii,result in enumerate(results):
+                good_orders.append(result[0])
+                spec2[5,ii,:] = result[1]
+            spec2 = spec2[:,good_orders,:]
+            
+            T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils/Correlation/')    # uses scipy.integrate.simps which can create negative values which makes math.sqrt(<0) fail (https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve); but don't use try - except, as correlation.CCF is called with Pool and crashes. When it crashes the pool isn't closed/terminated, hence processes are building up, try except doesn't solve this
+            line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
+            with open(pars_file, 'w') as f:
+                f.write(line)
+            text = 'Info: Using the following atmosperic parameters for {0}'.format(fsim)
+        else:
+            text = 'Warn: could not determine the stelar parameters as the wavelength range below 5150 is not available. Using the hard coded values'
+            hardcoded = True
+    elif os.path.isfile(pars_file):
+        T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
+        text = 'Info: Atmospheric parameters loaded from file {0}'.format(pars_file)
+    else:
+        hardcoded = True
+    logger('{0}: T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4} {5}.'.format( text, T_eff, logg, Z, vsini, round(vel0,4) ))
+    
+    return T_eff, logg, Z, vsini, vel0, hardcoded
+    
+def rv_analysis_ceres(params, spec, fitsfile, obname, reffile, mephem, vsini):
+    
     def get_spec(spectra, waves, cen_wave, range_px):
         """
         Used to get the order in which the cen_wave is most central
@@ -7759,22 +7931,15 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     
         return [], []                                      # everything went wrong
 
+    base = params['path_ceres']
     specs = spec.shape
     spec = np.vstack(( spec, np.zeros([11-specs[0], specs[1], specs[2]]) ))
     spec[7:11,:,:] = np.nan
     lbary_ltopo = 1
-    npools = 2          # number of subprocesses
     refvel = 0
     know_moon = False
     here_moon = False
-    models_path = base + 'data/COELHO_MODELS/R_40000b/' # "/home/ronny/software/ceres-master/data/COELHO_MODELS/R_40000b/"
-    #dirout = './'          # replaced by params['path_rv_ceres']
     fsim = fitsfile
-    #RESI = 120000.
-    RESI = np.median(wavelength_solution[:,-1]/wavelength_solution[:,-2])     # lambda/d_lambda for the central pixel, for MRES that doesn't seem to make difference
-
-    force_stellar_pars = False
-    
     
     #ron1,gain1 = h[1].header['HIERARCH ESO DET OUT1 RON'],h[1].header['HIERARCH ESO DET OUT1 GAIN']
     #ron2,gain2 = h[2].header['HIERARCH ESO DET OUT1 RON'],h[2].header['HIERARCH ESO DET OUT1 GAIN']
@@ -7812,37 +7977,11 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
         spec[9,order,:][L] = spec[5,order,:][L]# * (dlambda_dx[L] ** 1)         # used for the analysis in XCor (spec_order=9, iv_order=10)
         spec[10,order,:][L] = spec[2,order,:][L]# / (dlambda_dx[L] ** 2)        # used for the analysis in XCor (spec_order=9, iv_order=10)
     #plot_img_spec.plot_spectra_UI(np.array([spec]))
-    T_eff, logg, Z, vsini, vel0 = 5777, 4.4374, 0.0134, 2, 0
-    pars_file = params['path_rv_ceres'] + obname+'_stellar_pars.txt'                  # same stellar parameters for same object
-    pars_file = params['path_rv_ceres'] + fsim+'_stellar_pars.txt'                    # calculate stellar parameters for each spectrum
-    if not os.path.isfile(pars_file) or force_stellar_pars:
-        req1 = (np.nanmax(spec[0,:,:],axis=1) < 5150).any()         # At least one order with values below 5150
-        req2 = (np.nanmax(spec[0,:,:],axis=1) > 5600).any()
-        if req1 and req2:
-            good_orders = (np.nanmin(spec[0,:,:],axis=1) > 00)
-            Rx = np.around(1./np.sqrt(abs(1./40000.**2 - 1./RESI**2)))
-            spec2 = copy.copy(spec)
-            for i in tqdm(range(spec2.shape[1]), desc="Step: Estimating atmospheric parameters"):
-                good_values = ~np.isnan(spec2[5,i,:])
-                if sum(good_values) < 10:                               # If not enough values, then ignore the order
-                    good_orders[i] = False
-                    continue
-                spec2[5,i,good_values] = GLOBALutils.convolve(spec2[0,i,good_values],spec2[5,i,good_values],Rx)
-            spec2 = spec2[:,good_orders,:]
-            
-            T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils/Correlation/')    # uses scipy.integrate.simps which can create negative values which makes math.sqrt(<0) fail (https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve); but don't use try - except, as correlation.CCF is called with Pool and crashes. When it crashes the pool isn't closed/terminated, hence processes are building up, try except doesn't solve this
-            line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
-            with open(pars_file, 'w') as f:
-                f.write(line)
-            text = 'Info: Using the following atmosperic parameters for {0}'.format(fsim)
-        else:
-            text = 'Warn: could not determine the stelar parameters as the wavelength range below 5150 is not available. Using the hard coded values'
-    else:
-        T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
-        text = 'Info: Atmospheric parameters loaded from file {0}'.format(pars_file)
+    
+    
     # assign mask, obname is the name of the object
     sp_type, mask = GLOBALutils.get_mask_reffile(obname,reffile=reffile,base=base+'data/xc_masks/')     # !!! Warn: upper and lower case matters for obname
-    logger('{0}: T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4} {5}. Will use {6} mask for CCF.'.format(text, T_eff, logg, Z, vsini, vel0, sp_type))
+    logger('Info: Will use {0} mask for CCF.'.format(sp_type))
     
     spec[5,np.isnan(spec[5,:])] = 0     # 5 -> 9, GLOBALutils.XCor expects 0, not NaN -> otherwise higher RV scatter; but CCF expects nan
     
@@ -8014,59 +8153,6 @@ def rv_analysis(params, spec, im_head, fitsfile, obname, reffile, mephem, wavele
     BSerr  = np.around(BSerr,4)
     
     return RV, RVerr2, BS, BSerr
-
-def header_results_to_texfile(params, header_keywords=[]):
-    if len(header_keywords) == 0:
-        header_keywords.append(['HIERARCH HiFLEx OBJNAME',      'Object name',                  ''  ])
-        header_keywords.append(['HIERARCH HiFLEx EXPOSURE',     'Exposure time',                '[s]'])
-        header_keywords.append(['HIERARCH HiFLEx DATE-OBS',     'UTC, Begin of expose',         ''  ])
-        header_keywords.append(['HIERARCH HiFLEx DATE-MID',     'Middle of exposure',           ''  ])
-        header_keywords.append(['HIERARCH HiFLEx JD',           'JD at middle of exposure',     '[d]'])
-        header_keywords.append(['HIERARCH HiFLEx fsum_all',     'Total extracted flux',         '[ADU]'])
-        header_keywords.append(['HIERARCH HiFLEx BCKNOISE',     'Background noise',             '[ADU]'])
-        header_keywords.append(['HIERARCH HiFLEx CD_SHIFT',     'Shift in Cross-Dispersion',    '[px]'])
-        header_keywords.append(['HIERARCH HiFLEx CD_S_WDTH',    'Width of the shift in CD',     '[px]'])
-        header_keywords.append(['HIERARCH HiFLEx D_SHIFT',      'Shift in Dispersion',          '[px]'])
-        header_keywords.append(['HIERARCH HiFLEx D_SHIFT_ERR',  'Uncertainty of the shift in D','[px]'])
-        header_keywords.append(['HIERARCH HiFLEx D_SHIFT_NUMBER_LINES', 'Number of lines used to calculate the shift', ''])
-        header_keywords.append(['HIERARCH HiFLEx D_WIDTH',      'Gaussian width of the calibration lines',         '[px]'])
-        header_keywords.append(['HIERARCH HiFLEx D_SHIFT_KMS',  'Shift in Dispersion',                             '[km/s]'])
-        header_keywords.append(['HIERARCH HiFLEx DT_SHIFT',     'Shift between science and calibration fiber',     '[px]'])
-        header_keywords.append(['HIERARCH HiFLEx DT_SHIFT_KMS', 'Shift between science and calibration fiber',     '[km/s]'])
-        header_keywords.append(['HIERARCH HiFLEx BJDTDB',       'Barycentric correct JD (incl. leap seconds)',     '[d]'])
-        header_keywords.append(['HIERARCH HiFLEx RV_BARY',      'RV (corrected for BVC)',       '[km/s]'])
-        header_keywords.append(['HIERARCH HiFLEx RV_ERR',       'RV error',                     '[km/s]'])
-        header_keywords.append(['HIERARCH HiFLEx BCV',          'Barycentric Velocity',         '[km/s]'])
-        header_keywords.append(['HIERARCH HiFLEx BS',           'Bisector',                     ''])
-        header_keywords.append(['HIERARCH HiFLEx BS_ERR',       'Bisector error',               ''])
-        
-    results = []
-    # Create the table header
-    for ii, start in enumerate(['Header keyword:', 'Filename', '']):
-        result = [start]
-        for header_keyword in header_keywords:
-            result.append(header_keyword[ii])
-        results.append(result)
-    # Read the files
-    files = os.listdir(params['path_extraction'])
-    files = [os.path.join(params['path_extraction'], f) for f in files] # add path to each file
-    files.sort(key=os.path.getmtime)
-    for file in files:
-        if not file.endswith(".fits"):
-            continue
-        result = [ file.replace(params['path_extraction'],'') ]         # file name
-        im_head = fits.getheader(file)
-        for header_keyword in header_keywords:
-            result.append(str(im_head.get(header_keyword[0], '')))
-        results.append(result)
-         
-    if len(results) > 2:
-        with open('measurement_table.cvs','w') as file:
-            for entry in results:
-                file.write("\t".join(entry)+'\n')
-            
-
-
 
 
 
