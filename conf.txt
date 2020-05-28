@@ -36,7 +36,7 @@ raw_data_paths           = /local/home/ronny/data_EXOhSPEC/20190205/
   # for QSI (both), Photometrics:     rotate_frame = 90
   # for Moravian, SBIG:               rotate_frame = 180 or rotate_frame = 0; flip_frame = True
   # for HARPS:                        rotate_frame = 180
-  # for MRES:                         rotate_frame = 270
+  # for MRES:                         rotate_frame = 270, flip_frame = False
 rotate_frame    = 90
 flip_frame      = False
 
@@ -46,15 +46,12 @@ flip_frame      = False
   #           possible formats: can be empty, or
   #                             [4250,2838,0,0], or
   #                             4250,2838,0,0
-  # for QSI:              subframe        = [4250,2838,0,0]
   # for QSI:              subframe        = [4250,1600,0,450]
-  # for QSI Bill:         subframe        = [2184,1472,0,0]
   # for Moravian:         subframe        = [2500,3056,56,0]
   # for SBIG:             subframe        = [2750,4096,350,0]
   # for HARPS:            subframe        = [4096,2048,0,50]
   # for MRES:             subframe        = [1201,511,380,0]
   # for Photometrics:     subframe        = [2048,2048,0,0]
-  # for Narit:            subframe        = [1648,1236,0,0]
 subframe        = [2048,2048,0,0]
 
 
@@ -351,8 +348,8 @@ max_cores_used_pct      = 80
   #----------
   # logging_path will be relative to the result_path and all parameters starting with "logging_" will be stored in logging_path.
 logging_path                        = logging
-logging_trace1_binned               = mstr_trace1_binned.fits
-logging_traces_binned               = sci_trace1_binned.fits
+logging_trace1_binned               = master_trace1_binned.fits
+logging_traces_binned               = master_traces_sci_searched.fits
 logging_traces_im_binned            = traces_in_master_trace1_binned.png
 logging_traces_im                   = traces_in_master_trace1.png
 logging_traces_bisector             = bisector_traces1.png

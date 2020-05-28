@@ -483,7 +483,7 @@ if __name__ == "__main__":
     logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The nineth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))
     logger('Info: Will try to do the RV analysis in a moment') 
     header_results_to_texfile(params)           # Save the results from the header in a logfile
-    time.sleep(5)
+    time.sleep(2)
         
     # Do the TERRA RVs
     if np.max(wavelength_solution[:,-1]) > 100:
@@ -510,7 +510,8 @@ if __name__ == "__main__":
             resultfile = '{2} {0}/results/synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'])
             logger('For TERRA: results can be opened with: '+resultfile, show=False)
             
-        print('\nInfo: Preparing for the TERRA analysis.')
+        print('')
+        logger('Info: Preparing for the TERRA analysis.')
         for root, dirs, files in os.walk(params['path_rv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
             for file in files:
                 if file.endswith('.csv'):                       # has the file the correct ending?
@@ -529,7 +530,8 @@ if __name__ == "__main__":
             for obj_name in obj_names:
                 run_terra(obj_name)
         os.chdir(params['path_run'])        # Go back to previous folder
-        logger('\nInfo: Some errors reported by TERRA are expected (reading DRS ephemeris). The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_rv_terra']))
+        print('')
+        logger('Info: Some errors reported by TERRA are expected (reading DRS ephemeris). The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_rv_terra']))
      else:
         logger('TERRA is not installed or the path to the terra_jar_file wrong (currently: {0}), or the path for TERRA csv files does not exist ({1})'.format(params['terra_jar_file'], params['path_rv_terra']))
     
@@ -556,7 +558,7 @@ if __name__ == "__main__":
             resultfile = '{2} {0}/{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'])  
             logger('For SERVAL: results can be opened with: '+resultfile, show=False)
         
-        print('\nInfo: Preparing for the SERVAL analysis.')
+        logger('Info: Preparing for the SERVAL analysis.')
         for root, dirs, files in os.walk(params['path_rv_serval'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
             for file in files:
                 if file.endswith('.txt') and file.find('filelist_') == 0:                       # has the filename the correct format?
@@ -589,7 +591,8 @@ if __name__ == "__main__":
             for obj_name in obj_names:
                 run_serval(obj_name)
         os.chdir(params['path_run'])        # Go back to previous folder
-        logger(('\n\nInfo: Finished the SERVAL analysis. Some errors reported by SERVAL are expected.'+\
+        print('')
+        logger(('Info: Finished the SERVAL analysis. Some errors reported by SERVAL are expected.'+\
               ' The results are stored in {0}<object name>/<object name>.rvc.dat.'+\
               ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially orders with low SN).'+\
               ' The command history can be found in {0}cmdhistory.txt. Before running serval: cd {0}').format(params['path_rv_serval']))

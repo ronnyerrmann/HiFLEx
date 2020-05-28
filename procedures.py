@@ -2031,7 +2031,7 @@ def find_trace_orders(params, im, imageshape):
     maxshift = max(0.5,0.17*binx)                    # Only 0.15px shift per pixel along one order
     ims = im.shape
     cen_px = int(ims[0]*binx/2)             # central pixel to base the fit on
-    breakvalue = np.percentile(im,25)       # The brightes pixel of one order needs to be brighter than this value, otherwise it won't be identified (lower values -> darker orders are found)
+    breakvalue = np.percentile(im,15)       # The brightes pixel of one order needs to be brighter than this value, otherwise it won't be identified (lower values -> darker orders are found)
     im_orig = copy.deepcopy(im)
     im_traces = np.zeros(ims)               # Masks the orders in order to avoid overlapping traces
     traces = []
@@ -3500,7 +3500,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
         plot_traces_over_image(im_sflat, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
     if params['GUI']:
         logger('Step: Allowing user to remove orders')
-        fmask, dummy, dummy = remove_adjust_orders_UI( scale_image_plot(im_sflat, 'log10'), polyfits, xlows, xhighs, userinput=params['GUI'], do_rm=True)
+        fmask, dummy, dummy = remove_adjust_orders_UI( im_sflat, polyfits, xlows, xhighs, userinput=params['GUI'], do_rm=True)
         polyfits, xlows, xhighs = polyfits[fmask], xlows[fmask], xhighs[fmask]
         plot_traces_over_image(im_sflat, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
     # retrace orders in the original image to finetune the orders
@@ -3510,7 +3510,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
     polyfits, xlows, xhighs, widths = adjust_trace_orders(params, sim_sflat, im_sflat, polyfits, xlows, xhighs)
     if params['GUI']:
         logger('Step: Allowing user to remove orders and to adjust the extraction width')
-        fmask, polyfits, widths = remove_adjust_orders_UI( scale_image_plot(im_sflat, 'log10'), polyfits, xlows, xhighs, widths, userinput=params['GUI'], do_rm=True, do_adj=True)
+        fmask, polyfits, widths = remove_adjust_orders_UI( im_sflat, polyfits, xlows, xhighs, widths, userinput=params['GUI'], do_rm=True, do_adj=True)
         polyfits, xlows, xhighs, widths = polyfits[fmask], xlows[fmask], xhighs[fmask], widths[fmask]
     # save parameters of the polynoms into a fitsfile (from Neil, width added)
     """
@@ -3869,7 +3869,7 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         im_head['HIERARCH HiFLEx SIGMA_CLEARED']  = (removed, 'points removed from normalised spectrum')
         
     # Correct wavelength by barycentric velocity
-    wavelengths_bary = wavelengths * (1 + bcvel_baryc/(Constants.c/1000.) )
+    wavelengths_bary = wavelengths * (1 + bcvel_baryc/(Constants.c/1E3) )
     
     im_head_bluefirst = copy.copy(im_head)
     im_head = add_specinfo_head(spectra, spectra, noise_cont, extr_width, im_head)
@@ -4149,10 +4149,8 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
         title = 'Plot the traces in the image (log10 of image).'
         if np.mean(widths, axis=None) == 0 and np.std(widths, axis=None, ddof=1) == 0:
             title += ' The marked width (dashed lines) are shown for an extraction width multiplier of {0}.'.format(w_mult)
-    if imscale is not None:
-        pctile = imscale
-    else:
-        pctile=1
+    if imscale is not None: pctile = imscale
+    else:                   pctile = 0.2        # 1 was too high for MRES data binning 
     plot_img_spec.plot_image(im, [], pctile=pctile, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=colorbar)
     colors = color*len(pfits)
     for pp, pf in enumerate(pfits):
@@ -7776,6 +7774,10 @@ def convert_serval_master_hiflex(params, obname):
     im_head = im[0].header
     spec = np.array(im[1].data, dtype=np.float64)
     wave = np.array(im[2].data, dtype=np.float64)
+    #wave = wavelength_vacuum_to_air(wave)                       # Use Air Wavelengths (that overcorrects)
+    if np.max(wave, axis=None) < 15:                            # If np.log(wave)
+        wave = np.exp(wave)
+    wave *= (1+im_head.get('HiFLEx BCV', 0)/(Constants.c/1e3))  # Use barycentric velocity
     save_multispec(np.array([wave, spec]), params['path_rv_serval']+'serval_template_hiflexformat_'+obname+'.fits', im_head, bitpix=params['extracted_bitpix'])
     logger('Info: Created {0} from {1}'.format(params['path_rv_serval']+'serval_template_hiflexformat_'+obname+'.fits', serval_template))
     

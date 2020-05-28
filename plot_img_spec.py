@@ -276,6 +276,7 @@ def plot_spectra_UI(im, title=''):
                 settings[entry] = param[entry]
         save_obj(settings, 'plot_settings')
         plot_ranges = [1E10,0,1E10,0]
+        xlabel_text = 'Nothing to plot, remove plot_settings.pkl'
         if 'name_data_{0}'.format(iml-1-1) in param.keys():
             for data_entry in tqdm(param['name_data_{0}'.format(iml-1-1)]):
                 data_label = data_entry.replace('data_','')
@@ -368,6 +369,7 @@ def plot_spectra_UI(im, title=''):
             dy = (plot_ranges[3] - plot_ranges[2])*0.01
             plt.axis([plot_ranges[0]-dx,plot_ranges[1]+dx, plot_ranges[2]-dy, plot_ranges[3]+dy])
             param['reset_plot']=True
+        
         frame.set_xlabel(xlabel_text, fontsize=14)
         frame.set_ylabel('flux [ADU]', fontsize=14)
         if param['draw_legend']:
