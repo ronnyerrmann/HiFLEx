@@ -6,7 +6,25 @@ pat = '*.fits'              # Pattern of the file name
 # obsname = (28.75728, -17.88508, 2382) from wiki
 obsname = "hiflex" # for barycorrpy, not import if the BJD is in the header
 
-iomax = 1000          # stupidly big number for orders. Real control is done with -oset
+hiflex_file = 'conf_hiflex_serval.txt'
+
+params = dict()
+if os.path.isfile(hiflex_file):
+    try:
+        keys, values = np.genfromtxt(hiflex_file, dtype=str, comments='#', delimiter='=', filling_values='', autostrip=True, unpack=True)
+        params = dict(zip(keys, values))
+    except ValueError as error:
+        print('Problems when reading {0}'.format(hiflex_file))
+else:
+    print('Warn: No {0} found.'.format(hiflex_file))
+for key in params.keys():
+    params[key] = int(params[key])
+iomax = params.get('orders', 1000)           # 1000: stupidly big number for orders. Real control is done with -oset
+hdatf = params.get('data_dataset', 5)        # 1: higher scatter of resulting RVs; 5: no information about flux (continuum corrected)
+hdate = params.get('error_dataset', 6)
+hdatw = params.get('wave_dataset', 9)        # 9: Wavelength, drift correcte; 0: + barycentric correction
+hdats = params.get('mask_dataset', 7)
+print('Info: Using dataset {0} for the spectral data, {1} for the uncertainty, {2} for the wavelength, and {3} for the mastk'.format(hdatf, hdate, hdatw, hdats))
 
 maskfile = 'telluric_mask_atlas.dat'
 
@@ -68,12 +86,12 @@ def data(self, orders=None, pfits=True):
             scan(self, self.filename)
          data = self.hdulist[0].section[:]
       data = data.astype(dtype=np.float64)
-      #f = data[1,orders,:]          # higher scatter of resulting RVs
-      f = data[5,orders,:]          # no information about flux
-      e = data[6,orders,:]
+      f = data[hdatf,orders,:]          # higher scatter of resulting RVs
+      #f = data[5,orders,:]          # no information about flux (continuum corrected)
+      e = data[hdate,orders,:]
       #w = data[0,orders,:]          # Wavelength, drift corrected, barycentric correction
-      w = data[9,orders,:]          # Wavelength, drift corrected
-      s = data[7,orders,:]          # 
+      w = data[hdatw,orders,:]          # Wavelength, drift corrected
+      s = data[hdats,orders,:]          # Mask
 
       bpmap = np.isnan(f).astype(int)   # flag 1 for nan
       e[np.isnan(e)] = 0

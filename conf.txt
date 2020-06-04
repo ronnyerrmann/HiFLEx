@@ -335,6 +335,10 @@ path_ceres                      = /home/ronny/software/ceres/
   # Output of the CERES cross-correlation
 path_rv_ceres                   = ceres_rv
 
+  # What data set from the extracted files should be be used for the RV analysis (TERRA, SERVAL)? List of two integers.
+  #       [5,6] : continuum corrected spectrum and noise in continuum; [1,2] : extracted spectrum
+dataset_rv_analysis             = [5, 6]
+
 
   ## General Parameters
   #--------------------

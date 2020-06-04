@@ -276,7 +276,7 @@ def plot_spectra_UI(im, title=''):
                 settings[entry] = param[entry]
         save_obj(settings, 'plot_settings')
         plot_ranges = [1E10,0,1E10,0]
-        xlabel_text = 'Nothing to plot, remove plot_settings.pkl'
+        xlabel_text = 'Nothing to plot -> modify parameters or remove plot_settings.pkl'
         if 'name_data_{0}'.format(iml-1-1) in param.keys():
             for data_entry in tqdm(param['name_data_{0}'.format(iml-1-1)]):
                 data_label = data_entry.replace('data_','')

@@ -234,13 +234,13 @@ if __name__ == "__main__":
                 params['wavelength_solution_type'] = 'cal-fiber'
                 cal2_l_spec = copy.deepcopy(cal_l_spec)
                 im_arc2lhead = copy.copy(im_arclhead)
-                add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_mid_float, 0, 0, 'cal'), params['master_wavelengths_shift_filename'] )
+                add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_mid_float, 0, 0, 'cal'), params['master_wavelengths_shift_filename'], warn_missing_file=False )
             else:
                 wavelength_solution_sci, wavelength_solution_arclines_sci = copy.deepcopy(wavelength_solution), copy.deepcopy(wavelength_solution_arclines)
                 params['wavelength_solution_type'] = 'sci-fiber'
                 cal1_l_spec = copy.deepcopy(cal_l_spec)
                 im_arc1lhead = copy.copy(im_arclhead)
-                add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_mid_float, 0, 0, 'sci'), params['master_wavelengths_shift_filename'] )
+                add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(obsdate_mid_float, 0, 0, 'sci'), params['master_wavelengths_shift_filename'], warn_missing_file=False )
                 params['two_solutions'] = True
 
     # Use the better wavelength solution: should be the one of the science fiber (wavelength_solution_sci), but if calibration fiber is better, then use calibration fiber
@@ -340,18 +340,19 @@ if __name__ == "__main__":
             wavelengthcals_sci.append(entry.replace('_rawfiles',''))
             
     flat_spec_norm = np.array(fits.getdata(params['master_blaze_spec_norm_filename']))              # read it again, as the file is different than the data above
-    number_no_data = np.sum(np.isnan(flat_spec_norm[2,:,:]), axis=1)                                # What orders don't contain enough data
-    limit_no_data = (1-params['extraction_min_ident_part_of_trace_percent']/100.)*flat_spec_norm.shape[2]
-    keep_orders  = np.where(number_no_data <= limit_no_data)[0]         # remove all orders where more than x% of the pixel are not available
-    remove_orders = np.where(number_no_data > limit_no_data)[0]
+    
+    remove_orders, keep_orders = remove_orders_low_flux(params, flat_spec_norm)
     if len(remove_orders) > 0:
-        logger('Warn: The blaze function for {0} orders contains not data points (limit: {2}). The following orders have been removed: {1}'.format(len(remove_orders), remove_orders, limit_no_data))
         #print wavelength_solution.shape, wavelength_solution_arclines.shape, sci_tr_poly.shape, xlows.shape, xhighs.shape, widths.shape, cal_tr_poly.shape, axlows.shape, axhighs.shape, awidths.shape, flat_spec_norm.shape
         wavelength_solution, wavelength_solution_arclines, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, flat_spec_norm = \
                     wavelength_solution[keep_orders,:], wavelength_solution_arclines[keep_orders,:], \
                     sci_tr_poly[keep_orders,:,:], xlows[keep_orders], xhighs[keep_orders], widths[keep_orders,:], \
                     cal_tr_poly[keep_orders,:,:], axlows[keep_orders], axhighs[keep_orders], awidths[keep_orders,:], \
                     flat_spec_norm[:,keep_orders,:]                                                 # remove the bad orders
+    
+    update_calibration_memory('flat_spec_norm', flat_spec_norm)
+    update_calibration_memory('sci_trace',[sci_tr_poly, xlows, xhighs, widths])
+    update_calibration_memory('cal_trace',[cal_tr_poly, axlows, axhighs, awidths])
     
     if ( params['arcshift_side'] == 0 or params['two_solutions'] ) and len(wavelengthcals_cal)+len(wavelengthcals_sci) > 0:         # no calibration spectrum at the same time
         def wavecal_multicore(parameter):
@@ -380,6 +381,7 @@ if __name__ == "__main__":
                 for im_name_full in params[wavelengthcal+'_rawfiles']:
                     all_wavelengthcals.append([ wavelengthcal, fib, im_name_full ])
         if params['use_cores'] > 1:
+            logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
             p = multiprocessing.Pool(params['use_cores'])
             p.map(wavecal_multicore, all_wavelengthcals)
             p.terminate()
@@ -442,6 +444,7 @@ if __name__ == "__main__":
         else:
             all_extractions.append([extraction, extraction])
     if params['use_cores'] > 1:
+        logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
         p = multiprocessing.Pool(params['use_cores'])
         obj_names = p.map(extraction_multicore, all_extractions)
         p.terminate()
@@ -483,10 +486,42 @@ if __name__ == "__main__":
     logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The nineth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))
     logger('Info: Will try to do the RV analysis in a moment') 
     header_results_to_texfile(params)           # Save the results from the header in a logfile
-    time.sleep(2)
-        
-    # Do the TERRA RVs
+    #time.sleep(2)
+    
+    # Prepare files for TERRA and SERVAL and CERES
     if np.max(wavelength_solution[:,-1]) > 100:
+     run_RV = True
+     files_RV = []
+     headers = dict()
+     for file_RV in sorted(os.listdir(params['path_extraction'])):
+        if not file_RV.endswith(".fits"):
+            continue
+        do_RV = True
+        for no_RV_name in params['no_RV_names']:
+            if file_RV.lower().find(no_RV_name) in [0,1,2,3,4,5]:
+                do_RV = False
+                break
+        if not do_RV:
+            continue
+        im = fits.open(params['path_extraction']+file_RV)
+        im_head = im[0].header
+        headers[file_RV] = im_head      # for CERES
+        files_RV.append(file_RV)        # for CERES
+        spec = im[0].data
+        if 'HiFLEx OBJNAME' not in im_head.keys():
+            continue
+        obj_name = im_head['HiFLEx OBJNAME'].lower()
+        obsdate_midexp = datetime.datetime.strptime(im_head['HiFLEx DATE-MID'],"%Y-%m-%dT%H:%M:%S.%f")
+        # CSV file for TERRA
+        fname = params['path_rv_terra']+obj_name+'/data/'+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
+        save_spec_csv(spec[params['dataset_rv_analysis'][0]], spec[0], spec[7], fname)        # spec[1]: Flux, spec[5]: Continuum corrected
+    
+        # Store in a text file for serval
+        numbers_levels = params['path_rv_serval'].count(os.sep, 2)  # start at 2 to not count './'
+        add_text_to_file('../'*numbers_levels+params['path_extraction']+file_RV, 
+                         params['path_rv_serval']+'filelist_{0}.txt'.format(obj_name), warn_missing_file=False )
+        
+     # Do the TERRA RVs
      if os.path.isfile(params['terra_jar_file'])  and os.path.exists(params['path_rv_terra']):
      
         def run_terra(obj_name):
@@ -497,20 +532,23 @@ if __name__ == "__main__":
                     break
             if not do_RV:
                 return
+            os.system('rm -f {0}{1}/results/synthetic.rv'.format(params['path_rv_terra'],obj_name) )     # Delete the old solution, as won't be created otherwise
             newfile = 'echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}/" > astrocatalog{0}.example'.format(obj_name)
-            logger('For TERRA: creating a new astrocatalog.example with: '+newfile, show=False)
+            logger('For TERRA: creating a new astrocatalog.example with: '+newfile)
             os.system('rm -f astrocatalog{0}.example; '+newfile)
             cmd = 'java -jar {1} -ASTROCATALOG astrocatalog{2}.example 998 -INSTRUMENT CSV {0}'.format(wavelength_solution.shape[0],params['terra_jar_file'], obj_name )
-            logger('For TERRA: running TERRA: '+cmd, show=False)
-            if True:
-                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)            # This doesn't wait until the procress has been finished
-                p.communicate()                                                     # This makes it wait until it finished running
+            log = 'logTERRA_{0}'.format(obj_name)
+            logger('For TERRA: running TERRA: '+cmd)
+            logger('Info: TERRA output and errors can be watched in {0}'.format(log))
+            if run_RV:
+                with open(log, 'a') as logf:
+                    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True, stdout=logf, stderr=subprocess.STDOUT)            # This doesn't wait until the procress has been finished
+                    p.communicate()                                                     # This makes it wait until it finished running
             else:
                 logger('Warn: TERRA commented out')
             resultfile = '{2} {0}/results/synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'])
-            logger('For TERRA: results can be opened with: '+resultfile, show=False)
+            logger('For TERRA: results can be opened with: '+resultfile)
             
-        print('')
         logger('Info: Preparing for the TERRA analysis.')
         for root, dirs, files in os.walk(params['path_rv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
             for file in files:
@@ -519,10 +557,11 @@ if __name__ == "__main__":
                     obj_name = filename.split(os.sep)[0]
                     if obj_name not in obj_names:
                         obj_names.append(obj_name)
-        logger('For TERRA: changing directory to '+params['path_rv_terra']+' . The steps to run TERRA are given in the logfile in that folder.', show=False)
+        logger('For TERRA: changing directory to '+params['path_rv_terra']+' . The steps to run TERRA are given in the logfile in that folder.')
         os.chdir(params['path_rv_terra'])
-        logger('Info: All data logged in this file is relative to '+params['path_rv_terra'], show=False)
+        logger('Info: All data logged in this file is relative to '+params['path_rv_terra'])
         if params['use_cores'] > 1:
+            logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
             p = multiprocessing.Pool(params['use_cores'])
             p.map(run_terra, obj_names)
             p.terminate()
@@ -549,14 +588,17 @@ if __name__ == "__main__":
                 #continue
             cmd = 'ulimit -n 4096 ; {4}serval/src/serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode 2'.format(params['pmin'], 
                                             params['pmax'], params['oset'], obj_name, params['path_serval'])
-            logger('For SERVAL: running SERVAL: '+cmd, show=False)
-            if True:
-                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)    # shell=True is necessary
-                p.communicate(input="\n")                                       # This waits until the process needs the enter
+            log = 'logSERVAL_{0}'.format(obj_name)
+            logger('For SERVAL: running SERVAL: '+cmd)
+            logger('Info: SERVAL output and errors can be watched in {0}'.format(log))
+            if run_RV:
+                with open(log, 'a') as logf:
+                    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True, stdout=logf, stderr=subprocess.STDOUT)    # shell=True is necessary
+                    p.communicate(input="\n")                                       # This waits until the process needs the enter
             else:
                 logger('Warn: SERVAL commented out')
             resultfile = '{2} {0}/{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'])  
-            logger('For SERVAL: results can be opened with: '+resultfile, show=False)
+            logger('For SERVAL: results can be opened with: '+resultfile)
         
         logger('Info: Preparing for the SERVAL analysis.')
         for root, dirs, files in os.walk(params['path_rv_serval'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
@@ -565,6 +607,12 @@ if __name__ == "__main__":
                     obj_name = file.split('filelist_')[-1].split('.txt')[0]
                     if obj_name not in obj_names:
                         obj_names.append(obj_name)                   
+        hiflex_file = params['path_rv_serval']+'conf_hiflex_serval.txt'
+        with open(hiflex_file, 'w') as file:
+            file.write('# This file is used to control which data is used in SERVAL. It is read by inst_HIFLEX\n')
+            file.write('orders = {0}\ndata_dataset = {1}\nerror_dataset = {2}\nwave_dataset = {3}\nmask_dataset = {4}\n'.format(
+                                wavelength_solution.shape[0], params['dataset_rv_analysis'][0], params['dataset_rv_analysis'][1], 9, 7))
+
         pypath = ''
         if 'PYTHONPATH' in os.environ.keys():
             pypath = os.environ["PYTHONPATH"] + os.pathsep
@@ -576,14 +624,13 @@ if __name__ == "__main__":
         params['pmin'] = int(np.min(xlows) + 0.1*xran)
         params['pmax'] = int(np.max(xhighs) - 0.1*xran)
         params['oset'] = '{0}:{1}'.format(0,wavelength_solution.shape[0])     # if shape is 9, then oset will lead to 0,1,2,3,4,5,6,7,8 being used
-        logger('For SERVAL: changing directory to '+params['path_rv_serval']+' . The steps to run SERVAL are given in the logfile in that folder.', show=False)
+        logger('For SERVAL: changing directory to '+params['path_rv_serval']+' . The steps to run SERVAL are given in the logfile in that folder.')
         os.chdir(params['path_rv_serval'])
-        logger('Info: All data logged in this file is relative to '+params['path_rv_serval'], show=False)
-        #for obj_name in obj_names:
-        #    run_serval(obj_name)
+        logger('Info: All data logged in this file is relative to '+params['path_rv_serval'])
         #with multiprocessing.Pool(params['use_cores']) as p:       # only possible in python3
         #    p.map(run_serval, obj_names)
         if params['use_cores'] > 1:
+            logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
             p = multiprocessing.Pool(params['use_cores'])
             p.map(run_serval, obj_names)
             p.terminate()
@@ -597,7 +644,7 @@ if __name__ == "__main__":
               ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially orders with low SN).'+\
               ' The command history can be found in {0}cmdhistory.txt. Before running serval: cd {0}').format(params['path_rv_serval']))
      else:
-        logger('SERVAL is not installed (check that serval is installed under {0}), or the folder for the "filelist_* are missing in {1}'.format(params['path_serval'], params['path_rv_serval']))
+        logger('SERVAL is not installed or path_serval is wrong (currently: {0}), or the folder for the "filelist_* are missing in {1}'.format(params['path_serval'], params['path_rv_serval']))
      
      # Do the CERES RVs
      force_stellar_pars = False
@@ -609,20 +656,6 @@ if __name__ == "__main__":
         models_path = base + 'data/COELHO_MODELS/R_40000b/'
         load_ceres_modules(params)
         
-        files_RV = []
-        headers = dict()
-        for file_RV in os.listdir(params['path_extraction']):
-            if file_RV.endswith(".fits"):
-                do_RV = True
-                for no_RV_name in params['no_RV_names']:
-                    if file_RV.lower().find(no_RV_name) in [0,1,2,3,4,5]:
-                        do_RV = False
-                        break
-                if do_RV:
-                    im = fits.open(params['path_extraction']+file_RV)
-                    im_head = im[0].header
-                    headers[file_RV] = im_head
-                    files_RV.append(file_RV)
         stellar_par = dict()
         for file_RV in files_RV:
             im_head = headers[file_RV]
@@ -721,20 +754,21 @@ if __name__ == "__main__":
             else:
                 RV_BARY = round(RV+bcvel_baryc,4)
                 im_head['HIERARCH HiFLEx CERES RV'] = (round(RV,4), 'RV in km/s (without BCV)')
-                im_head['HIERARCH HiFLEx CERES RV_BARY'] = (RV_BARY, 'RV including BCV in km/s (measured RV+BCV)')
+                im_head['HIERARCH HiFLEx CERES RV_BARY'] = (RV_BARY, 'barycentric RV in km/s (measured RV+BCV)')
             # Air to Vacuum wavelength difference only causes < 5 m/s variation: https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf (no, causes 83.15 km/s shift, < 5m/s is between the different models)
             logger(('Info: The radial velocity (including barycentric correction) for {0} at [ {6} , JD= {8} , BJDTDB= {9} (center)] gives: '+\
                     'RV = {1} +- {2} km/s, Barycentric velocity = {5} km/s, and BS = {3} +- {4} km/s. '+\
                     'The total extracted flux is {7} counts.').format(file_RV, RV_BARY, round(RVerr2,4), round(BS,4), 
                             round(BSerr,4), bcvel_baryc, im_head['HiFLEx DATE-MID'], np.nansum(spec[1,:,:]), 
                             im_head['HiFLEx JD'], bjdtdb ))
-            im_head['HIERARCH HiFLEx CERES RV_ERR']  = (round(RVerr2,4), 'Uncertainty RV')
+            im_head['HIERARCH HiFLEx CERES RV_ERR']  = (round(RVerr2,4), 'Uncertainty RV in km/s')
             im_head['HIERARCH HiFLEx CERES BS']      = (round(BS,4), 'Bisector')
             im_head['HIERARCH HiFLEx CERES BS_ERR']  = (round(BSerr,4), 'Uncertainty BS')
         
-            save_multispec(im[0].data, params['path_extraction']+file_RV, im_head, bitpix=params['extracted_bitpix'])
+            save_multispec(im[0].data, params['path_extraction']+file_RV, im_head)
         
         if params['use_cores'] > 1:
+            logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
             p = multiprocessing.Pool(params['use_cores'])
             p.map(prepare_ceres_rv, files_RV)
             p.terminate()
@@ -742,9 +776,9 @@ if __name__ == "__main__":
             for file_RV in files_RV:
                 prepare_ceres_rv(file_RV)
      else:
-        logger('Warn: CERES RV analysis did not run. Please check that it is installed under {0} and includes the folders: utils/Correlation, utils/GLOBALutils, utils/OptExtract, utils/CCF'.format(params['path_ceres']))
+        logger('Warn: CERES RV analysis did not run. If this a mistake, please check that it is installed under {0} and includes the folders: utils/Correlation, utils/GLOBALutils, utils/OptExtract, utils/CCF'.format(params['path_ceres']))
             
-     rv_templates_hiflex(params)        # also as new script
+     rv_results_to_hiflex(params)        # also as new script
     else:
      logger('Info: Using a pseudo wavelength solution -> no RV analysis')
     

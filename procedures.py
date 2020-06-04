@@ -262,7 +262,7 @@ def textfileargs(params, textfile=None):
     params.update(cmdparams)
     list_txt = ['use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys']
     list_int = ['arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
-             'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck']
+             'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck', 'dataset_rv_analysis']
     list_float = ['opt_px_range', 'background_width_multiplier', 'sigmaclip_spectrum']
     list_abs = ['arcshift_range']
     ints = ['polynom_order_apertures', 'rotate_frame']
@@ -378,11 +378,12 @@ def textfileargs(params, textfile=None):
         if entry not in params.keys():
             overdeclared_params += '{0}, '.format(entry)
     if len(overdeclared_params) > 0:
-        logger('Warn: The following parameters are expected, but do not appear in the configuration files. : {0}\n\t!!! This is likely to cause problems later !!!'.format(overdeclared_params[:-2]))
+        logger('Warn: The following parameters are expected, but do not appear in the configuration files. : {0}\n\t!!! The missing parameters might cause crashes later !!!'.format(overdeclared_params[:-2]))
     if len(undeclared_params) > 0:
         logger('Warn: The following parameters appear in the configuration files, but the programm did not expect them: {0}'.format(undeclared_params[:-2]))
         
     params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)     # Use 80% of the CPU cores
+    params['dataset_rv_analysis'] = params.get('dataset_rv_analysis', [5, 6])
     
     return params
 
@@ -421,11 +422,11 @@ def add_text_file(text, filename):
     with open(filename, 'a') as file:
         file.write(text+'\n')
 
-def add_text_to_file(text, filename):
+def add_text_to_file(text, filename, warn_missing_file=True):
     """
     If the text is not yet in the file, the text is added
     """
-    oldtext = read_text_file(filename)
+    oldtext = read_text_file(filename, warn_missing_file=warn_missing_file)
     exists = False
     for line in oldtext:
         if line.find(text) != -1:
@@ -1004,38 +1005,6 @@ def save_fits_width(pfits, xlows, xhighs, widths, filename):
         atable[str(col)] = data[:, c]
     atable.write(filename, overwrite=True)
     logger('Info: master file to trace orders written: {0}'.format(filename))
-
-"""def save_fits(pfits, xlows, xhighs, filename):                      # not needed anymore
-    ""
-    save the fits to file, for use in extracting future spectra
-    :param pfits: list, length same as number of orders, polynomial values
-                      (output of np.polyval)
-                      i.e. p where:
-                      p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
-    :param xlows: list, length same as number of orders, the lowest x pixel
-                   (wavelength direction) used in each order
-    :param xhighs: list, length same as number of orders, the highest x pixel
-                   (wavelength direction) used in each order
-    :param filename: string, location and file name of the file containing the polynomial fits
-    ""
-    data = []
-    porder = len(pfits[0])                                                  #added by ronny
-    cols = ['Order'] + list(range(porder + 1))[::-1]                        #added by ronny
-    cols += ['low_x', 'high_x']
-
-    # Loop around each order and plot fits
-    for pp, pf in enumerate(pfits):
-        row = [pp] + list(np.zeros(porder + 1 - len(pf)))               #added by ronny
-        row += list(pf)
-        row += [xlows[pp], xhighs[pp]]
-        data.append(row)
-    data = np.array(data)
-
-    # convert to astropy table
-    atable = Table()
-    for c, col in enumerate(cols):
-        atable[str(col)] = data[:, c]
-    atable.write(filename, overwrite=True)                                     #added by ronny"""
 
 def save_wavelength_solution_to_fits(wavelength_solution, wavelength_solution_arclines, filename):
     """
@@ -3899,11 +3868,6 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
             break
             
     if do_RV:
-        # CSV file for terra
-        fname = params['path_rv_terra']+obnames[0].lower()+'/data/'+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
-        os.system('rm -f {0}{1}/results/synthetic.rv'.format(params['path_rv_terra'],obnames[0].lower()) )     # Delete the old solution, as won't be created otherwise
-        save_spec_csv(cspectra, wavelengths_bary, good_px_mask, fname)
-        
         # Harps format
         im_head_harps_format = wavelength_solution_harps(params, im_head_harps_format, wavelengths[::-1,:])        # [::-1,:] -> Blue orders first      # 20190509: wavelengths instead of wavelengths_bary
         serval_keys = []
@@ -3928,8 +3892,6 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         serval_keys.append(['OBJECT',                        obnames[0],        'OB target name'])
         serval_keys.append(['HIERARCH ESO INS DET1 TMMEAN',  im_head_harps_format['HiFLEx EXP_FRAC'],     'Normalised mean exposure time'])
         serval_keys.append(['HIERARCH ESO INS DET2 TMMEAN',  im_head_harps_format['HiFLEx EXP_FRAC'],     'Normalised mean exposure time'])
-        #serval_keys.append(['HIERARCH ESO DRS BLAZE FILE',   'HARPS.2007-04-03T20:57:37.400_blaze_A.fits',  'Bla'])        # not necessary
-        #serval_keys.append(['HIERARCH ESO DRS DRIFT RV USED',0.,                'Used RV Drift [m/s]'])                    # not necessary
         #serval_keys.append(['',         '',        ''])
         for order in orders:
             serval_keys.append([ 'HIERARCH ESO DRS SPE EXT SN{0}'.format(order), im_head['HiFLEx SN_order{0}'.format('%2.2i'%order)], 'S_N order center{0}'.format(order) ])
@@ -3954,11 +3916,6 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         #    if entry.find('AXIS') != -1:
         #        print "key, value, comment",(entry, im_head_harps_format[entry], im_head_harps_format.comments[entry]) 
         save_multispec(spectra[::-1,:], fname, im_head_harps_format, bitpix=params['extracted_bitpix'])                 # [::-1,:] -> Blue orders first
-    
-        # Store in a text file for serval
-        numbers_levels = params['path_rv_serval'].count(os.sep, 2)  # start at 2 to not count './'
-        add_text_to_file('../'*numbers_levels+params['path_extraction']+im_name+'.fits', 
-                         params['path_rv_serval']+'filelist_{0}.txt'.format(obnames[0].lower()) )
     
     # Create a linearised solution for the input spectrum and the continuum corrected spectrum
     logger('Step: Linearising the spectrum (commented out)')
@@ -7691,6 +7648,16 @@ def find_shift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_s
     
     return shift, shift_err
 
+def remove_orders_low_flux(params, flat_spec_norm):
+    number_no_data = np.sum(np.isnan(flat_spec_norm[2,:,:]), axis=1)                                # What orders don't contain enough data
+    limit_no_data = (1-params['extraction_min_ident_part_of_trace_percent']/100.)*flat_spec_norm.shape[2]
+    keep_orders  = np.where(number_no_data <= limit_no_data)[0]         # remove all orders where more than x% of the pixel are not available
+    remove_orders = np.where(number_no_data > limit_no_data)[0]
+    if len(remove_orders) > 0:
+        logger('Warn: The blaze function for {0} orders contains not data points (limit: {2}). The following orders have been removed: {1}'.format(len(remove_orders), remove_orders, limit_no_data))
+        #print wavelength_solution.shape, wavelength_solution_arclines.shape, sci_tr_poly.shape, xlows.shape, xhighs.shape, widths.shape, cal_tr_poly.shape, axlows.shape, axhighs.shape, awidths.shape, flat_spec_norm.shape
+    return remove_orders, keep_orders
+
 def header_results_to_texfile(params, header_keywords=[]):
     if len(header_keywords) == 0:
         header_keywords.append(['HIERARCH HiFLEx OBJNAME',      'Object name',                  ''  ])
@@ -7716,6 +7683,10 @@ def header_results_to_texfile(params, header_keywords=[]):
         header_keywords.append(['HIERARCH HiFLEx BCV',          'Barycentric Velocity',         '[km/s]'])
         header_keywords.append(['HIERARCH HiFLEx CERES BS',     'CERES Bisector',               ''  ])
         header_keywords.append(['HIERARCH HiFLEx CERES BS_ERR', 'CERES Bisector error',         ''  ])
+        header_keywords.append(['HIERARCH HiFLEx TERRA RV',     'TERRA RV relative to template',    'm/s'  ])
+        header_keywords.append(['HIERARCH HiFLEx TERRA RV_ERR', 'TERRA RV error',                   'm/s'  ])
+        header_keywords.append(['HIERARCH HiFLEx SERVAL RV',    'SERVAL RV relative to template',   'm/s'  ])
+        header_keywords.append(['HIERARCH HiFLEx SERVAL RV_ERR', 'SERVAL RV error',                 'm/s'  ])
         
     results = []
     # Create the table header
@@ -7725,7 +7696,7 @@ def header_results_to_texfile(params, header_keywords=[]):
             result.append(header_keyword[ii])
         results.append(result)
     # Read the files
-    files = os.listdir(params['path_extraction'])
+    files = sorted(os.listdir(params['path_extraction']))
     files = [os.path.join(params['path_extraction'], f) for f in files] # add path to each file
     files.sort(key=os.path.getmtime)
     for file in files:
@@ -7743,29 +7714,179 @@ def header_results_to_texfile(params, header_keywords=[]):
                 file.write("\t".join(entry)+'\n')
         logger('Info: Created {0}'.format('measurement_table.cvs'))
      
-def rv_templates_hiflex(params):
+def rv_results_to_hiflex(params):
     
-    obj_names = []
-    for root, dirs, files in os.walk(params['path_rv_serval'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
-            for file in files:
-                if file == 'template.fits':
-                    [root, obj_name] = root.rsplit(os.sep,1)
-                    if obj_name not in obj_names:
-                        obj_names.append(obj_name)                   
-    for obname in obj_names:
-        convert_serval_master_hiflex(params, obname)
-        
     obj_names = []
     for root, dirs, files in os.walk(params['path_rv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
             for file in files:
-                if file == 'nominal_00':
-                    [root, obj_name, dummy] = root.rsplit(os.sep,2)
-                    if obj_name not in obj_names:
-                        obj_names.append(obj_name)                   
-    for obname in obj_names:
-        convert_terra_master_hiflex(params, obname)
+                if file == 'nominal_00':                    # TERRA template
+                    [root1, obj_name, dummy] = (os.sep+root).rsplit(os.sep,2)
+                    if obj_name not in obj_names:   obj_names.append(obj_name)
+                    break
+                if file == 'synthetic.rv':                  # TERRA resuts
+                    [root1, obj_name, dummy] = (os.sep+root).rsplit(os.sep,2)
+                    if obj_name not in obj_names:   obj_names.append(obj_name)
+                    break
+    #for obname in obj_names:
+    #    convert_terra_master_hiflex(params, obname)
        
+    #obj_names = []
+    for root, dirs, files in os.walk(params['path_rv_serval'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
+            for file in files:
+                if file == 'template.fits':                 # SERVAL template
+                    [root1, obj_name] = (os.sep+root).rsplit(os.sep,1)
+                    if obj_name not in obj_names:   obj_names.append(obj_name)
+                    break
+                if file.endswith('.rvc.dat'):               # SERVAL results
+                    [root1, obj_name] = (os.sep+root).rsplit(os.sep,1)
+                    if obj_name not in obj_names:   obj_names.append(obj_name)
+                    break 
+    terra_rvs, serval_rvs = [], []
+    for obname in obj_names:
+        convert_serval_master_hiflex(params, obname)
+        convert_terra_master_hiflex(params, obname)
+        terra_rvs  += get_terra_results(params, obname)     # Object name, index in file, mid-exposure JD, RV, error RV
+        serval_rvs += get_serval_results(params, obname)
+        
+    add_terra_serval_results_to_header(params, terra_rvs, serval_rvs)
+        
+def add_terra_serval_results_to_header(params, terra_rvs, serval_rvs):
+    terra_jd = np.array( [terra_results[2] for terra_results in terra_rvs] )
+    terra_obj = np.array( [terra_results[0] for terra_results in terra_rvs] )
+    serval_bjd = np.array( [serval_results[2] for serval_results in serval_rvs] )
+    serval_obj = np.array( [serval_results[0] for serval_results in serval_rvs] )
+    for file_RV in sorted(os.listdir(params['path_extraction'])):
+        if not file_RV.endswith(".fits"):           continue
+        im = fits.open(params['path_extraction']+file_RV)
+        im_head = im[0].header
+        if not 'HiFLEx OBJNAME' in im_head.keys():  continue
+        if not 'HiFLEx JD' in im_head.keys():       continue
+        jd = im_head['HiFLEx JD']
+        bjd = im_head.get('HiFLEx BJDTDB', jd)
+        if len(terra_obj) > 0:
+            good_data_terra = np.where( terra_obj == im_head['HiFLEx OBJNAME'].lower() )[0]
+        else:       good_data_terra = np.zeros(0)
+        if len(serval_obj) > 0:
+            good_data_serval = np.where( serval_obj == im_head['HiFLEx OBJNAME'].lower() )[0]
+        else:       good_data_serval = np.zeros(0)
+        changed_header = False
+        if good_data_terra.shape[0] > 0:
+            diff = np.abs( terra_jd[good_data_terra] - jd )
+            if np.min(diff) < 1E-6:         # 1E-4: 9s
+                index = good_data_terra[diff.argmin()]
+                data = terra_rvs[index]
+                im_head['HIERARCH HiFLEx TERRA RV'] = (round(data[3],1), 'RV in m/s (rel. to template: {0})'.format(data[0]))
+                im_head['HIERARCH HiFLEx TERRA RV_ERR'] = (round(data[4],1), 'Uncertainty RV in m/s')
+                changed_header = True
+                terra_rvs[index][1] = -99
+            elif False:
+                print('not found in terra results', im_head['HiFLEx OBJNAME'], jd, file_RV, diff)#, terra_jd[good_data_terra])
+        if good_data_serval.shape[0] > 0:
+            diff = np.abs( serval_bjd[good_data_serval] - bjd )
+            if np.min(diff) < 5E-6:         # 1E-4: 9s
+                index = good_data_serval[diff.argmin()]
+                data = serval_rvs[index]
+                im_head['HIERARCH HiFLEx SERVAL RV'] = (round(data[3],1), 'RV in m/s (rel. to template: {0})'.format(data[0]))
+                im_head['HIERARCH HiFLEx SERVAL RV_ERR'] = (round(data[4],1), 'Uncertainty RV in m/s')
+                changed_header = True
+                serval_rvs[index][1] = -99
+            elif False:
+                print('not found in serval results', im_head['HiFLEx OBJNAME'], bjd, file_RV, diff)#, serval_bjd[good_data_serval] )
+        if changed_header:
+            save_multispec(im[0].data, params['path_extraction']+file_RV, im_head)
+    for entry in terra_rvs:
+        if entry[1] >= 0:
+            print "problem for Ronny: not assigned the TERRA result:", entry
+    for entry in serval_rvs:
+        if entry[1] >= 0:
+            print "problem for Ronny: not assigned the SERVAL result:", entry
+
+def get_terra_results(params, obname):
+    """
+    Reads the result file from TERRA and puts it together with the corrected JD into a list
+    :return dataf: list with following entries: obname, index in file, JD, RV, RV error
+    """
+    filename = params['path_rv_terra']+obname+'/results/synthetic.rv'
+    if not os.path.isfile(filename):
+        logger('Warn: TERRA result file {0} does not exist'.format(filename))
+        return []
+    dataf = read_text_file(filename, no_empty_lines=True)
+    dataf = convert_readfile(dataf, [float, float, float], delimiter=' ', replaces=[['  ',' ']]*20, ignorelines=['NaN'])     # MJD is unfortunatelly not the same as JD-2400000.5 and the offsets varies between nights or within one data set
+    midexpJD = []
+    for file in sorted(os.listdir(params['path_rv_terra']+obname+'/data/')):
+        if file.endswith(".csv"):
+            date = datetime.datetime.strptime(file.replace('.csv',''), '%Y-%m-%d%H%M%S')
+            midexpJD.append(get_julian_datetime(date))
+    midexpJD = sorted(midexpJD)
+    diff = len(midexpJD) - len(dataf)
+    if diff == 0:                 # all files were used -> wrong MJD is not a problem
+        for ii in range(len(dataf)):
+            #print midexpJD[ii]-dataf[ii][0]        # See the offset between wrong MJD and JD
+            dataf[ii] = [obname, ii, midexpJD[ii]] + dataf[ii][1:3]
+    else:                                           # TERRA excluded fles -> Now it really does get difficult because of the wrong MJD
+        midexpJD = np.array(midexpJD)
+        possible_results = [0.0, 0.6666666, 0.8333333]
+        prev_offset = 0
+        for ii in range(len(dataf)):
+            diffs = midexpJD[ii:min(ii+diff+1,midexpJD.shape)] - dataf[ii][0]
+            found = []
+            for jj, entry in enumerate(possible_results):
+                found += list(np.where(np.abs( np.mod(diffs, 1) - entry ) < 1E-5)[0])       # find the data which could be right
+            if len(found) == 1:
+                found = found[0]
+                dataf[ii] = [obname, ii, midexpJD[ii+found]] + dataf[ii][1:3]
+                prev_offset = found
+            else:
+                dataf[ii] = [obname, ii, midexpJD[ii+prev_offset]] + dataf[ii][1:3]
+                print( "Struggled to assign the MJDs from the TERRA. This is for Ronny to check things:",ii, found, diffs )
+
+    return dataf
+
+def get_serval_results(params, obname):
+    """
+    Reads the SERVAL results and provides the results in a list
+    :return dataf: list with following entries: obname, index in file, BJD, RV, RV error
+    """
+    filename = params['path_rv_serval']+obname+'/'+obname+'.rvc.dat'
+    if not os.path.isfile(filename):
+        logger('Warn: SERVAL result file {0} does not exist'.format(filename))
+        return []
+    dataf = read_text_file(filename, no_empty_lines=True)
+    dataf = convert_readfile(dataf, [float, float, float], delimiter=' ', shorten_input=True)
+    for ii in range(len(dataf)):
+        dataf[ii] = [obname, ii] + dataf[ii][:3]
+        
+    return dataf   
+
+def convert_terra_master_hiflex(params, obname):
+    """
+    Reads the TERRA template and safes it in the HiFLEx format
+    """
+    spec = []
+    wave = []
+    terra_template = params['path_rv_terra']+obname+'/template/nominal_'
+    for ii in range(1000):
+        if os.path.isfile(terra_template+'%2.2i'%ii):
+            dataf = read_text_file(terra_template+'%2.2i'%ii, no_empty_lines=True)
+            dataf = convert_readfile(dataf, [float, float], delimiter=' ', replaces=[['  ',' ']]*10, shorten_input=True)
+            dataf = np.array(dataf)
+            spec.append(dataf[:,1])
+            wave.append(dataf[:,0])
+        else:
+            break
+    if ii > 0:
+        wave, spec = np.array(wave), np.array(spec)
+        hdu = fits.PrimaryHDU()
+        spec = convert_rv_templates_hilfex_normalise(params, spec, wave)
+        save_multispec(np.array(spec), params['path_rv_terra']+'terra_template_hiflexformat_'+obname+'.fits', hdu.header, bitpix=params['extracted_bitpix'])
+        logger('Info: Created {0} from {1}*'.format(params['path_rv_terra']+'terra_template_hiflexformat_'+obname+'.fits', terra_template))
+    else:
+        logger('Warn: TERRA template {0} does not exist'.format(terra_template))
+
 def convert_serval_master_hiflex(params, obname):
+    """
+    Reads the SERVAL template and safes it in the HiFLEx format
+    """
     serval_template = params['path_rv_serval']+obname+'/template.fits'
     if not os.path.isfile(serval_template):
         logger('Warn: SERVAL template {0} does not exist'.format(serval_template))
@@ -7774,31 +7895,39 @@ def convert_serval_master_hiflex(params, obname):
     im_head = im[0].header
     spec = np.array(im[1].data, dtype=np.float64)
     wave = np.array(im[2].data, dtype=np.float64)
-    #wave = wavelength_vacuum_to_air(wave)                       # Use Air Wavelengths (that overcorrects)
     if np.max(wave, axis=None) < 15:                            # If np.log(wave)
         wave = np.exp(wave)
-    wave *= (1+im_head.get('HiFLEx BCV', 0)/(Constants.c/1e3))  # Use barycentric velocity
-    save_multispec(np.array([wave, spec]), params['path_rv_serval']+'serval_template_hiflexformat_'+obname+'.fits', im_head, bitpix=params['extracted_bitpix'])
+    wave = wavelength_vacuum_to_air(wave)                       # Use Air Wavelengths
+    #wave *= (1+im_head.get('HiFLEx BCV', 0)/(Constants.c/1e3))  # Use barycentric velocity, but it's already in BCV
+    spec = convert_rv_templates_hilfex_normalise(params, spec, wave)
+    save_multispec(np.array(spec), params['path_rv_serval']+'serval_template_hiflexformat_'+obname+'.fits', im_head, bitpix=params['extracted_bitpix'])
     logger('Info: Created {0} from {1}'.format(params['path_rv_serval']+'serval_template_hiflexformat_'+obname+'.fits', serval_template))
     
-def convert_terra_master_hiflex(params, obname):
-    spec = []
-    wave = []
-    ceres_template = params['path_rv_terra']+obname+'/template/nominal_'
-    for ii in range(1000):
-        if os.path.isfile(ceres_template+'%2.2i'%ii):
-            dataf = read_text_file(ceres_template+'%2.2i'%ii, no_empty_lines=True)
-            dataf = convert_readfile(dataf, [float, float], delimiter=' ', replaces=[['  ',' ']]*10)
-            dataf = np.array(dataf)
-            spec.append(dataf[:,1])
-            wave.append(dataf[:,0])
-        else:
-            break
-    if ii > 0:
-        data=np.array([wave, spec])
-        hdu = fits.PrimaryHDU()
-        save_multispec(np.array([wave, spec]), params['path_rv_terra']+'terra_template_hiflexformat_'+obname+'.fits', hdu.header, bitpix=params['extracted_bitpix'])
-        logger('Info: Created {0} from {1}*'.format(params['path_rv_terra']+'terra_template_hiflexformat_'+obname+'.fits', ceres_template))
+def convert_rv_templates_hilfex_normalise(params, spec, wave, limit_for_flat=10):
+    """
+    Creates an array with al the important information to keep compatible with HiFLEx output, e.g.: Wave, Spec, Error Spec, Flatcorrected, Error Flat, Normalised, noise
+    !!! flat correction doesn't work:   TERRA: normaises the spectrum to average flux of 1, hence hard to decide if flat corrected spectrum or not
+                                        SERVAL: different amount of x-pixel
+    """
+    global calimages
+    if not'flat_spec_norm' in calimages.keys():
+        flat_spec_norm = np.array(fits.getdata(params['master_blaze_spec_norm_filename']))
+        remove_orders, keep_orders = remove_orders_low_flux(params, flat_spec_norm)
+        flat_spec_norm = flat_spec_norm[:,keep_orders,:] 
+        calimages['flat_spec_norm'] = flat_spec_norm
+    
+    if np.nanmedian(spec, axis=None) > limit_for_flat and spec.shape[0] == calimages['flat_spec_norm'].shape[1] and spec.shape[1] == calimages['flat_spec_norm'].shape[2]:     # same number of orders, same number of pixel
+        fspec = spec/(calimages['flat_spec_norm'][2]+0.0)        # 1: extracted flat, 2: low flux removed
+    else:
+        fspec = spec
+    measure_noise_orders = 16
+    measure_noise_semiwindow = 10                   # in pixel
+    efspec = measure_noise(fspec, p_order=measure_noise_orders, semi_window=measure_noise_semiwindow)             # Noise will be high at areas wih absorption lines
+    cspec, ecspec = normalise_continuum(fspec, wave, nc=6, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders) 
+    #if np.nanmedian(spec, axis=None) <= limit_for_flat:
+    #    cspec = spec
+    
+    return [wave, spec, spec*0, fspec, efspec, cspec, ecspec ]
 
 def load_ceres_modules(params):
         global GLOBALutils
