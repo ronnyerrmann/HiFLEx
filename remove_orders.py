@@ -52,11 +52,11 @@ if __name__ == "__main__":
                         logger('Warn: Cannot create directory {0}'.format(params[entry]))
     
     # Save the new file and restart the reduction
-    logger('Info: New file with the traces was created. All data depending on this will be moved to the folder {0}, the traces will be written and reduction_day.py will be run'.format(params['folder_original_traces']))
+    logger('Info: New file with the traces was created. All data depending on this will be moved to the folder {0}, the traces will be written and hiflex.py will be run'.format(params['folder_original_traces']))
     save_fits_width(polyfits, xlows, xhighs, widths, params['master_trace_sci_filename'])
     plot_traces_over_image(im_flat, params['logging_traces_im'], polyfits, xlows, xhighs, widths)
     
-    os.system('python {0}/reduction_day.py'.format(os.path.dirname(sys.argv[0])) )
+    os.system('python {0}/hiflex.py {1}'.format(os.path.dirname(sys.argv[0]), ' '.join(sys.argv[1:]) )
      
     log_params(params)
     logger('Info: Finished removing traces and updating all the files for the day. \n')

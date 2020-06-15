@@ -223,8 +223,11 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
         plt.close()
 
 def save_obj(obj, name ):
-    with open(name + '.pkl', 'wb') as f:
-        pickle.dump(obj, f, 0)
+    try:
+        with open(name + '.pkl', 'wb') as f:
+            pickle.dump(obj, f, 0)
+    except:
+        logger('Warn: Cannot save {0}.'.format(name + '.pkl'))
 
 def load_obj(name ):
     with open(name + '.pkl', 'rb') as f:
@@ -532,7 +535,7 @@ if __name__ == "__main__":
         files = read_text_file(filename, no_empty_lines=True, warn_missing_file=True)
         for line in files:
             if line[0] != '#':
-                fitsfiles.append([line,0,'sg'])
+                fitsfiles.append([line.replace(' ',''),0,'sg'])
     
     data_sg = []
     titel_sg = ''

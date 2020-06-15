@@ -165,16 +165,23 @@ arcextraction_width_multiplier = 1
   #         format: array of one intger and two floats or integers: sigma to clip absorption lines AND sigma to clip emission lines or cosmics
   #         default: [ 10 , 20 , 4 ] : fit a polynom of 10th order, Don't clip absorption lines (20 sigma), clip emission lines that are stronger than 4 sigma
 sigmaclip_spectrum = []
+  # In case of a bifurcated fiber, a wavelength solution should be determined for both fibers in order to measure the shift between science and calibration wavelength solution.
+  #         If this is not possible, the parameter 'pxshift_between_wavesolutions' can be set to the shift between the solutions.
+  #             Positive values mean that the same wavelength in the science fiber has a higher pixel number compared to the calbration fiber.
+  #         This value will be overwritten by the entry in the second column with "sci-cal" as fourth column in the file from parameter 'master_wavelengths_shift_filename'
+pxshift_between_wavesolutions = 0
+
   # In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom
 wavelength_scale_resolution = 0.01
 
+  ## Use the extracted flux from the files for blaze correction to correct for the trace or use the fitted flux to correct for the blaze
+blazercor_function = flux
 
   ## general filenames which should be the same for a long time.
-  # Path and filename to the badpixel mask. Created by create_badpx_mask.py
+  # Path and filename to the badpixel mask. Created by create_badpx_mask.py. Leave empty 
 badpx_mask_filename = /data/ronny/Reduced/NA/bad_px_mask.fits
 
-
-  # Path and filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. 
+  # (Path and) Filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. 
   #             The values can be used as given from the NIST database, e.g. 6550.653 \t 140* \t Ne II
   #             The file will be looked for in the position given, in the reduction folder, and in the HiFLEx folder
 reference_catalog = reference_lines_UNe.txt

@@ -268,7 +268,8 @@ def textfileargs(params, textfile=None):
     ints = ['polynom_order_apertures', 'rotate_frame']
     floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier',
               'resolution_offset_pct', 'diff_pxs', 'maxshift_orders', 'wavelength_scale_resolution', 'width_percentile', 'raw_data_timezone_cor',
-              'altitude', 'latitude', 'longitude', 'in_shift', 'extraction_shift', 'extraction_min_ident_part_of_trace_percent', 'max_cores_used_pct']
+              'altitude', 'latitude', 'longitude', 'in_shift', 'extraction_shift', 'extraction_min_ident_part_of_trace_percent',
+              'max_cores_used_pct', 'pxshift_between_wavesolutions']
     bools = ['flip_frame', 'update_width_orders', 'GUI']
     text_selection = ['arcshift_side', 'extraction_precision']
     results = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_rv_terra', 'path_rv_serval',
@@ -384,17 +385,18 @@ def textfileargs(params, textfile=None):
         
     params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)     # Use 80% of the CPU cores
     params['dataset_rv_analysis'] = params.get('dataset_rv_analysis', [5, 6])
+    params['pxshift_between_wavesolutions'] = params.get('pxshift_between_wavesolutions', 0)
     
     return params
 
-def update_calibration_memory(key, value):
-    """
-    Add new information to the global variable calimages, which is not accessable from other python files
-    :param key: string, key for the dictionary
-    :param value: string, number, array, or anything: value for the dictionary
-    """
-    global calimages
-    calimages[key] = copy.deepcopy(value)
+#def update_calibration_memory(key, value):
+#    """
+#    Add new information to the global variable calimages, which is not accessable from other python files
+#    :param key: string, key for the dictionary
+#    :param value: string, number, array, or anything: value for the dictionary
+#    """
+#    global calimages
+#    calimages[key] = copy.deepcopy(value)
 
 def read_text_file(filename, no_empty_lines=False, warn_missing_file=True):
     """
@@ -715,8 +717,9 @@ def read_file_calibration(params, filename, level=0):
             'nothing to do, as for a different step'
         else:
             logger('Warn: do not know what to do with this correction: {0}'.format(entry))
-        if logtxt != [] and headtxt != []:
-            im_median, im_std = int(round(np.median(calimages[entry]))), int(round(np.std(calimages[entry], ddof=1)))
+        if len(logtxt) > 0 and len(headtxt) > 0:
+            #print "np.where(np.isnan(calimages[entry])), calimages[entry].shape", np.where(np.isnan(calimages[entry])), calimages[entry].shape, np.median(calimages[entry]), np.nanmedian(calimages[entry]), np.mean(calimages[entry]), np.nanstd(calimages[entry], ddof=1, axis=None), np.where( np.isinf(calimages[entry]) )
+            im_median, im_std = int(round(np.nanmedian(calimages[entry], axis=None))), int(round(np.nanstd(calimages[entry], ddof=1, axis=None)))
             logger('Info: {4}: {3}: {0} (median={1}, std={2})'.format(entry, im_median, im_std, logtxt[0], level))
             im_head['HIERARCH HiFLEx '+headtxt[0]] = '{3}: {0}, median={1}, std={2}'.format(entry, im_median, im_std, headtxt[1])
     #logger('Info: image loaded and processed: {0}'.format(filename))
@@ -800,6 +803,10 @@ def create_image_general(params, imtype, level=0):
             exposure_time = np.sum(header_updates[:,0])                      # Sum of the exposure times
         else:           # Median combine
             im = combine_median(im)
+            #imt = combine_median(im)
+            #aa = np.where(np.isinf(imt))
+            #for ii in range(aa[0].shape):
+            #    print aa[0],aa[1], im[:,aa[0],aa[1]]
             im_head['HIERARCH HiFLEx redu07'] = 'Median of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
             exposure_time = np.median(header_updates[:,0])                   # Median of the exposure times
         if 'normalise' in params['{0}_calibs_create'.format(imtype)]:
@@ -2903,7 +2910,7 @@ def find_shift_images(params, im, im_ref, sci_tr_poly, xlows, xhighs, widths, w_
                 shift = shift_poly
             elif width == 0 and min(shifts) < mshift < max(shifts):      # If Gaussian fit didn't work, or if shift is close to borders, then mshift might be dogy
                 shift = mshift                                      # use the maximum flux as shift
-    logger('Info: The shift between this frame and the reference frame is {0} px. The gaussian width is {1} px. A shift between {2} and {3} pixel was tested.{4}'.format(shift, width, min(shifts), max(shifts), comment ))
+    logger('Info: The shift between this frame and the reference frame in Cross-Dispersion direction is {0} px. The gaussian width is {1} px. A shift between {2} and {3} pixel was tested.{4}'.format(shift, width, min(shifts), max(shifts), comment ))
     im_head['HIERARCH HiFLEx CD_SHIFT']  = (shift, 'Applied Shift in Cross-dispersion [px]')        # (value, comment)
     im_head['HIERARCH HiFLEx CD_S_WDTH'] = (width, 'Width of shift in Cross-dispersion [px]')        # (value, comment)
     im_head['HIERARCH HiFLEx CD_S_MIN']  = (min(shifts), 'Minimum tested shift in Cross-disp. [px]')        # (value, comment)
@@ -3094,8 +3101,8 @@ def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None
                         if 0.1 in im_short_badpx[order,range_arr]:          # ignore saturated lines in the short exposure
                             continue
                     y_data = im_short[order,range_arr]
-                    if np.sum(already_found[range_arr]) == 0:           # Only print once in the area
-                        print('Used the short exposure time to find the centroid of the line in order {1} @ px {0}'.format(pos_real, order))
+                    #if np.sum(already_found[range_arr]) == 0:           # Only print once in the area
+                    #    print('Used the short exposure time to find the centroid of the line in order {1} @ px {0}'.format(pos_real, order))
             # Fit a double Gauss 
             #popts = oneD_blended_gauss
             # fit the gauss, pos_real is the expected center
@@ -3223,9 +3230,9 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     ratio_lines_identified = 0.15       # if more than ratio_lines_identified of the checked_arc_lines has been identified, then a sigma_clipping will be applied. If less than this number of lines remain after sigma clipping, then the assumption is, that the calibration fiber wasn't used and therefore no wavelength shift is applied
     # In each order get the approx pixel of each reference line, fit a gaussian against the position, calculate the wavelength for the gaussian center, compare the wavelength of the line center with the reference line wavelength
     if in_shift == 0 and params['wavelength_solution_type'] == 'sci-fiber' and fib == 'cal':
-        in_shift = params['master_shift']              # if the wavelength solution is from the science fiber, then all the lines calibration fiber will be shifted
+        in_shift = params['pxshift_between_wavesolutions']              # if the wavelength solution is from the science fiber, then all the lines calibration fiber will be shifted
     if in_shift == 0 and params['wavelength_solution_type'] == 'cal-fiber' and fib == 'sci':
-        in_shift = params['master_shift']              # if the wavelength solution is from the calibration fiber and emission spectrum from the science fiber, then the shift is necessary
+        in_shift = params['pxshift_between_wavesolutions']              # if the wavelength solution is from the calibration fiber and emission spectrum from the science fiber, then the shift is necessary, the sign is changed in hiflex.py
     in_shift_int = int(round(in_shift))
     #print 'input_shift', in_shift, in_shift_int
     
@@ -3250,6 +3257,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
                 #print range_arr, xarr, aspectra.shape, order_index
                 #get_timing('{0}'.format(arcline))
                 popt = centroid_order(xarr[range_arr],aspectra[order_index,range_arr], pos+in_shift_int, FWHM*3, significance=3.5, bordersub_fine=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+                #print popt, range_arr
                 #get_timing('{0}'.format(popt))
                 if popt[1] == 0 or popt[2] > FWHM*1.5:
                     #if order_index == 50:
@@ -3265,6 +3273,7 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
                 diff = np.abs(warr_fine-reference_catalog[ref_line_index,0])
                 pos_fine = xarr_fine[np.argmin(diff)]
                 #print 'used',order_index, pos, reference_catalog[ref_line_index,0], popt[1], pos_fine, popt[1] - (pos_fine+in_shift), maxshift
+                #print np.abs(popt[1] - (pos_fine+in_shift)) <= maxshift, (pos_fine+in_shift), popt[1], np.abs(popt[1] - (pos_fine+in_shift)), maxshift
                 if np.abs(popt[1] - (pos_fine+in_shift)) <= maxshift:                                   # Miximal 2.5 px shift
                     # Index of order, Index of reference line, wavelength of reference line, px of arc line, \n wavelength of arc line, \n height of arc line, sigma/width of gauss, original pixel position of reference line
                     shifts.append([ order_index, ref_line_index, reference_catalog[ref_line_index,0], popt[1], \
@@ -3294,12 +3303,32 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
 
         # Save the shift for later use
         if params['extract_wavecal']:            # This values are not correct, as later the shift has to be applied
-            add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(jd_midexp, shift_med-in_shift, shift_std, fib), params['master_wavelengths_shift_filename'] )
+            add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(jd_midexp, round(shift_med-in_shift,4), round(shift_std,4), fib), params['master_wavelengths_shift_filename'] )    # Not the shift between the two solutions
+    
+    wavelength_solution_new = copy.deepcopy(wavelength_solution)
+    
+    #print('1: Measured shift: shift_avg, shift_med, shift_std, width_avg, width_std, in_shift', shift_avg, shift_med, shift_std, width_avg, width_std, in_shift, shifts.shape)
+    # In case of pixel shift available -> linear interpolation of pixel shift
+    if not params['extract_wavecal']:         # science and calibration traces are at the same position and it's not the calibration spectrum
+        if params['wavelength_solution_type'] == 'cal-fiber':
+            shift_med += params['pxshift_between_wavesolutions']         # Transform it to the science wavelengths solution (checked that + is right)
+            #print("2: Added params pxshift_between_wavesolutions: shift_med, params['pxshift_between_wavesolutions']", shift_med, params['pxshift_between_wavesolutions'])
+        if params['wavelength_solution_type'] == 'sci-fiber' and fib == 'cal':
+            shift_med -= params['pxshift_between_wavesolutions']         # Remove the input shift
+            #print("3: Subtracted params pxshift_between_wavesolutions: shift_med, params['pxshift_between_wavesolutions']", shift_med, params['pxshift_between_wavesolutions'])
+        if fib == 'cal':
+            wavelength_solution_dummy, shift_stored, im_head = shift_wavelength_solution_times(params, wavelength_solution_new, obsdate_float, jd_midexp, objname, im_head)
+            shift_med += shift_stored
+            #print('4: stored shifts added: shift_med, shift_stored', shift_med, shift_stored)
+    if params['two_solutions']:
+        text = '(from {0}) '.format( params['wavelength_solution_type'].replace('cal', 'calibration').replace('sci','science') )
+    else:
+        text = ''
     d_shift_kms = round(shift_med*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4)
-    logger('Info: The median shift between the lines used in the wavelength solution and the current calibration spectrum of file {9} at JD {10} is {0} +- {1} px ({8} km/s). {2} reference lines have been used, {7} reference lines have been tested. The calibration lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px'\
+    logger('Info: The median shift between the lines used in the wavelength solution {11}and the current calibration spectrum of file {9} at JD {10} is {0} +- {1} px ({8} km/s). {2} reference lines have been used, {7} reference lines have been tested. The calibration lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px'\
                 .format(round(shift_med,4), round(shift_std,4), shifts.shape[0], round(width_avg,3), \
                         round(width_std,3), round(width_avg*2.35482,3), round(width_std*2.35482,3), checked_arc_lines,
-                        d_shift_kms, objname, round(jd_midexp,5) ))
+                        d_shift_kms, objname, round(jd_midexp,5), text ))
     im_head['HIERARCH HiFLEx D_SHIFT'] = (round(shift_med,4), 'Shift in dispersion direction [px]')
     im_head['HIERARCH HiFLEx D_SHIFT_ERR'] = (round(shift_std,4), 'Uncertainty of the shift [px]')
     im_head['HIERARCH HiFLEx D_SHIFT_NUMBER_LINES'] = (shifts.shape[0], 'out of {0} calibration lines'.format(checked_arc_lines))
@@ -3308,16 +3337,11 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
     im_head['HIERARCH HiFLEx D_SHIFT_KMS'] = (d_shift_kms, 'Shift in dispersion direction [km/s]')
     if len(shifts) >= ratio_lines_identified * checked_arc_lines and len(shifts) != 0:                          # Statistics only if enough lines were detected
         statistics_arc_reference_lines(shifts, [0,1,6,2], reference_names, wavelength_solution, xlows, xhighs, show=False)
-    # correction in the other side of the shift
-
-    wavelength_solution_new = copy.deepcopy(wavelength_solution)
+    
     #wavelength_solution_new[:,1] -= shift_avg                       # shift the central pixel, - sign is right, tested before 19/9/2018
     wavelength_solution_new[:,1] += shift_med                       # shift the central pixel, + sign is right, tested on 19/9/2018
     
-    # In case of pixel shift available -> linear interpolation of pixel shift
-    if not params['extract_wavecal']:         # science and calibration traces are at the same position and it's not the calibration spectrum
-        wavelength_solution_new, shift_stored, im_head = shift_wavelength_solution_times(params, wavelength_solution_new, obsdate_float, jd_midexp, objname, im_head)
-        shift_med += shift_stored
+    
     
     if False:           # The changes below are not necessary, shift_med/shift_avg will contain the input shift
         shift_avg -= in_shift           # To separate the input shift from the rest
@@ -3354,9 +3378,28 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
             all_shifts_str_n.append(all_shifts_str[i,:])
     all_shifts_str = np.array(all_shifts_str_n)                     # Only contains the latest entries, newest entry first
     # select the right data, depending on params['two_solutions']
-    shifts = []
+    hours = 1.
     if not params['two_solutions']:                                 # single soution: use all lines
-        all_shifts = all_shifts_str[:,0:3].astype(float)
+        data = all_shifts_str[:,0:3].astype(float)
+        data_bef = data[ (data[:,0] <= jd_midexp), : ]
+        data_aft = data[ (data[:,0] >= jd_midexp), : ]
+        if data_bef.shape[0] > 1:
+            goodtime = data_bef[:,0] >= np.max(data_bef[:,0]) - hours / 24.      # only use data taken within 1 hour of the closest data for the fit
+            data_bef = data_bef[goodtime ,:]
+        if data_aft.shape[0] > 1:
+            goodtime = data_aft[:,0] <= np.min(data_aft[:,0]) + hours / 24.      # only use data taken within 1 hour of the closest data for the fit
+            data_aft = data_aft[goodtime ,:]
+        if data_bef.shape[0] == 0:
+            shift_avg = np.median(data_aft[:,1])
+            text = 'Median of the datapoints in {0} after the exposure ( {1} to {2} ).'.format( params['master_wavelengths_shift_filename'], np.min(data_aft[:,0]), np.max(data_aft[:,0]) )
+        elif data_aft.shape[0] == 0:
+            shift_avg = np.median(data_bef[:,1])
+            text = 'Median of the datapoints in {0} before the exposure ( {1} to {2} ).'.format( params['master_wavelengths_shift_filename'], np.min(data_bef[:,0]), np.max(data_bef[:,0]) )
+        else:
+            data = np.vstack(( data_bef, data_aft ))
+            p = np.polyfit(data[:,0], data[:,1], 1)
+            shift_avg = np.polyval(p, jd_midexp)
+            text = 'Linear fit of the datapoints in {0} around the exposure ( {1} to {2} ).'.format( params['master_wavelengths_shift_filename'], np.min(data[:,0]), np.max(data[:,0]) )
     else:                                                           # two wavelength solutions -> compare the two
         all_shifts_cal = all_shifts_str[all_shifts_str[:,3]=='cal',0:3].astype(float)
         all_shifts_sci = all_shifts_str[all_shifts_str[:,3]=='sci',0:3].astype(float)
@@ -3364,6 +3407,34 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
             logger('Warn: Offset between the fibers cannot be determined as the offset is only available for one fiber. '+\
                     'Please re-run prepare_file_list.py and asign "w" and "w2" to the emission line spectra of the calibration and science fiber, respectively.')
             return copy.deepcopy(wavelength_solution), 0.               # No shift is possible
+        data = dict()
+        data['cal_bef'] = all_shifts_cal[ (all_shifts_cal[:,0] <= jd_midexp), : ]
+        data['cal_aft'] = all_shifts_cal[ (all_shifts_cal[:,0] >= jd_midexp), : ]
+        data['sci_bef'] = all_shifts_sci[ (all_shifts_sci[:,0] <= jd_midexp), : ]
+        data['sci_aft'] = all_shifts_sci[ (all_shifts_sci[:,0] >= jd_midexp), : ]
+        for entry in data.keys():
+            if data[entry].shape[0] > 1:
+                if entry.endswith('_bef'):
+                    goodtime = data[entry][:,0] >= np.max(data[entry][:,0]) - hours / 24.      # only use data taken within 1 hour of the closest data for the fit
+                if entry.endswith('_aft'):
+                    goodtime = data[entry][:,0] <= np.min(data[entry][:,0]) + hours / 24.      # only use data taken within 1 hour of the closest data for the fit
+                data[entry] = data[entry][goodtime ,:]
+        for mode in ['cal','sci']:
+            if data[mode+'_bef'].shape[0] == 0:
+                data[mode+'_jd'] = np.median(data[mode+'_aft'][:,1])
+                data[mode+'_text'] = 'Median after the exposure: {0} - {1} '.format( np.min(data[mode+'_aft'][:,0]), np.max(data[mode+'_aft'][:,0]) )
+            elif data[mode+'_aft'].shape[0] == 0:
+                data[mode+'_jd'] = np.median(data[mode+'_bef'][:,1])
+                data[mode+'_text'] = 'Median before the exposure: {0} - {1} '.format( np.min(data[mode+'_bef'][:,0]), np.max(data[mode+'_bef'][:,0]) )
+            else:
+                data[mode] = np.vstack(( data[mode+'_bef'], data[mode+'_aft'] ))
+                data[mode+'_p'] = np.polyfit(data[mode][:,0], data[mode][:,1], 1)
+                data[mode+'_jd'] = np.polyval(data[mode+'_p'], jd_midexp)
+                data[mode+'_text'] = 'Linear fit around the exposure: {0} - {1} '.format( np.min(data[mode][:,0]), np.max(data[mode][:,0]) )
+        shift_avg = (data['sci_jd'] - data['cal_jd'])                 # Thought about no - on 20200612
+        text = 'It is the difference between science ({1}) and calibration ({2}) datapoints in {0}.'.format( params['master_wavelengths_shift_filename'], data['sci_text'], data['cal_text'] )
+        
+        """ # old
         all_shifts = []
         for hours in range(1,24):
             for entry in all_shifts_sci:
@@ -3380,8 +3451,8 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
             all_shifts.append([ 0, 0, 0 ])
         all_shifts = np.array(all_shifts)
         if params['wavelength_solution_type'] == 'sci-fiber':       # Test on 20190307 indicates that it should be sci-fiber
-            all_shifts[:,1] = -1 * all_shifts[:,1]
-    # Find the closest entries in time
+            all_shifts[:,1] = -1 * all_shifts[:,1]"""
+    """ # old # Find the closest entries in time
     for diff_array in [jd_midexp - all_shifts[:,0], all_shifts[:,0] - jd_midexp]:           # difference in two different directions
         diff_array[diff_array < 0] = diff_array.max()                                               # Only values before/after jd_midexp
         index = np.where( diff_array == diff_array.min() )[0][-1]                                   # Get the index in shifts for the last minimum
@@ -3397,10 +3468,14 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
                         round(shift_avg,4), datetime.datetime.utcfromtimestamp(obsdate_float).strftime('%Y-%m-%d %H:%M:%S'), 
                         round(shifts[0,1],4), round(shifts[0,0],5), round(shifts[-1,1],4), round(shifts[-1,0],5),
                         round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), 
-                        objname, params['master_wavelengths_shift_filename'], round(jd_midexp,5) ) )
+                        objname, params['master_wavelengths_shift_filename'], round(jd_midexp,5) ) )"""
+    logger('Info: The shift between the wavelength solution and the current file {0} (center of exposure is {1}, JD = {2}) is {3} px ({4} km/s). {5}'.format(\
+                        objname, datetime.datetime.utcfromtimestamp(obsdate_float).strftime('%Y-%m-%d %H:%M:%S'), round(jd_midexp,5),
+                        round(shift_avg,4), round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4),
+                        text ) )
     im_head['HIERARCH HiFLEx DT_SHIFT'] = (round(shift_avg,4), 'Applied shift in dispersion direction [px]')
-    im_head['HIERARCH HiFLEx DT_SHIFT1'] = (round(shifts[0,1],4), 'Shift before @ {0}'.format(round(shifts[0,0],5) ))
-    im_head['HIERARCH HiFLEx DT_SHIFT2'] = (round(shifts[-1,1],4), 'Shift after  @ {0}'.format(round(shifts[-1,0],5) ))
+    #im_head['HIERARCH HiFLEx DT_SHIFT1'] = (round(shifts[0,1],4), 'Shift before @ {0}'.format(round(shifts[0,0],5) ))
+    #im_head['HIERARCH HiFLEx DT_SHIFT2'] = (round(shifts[-1,1],4), 'Shift after  @ {0}'.format(round(shifts[-1,0],5) ))
     im_head['HIERARCH HiFLEx DT_SHIFT_KMS'] = (round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), 'Applied shift in dispersion d. [km/s]')
 
     wavelength_solution_new = copy.deepcopy(wavelength_solution)
@@ -7611,26 +7686,16 @@ def find_shift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_s
                 result.append([ posi[1]-posi[0], i, 0, order, catalog_line, np.mean(posi) ])
     result = np.array(result)
     """for i in range(10):
-        if i==0:
-            good_values = range(len(result))        # all data
-        if i==1:
-            good_values = result[:,1] == 0          # only same lines in both solutions
-        if i==2:
-            good_values = result[:,1] == 1          # lines of solution1
-        if i==3:
-            good_values = result[:,1] == 2          # lines of solution2
-        if i==4:
-            good_values = (result[:,1] == 0) & (result[:,5] < 500)          # only same lines in both solutions and left side 
-        if i==5:
-            good_values = (result[:,1] == 0) & (result[:,5] > 1500)          # only same lines in both solutions and right side 
-        if i==6:
-            good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300)          # only same lines in both solutions and middle
-        if i==7:
-            good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300) & (result[:,3] < 20)          # only same lines in both solutions and middle and red orders
-        if i==8:
-            good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300) & (result[:,3] > 60)          # only same lines in both solutions and middle and blue orders
-        if i==9:
-            good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300) & (result[:,3] > 30) & (result[:,3] < 50)         # only same lines in both solutions and middle and middle orders
+        if i==0:    good_values = range(len(result))        # all data
+        if i==1:    good_values = result[:,1] == 0          # only same lines in both solutions
+        if i==2:    good_values = result[:,1] == 1          # lines of solution1
+        if i==3:    good_values = result[:,1] == 2          # lines of solution2
+        if i==4:    good_values = (result[:,1] == 0) & (result[:,5] < 500)          # only same lines in both solutions and left side 
+        if i==5:    good_values = (result[:,1] == 0) & (result[:,5] > 1500)          # only same lines in both solutions and right side 
+        if i==6:    good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300)          # only same lines in both solutions and middle
+        if i==7:    good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300) & (result[:,3] < 20)          # only same lines in both solutions and middle and red orders
+        if i==8:    good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300) & (result[:,3] > 60)          # only same lines in both solutions and middle and blue orders
+        if i==9:    good_values = (result[:,1] == 0) & (result[:,5] > 700) & (result[:,5] < 1300) & (result[:,3] > 30) & (result[:,3] < 50)         # only same lines in both solutions and middle and middle orders
         print 'i, size, median, average, std:', i, result[good_values,0].shape, np.median(result[good_values,0]), np.mean(result[good_values,0]), np.std(result[good_values,0], ddof=1),
         for pctl in [1,5,10,20]:
             temp = percentile_list(result[good_values,0], pctl/100.)
@@ -7698,7 +7763,7 @@ def header_results_to_texfile(params, header_keywords=[]):
     # Read the files
     files = sorted(os.listdir(params['path_extraction']))
     files = [os.path.join(params['path_extraction'], f) for f in files] # add path to each file
-    files.sort(key=os.path.getmtime)
+    #files.sort(key=os.path.getmtime)       # not useful with the RV added in the end
     for file in files:
         if not file.endswith(".fits"):
             continue
@@ -7719,7 +7784,7 @@ def rv_results_to_hiflex(params):
     obj_names = []
     for root, dirs, files in os.walk(params['path_rv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
             for file in files:
-                if file == 'nominal_00':                    # TERRA template
+                if file == 'template_order_00':                    # TERRA template
                     [root1, obj_name, dummy] = (os.sep+root).rsplit(os.sep,2)
                     if obj_name not in obj_names:   obj_names.append(obj_name)
                     break
@@ -7864,7 +7929,7 @@ def convert_terra_master_hiflex(params, obname):
     """
     spec = []
     wave = []
-    terra_template = params['path_rv_terra']+obname+'/template/nominal_'
+    terra_template = params['path_rv_terra']+obname+'/template/template_order_'
     for ii in range(1000):
         if os.path.isfile(terra_template+'%2.2i'%ii):
             dataf = read_text_file(terra_template+'%2.2i'%ii, no_empty_lines=True)

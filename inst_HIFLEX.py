@@ -24,7 +24,7 @@ hdatf = params.get('data_dataset', 5)        # 1: higher scatter of resulting RV
 hdate = params.get('error_dataset', 6)
 hdatw = params.get('wave_dataset', 9)        # 9: Wavelength, drift correcte; 0: + barycentric correction
 hdats = params.get('mask_dataset', 7)
-print('Info: Using dataset {0} for the spectral data, {1} for the uncertainty, {2} for the wavelength, and {3} for the mastk'.format(hdatf, hdate, hdatw, hdats))
+print('Info: Using dataset {0} for the spectral data, {1} for the uncertainty, {2} for the wavelength, and {3} for the mask.'.format(hdatf, hdate, hdatw, hdats))
 
 maskfile = 'telluric_mask_atlas.dat'
 
