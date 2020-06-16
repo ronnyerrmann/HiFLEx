@@ -56,7 +56,7 @@ if __name__ == "__main__":
     save_fits_width(polyfits, xlows, xhighs, widths, params['master_trace_sci_filename'])
     plot_traces_over_image(im_flat, params['logging_traces_im'], polyfits, xlows, xhighs, widths)
     
-    os.system('python {0}/hiflex.py {1}'.format(os.path.dirname(sys.argv[0]), ' '.join(sys.argv[1:]) )
+    os.system('python {0}/hiflex.py {1}'.format(os.path.dirname(sys.argv[0]), ' '.join(sys.argv[1:]) ) )
      
     log_params(params)
     logger('Info: Finished removing traces and updating all the files for the day. \n')
