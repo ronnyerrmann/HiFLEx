@@ -544,26 +544,26 @@ You might also want to read Chapter~\ref{Section:FAQ_wavelength_solution}.
     \item[2a.] Finding the traces of all science orders. First in a heavily binned image (e.g. 20,5) to find the traces, and then in a slightly binned image (only few pixel in dispersion direction) where the position is redefined.
   \end{itemize}
 % not useful  \item[3.] Creating a map of the leaking light between the science orders (background map).
-  \item[3.] (for bifurcated fiber spectrographs) Finding the traces of the calibration orders by searching for the shift between each order in the trace1 and trace2 file ($\rightarrow$~Figure~\ref{figure_arcapertures_in_master_arc}). 
+  \item[3.] (for bifurcated fiber spectrographs) Finding the traces of the calibration orders by searching for the offset between each order in the trace1 and trace2 file ($\rightarrow$~Figure~\ref{figure_arcapertures_in_master_arc}). 
   \item[4.] Create the wavelength solution for the night on the calibration fiber spectra (and maybe the science fiber spectra). ($\rightarrow$~Figure~\ref{figure_arc_line_identification_positions} and \ref{figure_arc_line_identification_residuals}). This is based on the solution of the previous data set, which is adjusted according to the given parameters (see \ref{Section:further_configuration}).
   \item[5.] Extract the flat and normalise it. This is used for the blaze correction.
   \item[6a.] (for single fiber spectrographs) Measure the instrumental drift in emission line spectra to calibrate the wavelength solution.
-  \item[6b.] (if applicable: find the radial velocity drift between the wavelength solutions of calibration and science fiber)
+  \item[6b.] (if applicable: find the radial velocity drift between the wavelength solutions of calibration and science fiber at different times during the night.)
   \item[7.] Extract the science spectra. This includes the following steps for each image:
   \begin{itemize}
     \item[a)] Data reduction of the CCD frame (if set up).
-    \item[b)] Finding the shift between this frame and the \textbf{sflat} file.
+    \item[b)] Finding the offset between this frame and the traces (e.g. which offsets allows the extraction of maximum flux).
     \item[c)] Extraction of the apertures for the science fiber.
     \item[d)] (for bifurcated fiber spectrographs) Extraction of the apertures for the calibration fiber.
-    \item[e)] Finding the shift between the emission lines in the calibration spectra and the lines used for the wavelength solution (for bifurcated fiber spectrographs) or interpolating the measured drift from step 6. Calculating the wavelength for each pixel in the extracted spectrum.
-    \item[f)] Creating the flat corrected spectrum.
+    \item[e)] Finding the offset between the emission lines in the calibration spectra and the lines used for the wavelength solution (for bifurcated fiber spectrographs). Additionally, interpolating the measured drift from step 6 to the mid exposure time. Calculating the wavelength for each pixel in the extracted spectrum.
+    \item[f)] Creating the blaze corrected spectrum.
     \item[g)] Creating the spectrum with normalised continuum.
-    \item[h)] (Optional) Perform the radial velocity analysis (cross-correlation with template spectrum).
-    \item[i)] Perform some general measurements which are stored in the header.
-    \item[j)] Write the file with all extracted data into the folder given in the parameter \verb|path_extraction| (standard: \textit{extracted}).
+    %\item[h)] (Optional) Perform the radial velocity analysis (cross-correlation with template spectrum).
+    \item[h)] Perform some general measurements which are stored in the header.
+    \item[i)] Write the file with all extracted data into the folder given in the parameter \verb|path_extraction| (standard: \textit{extracted}).
     \item[k)] Write subsets of data into different files to create compatibility with other software.
   \end{itemize}
-  \item[8.] (Optional) Perform the radial velocity analysis by building a template spectrum from the observation.
+  \item[8.] (Optional) Perform the radial velocity analysis.
 \end{itemize}
 
 \noindent If the result file of any of the above steps already exist in the folder in which the code is run, then the existing file is read instead of performing the step again in order to safe computational time. If a step needs to run again, the according result file needs to be deleted. (Further information can be found in \ref{Section:Problem_solution}.)
@@ -598,10 +598,11 @@ To get the best results, the following data (or more files) should be taken. Ple
   \item \textit{(optional) true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{rflat} for automatic processing.
   \item Flat (11x, white light source through the science fiber), with the filename containing \textbf{sflat}, \textbf{tung}, or \textbf{whli}. The calibration fiber should be dark for this data.
   \item Arc (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc}, \textbf{ThAr}, \textbf{Th\_Ar}, or \textbf{UNe}. Results might be better, if the science fiber is dark.
-  \item (\textit{Only necessary, if the shift in dispersion direction between the fibers of a bifurcated fiber should be measured}): Arc2 (5x, calibration lamp through the science fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc2}, \textbf{ThAr2}, \textbf{Th\_Ar2}, or \textbf{UNe2}.
+  \item (\textit{Only necessary, if the offset in dispersion direction between the fibers of a bifurcated fiber should be measured}): Arc2 (5x, calibration lamp through the science fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc2}, \textbf{ThAr2}, \textbf{Th\_Ar2}, or \textbf{UNe2}.
 %  \item Blazecor (11x, white light source and calibration lamp), the filename should be \textbf{blazecor}, \textbf{sflatThAr}, \textbf{whli-UNe}, or similar.
   \item (optinal) Bias (11x) and/or Darks (11x, for the exposure time of the true Flat and Flat)% and Blazecor)
   \item Science images: It is best to start the filename with the object name (as in reference file given by parameter \verb|object_file|, see \ref{Section:create_object_list_file}). However, in order to try to match the object name with entries in the \verb|object_file| the parts of the filename containing ``\_'' and ``-'' are stripped away one by one from the end of the filename.
+  \item (optional) Emission line spectra all fibers (not necessarily at the same time) to measure the drift spectrum along the detector.
 \end{itemize}
 The suggestions are for bifurcated fiber input to the spectrograph. If a spectrograph with a single fiber is used, then the same data should be taken using the same fiber (setting parameter \verb|arcshift_side = center| will process the data correctly).
 
@@ -714,7 +715,7 @@ For each of the steps given in Chapter~\ref{Section:pipeline_steps_general} the 
 \vspace{0.5em}\noindent \textbf{Step 2:} The trace of each scientific order is stored as a table in the file given in parameter \verb|master_trace_sci_filename| (standard: \textit{master\_traces\_sci.fits}). This is a table fits-file and contains one line for each order, normally starting with the reddest order, which is located on the left side of the CCD image. Each line contains the following information:
 \begin{itemize}\setlength\itemsep{0em}
   \item Number of the aperture (starting at 0).
-  \item Central pixel (in dispersion direction) for the polynomial fit along the center (Gaussian centre) of the trace.
+  \item Central pixel (in dispersion direction) for the polynomial fit along the center (first searched by Gaussian fit and then more precise by a the maximum of a third order polynomial around the maximum) of the trace.
   \item Parameters of a polynomial fit to the center of the trace (given in parameter \verb|polynom_traces_apertures|), e.g. 5 values if the trace is fitted with a polynomial of order 5.
   \item Central pixel (in dispersion direction) for the polynomial fit along the left limit of the trace. The limit is determined from the value given in parameter \verb|width_percentile|
   \item Parameters of a polynomial fit to the left limit of the trace (given in parameter \verb|polynom_traces_apertures|).
@@ -819,22 +820,27 @@ The last lines give the information for all apertures. Columns, for which no use
 If the packages are installed, the radial velocity analysis will be run after the extraction of the science files. The necessary files will created each time the \verb|hiflex.py| is run. It is possible to add files from different nights together
 
 \subsubsection{TERRA}
-\paragraph{Files and folders in folder given in parameter path\_rv\_terra (standard: terra\_rv}
 \label{Section:files_folders_rv_for_terra}
-The data of the individual objects are stored in this folder in the subfolder \textit{object name + /data/}. If TERRA is installed and \verb|terra_jar_file| is set correctly to the TERRA \textit{PRV.jar}-file, then TERRA will run on each \textit{object name} within the folder. The results of the radial velocity analysis will be stored in \textit{object name + /results/synthetic.rv}.
+All information is relative to the folder given in parameter \verb|path_rv_terra| (standard: terra\_rv). 
+The data of the individual objects are stored in the subfolder \textit{object name + /data/}. If TERRA is installed and \verb|terra_jar_file| is set correctly to the TERRA \textit{PRV.jar}-file, then TERRA will run on each \textit{object name} within the folder. The results of the radial velocity analysis will be stored in \textit{object name + /results/synthetic.rv}.
 
-It is possible to include the information from previous nights of the same object by linking or copying the \textit{.csv}-files into the corresponding \textit{data/}-folders and rerunning \verb|python <path to scripts>/hiflex.py|. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
+It is possible to include the information from previous nights of the same object by linking or copying the \textit{.csv}-files into the corresponding \textit{data/}-folders and (1) rerunning \verb|python <path to scripts>/hiflex.py| or (2) alternatively run the commands as stored in the logfile. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
+
+It is also possible to include the information from other nights by linking or copying the files from folder given in parameter \verb|path_extraction| (standard: extracted) into the current one. Afterwards run \verb|python <path to scripts>/hiflex.py| again. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
 
 \subsubsection{SERVAL}
-\paragraph{Files and folders in folder given in parameter path\_rv\_serval (standard: serval\_rv}
 \label{Section:files_folders_rv_for_serval}
-The data to be used for each Object is stored in the files \textit{filelist_ + object name + .txt}. If SERVAL is installed and \verb|path_serval| is set correctly, then SERVAL will run on each \textit{object name} within the folder. The results of the radial velocity analysis will be stored in \textit{object name + / + object name + rvc.dat}.
+All information is relative to the folder given in parameter \verb|path_rv_serval| (standard: serval\_rv). 
+The data to be used for each Object is stored in the files \textit{filelist\_ + object name + .txt}. If SERVAL is installed and \verb|path_serval| is set correctly, then SERVAL will run on each \textit{object name} within the folder. The results of the radial velocity analysis will be stored in \textit{object name + / + object name + rvc.dat}.
 
-It is possible to include the information from previous nights of the same object by linking or copying the extraced files into the corresponding \textit{data/}-folders and rerunning \verb|python <path to scripts>/hiflex.py|. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
+It is possible to include the information from previous nights of the same object by linking or copying the extraced files into the corresponding \textit{data/}-folders and (1) rerunning \verb|python <path to scripts>/hiflex.py| or (2) alternatively run the commands as stored in the logfile. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
+
+It is also possible to include the information from other nights by linking or copying the files from folder given in parameter \verb|path_extraction| (standard: extracted) into the current one. Afterwards run \verb|python <path to scripts>/hiflex.py| again. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
+
 
 \subsubsection{CERES}
-\paragraph{Files in folder given in parameter path\_rv\_ceres (standard: ceres\_rv}
-This step is only done, if the CERES pipeline is installed and \verb|path_ceres| is set correctly to the base folder of CERES and the sub-folders \textit{utils/Correlation}, \textit{utils/GLOBALutils}, \textit{utils/OptExtract}, and \textit{utils/CCF} exist.
+The results are stored in the folder given in parameter path\_rv\_ceres (standard: ceres\_rv).
+This step is only done, if the CERES pipeline is installed and \verb|path_ceres| is set correctly to the base folder of CERES and the sub-folders \textit{utils/Correlation}, \textit{utils/GLOBALutils}, \textit{utils/OptExtract}, and \textit{utils/CCF} exist within.
 
 \begin{description}
   \item[*\_$<$mask$>$.pdf:] Cross-correlation function between object spectrum and the template.
@@ -1116,7 +1122,8 @@ rm master_*
 rm logging/sci_trace1_binned.fits
 rm master_traces_sci.fits
 rm master_traces_cal.fits
-rm master_wavelength*.fits
+rm logging/arc_lines_found.txt
+rm master_wavelength*.fits 
 rm master_flat_spec_norm.fits
 rm extracted/*
 \end{lstlisting}
@@ -1143,14 +1150,14 @@ rm extracted/*
 \subsection{Is the wavelength solution correct?}
 \label{Section:FAQ_wavelength_solution}
 \begin{itemize}
-  \item \textbf{logging/arctraces\_in\_master\_trace2.png} (if emission line lamp spectrum, otherwise \textbf{logging/arc\_line\_identification\_positions.png} (ignore the written wavelengths)): If the wavelengths of the emission lines is not increasing from up to down along the individual orders or if the redder orders are not on the left side of the image, adjust parameters \verb|rotate_frame| and \verb|flip_frame|. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
-  \item \textbf{logging/arc\_line\_identification\_residuals.png}: If the most dots fall on the x-axis , go to next chapter. If most dots fall on a sinusoidal line, increase the number of orders in parameters \verb|polynom_order_traces| or \verb|polynom_order_intertraces|. Remove everything after \textit{ master\_wavelength*.fits}.
+  \item \textbf{logging/arctraces\_in\_master\_trace2.png} (if emission line lamp spectrum, otherwise\\ \textbf{logging/arc\_line\_identification\_positions.png} (ignore the written wavelengths)): If the wavelength of the emission lines is not increasing from up to down along the individual orders or if the redder orders are not on the left side of the image, adjust parameters \verb|rotate_frame| and \verb|flip_frame|. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
+  \item \textbf{logging/arc\_line\_identification\_residuals.png}: If the most dots fall on the x-axis , go to next chapter. If most dots fall on a sinusoidal line, increase the number of polynomial orders in parameters \verb|polynom_order_traces| or \verb|polynom_order_intertraces|. Remove everything after \textit{master\_wavelength*.fits}.
   \item \textbf{logfile}: search for the (last) line containing:
   \begin{lstlisting}[style=base]
  standard deviation of the residuals between the lines and the fit
   \end{lstlisting}
   A high number of lines should have been identified to a reasonable precision (compare to a previous night). If all is the case, go to next chapter.
-  \item \textbf{logging/arc\_line\_identification\_spectrum.pdf}: The emision lines in the extracted spectrum should match with the brightest lines from the catalogue (red wavelengths, marker lengths is an indication for the brightness). If yes, go to next chapter.
+  \item \textbf{logging/arc\_line\_identification\_spectrum.pdf}: The emision lines in the extracted spectrum should match with the brightest lines from the catalogue (wavelengths in red colour, marker lengths is an indication for the catalogue brightness). If yes, go to next chapter.
   \item The lines in the above spectrum are not matching at the borders. Decrease or increase parameter \verb|polynom_order_traces|. Decrease or increase the values in \verb|opt_px_range|. Remove everything after \textit{ master\_wavelength*.fits}.
   \item The lines are completely off. Compare \textbf{logging/arctraces\_in\_master\_trace2.png} in the current directory and in the directory from where the the original wavelength solution are taken (\verb|original_master_wavelensolution_filename|). Check, that the parameters \verb|order_offset|, \verb|px_offset_order|, and \verb|px_offset_order| are large enough to cover the change between the two nights. Be sure the values are not too big. Remove everything after \textit{master\_wavelength*.fits}.
 \end{itemize}
