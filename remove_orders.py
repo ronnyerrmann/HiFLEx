@@ -19,10 +19,11 @@ if __name__ == "__main__":
     logger('\nInfo: Starting removing traces')
     log_params(params)
     
-    if not os.path.exists(params['folder_original_traces']):
-        try:
+    if os.path.exists(params['folder_original_traces']):
+        os.system('mv {0} old_{0}'.format(params['folder_original_traces']))
+    try:
             os.makedirs(params['folder_original_traces'])
-        except:
+    except:
             logger('Error: Cant create directory {0}'.format(params['folder_original_traces']))
             exit(1)
     

@@ -3329,12 +3329,12 @@ def shift_wavelength_solution(params, aspectra, wavelength_solution, wavelength_
                 .format(round(shift_med,4), round(shift_std,4), shifts.shape[0], round(width_avg,3), \
                         round(width_std,3), round(width_avg*2.35482,3), round(width_std*2.35482,3), checked_arc_lines,
                         d_shift_kms, objname, round(jd_midexp,5), text ))
-    im_head['HIERARCH HiFLEx D_SHIFT'] = (round(shift_med,4), 'Shift in dispersion direction [px]')
-    im_head['HIERARCH HiFLEx D_SHIFT_ERR'] = (round(shift_std,4), 'Uncertainty of the shift [px]')
+    im_head['HIERARCH HiFLEx D_SHIFT'] = (round(shift_med,4), 'Offset in dispersion direction [px]')
+    im_head['HIERARCH HiFLEx D_SHIFT_ERR'] = (round(shift_std,4), 'Uncertainty of the offset [px]')
     im_head['HIERARCH HiFLEx D_SHIFT_NUMBER_LINES'] = (shifts.shape[0], 'out of {0} calibration lines'.format(checked_arc_lines))
     im_head['HIERARCH HiFLEx D_WIDTH'] = (round(width_avg,2), 'Gaussian width of the calibration lines [px]')
     im_head['HIERARCH HiFLEx D_WIDTH_ERR'] = (round(width_std,4), 'Uncertainty of the width [px]')
-    im_head['HIERARCH HiFLEx D_SHIFT_KMS'] = (d_shift_kms, 'Shift in dispersion direction [km/s]')
+    im_head['HIERARCH HiFLEx D_SHIFT_KMS'] = (d_shift_kms, 'Offset in dispersion direction [km/s]')
     if len(shifts) >= ratio_lines_identified * checked_arc_lines and len(shifts) != 0:                          # Statistics only if enough lines were detected
         statistics_arc_reference_lines(shifts, [0,1,6,2], reference_names, wavelength_solution, xlows, xhighs, show=False)
     
@@ -3469,7 +3469,7 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
                         round(shifts[0,1],4), round(shifts[0,0],5), round(shifts[-1,1],4), round(shifts[-1,0],5),
                         round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4), 
                         objname, params['master_wavelengths_shift_filename'], round(jd_midexp,5) ) )"""
-    logger('Info: The shift between the wavelength solution and the current file {0} (center of exposure is {1}, JD = {2}) is {3} px ({4} km/s). {5}'.format(\
+    logger('Info: The offset between the wavelength solution and the current file {0} (center of exposure is {1}, JD = {2}) is {3} px ({4} km/s). {5}'.format(\
                         objname, datetime.datetime.utcfromtimestamp(obsdate_float).strftime('%Y-%m-%d %H:%M:%S'), round(jd_midexp,5),
                         round(shift_avg,4), round(shift_avg*np.median(wavelength_solution[:,-2]/wavelength_solution[:,-1])*Constants.c/1000.,4),
                         text ) )
