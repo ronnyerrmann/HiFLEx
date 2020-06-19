@@ -2198,6 +2198,9 @@ def find_trace_orders(params, im, imageshape):
     return traces[:,0], traces[:,1].astype(int), traces[:,2].astype(int)            # polyfits, xlows, xhighs
 
 def adjust_trace_order(kwargs):
+    """
+    This is the routine which does the work for adjust_trace_orders to allow multiprocessing. It performs the step for one order.
+    """
     [order, kwargs] = kwargs
     trace_pos = kwargs['trace_pos']
     maxFWHM = kwargs['maxFWHM']
@@ -3056,7 +3059,7 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
     logger('Info: The parameters of the polynomial are: {0}'.format(poly), show=False)
     return shifts
     
-def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None):
+def identify_emission_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None):
     """
     Identifies the lines in a spectrum by searching for the significant outliers in a polynomial fit to the data and subsequent fitting of Gaussian profiles to this positions
     :param im: 2d array with the extracted spectra
@@ -3072,10 +3075,10 @@ def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None
         xarr = np.arange(ims[1])
         yarr = im[order,:]
         notnans = ~np.isnan(yarr)
+        if np.sum(notnans) < 10:         # At the border of the chip the arc traces might be outside of the CCD
+            continue
         yarr1 = yarr[notnans]
         xarr1 = xarr[notnans]
-        if len(yarr1) < 10:         # At the border of the chip the arc traces might be outside of the CCD
-            continue
         notline_pos, pfit = sigmaclip(yarr1, x=xarr1, nc=12, sub=[], ll=10, lu=2.2, repeats=20)  #orders, sigma low, sigma high ; tested that 2.5 is too high for some lines (UNe), If lines are not identified correctly, the problem isn't here, probably
         line_pos = ~notline_pos
         for i in range(1,len(line_pos)-1):
@@ -3094,6 +3097,7 @@ def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None
             range_arr = range(max(0,pos_real-FWHM*2),min(ims[1],pos_real+FWHM*2+1))
             # check if line is saturated and if so use the short exposure time
             y_data = yarr[range_arr]
+            yarr_use = copy.copy(yarr)
             if im_short is not None and im_badpx is not None and not (im == im_short).all():
                 #print order, pos_max, np.sum(im_badpx[order,range_arr]==0), np.sum(im_badpx[order,range_arr]==0.1), np.sum(im_badpx[order,range_arr]==0.2), np.sum(im_badpx[order,range_arr]==1), np.sum(im_badpx[order,range_arr]!=-1)
                 if 0.1 in im_badpx[order,range_arr]:
@@ -3101,27 +3105,35 @@ def identify_lines(params, im, im_short=None, im_badpx=None, im_short_badpx=None
                         if 0.1 in im_short_badpx[order,range_arr]:          # ignore saturated lines in the short exposure
                             continue
                     y_data = im_short[order,range_arr]
+                    yarr_use = copy.copy(im_short[order,:])
                     #if np.sum(already_found[range_arr]) == 0:           # Only print once in the area
                     #    print('Used the short exposure time to find the centroid of the line in order {1} @ px {0}'.format(pos_real, order))
             # Fit a double Gauss 
             #popts = oneD_blended_gauss
             # fit the gauss, pos_real is the expected center
-            popt = centroid_order(xarr[range_arr],y_data,pos_real,FWHM*2, significance=2, blended_gauss=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
-            #if order == 0 and pos_real>100 and pos_real<13150:
-            #    print xarr[range_arr],y_data,pos_real, popt
-            if popt[1] == 0 or popt[2] > FWHM*1.5 or int(round(popt[1])) >= ims[1] or int(round(popt[1])) < 0:
+            if True:       # old way until v1.0.0 (including)
+                popt = centroid_order(xarr[range_arr],y_data,pos_real,FWHM*2, significance=2, blended_gauss=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+                centre, width, height = popt[1], popt[2], popt[0]
+            else:           # using polynomial of order 3
+                cen_gauss, cen_poly, width, leftmin,rightmin = find_center(yarr_use, pos_real, order, FWHM*2, border_pctl=10, significance=2.0, polymax=True)
+                if not np.isnan(cen_poly):      centre = cen_poly
+                elif not np.isnan(cen_gauss):   centre = cen_gauss
+                else:                           centre, width = 0,0
+                height = np.max(yarr_use[max(0, int(round(centre-width))):min(ims[1],int(round(centre+width))+1)])
+            #if order == 2 and pos_real>100 and pos_real<13150:
+            #    print xarr[range_arr],np.round(y_data,0).astype(int), pos_real, popt, cen_gauss, cen_poly, width, leftmin,rightmin
+            #if order == 3:
+            #    print("exit 3117")
+            #    exit(100)
+            if centre == 0 or width > FWHM*1.5 or int(round(centre)) >= ims[1] or int(round(centre)) < 0:
                 #print 'not used',order, pos_real,popt
                 already_found[max(0,pos_real-1):min(len(already_found),pos_real+1)+1] = 1
                 continue
-            #print int(round(popt[1])),round(popt[1]), popt[1]
-            if already_found[int(round(popt[1]))] == 1:
+            if already_found[int(round(centre))] == 1:
                 #print 'already found',order, pos_real,popt
                 continue
-            #print 'used',order, pos_real,popt
-            #print order,popt, pos_real #, yarr[pos_real-5:pos_real+6].astype(int)
-            #yarr -= oneD_gauss(xarr,popt)  #line is not really a gauss
-            already_found[max(0,int(popt[1]-popt[2]*3)):min(len(yarr),int(popt[1]+popt[2]*3))+1] = 1
-            lines.append([order, popt[1], popt[2], popt[0] ])
+            already_found[max(0,int(centre-width*3)):min(len(yarr),int(centre+width*3))+1] = 1
+            lines.append([order, centre, width, height ])
 
     lines = np.array(lines)
     # Remove the lines which are too wide/narrow

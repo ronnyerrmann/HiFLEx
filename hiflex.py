@@ -187,7 +187,7 @@ if __name__ == "__main__":
                 arc_lines_px_txt = read_text_file(fname, no_empty_lines=True)              # list of strings, first entry is header 
                 arc_lines_px = np.array( convert_readfile(arc_lines_px_txt[1:], [int, float, float, float], delimiter='\t', replaces=['\n',' ']) )
             else:
-                arc_lines_px = identify_lines(params, cal_l_spec, cal_s_spec, good_px_mask_l, good_px_mask_s)
+                arc_lines_px = identify_emission_lines(params, cal_l_spec, cal_s_spec, good_px_mask_l, good_px_mask_s)
                 logger('Info: Identified {0} lines in the arc spectrum. These lines are stored in file {1}'.format(len(arc_lines_px), fname ))
                 printarrayformat = ['%1.1i', '%3.2f', '%3.2f', '%3.1f']
                 logger('order\tpixel\twidth\theight of the line', show=False, printarrayformat=printarrayformat, printarray=arc_lines_px, logfile=fname)
