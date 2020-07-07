@@ -12,6 +12,14 @@ CONFIGFILE = 'conf.txt'
 # Start of code
 # deal with arguments from a text file
 params = textfileargs(params, CONFIGFILE)
+global calimages    # dictionary for all calibration images
+
+for calib in [ ['','cal2','cal'], ['_sci','cal1', 'sci'] ]:
+    if 'master_wavelensolution'+calib[0]+'_filename' not in params.keys():
+        params['master_wavelensolution'+calib[0]+'_filename'] = params['master_wavelensolution_filename'].replace('.fit',calib[0]+'.fit')
+    if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']):
+        wave_sol_dict = read_wavelength_solution_from_fits(params['master_wavelensolution'+calib[0]+'_filename'])
+calimages['wavelength_solution'] = copy.deepcopy( wave_sol_dict['wavesol'] )
 
 rv_results_to_hiflex(params)
 

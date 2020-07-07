@@ -133,7 +133,8 @@ resolution_offset_pct = 1
 original_master_wavelensolution_filename = /data/ronny/Reduced/20190205/master_wavelength.fits
 
   ## To determine the background
-  # background_width_multiplier defines the area which is excluded for determining the background. It has the same settings as extraction_width_multiplier/arcextraction_width_multiplier.
+  # background_width_multiplier defines the area which is excluded for determining the background, e.g. to remove the scattered light.
+  # It has the same settings as extraction_width_multiplier/arcextraction_width_multiplier.
   # The first value is for the science and the second for the calibration traces
   #                 format: list of two floats
 background_width_multiplier = [1.2, 0.5]
@@ -171,8 +172,8 @@ sigmaclip_spectrum = []
   #         This value will be overwritten by the entry in the second column with "sci-cal" as fourth column in the file from parameter 'master_wavelengths_shift_filename'
 pxshift_between_wavesolutions = 0
 
-  # In order to create a linear wavelength scale, what should the resolution of the scale be in Angstrom
-wavelength_scale_resolution = 0.01
+  # In order to create a linear wavelength scale for the normalised spectrum, what should the resolution of the scale be in Angstrom. Set to 0 to skip the step
+wavelength_scale_resolution = 0.00
 
   ## Use the extracted flux from the files for blaze correction to correct for the trace or use the fitted flux to correct for the blaze
 blazercor_function = flux

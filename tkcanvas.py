@@ -14,13 +14,21 @@ Version 0.0.11
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-try:        # after version 2.2
-    from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk as NavigationToolbar2TkAgg
-except:     # before version 2.2
-    from matplotlib.backends.backend_tkagg import NavigationToolbar2TkAgg
-from matplotlib.backend_bases import cursors
-import matplotlib.backends.backend_tkagg as tkagg
+backend = 'TkAgg'           # The NavigationToolbar doesn't contain the settings for x,y zoom or line styles
+# backend = 'Qt4Agg'        # This requires more work
+if backend == 'TkAgg':
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    try:        # after version 2.2
+        from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk as NavigationToolbar2TkAgg
+    except:     # before version 2.2
+        from matplotlib.backends.backend_tkagg import NavigationToolbar2TkAgg
+    from matplotlib.backend_bases import cursors
+    import matplotlib.backends.backend_tkagg as tkagg
+else:
+    from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvasTkAgg
+    from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar2TkAgg
+    from matplotlib.backend_bases import cursors
+    import matplotlib.backends.backend_qt4agg as tkagg
 
 import time
 

@@ -243,7 +243,7 @@ After all the calibration steps have been performed for a given instrument (see\
   \item[dark] : Apply a master dark. A dark with the same exposure time as read from the fits header will be applied. %The necessary parameters are created automatically by the script \verb|file_assignment.py|.
   \item[rflat] : Apply a master true flat. %The necessary parameters are created automatically by the script \verb|file_assignment.py|.
   %\item[background] : Applies background correction using the filename given in the parameter \verb|background_filename|. The background image will be scaled by the exposure time of the scientific image, before its subtracted from the scientific image.
-  \item[background] : Applies background correction by fitting a 2d polynomial against the current reduced image, excluding the area of the science and calibration traces. The fitted 2d-image is then subtracted from the current image.
+  \item[background] : For Scattered light removal. Applies background correction by fitting a 2d polynomial against the current reduced image, excluding the area of the science and calibration traces. The fitted 2d-image is then subtracted from the current image.
 \end{description}
 
 \noindent The following parameters change the way, several CCD images are combined. In the pipeline the individual frames are corrected before frames are combined.
@@ -569,7 +569,8 @@ You might also want to read Chapter~\ref{Section:FAQ_wavelength_solution}.
     \item[b)] Finding the offset between this frame and the traces (e.g. which offsets allows the extraction of maximum flux).
     \item[c)] Extraction of the apertures for the science fiber.
     \item[d)] (for bifurcated fiber spectrographs) Extraction of the apertures for the calibration fiber.
-    \item[e)] Finding the offset between the emission lines in the calibration spectra and the lines used for the wavelength solution (for bifurcated fiber spectrographs). Additionally, interpolating the measured drift from step 6 to the mid exposure time. Calculating the wavelength for each pixel in the extracted spectrum.
+    \item[e1)] Finding the offset between the emission lines in the calibration spectra and the lines used for the wavelength solution (for bifurcated fiber spectrographs).
+    \item[e1)] Additionally, if possible the measured drift from step 6 is interpolated to the mid exposure time and applied. Calculating the wavelength for each pixel in the extracted spectrum.
     \item[f)] Creating the blaze corrected spectrum.
     \item[g)] Creating the spectrum with normalised continuum.
     %\item[h)] (Optional) Perform the radial velocity analysis (cross-correlation with template spectrum).
@@ -873,7 +874,18 @@ This step is only done, if the CERES pipeline is installed and \verb|path_ceres|
   \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
 \end{enumerate}
 
+\newpage
+\section{Technical details to some steps}
 
+\subsection{Measuring the drift of the wavelength solution}
+The wavelength solution is only created once, assuming that the user provides a high quality set of spectra for this step. To calibrate the spectrum during the observation the drift can be measured using emission lamp spectra. For each line that was used to create the wavelength solution a Gaussian fit is applied to the expected area in the emssion line spectrum and the pixel-offset measured. The distribution of the offsets is then binned with few different binning widths and a Gaussian fitted. The centre of the Gaussian and the width are used for the corrections.
+
+Depending on the spectrograph and available data, they can be used to
+\begin{itemize}
+  \item Measure the offset between science and calibration fiber (at different times during the night).
+  \item Monitor the drift during the night, so the drift can be interpolated for the science spectra (single fiber spectrograph).
+  \item Measure the the drift for the current science frame (bifurcated spectrograph).
+\end{itemize}
 
 % -------------------------------------------------------------------------------------------
 
