@@ -1,11 +1,11 @@
 ## How to used the Scripts
-# prepare filelist: run file_assignment.py
+# prepare filelist: run prepare_file_list.py
 # every day: run HiFLEx.py   : shift orders, create wavelength solution for the day, create normalised extracted spectrum, extract the spectrum
 
 # Configuration file for:
 #   create_badpx_mask.py
-#   file_assignment.py
-#   HiFLEx.py
+#   prepare_file_list.py
+#   hiflex.py
 #   remove_orders.py
 
 ## Format of the parameters:
@@ -106,7 +106,7 @@ polynom_order_traces = [4,4]
   # polynom_order_intertrace: order for rough and final solution to fit the parameters of the polynomials between the orders. Normally 2 should be fine
   #                 format: list of one or two integers
 polynom_order_intertraces = 4
-  # opt_px_range: What fraction around the central pixel of each order should be used to corellate lines in the arc spectrum with the reference spectrum. Normally [0.6, 1.0] is good.
+  # opt_px_range: What fraction around the central pixel of each order should be used to corellate lines in the emmission line (arc) spectrum with the reference spectrum. Normally [0.9, 1.0] is good.
   #               If the previous solution differs a lot at the edges of the orders, than the first value should be smaller.
   #               If the previous solution matches nearly exactly the current solution, then both value can be bigger, e.g. [0.8,2]
 opt_px_range = [0.9, 1.0]
@@ -182,12 +182,13 @@ blazercor_function = flux
   # Path and filename to the badpixel mask. Created by create_badpx_mask.py. Leave empty 
 badpx_mask_filename = /data/ronny/Reduced/NA/bad_px_mask.fits
 
-  # (Path and) Filename to the file with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. 
+  # (Path and) Filename to the file(s) with the catalog lines. The file must contain tab-separated wavelength, line strength, and element. 
   #             The values can be used as given from the NIST database, e.g. 6550.653 \t 140* \t Ne II
   #             The file will be looked for in the position given, in the reduction folder, and in the HiFLEx folder
+  #             If a list of 2 files is given, the first file will be used create a rough wavelength solution and the second file with only stable lines to create the final wavelength solution
 reference_catalog = reference_lines_UNe.txt
-reference_catalog = reference_lines_ThAr.txt
-  # The Script runs arc solution in Angstrom. Give the multiplier for the wavelength to get Angstrom, e.g. catalog_file_wavelength_muliplier=10 for the reference_catalog in [nm]
+reference_catalog = reference_lines_ThAr.txt, reference_lines_Th.txt
+  # The Script requires Angstrom. Give the multiplier for the wavelength to get Angstrom, e.g. catalog_file_wavelength_muliplier=10 for a reference_catalog in [nm]
 catalog_file_wavelength_muliplier = 1
   # Which lines of the catalogue should be used (duplicates are not a problem)
 use_catalog_lines = NeI, UI, ThI, ArI, ThII, ArII
@@ -306,17 +307,17 @@ path_reduced                = NA
 
   ## Standard filenames:
   #---------------------
-  # master file for the orders of the scientific traces, of the arc traces, and the normalised extracted flat spectrum. Created by reduction_day.py
+  # master file for the orders of the scientific traces, of the calibration (arc) traces, and the normalised extracted flat spectrum. Created by hiflex.py
 master_trace_sci_filename           = master_traces_sci.fits
 master_trace_cal_filename           = master_traces_cal.fits
 master_wavelensolution_filename     = master_wavelength.fits
 master_blaze_spec_norm_filename     = master_blaze_spec_norm.fits
 master_wavelengths_shift_filename   = master_wavelengths_shift.txt
 
-  # master file for identifiying which pixel contain background. Created by reduction_day.py
+  # master file for identifiying which pixel contain background. Created by hiflex.py
 background_px_filename          = background_px.fits
 
-  # master file for the background correction. Created by reduction_day.py
+  # master file for the background correction. Created by hiflex.py
 background_filename             = background.fits
 
   ## RV analysis: please read the manual to check how to install the packages.

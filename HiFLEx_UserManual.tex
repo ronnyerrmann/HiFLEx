@@ -870,9 +870,11 @@ This step is only done, if the CERES pipeline is installed and \verb|path_ceres|
   \item The script has some hard coded values in the *.py files (normally at the beginning of a procedure). These values can be changed for testing, but usually do not need any changes.
   \item The pipeline reads the parameters from a configuration file (standard: \verb|conf.txt|), given at the beginning of the python scripts. Some of the parameters in the configuration file need adjustment on a regular basis (see \ref{Section:first_configuration} and \ref{Section:further_configuration}).
   \item Furthermore, the pipeline reads the configuration file given in parameter \verb|configfile_fitsfiles| (standard: \verb|fits_conf.txt|), which is automatically created by the pipeline when running \verb|file_assignment.py|.
-  \item The parameters which are set in the configuration file(s) can be overwritten with a command line input when a python script is started (e.g. \verb|python bla.py argument1=valueX argument2=valueY|).
+  \item The parameters which are set in the configuration file(s) can be overwritten with a command line input when a python script is started (e.g. \verb|python bla.py argument1=valueX argument2=valueY| (no spaces around the =)).
   \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
 \end{enumerate}
+
+% -------------------------------------------------------------------------------------------
 
 \newpage
 \section{Technical details to some steps}
@@ -981,21 +983,21 @@ python extract_single_chip.py
 \subsubsection{Preparing for data extraction}
 
 \noindent The following replacements are necessary in the conf.txt file:
-\begin{itemize}\setlength\itemsep{0em}
+\begin{itemize}\small\setlength\itemsep{-0.1cm}
   \small
   \item \verb|subframe                = [4096,2048,0,50]|
   \item \verb|rotate_frame            = 180|
   \item \verb|bin_search_apertures    = 20,2|
   %\item \verb|arcshift_range    = [-12, -20]| (red chip),\\ \verb|arcshift_range  = [-12, -20]| (blue chip)
   \item \verb|arcshift_side           = left|
-  \item \verb|original_master_wavelensolution_filename = master_wavelensolution_manual.fits|. The file \verb|pixel_to_wavelength.txt| needs to be created (\ref{section:create_new_wave_solution}).
-  \item \verb|arc_lines_catalog 	  = <path>reference_lines_ThAr-HARPS_Ceres.txt|
+  \item \verb|original_master_wavelensolution_filename = master_wavelensolution_manual.fits|.
+%  \item \verb|reference_catalog 	  = <path>reference_lines_ThAr-HARPS_Ceres.txt|
   \item \verb|use_catalog_lines 	  = ThI, ArI, ?, NoID, ArII, ThII|
   \item \verb|raw_data_imtyp_keyword  = OBJECT|
   \item \verb|raw_data_imtyp_bias     = BIAS,BIAS|
-  \item \verb|raw_data_imtyp_sflat    = LAMP,DARK,TUN|
+  \item \verb|raw_data_imtyp_trace1   = LAMP,DARK,TUN|
+  \item \verb|raw_data_imtyp_trace2   = WAVE,WAVE,THAR2|
   \item \verb|raw_data_imtyp_blaze    = LAMP,LAMP,TUN|
-  \item \verb|raw_data_imtyp_arc      = WAVE,WAVE,THAR2|
   \item \verb|bias_calibs_create_g    = subframe|
   \item \verb|trace1_calibs_create_g  = subframe, bias|
   \item \verb|trace2_calibs_create_g  = subframe, bias|
@@ -1024,7 +1026,6 @@ The pipeline produces the following files:
 \end{description}
 
 Please note that the CERES pipeline uses both the red and the blue HARPS chip in order to determine the radial velocities (the data of the blue chip can be avoided by changing \verb|spec| into \verb|spec[:,:26,:]| in \verb|harpspipe.py|, lines 1507 and 1530). Furthermore, a cosmic ray correction is applied. The extracted spectra have the same features as when extracting data with the HiFLEx pipeline.
-
 
 
 \subsubsection{HARPS data reduced by the ESO Phase 3 pipeline}
@@ -1060,7 +1061,7 @@ The following files are available:
 The wavelength solution in the \verb|e2ds| files is stored in the header\footnote{See page 22 in \url{https://www.eso.org/sci/facilities/lasilla/instruments/harps/doc/DRS.pdf}}. The order numbering starts at 0 (bluest order) and the pixel numbering \textbf{probably} starts at 0, too (bluest pixel). The \verb|e2ds| files can be converted to the HiFLEx format by using the script \verb|reduced_harps_to_hiflex.py|.
 
 \paragraph{Results}
-The extracted calibration spectrum and the science spectrum are very similar. Emission and absorption lines are at the same wavelength. The extracted flux is about 10-12\% lower and the noise slightly higher.
+The extracted calibration spectrum and the science spectrum are very similar. Emission and absorption lines are at the same wavelength. The extracted flux is about a few percent lower and the noise slightly higher.
 
 Few problems occur when comparing the data of reduced with this pipeline and the data from the ESO Phase 3 pipeline:
 \begin{enumerate}\setlength\itemsep{0em}
@@ -1070,7 +1071,6 @@ Few problems occur when comparing the data of reduced with this pipeline and the
   \item Different flat fielding.
   \item Traces have a fixed width, therefore the S/N of the extracted data might decrease slightly.
   \item Only one CCD is processed at a time, which might decrease the precision of the wavelength solution.
-  \item The wavelength shift between science and calibration fiber is not determined (yet).
 \end{enumerate}
 
 \subsubsection{Analysing the reduced HARPS data with TERRA}
@@ -1080,8 +1080,6 @@ For more information about TERRA please refer to the literature\footnote{\url{ht
   \item[HARPS.*\_ccf\_\textless sptype\textgreater\_A.fits] Cross correlation function matrix for mask for \textless sptype\textgreater.
   \item[HARPS.*\_e2ds\_\textless fibre\textgreater.fits] 2D extracted spectrum with wavelength solution in the header.
 \end{description}
-
-\textit{Todo: more}
 
 \subsection{Extracting MRES data}
 
@@ -1100,6 +1098,7 @@ The testing of the pipeline was done for the MRES data taken on 2018-11-27.
   \item \verb|raw_data_imtyp_bias      = NA|
   \item \verb|raw_data_imtyp_dark      = NA|
   \item \verb|raw_data_imtyp_flat      = NA|
+  \item \verb|raw_data_imtyp_blaze     = NA|
   \item \verb|raw_data_exptim_keyword  = EXPOSURE|
   \item \verb|raw_data_dateobs_keyword = DATE|
   \item \verb|arc_calibs_create_g      = subframe,bias|

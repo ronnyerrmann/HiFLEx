@@ -260,7 +260,7 @@ def textfileargs(params, textfile=None):
         else:
             logger('Warn: I dont know how to handle command line argument: {0}'.format(arg))
     params.update(cmdparams)
-    list_txt = ['use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys']
+    list_txt = ['reference_catalog', 'use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys']
     list_int = ['arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck', 'dataset_rv_analysis']
     list_float = ['opt_px_range', 'background_width_multiplier', 'sigmaclip_spectrum']
@@ -276,9 +276,9 @@ def textfileargs(params, textfile=None):
                'path_harpsformat', 'master_blaze_spec_norm_filename']     #, 'configfile_fitsfiles' (excluded, as should be handled as conf.txt
     full_filenames = ['badpx_mask_filename', 'original_master_traces_filename', 'original_master_wavelensolution_filename',
                 'configfile_fitsfiles', 'raw_data_file_list', 'terra_jar_file']   # deal with full filenames -> nothing to do
-    texts = ['editor', 'extracted_bitpix', 'site', 'reference_catalog', 'object_file', 'raw_data_imtyp_keyword', 
+    texts = ['editor', 'extracted_bitpix', 'site', 'object_file', 'raw_data_imtyp_keyword', 
              'raw_data_imtyp_bias', 'raw_data_imtyp_dark', 'raw_data_imtyp_flat', 'raw_data_imtyp_trace1', 'raw_data_imtyp_blaze', 'raw_data_imtyp_trace2',
-             'raw_data_exptim_keyword', 'raw_data_dateobs_keyword', 'raw_data_timezone_cor']      # -> nothing to do
+             'raw_data_exptim_keyword', 'raw_data_dateobs_keyword', 'raw_data_timezone_cor', 'blazercor_function']      # -> nothing to do
     paths, loggings = [], []
     #list_raw = []              # not necessary anymore
     for entry in params.keys():                         # make the live easier by adding entries automatically to the lists above
@@ -3187,7 +3187,7 @@ def identify_emission_lines(params, im, im_short=None, im_badpx=None, im_short_b
     
     return lines
 
-def read_reference_catalog(params, filename=None, wavelength_muliplier=None, arc_lines=None):
+def read_reference_catalog(params, filenames=None, wavelength_muliplier=None, arc_lines=None):
     """
     Reads the reference catalogue from a file and extracts the lines which should be used
     :param filename: text, filename of the catalogue file. The file needs to consist of 3 columns: wavelength of the line, 
@@ -3197,63 +3197,69 @@ def read_reference_catalog(params, filename=None, wavelength_muliplier=None, arc
     :return reference_catalog: 2d array with one entry for each line. Each entry contains the wavelength, the intensity of the line, and the index in the catalogue
     :return reference_names: list with same length as reference_catalog, name of each line
     """
-    if filename is None:                filename = params['reference_catalog']
-    if wavelength_muliplier is None:    wavelength_muliplier = params['catalog_file_wavelength_muliplier']
-    if arc_lines is None:               arc_lines = params['use_catalog_lines']
+    if filenames is None:                   filenames = params['reference_catalog']
+    if type(filenames).__name__ == 'str':   filenames = [filenames]
+    if wavelength_muliplier is None:        wavelength_muliplier = params['catalog_file_wavelength_muliplier']
+    if arc_lines is None:                   arc_lines = params['use_catalog_lines']
     for i in range(len(arc_lines)):
         arc_lines[i] = arc_lines[i].replace(' ','')
-    reference_catalog, reference_names = [], []
-    refernce_files, refernce_files_full = find_file_in_allfolders(filename, [params['result_path']] + params['raw_data_paths'] + [os.path.realpath(__file__).rsplit(os.sep,1)[0]+os.sep])
-    if len(refernce_files) == 0:
-        logger('Error: file for the reference coordinates does not exist. Checked: {0}'.format(refernce_files_full) )
-    for refernce_file in refernce_files:
-        with open(refernce_file, 'r') as file:
-            for line in file:
-                line = line[:-1].split('\t')
-                if len(line) < 3:
-                    continue
-                if line[2].replace(' ','') not in arc_lines:        # if Ar IV
-                    continue
-                try:
-                    line[0] = float(line[0])*wavelength_muliplier   # wavelength in Angstrom
-                except:
-                    logger('Warn: Wavelength {0} of line {1} in file {2} cannot be transformed to float'.format(line[0], line, refernce_file))
-                    continue                                        # wavelength can't be transformed to float
-                for i in range(len(line[1])+1)[::-1]:               # Make intensity into a number, intensity can contain text at the end
+    reference_lines_dict = dict(reference_catalog=[], reference_names=[])
+    for ii, filename in enumerate(filenames):
+        reference_catalog, reference_names = [], []
+        refernce_files, refernce_files_full = find_file_in_allfolders(filename, [params['result_path']] + params['raw_data_paths'] + [os.path.realpath(__file__).rsplit(os.sep,1)[0]+os.sep])
+        if len(refernce_files) == 0:
+            logger('Error: file for the reference coordinates does not exist. Checked: {0}'.format(refernce_files_full) )
+        for refernce_file in refernce_files:
+            with open(refernce_file, 'r') as file:
+                for line in file:
+                    line = line[:-1].split('\t')
+                    if len(line) < 3:
+                        continue
+                    if line[2].replace(' ','') not in arc_lines:        # if Ar IV
+                        continue
                     try:
-                        line[1] = float(line[1][:i])                # It's a number
-                        break
+                        line[0] = float(line[0])*wavelength_muliplier   # wavelength in Angstrom
                     except:
-                        continue                                    # Try without the last character
-                if i == 0:
-                    line[1] = 1.
-                if line[1] < 0:
-                    logger('Warn: Line intensity cannot be smaller than 0.0, check line {0} in {1}'.format(line, refernce_file))
-                    line[1] = 1.
-                if line[1] == 0:
-                    line[1] = 0.1
-                reference_names.append(line[2])
-                line = line[0:2]
-                if reference_names[-1].find('Ar I') == 0:
-                    line[1] *= 50
-                line.append(len(reference_catalog))
-                reference_catalog.append(line)   # wavelength in Angstrom, relative intensity of the line, index of line in reference_names
-        if len(reference_catalog) > 0:
-            break
-    if len(reference_catalog) == 0:
-        logger('Error: no reference lines found in {0} for the requested lines {1}'.format(refernce_files, arc_lines))
-    reference_catalog = np.array(reference_catalog)
-    arcs = reference_catalog.shape
-    # Remove the faintest lines, if too many lines are in the catalogue
-    if arcs[0] > 100000:
-        breakvalue = np.percentile(reference_catalog[:,1],min(90.,arcs[0]/120.))
-        keep = np.logical_or(reference_catalog[:,1] >= breakvalue , reference_catalog[:,1] == 1)
-        for i in range(arcs[0])[::-1]:
-            if keep[i] == False:
-                del reference_names[i]                      # remove the names
-        reference_catalog = reference_catalog[keep,:]       # remove the wavelengths, intensities
-        logger('Info The faintest {0} of {1} entries in the arc reference file {2} will not be used '.format(arcs[0]-reference_catalog.shape[0], arcs[0], refernce_file ))
-    return reference_catalog, reference_names
+                        logger('Warn: Wavelength {0} of line {1} in file {2} cannot be transformed to float'.format(line[0], line, refernce_file))
+                        continue                                        # wavelength can't be transformed to float
+                    for i in range(len(line[1])+1)[::-1]:               # Make intensity into a number, intensity can contain text at the end
+                        try:
+                            line[1] = float(line[1][:i])                # It's a number
+                            break
+                        except:
+                            continue                                    # Try without the last character
+                    if i == 0:
+                        line[1] = 1.
+                    if line[1] < 0:
+                        logger('Warn: Line intensity cannot be smaller than 0.0, check line {0} in {1}'.format(line, refernce_file))
+                        line[1] = 1.
+                    if line[1] == 0:
+                        line[1] = 0.1
+                    reference_names.append(line[2])
+                    line = line[0:2]
+                    if reference_names[-1].find('Ar I') == 0:
+                        line[1] *= 50
+                    line.append(len(reference_catalog))
+                    reference_catalog.append(line)   # wavelength in Angstrom, relative intensity of the line, index of line in reference_names
+            if len(reference_catalog) > 0:
+                break
+        if len(reference_catalog) == 0:
+            logger('Error: no reference lines found in {0} for the requested lines {1}'.format(refernce_files, arc_lines))
+        reference_catalog = np.array(reference_catalog)
+        arcs = reference_catalog.shape
+        # Remove the faintest lines, if too many lines are in the catalogue
+        """if arcs[0] > 100000:
+            breakvalue = np.percentile(reference_catalog[:,1],min(90.,arcs[0]/120.))
+            keep = np.logical_or(reference_catalog[:,1] >= breakvalue , reference_catalog[:,1] == 1)
+            for i in range(arcs[0])[::-1]:
+                if keep[i] == False:
+                    del reference_names[i]                      # remove the names
+            reference_catalog = reference_catalog[keep,:]       # remove the wavelengths, intensities
+            logger('Info The faintest {0} of {1} entries in the arc reference file {2} will not be used '.format(arcs[0]-reference_catalog.shape[0], arcs[0], refernce_file ))"""
+        reference_lines_dict['reference_catalog'].append(reference_catalog)
+        reference_lines_dict['reference_names'].append(reference_names)
+        
+    return reference_lines_dict
 
 def remove_orders_from_wavelength_solution(wave_sol_dict, keep_orders):
     """
@@ -3269,7 +3275,7 @@ def remove_orders_from_wavelength_solution(wave_sol_dict, keep_orders):
 
     return wave_sol_dict
 
-def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_catalog, reference_names, xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=20.0, in_shift=0, fib='cal', fine=False, im_head=dict()):
+def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_dict, xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=20.0, in_shift=0, fib='cal', fine=False, im_head=dict()):
     """
     Determines the pixelshift between the current arc lines and the wavelength solution
     Two ways for a wavelength shift can happen:
@@ -3291,9 +3297,13 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_catalog
     :param fib: for which fiber is wavelength solution
     :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
+    sigma = 3.5     # before 20200708
+    sigma = 2       # test on 20200708 -> no difference
+    sigma = 3.0
     
     wavelength_solution = wave_sol_dict['wavesol']
     wavelength_solution_arclines = wave_sol_dict['reflines']
+    reference_catalog, reference_names = reference_lines_dict['reference_catalog'][-1], reference_lines_dict['reference_names'][-1]
     #logger('Step: Finding the wavelength shift for this exposure')
     if np.max(wavelength_solution[:,-1]) < 1000:                 # pseudo solution, wavelength of the central pixel is < 1000 Angstrom
         return copy.deepcopy(wavelength_solution), 0., im_head               # No shift is necessary
@@ -3334,7 +3344,7 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_catalog
                 range_arr = range( max(0,pos+in_shift_int-int(maxshift)), min(ass[1],pos+in_shift_int+int(maxshift)+1) )     # Range to search for the arc line
                 #print range_arr, xarr, aspectra.shape, order_index
                 #get_timing('{0}'.format(arcline))
-                popt = centroid_order(xarr[range_arr],aspectra[order_index,range_arr], pos+in_shift_int, FWHM[order_index,0]*3, significance=3.5, bordersub_fine=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+                popt = centroid_order(xarr[range_arr],aspectra[order_index,range_arr], pos+in_shift_int, FWHM[order_index,0]*3, significance=sigma, bordersub_fine=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
                 #print popt, range_arr
                 #get_timing('{0}'.format(popt))
                 if popt[1] == 0 or popt[2] > FWHM[order_index,0]*1.5:
@@ -3370,13 +3380,14 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_catalog
         return shifts
     elif maxshift > 5. and shifts.shape[0] >= ratio_lines_identified * checked_arc_lines and shifts.shape[0] != 0:
         shift_med = np.median( (shifts[:,3]-shifts[:,7]) )      # Better: check within bins where the most matches are found
-        shifts = shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_catalog, reference_names, 
+        shifts = shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_dict, 
                                            xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=5.5, in_shift=shift_med, fib=fib, fine=True)
     
     shift_avg, shift_med, shift_std, width_avg, width_std, textsource = in_shift, in_shift, 0, 0, 0 , ''
     if shifts.shape[0] >= ratio_lines_identified * checked_arc_lines and shifts.shape[0] != 0:                          # Only if enough lines have been detected
         #shift_avg, shift_std = np.mean( (shifts[:,4]-shifts[:,2]) / shifts[:,2] ), np.std( (shifts[:,4]-shifts[:,2]) / shifts[:,2], ddof=1)    # Will vary along the CCD
-        """orders = np.unique(shifts[:,0])
+        """
+        orders = np.unique(shifts[:,0])
         data_x, data_y, label, popts = [], [], [], []
         for order in orders:
             data = shifts[shifts[:,0]==order,:]
@@ -3386,10 +3397,10 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_catalog
             if len(label) == 10 or order == orders[-1]:
                 plot_img_spec.plot_points(data_x, data_y, label, ['testfig_{0}.png'.format(order)], show=False, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01], 
                                   return_frame=False, x_title='Position [px]', y_title='Difference [px]', linestyle="", marker=["o"]*10+["s"]*10+["v"]*10+["^"]*10+["+"]*10+["x"]*10+["."]*10)
-                data_x, data_y, label = [], [], []"""
+                data_x, data_y, label = [], [], []          #"""
         """# This creates not conclusive picture for about 1000 lines. If run on the individual files for the wavelength solution, it shows were the wavelength solution is not perfect
         data_x, data_y, label, popts = [], [], [], []
-        bins = 30
+        bins = 10
         #for bins in np.linspace(shifts.shape[0]/30, shifts.shape[0]/7, 11, dtype=int):
         for goodwave in [ (shifts[:,4] <= 6000), ((shifts[:,4] > 6000)&(shifts[:,4] <= 7000)), ((shifts[:,4] > 7000)&(shifts[:,4] <= 8000)), (shifts[:,4] > 8000) ]:
          for goodx in [ (shifts[:,3] <= 800), ((shifts[:,3] > 800)&(shifts[:,3] <= 1348)), (shifts[:,3] > 1348) ]:
@@ -3405,9 +3416,9 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_catalog
             data_y.append(oneD_gauss(hist_x2,popt))
             label.append('Gauss {0}'.format(bins))
             popts.append(popt)
-            print bins, ran, popt, np.median(data[:,3] - data[:,7])
+            print bins, ran, popt, np.median(data[:,3] - data[:,7]), data.shape[0]
         plot_img_spec.plot_points(data_x, data_y, label, ['testhist'], show=False, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01], 
-                                  return_frame=False, title='{0}'.format(popt), x_title='Difference [px]', y_title='Count', linestyle="-", marker="o")"""
+                                  return_frame=False, title='{0}'.format(popt), x_title='Difference [px]', y_title='Count', linestyle="-", marker="o")      #"""
        
         shift_avg, shift_std = np.mean( (shifts[:,3]-shifts[:,7]) ), np.std( (shifts[:,3]-shifts[:,7]), ddof=1)
         if shifts.shape[0] > 200:
@@ -3867,7 +3878,7 @@ def get_obsdate(params, im_head):
     return im_head, obsdate_midexp, obsdate_mid_float, jd_midexp
     #return obsdate_midexp, obsdate_mid_float, exposure_time, obsdate, fraction, jd_midexp
     
-def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wave_sol_dict, reference_catalog, reference_names, flat_spec_norm, im_trace, objname):
+def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wave_sol_dict, reference_lines_dict, flat_spec_norm, im_trace, objname):
     """
     Extracts the wavelength calibration
     
@@ -3889,8 +3900,8 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
         fib = 'sci'
     else:
         logger('Error: The filename does not end as expected: {0} . It should end with _wavecal or _wavesci. This is probably a programming error.'.format(im_name))
-    wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_catalog, 
-                                                              reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, fib=fib, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
+    wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_dict, 
+                                                              xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, fib=fib, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, aspectra)
     im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
     im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
@@ -3970,7 +3981,7 @@ def find_file_in_allfolders(filename, folders=[]):
     
     return pathfiles, pathfiles_full
     
-def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wave_sol_dict, reference_catalog, reference_names, flat_spec_norm, im_trace):
+def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wave_sol_dict, reference_lines_dict, flat_spec_norm, im_trace):
     """
     Extracts the spectra and stores it in a fits file
     
@@ -4015,8 +4026,8 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         aspectra, agood_px_mask = spectra*0, copy.copy(good_px_mask)
     else:
         aspectra, agood_px_mask, aextr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head)
-    wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_catalog, 
-                                                              reference_names, xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
+    wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_dict, 
+                                                              xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, spectra)
     espectra = combine_photonnoise_readnoise(spectra, im_head['HiFLEx BCKNOISE'] * np.sqrt(extr_width) )     # widths[:,2] is gaussian width
     fspectra = spectra/(flat_spec_norm[2]+0.0)        # 1: extracted flat, 2: low flux removed
@@ -5178,11 +5189,11 @@ def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=T
     plt.close()
     return im_bck_px, params
 
-def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, reference_catalog, reference_names, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01] ):   
+def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, reference_lines_dict, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01] ):   
     """
     :param arc_lines_px: numpy arry of floats: order, pixel, width, height of the line
     """
-
+    reference_catalog, reference_names = reference_lines_dict['reference_catalog'][0], reference_lines_dict['reference_names'][0]
     px_to_wave_txt = read_text_file(params['px_to_wavelength_file'], no_empty_lines=True, warn_missing_file=False)              # list of strings
     if len(px_to_wave_txt) == 0:
         px_to_wave_txt = read_text_file(params['logging_path']+'tmp_'+params['px_to_wavelength_file'], no_empty_lines=True, warn_missing_file=False)              # list of strings
@@ -5890,7 +5901,7 @@ def create_pseudo_wavelength_solution(number_orders):
         wavelength_solution_arclines.append([0])     #The wavelength of the reference lines
     return dict(wavesol=np.array(wavelength_solution), reflines=np.array(wavelength_solution_arclines) )
 
-def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, reference_catalog_full, reference_names, xlows, xhighs, show_res=False):
+def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, reference_lines_dict, xlows, xhighs, show_res=False):
     """
     :param wavelength_solution_ori: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :param arc_lines_px: 2d array with one line for each identified line, sorted by order and amplitude of the line. For each line the following informaiton is given:
@@ -5931,13 +5942,14 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         new_waves = polynomial_value_2d(x, y, polynom_order_trace, polynom_order_intertrace, poly2d_params)
         return poly2d_params, new_waves
     
+    reference_catalog_full, reference_names = reference_lines_dict['reference_catalog'][0], reference_lines_dict['reference_names'][0]
     specs = spectrum.shape
     orders = np.arange(specs[0])
     if len(arc_lines_px) <= 10:
         logger('Warn: no arc lines available -> creating a pseudo solution (1 step per px)')
         wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(specs[0])
         return wavelength_solution, wavelength_solution_arclines
-    reference_catalog = reference_catalog_full[ reference_catalog_full[:,1] >= np.percentile(reference_catalog_full[:,1], 50) ,:]       # only use the brightest lines at the beginning
+    #reference_catalog = reference_catalog_full[ reference_catalog_full[:,1] >= np.percentile(reference_catalog_full[:,1], 50) ,:]       # only use the brightest lines at the beginning
     reference_catalog = copy.deepcopy(reference_catalog_full)
     cen_resolution = []
     for wls in wavelength_solution_ori:
@@ -5952,6 +5964,8 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     pxdiffords = range(min(params['px_offset_order'][0:2]),max(params['px_offset_order'][0:2])+1,params['px_offset_order'][2])
     resolution_offset = params['resolution_offset_pct']/100.
     res_steps = 11
+    if resolution_offset == 0:
+        res_steps = 1
     resdiffs = np.linspace(1-resolution_offset, 1+resolution_offset, res_steps)
     best_matching = []
     #logger('Step: Compare old wavelength solution with current arc lines')
@@ -6098,17 +6112,21 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     #logdata = np.zeros((len(arc_lines_px)+1, 2+steps*iter_break*2))
     #logdata[1:,0:2] = arc_lines_px[:,0:2]
     old_px_range = opt_px_range[0]
-    for step in tqdm(range(steps), desc='Finding the new wavelength solution'):
-        max_diff_px = max_diff_pxs[step]
-        px_range = opt_px_range[step]
-        polynom_order_trace = polynom_order_traces[step]
-        polynom_order_intertrace = polynom_order_intertraces[step]
-        good_values = (arc_lines_px[:,1] >= px_range+pxdiff) & (arc_lines_px[:,1] <= specs[1]-px_range+pxdiff) & (arc_lines_px[:,0] not in ignoreorders)        #+pxdiff to start with the lines closest to the center of the old wavelength solution   !!! add cen_px, but keep in mind that opt_px_range = 1 should include the whole order
-        arc_lines_px_step = arc_lines_px[good_values,:]                             # Subset of the emission lines in the spectrum to which the fitting is done in this step
-        weights1, weights3 = arc_lines_px_step[:,3], 1./(abs(arc_lines_px_step[:,2]-med_arc_width)+med_arc_width)     # height of the arc line, 1/width of the arc line
-        reference_catalog = reference_catalog_full[ reference_catalog_full[:,1] >= np.percentile(reference_catalog_full[:,1], ref_catalog_brigthness[step]) ,:]   # use only the brightest lines
-        #print reference_catalog.shape, reference_catalog_full.shape
-        #print(step,max_diff_px,px_range,polynom_order_trace,polynom_order_intertrace,len(arc_lines_px_step), len(good_values), reference_catalog.shape)
+    for step in tqdm(range(steps+1), desc='Finding the new wavelength solution'):
+        if step < steps:                # Normal steps
+            max_diff_px = max_diff_pxs[step]
+            px_range = opt_px_range[step]
+            polynom_order_trace = polynom_order_traces[step]
+            polynom_order_intertrace = polynom_order_intertraces[step]
+            good_values = (arc_lines_px[:,1] >= px_range+pxdiff) & (arc_lines_px[:,1] <= specs[1]-px_range+pxdiff) & (arc_lines_px[:,0] not in ignoreorders)        #+pxdiff to start with the lines closest to the center of the old wavelength solution   !!! add cen_px, but keep in mind that opt_px_range = 1 should include the whole order
+            arc_lines_px_step = arc_lines_px[good_values,:]                             # Subset of the emission lines in the spectrum to which the fitting is done in this step
+            weights1, weights3 = arc_lines_px_step[:,3], 1./(abs(arc_lines_px_step[:,2]-med_arc_width)+med_arc_width)     # height of the arc line, 1/width of the arc line
+            reference_catalog = reference_catalog_full[ reference_catalog_full[:,1] >= np.percentile(reference_catalog_full[:,1], ref_catalog_brigthness[step]) ,:]   # use only the brightest lines
+            #print reference_catalog.shape, reference_catalog_full.shape
+            #print(step,max_diff_px,px_range,polynom_order_trace,polynom_order_intertrace,len(arc_lines_px_step), len(good_values), reference_catalog.shape)
+        else:                           # final step: using the 
+            iter_break = 1
+            reference_catalog, reference_names = reference_lines_dict['reference_catalog'][-1], reference_lines_dict['reference_names'][-1]
         for iteration in range(iter_break):
                 cen_pxs = arc_lines_wavelength[:,0] * np.nan
                 for i,order in enumerate(orders):
@@ -6412,7 +6430,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         w.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),2])    # Wavelength
         y.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),3])    # Residuals
         l.append('{0}'.format(order))
-        max_number_reflines = max(max_number_reflines, len(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),2]))
+        max_number_reflines = max(max_number_reflines, np.sum(arc_lines_wavelength[:,0]==order))
     text = ('Residuals of the identificated arc lines: identified {0} lines when using a 2d polynom fit with {1} (dispersion) '+\
             'and {2} (cross-dispersion) orders').format(arc_lines_wavelength.shape[0], polynom_order_trace, polynom_order_intertrace)
     fname_px   = params['logging_arc_line_identification_residuals'][:-4] + '_px'   + params['logging_arc_line_identification_residuals'][-4:]
@@ -7279,7 +7297,7 @@ def linearise_wavelength_spec(params, wavelength_solution, spectra, method='sum'
     data = []
     for order in range(specs[0]):
         wave_range = np.polyval(wavelength_solution[order,2:], px_range-wavelength_solution[order,1])
-        wave_diff = np.nanmax(wave_range[1:] - wave_range[:-1])        # Difference in wavelength between 2 data points
+        wave_diff = np.nanmax(np.abs(wave_range[1:] - wave_range[:-1]))        # Difference in wavelength between 2 data points, abs needed for dodgy wavelength solutions
         start = int(min(wave_range)/dwave) * dwave          # Minumum wavelength should a multiple of the wavelength_scale_resolution
         lwave_range = np.arange(start, max(wave_range)+dwave, dwave )
         """ # This solution takes long and has the disadvantage described in the comments
@@ -7315,6 +7333,7 @@ def linearise_wavelength_spec(params, wavelength_solution, spectra, method='sum'
         for i,wave in enumerate(lwave_range):
             diff = np.abs(wave_range - wave)                # Wavelength difference to the original wavelengths
             indexes = np.where( diff < wave_diff )[0]
+            #print order,i, diff.shape, indexes.shape, diff, np.min(diff), wave_diff
             #print i, wave, spectra[order,indexes].shape, diff[indexes].shape
             lspec[i] = np.average( spectra[order,indexes], weights=1./diff[indexes] )
             lweight[i] = np.average( weight[order,indexes], weights=1./diff[indexes] )
