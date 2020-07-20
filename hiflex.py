@@ -315,10 +315,10 @@ if __name__ == "__main__":
     
     # Extract the flat spectrum and normalise it
     if os.path.isfile(params['master_blaze_spec_norm_filename']) :
-        logger('Info: Normalised flat already exists: {0}'.format(params['master_blaze_spec_norm_filename']))
+        logger('Info: Normalised blaze already exists: {0}'.format(params['master_blaze_spec_norm_filename']))
         # The file is read later on purpose
     else:
-        logger('Step: Create the normalised flat for the night')
+        logger('Step: Create the normalised blaze for the night')
         im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_blazecor_head)
         shift, im_head = find_shift_images(params, im_blazecor, im_trace1, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, extract=True, im_head=im_head)
         flat_spec, good_px_mask, extr_width = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='linfit', offset=shift)

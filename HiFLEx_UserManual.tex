@@ -843,6 +843,8 @@ It is possible to include the information from previous nights of the same objec
 
 It is also possible to include the information from other nights by linking or copying the files from folder given in parameter \verb|path_extraction| (standard: extracted) into the current one. Afterwards run \verb|python <path to scripts>/hiflex.py| again. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
 
+It is also possible to rerun TERRA with less images (e.g. exclude bad signal to noise files). To do this change into the folder given in parameter \verb|path_rv_terra|. Remove the files you don't need from the subfolder \textit{object name + /data/}. Afterwards run TERRA using the command given in the logfile. Afterwards move back to the folder in which HiFLEx was run and run \verb|python <path to scripts>/measurements_to_output.py|.
+
 \subsubsection{SERVAL}
 \label{Section:files_folders_rv_for_serval}
 All information is relative to the folder given in parameter \verb|path_rv_serval| (standard: serval\_rv). 
@@ -852,6 +854,7 @@ It is possible to include the information from previous nights of the same objec
 
 It is also possible to include the information from other nights by linking or copying the files from folder given in parameter \verb|path_extraction| (standard: extracted) into the current one. Afterwards run \verb|python <path to scripts>/hiflex.py| again. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
 
+It is also possible to rerun SERVAL with less images (e.g. exclude bad signal to noise files). To do this change into the folder given in parameter \verb|path_rv_serval|. Remove the files you don't need from the file \textit{filelist_ + object name + .txt}. Afterwards run SERVAL using the command given in the logfile. Afterwards move back to the folder in which HiFLEx was run and run \verb|python <path to scripts>/measurements_to_output.py|.
 
 \subsubsection{CERES}
 The results are stored in the folder given in parameter path\_rv\_ceres (standard: ceres\_rv).
@@ -955,7 +958,7 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
 \subsubsection{Getting the data}
 %  observations with HARPS: http://www.eso.org/public/archives/releases/sciencepapers/eso1609/eso1609a.pdf
 % HD 10180: G1V star with 7 planets: http://adsabs.harvard.edu/abs/2011A%26A...528A.112L
-Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*fits.Z) can be extracted with:
+Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres, use '2004 07 12' and Program ID '072.C-0488(E)' for calibration data taken by the RV exoplanet search team, or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*fits.Z) can be extracted with:
 \begin{lstlisting}[style=base]
 gunzip *
 cat <<EOT > extract_single_chip.py

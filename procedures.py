@@ -221,8 +221,9 @@ def textfileargs(params, textfile=None):
     Please note, the parameters are only lists or single entries. No numpy arrays allowed
     """
     
-    # Set up standard parameters
+    # Set up standard parameters for 
     params['in_shift'] = -0
+    
     
     emsg = 'Error in config file: '
     

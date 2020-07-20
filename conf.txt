@@ -216,7 +216,7 @@ raw_data_object_name_keys  = [OBJECT]
 # raw_data_imtyp_keyword  = OBJECT
 # raw_data_imtyp_bias     = BIAS,BIAS
 # raw_data_imtyp_trace1   = LAMP,DARK,TUN
-# raw_data_imtyp_trace2   = WAVE,WAVE,THAR2
+# raw_data_imtyp_trace2   = DARK,LAMP,TUN
 # raw_data_imtyp_blaze    = LAMP,LAMP,TUN
 
   # For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create gives the information which corrections will be applied before the <filetype>_rawfiles are combined.
