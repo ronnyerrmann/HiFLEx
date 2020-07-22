@@ -396,10 +396,13 @@ if __name__ == "__main__":
                 for im_name_full in params[wavelengthcal+'_rawfiles']:
                     all_wavelengthcals.append([ wavelengthcal, fib, im_name_full ])
         if params['use_cores'] > 1:
-            logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
-            p = multiprocessing.Pool(params['use_cores'])
-            p.map(wavecal_multicore, all_wavelengthcals)
-            p.terminate()
+            if len(all_wavelengthcals) > 0:
+                wavecal_multicore(all_wavelengthcals[0])         # run the first one single, so that not all calibration data will be created in the same moment
+            if len(all_wavelengthcals) > 1:
+                logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
+                p = multiprocessing.Pool(params['use_cores'])
+                p.map(wavecal_multicore, all_wavelengthcals[1:])
+                p.terminate()
         else:
             for all_wavelengthcal in all_wavelengthcals:
                 wavecal_multicore(all_wavelengthcal)
@@ -459,10 +462,13 @@ if __name__ == "__main__":
         else:
             all_extractions.append([extraction, extraction])
     if params['use_cores'] > 1:
-        logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
-        p = multiprocessing.Pool(params['use_cores'])
-        obj_names = p.map(extraction_multicore, all_extractions)
-        p.terminate()
+        if len(all_extractions) > 0:
+            obj_names.append( extraction_multicore(all_extractions[0]) )
+        if len(all_extractions) > 1:
+            logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
+            p = multiprocessing.Pool(params['use_cores'])
+            obj_names += p.map(extraction_multicore, all_extractions[1:])
+            p.terminate()
     else:
         for all_extraction in all_extractions:
             obj_names.append( extraction_multicore(all_extraction) )

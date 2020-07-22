@@ -3301,6 +3301,7 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     sigma = 3.5     # before 20200708
     sigma = 2       # test on 20200708 -> no difference
     sigma = 3.0
+    precision = 0.0001      # in pixel; 0.001 is a milli-pixel
     
     wavelength_solution = wave_sol_dict['wavesol']
     wavelength_solution_arclines = wave_sol_dict['reflines']
@@ -3331,14 +3332,17 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     checked_arc_lines = 0
     xarr = np.arange(ass[1])                                    # array of the x-positions
     for order_index in range(wavelength_solution.shape[0]):
-        warr = np.polyval(wavelength_solution[order_index,2:], xarr-wavelength_solution[order_index,1])                 # Wavelength of each pixel in the order
+        if FWHM[order_index][0] == 0 or wavelength_solution_arclines[order_index][0] == 0.0:           # No emission line was identified, or no line from catalogue was identified
+            continue
+        warr = np.polyval(wavelength_solution[order_index,2:], xarr-wavelength_solution[order_index,1])     # Wavelength of each pixel in the order
         for arcline in wavelength_solution_arclines[order_index]:
             if arcline == 0.0:
                 continue
             ref_line_index = np.argmin(np.abs( reference_catalog[:,0] - arcline ))
-            if abs( reference_catalog[ref_line_index,0] - arcline ) > 0.0001:           # check that it is in the reference catalog, allowing for uncertainty; catches also zeros used to fill the array
-                continue                                                                # it's not in the reference catalog
-            diff = np.abs(warr-reference_catalog[ref_line_index,0])                     # Diff in wavelengths
+            if abs( reference_catalog[ref_line_index,0] - arcline ) > 0.05:           # check that it is in the reference catalog, allowing for uncertainty; catches also zeros used to fill the array
+                continue                                                                # it's not in the reference catalog (is this necessary???)
+            #diff = np.abs(warr-reference_catalog[ref_line_index,0])                     # Diff in wavelengths, Before 20200720
+            diff = np.abs(warr-arcline)                                                 # Diff in wavelengths
             if min(diff) <= wavelength_solution[order_index,-2]*maxshift:               # Distance should be less than 2.5 px
                 checked_arc_lines += 1
                 pos = np.argmin(diff)                                               # Position of the line in the array
@@ -3357,9 +3361,10 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
                 #    print 'used',order_index, pos,popt, reference_catalog[ref_line_index,0]
                 #    x = xarr[range_arr]
                 #    plot_img_spec.plot_spectra(np.array([x, x]),np.array([aspectra[order_index,range_arr], oneD_gauss(x,popt)]),['data','fit'], ['savepaths'], True, [0.06,0.92,0.95,0.06, 1.0,1.01])
-                xarr_fine = np.arange(xarr[pos]-2, xarr[pos]+2.001, 0.001)                                                      # fine check of where the reference line is lockated 1/1000ths of a pixel
+                xarr_fine = np.arange(xarr[pos]-2, xarr[pos]+2+precision, precision)       # fine check of where the reference line is lockated 1/1000ths of a pixel
                 warr_fine = np.polyval(wavelength_solution[order_index,2:], xarr_fine-wavelength_solution[order_index,1])       # Wavelength of the fine array
-                diff = np.abs(warr_fine-reference_catalog[ref_line_index,0])
+                #diff = np.abs(warr_fine-reference_catalog[ref_line_index,0])       # Before 20200720
+                diff = np.abs(warr_fine-arcline)
                 pos_fine = xarr_fine[np.argmin(diff)]
                 #print 'used',order_index, pos, reference_catalog[ref_line_index,0], popt[1], pos_fine, popt[1] - (pos_fine+in_shift), maxshift
                 #print np.abs(popt[1] - (pos_fine+in_shift)) <= maxshift, (pos_fine+in_shift), popt[1], np.abs(popt[1] - (pos_fine+in_shift)), maxshift
@@ -6427,11 +6432,12 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     x, w, y, l = [], [], [], []
     max_number_reflines = 0             # will be needed later in order to save the data correctly into a fits file
     for order in orders:
-        x.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),1])    # Pixel
-        w.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),2])    # Wavelength
-        y.append(arc_lines_wavelength[(arc_lines_wavelength[:,0]==order),3])    # Residuals
+        inorder = ( arc_lines_wavelength[:,0]==order )
+        x.append(arc_lines_wavelength[inorder,1])    # Pixel
+        w.append(arc_lines_wavelength[inorder,2])    # Wavelength
+        y.append(arc_lines_wavelength[inorder,3])    # Residuals
         l.append('{0}'.format(order))
-        max_number_reflines = max(max_number_reflines, np.sum(arc_lines_wavelength[:,0]==order))
+        max_number_reflines = max(max_number_reflines, np.sum(inorder) )
     text = ('Residuals of the identificated arc lines: identified {0} lines when using a 2d polynom fit with {1} (dispersion) '+\
             'and {2} (cross-dispersion) orders').format(arc_lines_wavelength.shape[0], polynom_order_trace, polynom_order_intertrace)
     fname_px   = params['logging_arc_line_identification_residuals'][:-4] + '_px'   + params['logging_arc_line_identification_residuals'][-4:]
@@ -6453,9 +6459,15 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         polyfit = np.polyfit(xarr-cen_px[ii], yarr, polynom_order_trace)      #lambda from px
         wavelength_solution[ii,2:] = polyfit
         inorder = (arc_lines_wavelength[:,0]==order)
-        line_width = arc_lines_wavelength[inorder,9]                        # Width of the line
-        wavelength_solution_arclines[ii,:np.sum(inorder)] = arc_lines_wavelength[inorder,2]       # Wavelength in reference catalogue
-        line_stats[ii,0], line_stats[ii,1] = np.median(line_width), np.std(line_width, ddof=1)
+        if np.sum(inorder) > 0:
+            line_width = arc_lines_wavelength[inorder,9]                        # Width of the line
+            # Get the real wavelength at the line positions instead of the catalogue lines:
+            refline_wavereal = polynomial_value_2d(arc_lines_wavelength[inorder,1]-cen_px[ii], 1.0/(order+order_offset), polynom_order_trace, polynom_order_intertrace, poly2d_params)
+            #wavelength_solution_arclines[ii,:np.sum(inorder)] = arc_lines_wavelength[inorder,2]       # Wavelength in reference catalogue
+            wavelength_solution_arclines[ii,:np.sum(inorder)] = refline_wavereal                    # Added on 20200720
+            line_stats[ii,0] = np.median(line_width)
+            if np.sum(inorder) > 1:
+                line_stats[ii,1] = np.std(line_width, ddof=1)
         
         #print order,polynomial_value_2d(0, 1.0/(order+order_offset), polynom_order_trace, polynom_order_intertrace, poly2d_params), solution
         #diff_fit = yarr-np.polyval(polyfit, xarr-cen_px[0])        #<1e-10
