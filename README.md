@@ -9,6 +9,7 @@ If you publish data using the barycentric correction, please cite (https://githu
 
 
 ## Recent changes
+* Improved measurement of the offset between emission line spectra and the wavelength solution
 * Bugfixing
 
 ## Install instruction
