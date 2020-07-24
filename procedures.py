@@ -261,6 +261,10 @@ def textfileargs(params, textfile=None):
         else:
             logger('Warn: I dont know how to handle command line argument: {0}'.format(arg))
     params.update(cmdparams)
+    # Add standard parameters, if they are missing, more at the end
+    params['logging_arc_line_identification_residuals_hist'] = params.get('logging_arc_line_identification_residuals_hist', 'arc_line_identification_residuals_hist.png')
+    params['logging_em_lines_bisector'] = params.get('logging_em_lines_bisector', 'wavelength_solution_emmission_lines_bisector.png')
+
     list_txt = ['reference_catalog', 'use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys']
     list_int = ['arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck', 'dataset_rv_analysis']
@@ -380,7 +384,8 @@ def textfileargs(params, textfile=None):
         logger('Warn: The following parameters are expected, but do not appear in the configuration files. : {0}\n\t!!! The missing parameters might cause crashes later !!!'.format(overdeclared_params[:-2]))
     if len(undeclared_params) > 0:
         logger('Warn: The following parameters appear in the configuration files, but the programm did not expect them: {0}'.format(undeclared_params[:-2]))
-        
+     
+    # Use standard parameters, if not given; more at the beginning, e.g. when modification of paths is necessary
     params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)     # Use 80% of the CPU cores
     params['dataset_rv_analysis'] = params.get('dataset_rv_analysis', [5, 6])
     params['pxshift_between_wavesolutions'] = params.get('pxshift_between_wavesolutions', 0)
@@ -3361,7 +3366,7 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
                 #    print 'used',order_index, pos,popt, reference_catalog[ref_line_index,0]
                 #    x = xarr[range_arr]
                 #    plot_img_spec.plot_spectra(np.array([x, x]),np.array([aspectra[order_index,range_arr], oneD_gauss(x,popt)]),['data','fit'], ['savepaths'], True, [0.06,0.92,0.95,0.06, 1.0,1.01])
-                xarr_fine = np.arange(xarr[pos]-2, xarr[pos]+2+precision, precision)       # fine check of where the reference line is lockated 1/1000ths of a pixel
+                xarr_fine = np.arange(xarr[pos]-2, xarr[pos]+2+precision, precision)       # fine check of where the reference line is lockated 1/10000ths of a pixel, ?? interpolate
                 warr_fine = np.polyval(wavelength_solution[order_index,2:], xarr_fine-wavelength_solution[order_index,1])       # Wavelength of the fine array
                 #diff = np.abs(warr_fine-reference_catalog[ref_line_index,0])       # Before 20200720
                 diff = np.abs(warr_fine-arcline)
@@ -3369,77 +3374,65 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
                 #print 'used',order_index, pos, reference_catalog[ref_line_index,0], popt[1], pos_fine, popt[1] - (pos_fine+in_shift), maxshift
                 #print np.abs(popt[1] - (pos_fine+in_shift)) <= maxshift, (pos_fine+in_shift), popt[1], np.abs(popt[1] - (pos_fine+in_shift)), maxshift
                 if np.abs(popt[1] - (pos_fine+in_shift)) <= maxshift:                                   # Miximal 2.5 px shift
-                    # Index of order, Index of reference line, wavelength of reference line, px of arc line, \n wavelength of arc line, \n height of arc line, sigma/width of gauss, original pixel position of reference line
+                    # Index of order, Index of reference line, wavelength of reference line, px of arc line, \n wavelength of arc line, \n height of arc line, sigma/width of gauss, original pixel position of reference line, residuals in px
                     shifts.append([ order_index, ref_line_index, reference_catalog[ref_line_index,0], popt[1], \
                                     np.polyval(wavelength_solution[order_index,2:], popt[1]-wavelength_solution[order_index,1]), \
-                                    popt[0], popt[2], pos_fine ])
-    # shifts: order_index, ref_line_index, ref_wavelength, gauss_centre (3), wavelength at gauss_centre, gauss_height, gauss_width, position where catalogue line is located to 1/1000ths of a pixel
+                                    popt[0], popt[2], pos_fine, popt[1]-pos_fine ])
+    # shifts: order_index, ref_line_index, ref_wavelength, gauss_centre (3), wavelength at gauss_centre, gauss_height, gauss_width, position where catalogue line is located to 1/10000ths of a pixel
     shifts = np.array(shifts)
     if shifts.shape[0] >= ratio_lines_identified * checked_arc_lines and shifts.shape[0] != 0:    
         # Using the wavelenght shift, but this is wrong
         #good_values, pfit = sigmaclip(shifts[:,3]-shifts[:,2], nc=0, ll=3, lu=3, repeats=20)   # x doesn't matter for nc=0
         # Using the pixel shift
-        good_values, pfit = sigmaclip(shifts[:,3]-shifts[:,7], nc=0, ll=3, lu=3, repeats=20)    # x doesn't matter for nc=0
+        good_values, pfit = sigmaclip(shifts[:,8], nc=0, ll=3, lu=3, repeats=20)    # x doesn't matter for nc=0
         shifts = shifts[good_values,:]
     
     if fine == True:
         return shifts
     elif maxshift > 5. and shifts.shape[0] >= ratio_lines_identified * checked_arc_lines and shifts.shape[0] != 0:
-        shift_med = np.median( (shifts[:,3]-shifts[:,7]) )      # Better: check within bins where the most matches are found
+        shift_med = np.median( (shifts[:,8]) )      # Better: check within bins where the most matches are found
         shifts = shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_dict, 
                                            xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=5.5, in_shift=shift_med, fib=fib, fine=True)
-    
     shift_avg, shift_med, shift_std, width_avg, width_std, textsource = in_shift, in_shift, 0, 0, 0 , ''
     if shifts.shape[0] >= ratio_lines_identified * checked_arc_lines and shifts.shape[0] != 0:                          # Only if enough lines have been detected
         #shift_avg, shift_std = np.mean( (shifts[:,4]-shifts[:,2]) / shifts[:,2] ), np.std( (shifts[:,4]-shifts[:,2]) / shifts[:,2], ddof=1)    # Will vary along the CCD
-        """
-        orders = np.unique(shifts[:,0])
-        data_x, data_y, label, popts = [], [], [], []
-        for order in orders:
-            data = shifts[shifts[:,0]==order,:]
-            data_x.append( data[:,3] )
-            data_y.append( data[:,3] - data[:,7] )
-            label.append('{0}'.format(order))
-            if len(label) == 10 or order == orders[-1]:
-                plot_img_spec.plot_points(data_x, data_y, label, ['testfig_{0}.png'.format(order)], show=False, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01], 
-                                  return_frame=False, x_title='Position [px]', y_title='Difference [px]', linestyle="", marker=["o"]*10+["s"]*10+["v"]*10+["^"]*10+["+"]*10+["x"]*10+["."]*10)
-                data_x, data_y, label = [], [], []          #"""
-        """# This creates not conclusive picture for about 1000 lines. If run on the individual files for the wavelength solution, it shows were the wavelength solution is not perfect
-        data_x, data_y, label, popts = [], [], [], []
-        bins = 10
-        #for bins in np.linspace(shifts.shape[0]/30, shifts.shape[0]/7, 11, dtype=int):
-        for goodwave in [ (shifts[:,4] <= 6000), ((shifts[:,4] > 6000)&(shifts[:,4] <= 7000)), ((shifts[:,4] > 7000)&(shifts[:,4] <= 8000)), (shifts[:,4] > 8000) ]:
-         for goodx in [ (shifts[:,3] <= 800), ((shifts[:,3] > 800)&(shifts[:,3] <= 1348)), (shifts[:,3] > 1348) ]:
-            data = shifts[goodwave&goodx,:]
-            ran = np.round([min(data[:,4]), max(data[:,4]), min(data[:,3]), max(data[:,3])],0)
-            hist_y, hist_x = np.histogram( data[:,3] - data[:,7], bins )
-            data_x.append(hist_x)
-            data_y.append(hist_y)
-            label.append('Data {0} {1}'.format(bins, ran))
-            hist_x2 = (hist_x[1:]+hist_x[:-1])/2.           # center of the bin
-            popt = centroid_order(hist_x2, hist_y, 0, np.max(np.abs(hist_x2)), significance=3, bordersub_fine=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
-            data_x.append(hist_x2)
-            data_y.append(oneD_gauss(hist_x2,popt))
-            label.append('Gauss {0}'.format(bins))
-            popts.append(popt)
-            print bins, ran, popt, np.median(data[:,3] - data[:,7]), data.shape[0]
-        plot_img_spec.plot_points(data_x, data_y, label, ['testhist'], show=False, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01], 
-                                  return_frame=False, title='{0}'.format(popt), x_title='Difference [px]', y_title='Count', linestyle="-", marker="o")      #"""
-       
-        shift_avg, shift_std = np.mean( (shifts[:,3]-shifts[:,7]) ), np.std( (shifts[:,3]-shifts[:,7]), ddof=1)
+        
+        # Create an image of the gaussian widths of the identified lines
+        fname = '{0}_{1}.{2}'.format(params['logging_em_lines_gauss_width_form'].rsplit('.',1)[0], objname, params['logging_em_lines_gauss_width_form'].rsplit('.',1)[-1])
+        plot_wavelength_solution_width_emmission_lines(fname, ass, shifts, [0,3,6]) # order at 0, pixel at 3, gauss at 6
+        fname = '{0}_{1}.{2}'.format(params['logging_arc_line_identification_residuals_hist'].rsplit('.',1)[0], objname, params['logging_arc_line_identification_residuals_hist'].rsplit('.',1)[-1])
+        plot_hist_residuals_wavesol(fname, shifts, [0,3,4,8] )
+    
+        x, w, y, l = [], [], [], []
+        for order in range(ass[0]):
+            inorder = ( shifts[:,0]==order )
+            x.append(shifts[inorder,3])    # Pixel
+            w.append(shifts[inorder,4])    # Wavelength
+            y.append(shifts[inorder,3]-shifts[inorder,7])    # Residuals
+            l.append('{0}'.format(order))
+        text = 'Residuals of the to the wavelength solution: used {0} out of {1} lines'.format(shifts.shape[0], checked_arc_lines)
+        fname_px   =   '{0}_{1}_px.{2}'.format(params['logging_arc_line_identification_residuals'].rsplit('.',1)[0], objname, params['logging_arc_line_identification_residuals'].rsplit('.',1)[-1])
+        fname_wave = '{0}_{1}_wave.{2}'.format(params['logging_arc_line_identification_residuals'].rsplit('.',1)[0], objname, params['logging_arc_line_identification_residuals'].rsplit('.',1)[-1])
+        plot_img_spec.plot_points(x,y,l,[fname_px],   show=False, title=text, x_title='Pixel', 
+                                  y_title='Residual (O-C) [Pixel]', marker=['o','s','*','P','^','v','>','<','x'])
+        plot_img_spec.plot_points(w,y,l,[fname_wave], show=False, title=text, x_title='Wavelength [Angstrom]', 
+                                  y_title='Residual (O-C) [Pixel]', marker=['o','s','*','P','^','v','>','<','x'])
+        
+        
+        shift_avg, shift_std = np.mean( (shifts[:,8]) ), np.std( (shifts[:,8]), ddof=1)
         if shifts.shape[0] > 200:
             popts = []
             for bins in np.linspace(shifts.shape[0]/30, shifts.shape[0]/7, 11, dtype=int):
-                hist_y, hist_x = np.histogram( shifts[:,3] - shifts[:,7], bins )
+                hist_y, hist_x = np.histogram( shifts[:,8], bins )
                 hist_x2 = (hist_x[1:]+hist_x[:-1])/2.           # center of the bin
                 popt = centroid_order(hist_x2, hist_y, 0, np.max(np.abs(hist_x2)), significance=3, bordersub_fine=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
                 if popt[2] != 0:
                     popts.append(popt)
             popt_med = np.median(popts, axis=0)
             shift_med, shift_std = popt_med[1], popt_med[2]
-            textsource = ' Used the Gaussian center and width of the distribution (the values depend on the binning and the standard deviation of the center is {0} px).'.format(round(np.std(popts, axis=0, ddof=1)[1],4))
+            textsource = ' Used the Gaussian center and width of the distribution (the values depend on the binning and the standard deviation when using {1} different bins is {0} px).'.format(round(np.std(popts, axis=0, ddof=1)[1],4), len(popts))
         else:
-            shift_med, shift_std = np.median( (shifts[:,3]-shifts[:,7]) ), np.std( (shifts[:,3]-shifts[:,7]), ddof=1)
+            shift_med, shift_std = np.median( (shifts[:,8]) ), np.std( (shifts[:,8]), ddof=1)
             textsource =  'Used the median and standard deviation.'
         width_avg, width_std = np.mean(shifts[:,6]), np.std(shifts[:,6], ddof=1)
 
@@ -3483,24 +3476,12 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     #wavelength_solution_new[:,1] -= shift_avg                       # shift the central pixel, - sign is right, tested before 19/9/2018
     wavelength_solution_new[:,1] += shift_med                       # shift the central pixel, + sign is right, tested on 19/9/2018
     
-    
-    
     if False:           # The changes below are not necessary, shift_med/shift_avg will contain the input shift
         shift_avg -= in_shift           # To separate the input shift from the rest
         logger('Info: Corrected for input shift. The shift of the currect spectrum is {0}'.format(round(shift_avg,4) ))
     #print 'return_shift', shift_avg
     return wavelength_solution_new, shift_med, im_head
     
-    """ old and wrong
-    wavelength_solution_new = []
-    for wls in wavelength_solution:
-        #wls[-1] -= shift_avg        #This cause the wavelength_solution to change globally, even if copy.copy(wavelength_solution) is used in the for loop or in the call of the procedure -> copy.deepcopy might solve this
-        wls_neu = wls[0:-1]
-        wls_neu = np.append(wls_neu, wls[-1] - shift_avg * wls[-1])     # Alternatively shift the central pixel wls[1] ?
-        wavelength_solution_new.append(wls_neu)
-    
-    return np.array(wavelength_solution_new)"""
-
 def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname, im_head):
     """
     In case no calibration spectrum was taken at the same time as the science spectra use the stored information to aply a shift in the lines
@@ -3884,7 +3865,7 @@ def get_obsdate(params, im_head):
     return im_head, obsdate_midexp, obsdate_mid_float, jd_midexp
     #return obsdate_midexp, obsdate_mid_float, exposure_time, obsdate, fraction, jd_midexp
     
-def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wave_sol_dict, reference_lines_dict, flat_spec_norm, im_trace, objname):
+def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wave_sol_dict, reference_lines_dict, im_trace, objname):
     """
     Extracts the wavelength calibration
     
@@ -4797,7 +4778,7 @@ def bisector_measurements_orders(im, fname, pfits, xlows, xhighs, widths=[]):
         orders_to_check = [[0], [no-1]]
     number_of_positions = 7                         # Modify by user, if wanted
     number_of_pixel = 20                            # Modify by user, if wanted
-    x_label = 'Position relative to centre [px], (line (blue) was rescaled to 10% width)'
+    x_label = 'Position relative to centre [px], (order cross-sections (blue) were rescaled to 10% in x)'
     y_label = 'Flux (normalised)'
     xmin = min(xlows[ np.array(orders_to_check).flatten() ])
     xmax = max(xhighs[ np.array(orders_to_check).flatten() ])
@@ -4833,13 +4814,13 @@ def bisector_measurements_orders(im, fname, pfits, xlows, xhighs, widths=[]):
                     yarrr = np.polyval(rightfit[order, 1:], xarr- rightfit[order, 0])
                     yarrl, yarrr = adjust_width_orders(yarr, yarrl, yarrr, [1.5, 1.5])              # Adjust width, double it to more likely catch the whole trace, but too big and problem with MRES red orders
                 for kk,x in enumerate(xarr):
-                    imslices.append( -im[x,max(0,int(yarrl[kk])):min(ims[1],int(yarrr[kk]+.99))+1] )    # negative to create absorption line
+                    imslices.append( -1*im[x,max(0,int(yarrl[kk])):min(ims[1],int(yarrr[kk]+.99))+1] )    # negative to create absorption line
                     imslices_x.append( range(len(imslices[-1])) )
             bisecs, bisec_fit, lines = calculate_bisector_multiple(imslices, imslices_x)
             # Plot
-            if len(xposis) == 1 and len(orders_to_check) == 1: frame_temp = frame
-            elif len(orders_to_check) == 1: frame_temp = frame[jj]
-            elif len(xposis) == 1:          frame_temp = frame[ii]
+            if lx == 1 and ly == 1: frame_temp = frame
+            elif ly == 1: frame_temp = frame[jj]
+            elif lx == 1:          frame_temp = frame[ii]
             else:                           frame_temp = frame[ii,jj]
             if len(bisecs.shape) != 1:                                              # only when data
                 #frame_temp.plot(bisecs[0,:], 1-bisecs[1,:], color='lightgray')   # 1-y to revese the creation of absorption line
@@ -4864,10 +4845,10 @@ def bisector_measurements_orders(im, fname, pfits, xlows, xhighs, widths=[]):
                 secax.yaxis.set_label_position("right")
             frame_temp.tick_params( axis='both', which='both', bottom=True, top=True, right=True, left=True, direction='inout' )           # Have the ticks in all frames
     
-    if len(xposis) == 1 and len(orders_to_check) == 1: f1, f2 = frame, frame
-    elif len(orders_to_check) == 1: f1, f2 = frame[int(jj/2)] , frame[0]
-    elif len(xposis) == 1:          f1, f2 = frame[-1], frame[int(ii/2)]
-    else:                           f1, f2 = frame[-1,int(jj/2)], frame[int(ii/2),0]
+    if lx == 1 and ly == 1: f1, f2 = frame, frame
+    elif ly == 1:   f1, f2 = frame[int(jj/2)] , frame[0]
+    elif lx == 1:   f1, f2 = frame[-1], frame[int(ii/2)]
+    else:           f1, f2 = frame[-1,int(jj/2)], frame[int(ii/2),0]
     f1.set_xlabel(x_label, fontsize=13)
     f2.set_ylabel(y_label, fontsize=13)
     x_min, x_max = np.percentile(x_range,2), np.percentile(x_range,98)
@@ -4876,6 +4857,87 @@ def bisector_measurements_orders(im, fname, pfits, xlows, xhighs, widths=[]):
     f1.set_ylim(-0.1,1.1)
     plt.savefig(fname, bbox_inches='tight')
 
+
+def bisector_measurements_emission_lines(fname, spec, data, indexes):     #im, fname, pfits, xlows, xhighs, widths=[]):
+    """
+    Measures the bisector for the emission lines used for the wavelength solution and plot it
+    """
+    ord_split = 5                       # Modify by user, if wanted
+    px_split = 5                        # Modify by user, if wanted
+    
+    [oo, xx, gg] = indexes
+    
+    min_orders, max_orders = np.min(data[:,oo]), np.max(data[:,oo])+1E-6
+    min_px, max_px = np.min(data[:,xx]), np.max(data[:,xx])+1E-6
+    range_orders = (max_orders - min_orders + 0.0)/ord_split
+    range_px = (max_px - min_px + 0.0)/px_split
+    max_width = int(np.ceil(np.max(data[:,gg])*2.35482*2))        # 2*FWHM to either side
+    
+    x_range = np.zeros(0)
+    x_label = 'Position relative to centre [px], (order cross-sections (blue) were rescaled to 10% in x)'
+    y_label = 'Flux (normalised)'
+    fig, frame = plt.subplots(px_split, ord_split, sharex=True, sharey=True, figsize=(2*px_split, 2*ord_split) )
+    plt.subplots_adjust(left=max(0.04,0.19-0.02*px_split), right=min(0.98,0.90+0.01*px_split), top=min(0.96,0.92+.0067*ord_split), bottom=max(0.04,0.17-0.023*ord_split), wspace=0., hspace=0.)
+    for ii in range(ord_split):
+        for jj in range(px_split):
+            mino, maxo = round(ii*range_orders+min_orders,0), round((ii+1)*range_orders+min_orders,0)
+            minx, maxx = jj*range_px+min_px, (jj+1)*range_px+min_px
+            good_data = ( (data[:,oo] >= mino) & (data[:,oo] < maxo) & (data[:,xx] >= minx) & (data[:,xx] < maxx) )
+            imslices = []
+            imslices_x = []
+            for entry in data[good_data,:]:
+                pos = int(round(entry[xx]))
+                #imslices_x.append( range( max(0,pos-max_width), min(pos+max_width+1,spec.shape[1]) ) )
+                #imslices.append( spec[int(entry[oo]),imslices_x[-1]] )
+                imslices.append( -1*spec[int(entry[oo]), max(0,pos-max_width): min(pos+max_width+1,spec.shape[1])] )
+                imslices_x.append( range(len(imslices[-1])) )
+                
+            bisecs, bisec_fit, lines = calculate_bisector_multiple(imslices, imslices_x)
+            # Plot
+            if px_split == 1 and ord_split == 1: frame_temp = frame
+            elif ord_split == 1:    frame_temp = frame[jj]
+            elif px_split == 1:     frame_temp = frame[ii]
+            else:                   frame_temp = frame[ii,jj]
+            if len(bisecs.shape) != 1:                                              # only when data
+                x = np.hstack(( bisec_fit[2,:], bisec_fit[3,:]))
+                y = np.hstack(( 1-bisec_fit[1,:], 1-bisec_fit[1,:] ))
+                sort_index = np.argsort(y)
+                frame_temp.plot(x[sort_index], y[sort_index], color='lightgray', linewidth=3)
+                frame_temp.plot(0.1*lines[0,:], 1-lines[1,:], color='blue', marker='o', markersize=1, linestyle='')       #decrese the x-scaling by factor 10
+                frame_temp.plot(bisec_fit[0,:], 1-bisec_fit[1,:], color='k')   # 1-y to revese the creation of absorption line
+                frame_temp.text( 0, 0, '{0} lines'.format(len(imslices)), 
+                                    horizontalalignment='center', verticalalignment='bottom', rotation=0, color='r', zorder=5 )
+                x_range = np.hstack(( x_range, bisec_fit[0,:] ))
+            if ii == 0:
+                secax = frame_temp.twiny()
+                secax.axes.xaxis.set_ticklabels([])     # Disable the tick label
+                secax.tick_params( axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+                secax.set_xlabel('Pixels: {0} - {1}'.format(int(round(minx)), int(round(maxx))), fontsize=10)
+                secax.xaxis.set_label_position("top")
+            if jj == px_split-1:
+                secax = frame_temp.twinx()
+                secax.axes.yaxis.set_ticklabels([])     # Disable the tick label
+                secax.tick_params( axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+                secax.set_ylabel('Orders: {0} - {1}'.format(int(mino),int(maxo)), fontsize=10)
+                secax.yaxis.set_label_position("right")
+            frame_temp.tick_params( axis='both', which='both', bottom=True, top=True, right=True, left=True, direction='inout' )           # Have the ticks in all frames
+    
+    if px_split == 1 and ord_split == 1: f1, f2 = frame, frame
+    elif ord_split == 1:    f1, f2 = frame[int(jj/2)] , frame[0]
+    elif px_split == 1:     f1, f2 = frame[-1], frame[int(ii/2)]
+    else:                   f1, f2 = frame[-1,int(jj/2)], frame[int(ii/2),0]
+    f1.set_xlabel(x_label, fontsize=13)
+    f2.set_ylabel(y_label, fontsize=13)
+    x_min, x_max = np.percentile(x_range,2), np.percentile(x_range,98)
+    x_range = x_max - x_min
+    f1.set_xlim(min(x_min-0.2*x_range, -0.1*max_width/2),max(x_max+0.2*x_range, 0.1*max_width/2))
+    f1.set_ylim(-0.1,1.1)
+    plt.savefig(fname, bbox_inches='tight')
+    
+    #print('exit 4936')
+    #os.system('notify-send -t 2000 "done"')
+    #exit()
+    
 def plot_wavelength_solution_form(fname, xlows, xhighs, wavelength_solution):
     """
     Creates a map of the wavelength solution
@@ -4900,26 +4962,28 @@ def plot_wavelength_solution_form(fname, xlows, xhighs, wavelength_solution):
     colorbar = True  
     title = 'Plot the wavelength difference between every {0} pixel (Angstrom/{0}px)'.format(step)
     axis_name = ['Order', 'Position in Dispersion direction [{0} px]'.format(step), 'wavelength difference [Angstrom/{0}px]'.format(step)]
-    plot_img_spec.plot_image(im, [fname], pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, autotranspose=False, colorbar=colorbar, axis_name=axis_name)
+    plot_img_spec.plot_image(im, [fname], pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, autotranspose=False, colorbar=colorbar, axis_name=axis_name, size=[16,10])
 
-def plot_wavelength_solution_width_emmission_lines(fname, specs, arc_lines_wavelength):
+def plot_wavelength_solution_width_emmission_lines(fname, specs, data, indexes, step=20):
     """
     Creates a map of the Gaussian width of the emmission lines
     :param fname: Filename to which the image is saved
     :param specs: 1d list with two integers: shape of the extracted spectrum, first entry gives the number of orders and the second the number of pixel
-    :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param data: 2d array of floats with the data to plot
+    :param indexes: list of int, position of the relevant columns: order, wavelength, gauss
     """
-    step = 20
+    [oo, xx, gg] = indexes
+    
     gauss_ima = np.empty((specs[0], int(specs[1]/step)+1)) * np.nan
     for order in range(specs[0]):
         for i,px in enumerate(range(0, specs[1], step)):
-            good_values = (arc_lines_wavelength[:,0] == order) & (arc_lines_wavelength[:,1] >= px) & (arc_lines_wavelength[:,1] < px+step)
+            good_values = (data[:,oo] == order) & (data[:,xx] >= px) & (data[:,xx] < px+step)
             if np.sum(good_values) > 0:
-                gauss_ima[order,i] = np.median(arc_lines_wavelength[good_values,9])
+                gauss_ima[order,i] = np.median(data[good_values,gg])
     gauss_ima[np.isnan(gauss_ima)] = np.nanmax(gauss_ima)+1
     title = 'Plot of the Gaussian width every {0} pixel (white shows areas with no data available)'.format(step)
     axis_name = ['Position in Dispersion direction [{0} px]'.format(step), 'Order', 'Gaussian width of the emission lines [px] (white shows areas with no data available)'.format(step)]
-    plot_img_spec.plot_image(gauss_ima, [fname], pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, autotranspose=False, colorbar=True, axis_name=axis_name)
+    plot_img_spec.plot_image(gauss_ima, [fname], pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, autotranspose=False, colorbar=True, axis_name=axis_name, size=[16,10])
 
 def plot_overlapping_orders(order, x_full, y1_full, y2_full=None, labels=[]):
     """
@@ -4952,6 +5016,11 @@ def plot_overlapping_orders(order, x_full, y1_full, y2_full=None, labels=[]):
     return x_data, y_data, label, color
 
 def adjust_data_log(data):
+    """
+    Calculates the log10 of the data, adds offsets before to avoid negative values
+    input data: ndarray or list
+    return data: ndarray: log10 of input data
+    """
     if np.nanmin(data) < 1:
         data += 1 - np.nanmin(data)       # minus to cancel negative minimum
     data = np.log10(data)
@@ -5139,6 +5208,42 @@ def plot_wavelength_solution_image(im, fname, pfits, xlows, xhighs, wavelength_s
     fig.set_size_inches(42, 42)
     plt.savefig(fname, bbox_inches='tight')
     plt.close()
+
+def plot_hist_residuals_wavesol(fname, data, indexes):
+    """
+    Plots a histogram of the data and a Gaussian fit to the data
+    :param data: 2d darry of floats
+    :param indexes: indexes in the data array for order, pixel, wavelength, residuals
+    """
+    splits = 3
+    bins = 15
+    [oo, xx, ww, dd] = indexes
+    min_orders, max_orders = np.min(data[:,oo]), np.max(data[:,oo])+1E-6
+    min_px, max_px = np.min(data[:,xx]), np.max(data[:,xx])+1E-6
+    if data.shape[0] < 9*50:
+        splits = 1
+    range_orders = (max_orders - min_orders + 0.0)/splits
+    range_px = (max_px - min_px + 0.0)/splits
+    
+    data_x, data_y, label = [], [], []
+    for ii in range(splits):
+        for jj in range(splits):
+            mino, maxo = round(ii*range_orders+min_orders,0), round((ii+1)*range_orders+min_orders,0)
+            minx, maxx = jj*range_px+min_px, (jj+1)*range_px+min_px
+            good_data = ( (data[:,oo] >= mino) & (data[:,oo] < maxo) & (data[:,xx] >= minx) & (data[:,xx] < maxx) )
+            label.append('Orders {0}-{1}\nPixel {2}-{3}'.format(int(mino), int(maxo), int(round(minx,0)), int(round(maxx,0))))
+            hist_y, hist_x = np.histogram( data[good_data,dd], bins )
+            data_x.append(hist_x)
+            data_y.append(hist_y)
+            hist_x2 = (hist_x[1:]+hist_x[:-1])/2.           # center of the bin
+            popt = centroid_order(hist_x2, hist_y, 0, np.max(np.abs(hist_x2)), significance=3, bordersub_fine=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+            hist_x2_fine = np.arange(np.min(data[good_data,dd]), np.max(data[good_data,dd]), 0.001)
+            data_x.append(hist_x2_fine)
+            data_y.append(oneD_gauss(hist_x2_fine,popt))
+            label.append('centre {0}\nwidth {1}'.format(round(popt[1],4), round(popt[2],4)))
+    text = 'Histogram of the residuals for {0} lines (width of 0.0 means a Gaussian fit was not possible)'.format(data.shape[0])
+    plot_img_spec.plot_points(data_x, data_y, label, [fname], show=False, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01], 
+                              return_frame=False, title=text, x_title='Difference [px]', y_title='Count per bin', linestyle="-", marker="")       
 
 def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=True):    # not used anymore
     fig, frame = plt.subplots(1, 1)
@@ -6427,8 +6532,10 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     logger('order\tpixel\twavelength\tdwavel', show=False, printarrayformat=printarrayformat, printarray=arc_lines_wavelength[:,0:4], logfile=params['logging_identified_arc_lines'])
     
     # Create an image of the gaussian widths of the identified lines
-    plot_wavelength_solution_width_emmission_lines(params['logging_em_lines_gauss_width_form'], specs, arc_lines_wavelength)
-    
+    plot_wavelength_solution_width_emmission_lines(params['logging_em_lines_gauss_width_form'], specs, arc_lines_wavelength, [0,1,9])   # order, wavelength, gauss width
+    plot_hist_residuals_wavesol(params['logging_arc_line_identification_residuals_hist'], arc_lines_wavelength, [0,1,2,3] )             # order, pixel, wavelength, residuals
+    bisector_measurements_emission_lines(params['logging_em_lines_bisector'], spectrum, arc_lines_wavelength, [0,1,9])         # order, pixel, width
+        
     x, w, y, l = [], [], [], []
     max_number_reflines = 0             # will be needed later in order to save the data correctly into a fits file
     for order in orders:
@@ -6440,8 +6547,8 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         max_number_reflines = max(max_number_reflines, np.sum(inorder) )
     text = ('Residuals of the identificated arc lines: identified {0} lines when using a 2d polynom fit with {1} (dispersion) '+\
             'and {2} (cross-dispersion) orders').format(arc_lines_wavelength.shape[0], polynom_order_trace, polynom_order_intertrace)
-    fname_px   = params['logging_arc_line_identification_residuals'][:-4] + '_px'   + params['logging_arc_line_identification_residuals'][-4:]
-    fname_wave = params['logging_arc_line_identification_residuals'][:-4] + '_wave' + params['logging_arc_line_identification_residuals'][-4:]
+    fname_px   = params['logging_arc_line_identification_residuals'].rsplit('.',1)[0] + '_px.'   + params['logging_arc_line_identification_residuals'].rsplit('.',1)[-1]
+    fname_wave = params['logging_arc_line_identification_residuals'].rsplit('.',1)[0] + '_wave.' + params['logging_arc_line_identification_residuals'].rsplit('.',1)[-1]
     plot_img_spec.plot_points(x,y,l,[fname_px],   show=False, title=text, x_title='Pixel', 
                               y_title='Residual (O-C) [Angstrom]', marker=['o','s','*','P','^','v','>','<','x'])
     plot_img_spec.plot_points(w,y,l,[fname_wave], show=False, title=text, x_title='Wavelength [Angstrom]', 

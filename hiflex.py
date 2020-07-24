@@ -383,7 +383,7 @@ if __name__ == "__main__":
                     params['calibs'] = params[wavelengthcal+'_calibs_create']
                     im, im_head = read_file_calibration(params, im_name_full)
                     extraction_wavelengthcal(params, im, im_name_wc, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
-                                                    wave_sol_dict, reference_lines_dict, flat_spec_norm, im_trace1, im_name)
+                                                    wave_sol_dict, reference_lines_dict, im_trace1, im_name)
         
         
         logger('Info: Starting to extract wavelength calibrations')
@@ -406,21 +406,7 @@ if __name__ == "__main__":
         else:
             for all_wavelengthcal in all_wavelengthcals:
                 wavecal_multicore(all_wavelengthcal)
-        """for [wavelengthcals, fib] in [ [wavelengthcals_cal,'cal'], [wavelengthcals_sci,'sci'] ]:
-            for wavelengthcal in wavelengthcals:
-                for im_name_full in params[wavelengthcal+'_rawfiles']:
-                    # !!! Posible improvement: combine a few files if they are taken close to each other
-                    im_name = im_name_full.rsplit(os.sep)
-                    im_name = im_name[-1].rsplit('.',1)         # remove the file ending
-                    im_name = im_name[0]
-                    im_name_wc = im_name+'_wave'+fib
-                    if os.path.isfile(params['path_extraction']+im_name_wc+'.fits'):
-                        logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name_wc, params['path_extraction']))
-                        continue
-                    params['calibs'] = params[wavelengthcal+'_calibs_create']
-                    im, im_head = read_file_calibration(params, im_name_full)
-                    extraction_wavelengthcal(params, im, im_name_wc, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
-                                                    wave_sol_dict, reference_lines_dict, flat_spec_norm, im_trace1, im_name)"""
+        
     params['extract_wavecal'] = False
     if len(extractions) == 0:                                               # no extractions to do
         logger('Warn: Nothing to extract. -> Exiting')
@@ -476,33 +462,6 @@ if __name__ == "__main__":
     obj_names = np.unique(obj_names)
     obj_names = list(obj_names[obj_names != ''])
     
-    """for extraction in extractions:
-        if  extraction.find('extract_combine') == -1:     # Single file extraction
-            for im_name_full in params[extraction+'_rawfiles']:
-                im_name = im_name_full.rsplit(os.sep)
-                im_name = im_name[-1].rsplit('.',1)         # remove the file ending
-                im_name = im_name[0]
-                if os.path.isfile(params['path_extraction']+im_name+'.fits'):
-                    logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
-                    continue
-                #print extraction, im_name_full, im_name
-                params['calibs'] = params[extraction+'_calibs_create']
-                im, im_head = read_file_calibration(params, im_name_full)
-                obj_name = extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
-                                                    wave_sol_dict, reference_lines_dict, flat_spec_norm, im_trace1)
-                if obj_name not in obj_names:
-                    obj_names.append(obj_name)
-        else:                                       # Combine files before extraction
-            im_comb, im_comb_head = create_image_general(params, extraction)
-            im_name = extraction
-            if os.path.isfile(params['path_extraction']+im_name+'.fits'):
-                logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
-                continue
-            obj_name = extraction_steps(params, im_comb, im_name, im_comb_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, \
-                                        wave_sol_dict, reference_lines_dict, flat_spec_norm, im_trace1)
-                                        # puts the files in obj_name.lower()
-            if obj_name.lower() not in obj_names:
-                obj_names.append(obj_name.lower())"""
     logger('')      # To have an empty line
     logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The nineth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))
     logger('Info: Will try to do the RV analysis in a moment') 

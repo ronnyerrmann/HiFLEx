@@ -23,7 +23,7 @@ else:
 import copy
 import pickle
 
-def plot_image(image, spaths, pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title='', return_frame=False, frame=None, autotranspose=True, colorbar=True, axis_name=['x [px]','y [px]','flux [ADU]']):
+def plot_image(image, spaths, pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title='', return_frame=False, frame=None, autotranspose=True, colorbar=True, axis_name=['x [px]','y [px]','flux [ADU]'], size=32):
     """
     Plots the raw CCD image to files $spaths$
     :param image: numpy 2D array, containing the CCD image
@@ -38,7 +38,9 @@ def plot_image(image, spaths, pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05]
     im_good = image[~np.isnan(image)]
     if frame is None:
         fig, frame = plt.subplots(1, 1)
-        fig.set_size_inches(32, 32)
+        if type(size).__name__ not in ('list', 'ndarray'):
+            size = [size]
+        fig.set_size_inches(size[0], size[-1])
     if len(ims) == 2:
         if ims[0] > ims[1] and show == True and autotranspose == True:		#transpose the image
             image = np.transpose(image)
@@ -64,11 +66,13 @@ def plot_image(image, spaths, pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05]
         print("\n Please close the graph (Figure 1) to continue (Alt F4).\n")
         plt.show()
     else:
+        if type(spaths).__name__ not in ('list', 'ndarray'):
+            spaths = [spaths]
         for spath in spaths:
             plt.savefig(spath, bbox_inches='tight')
         plt.close()
 
-def plot_spectra(spectra_x, spectra_y, labels, spaths, show=False, adjust=[0.05,0.95,0.95,0.05, 1.0,1.01], title='', return_frame=False, frame=None):
+def plot_spectra(spectra_x, spectra_y, labels, spaths, show=False, adjust=[0.05,0.95,0.95,0.05, 1.0,1.01], title='', return_frame=False, frame=None, size=[16.2, 10]):
     """
     Plots the Spectra to files $spaths$
     :param spectra: ???
@@ -81,7 +85,9 @@ def plot_spectra(spectra_x, spectra_y, labels, spaths, show=False, adjust=[0.05,
     #spectra_x = np.array(spectra_x)
     if frame is None:
         fig, frame = plt.subplots(1, 1)
-        fig.set_size_inches(16.2, 10)
+        if type(size).__name__ not in ('list', 'ndarray'):
+            size = [size]
+        fig.set_size_inches(size[0], size[-1])
     plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
     dx = (np.max(spectra_x) - np.min(spectra_x))*0.01
     dy = (np.max(spectra_y) - np.min(spectra_y))*0.01
@@ -102,6 +108,8 @@ def plot_spectra(spectra_x, spectra_y, labels, spaths, show=False, adjust=[0.05,
         print("\n Please close the graph (Figure 1) to continue (Alt F4).\n")
         plt.show()
     else:
+        if type(spaths).__name__ not in ('list', 'ndarray'):
+            spaths = [spaths]
         for spath in spaths:
             plt.savefig(spath, bbox_inches='tight')
         plt.close()
@@ -167,7 +175,9 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     """
     if frame is None:
         fig, frame = plt.subplots(1, 1)
-        fig.set_size_inches(size[0], size[1])
+        if type(size).__name__ not in ('list', 'ndarray'):
+            size = [size]
+        fig.set_size_inches(size[0], size[-1])
     plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
     minx, miny, maxx, maxy = 1e10, 1e10, -1e10, -1e10
     for i in range(len(data_x)):
@@ -218,6 +228,8 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
         print("\n Please close the graph (Figure 1) to continue (Alt F4).\n")
         plt.show()
     else:
+        if type(spaths).__name__ not in ('list', 'ndarray'):
+            spaths = [spaths]
         for spath in spaths:
             plt.savefig(spath, bbox_inches='tight')
         plt.close()
@@ -249,7 +261,7 @@ def plot_spectra_UI(im, title=''):
         frame, im = param['frame'], param['im']
         x_range, y_range, old_xlabel_text = copy.copy(frame.get_xlim()), copy.copy(frame.get_ylim()), copy.copy(frame.get_xlabel())
         frame.clear()
-        size_inch = copy.deepcopy(fig.get_size_inches())
+        size_inch = copy.deepcopy(fig.get_size())
         adjust=[0.04,0.97,0.97,0.03, 1.0,1.01]
         adjust[0] = max(0.04, 0.2 - 0.04682*(size_inch[0] - 3.8)** 0.4416)          # left
         adjust[3] = max(0.03, 0.0 + 0.47866*(size_inch[1] - 0.0)**-0.9368)          # bottom
