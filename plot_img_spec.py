@@ -249,7 +249,7 @@ def plot_spectra_UI(im, title=''):
 
     ims = im.shape
     iml = len(ims)
-    
+
     settings = dict()
     if os.path.isfile('plot_settings.pkl') == True:
         settings = load_obj('plot_settings')
@@ -261,7 +261,7 @@ def plot_spectra_UI(im, title=''):
         frame, im = param['frame'], param['im']
         x_range, y_range, old_xlabel_text = copy.copy(frame.get_xlim()), copy.copy(frame.get_ylim()), copy.copy(frame.get_xlabel())
         frame.clear()
-        size_inch = copy.deepcopy(fig.get_size())
+        size_inch = copy.deepcopy(fig.get_size_inches())
         adjust=[0.04,0.97,0.97,0.03, 1.0,1.01]
         adjust[0] = max(0.04, 0.2 - 0.04682*(size_inch[0] - 3.8)** 0.4416)          # left
         adjust[3] = max(0.03, 0.0 + 0.47866*(size_inch[1] - 0.0)**-0.9368)          # bottom

@@ -264,6 +264,7 @@ def textfileargs(params, textfile=None):
     # Add standard parameters, if they are missing, more at the end
     params['logging_arc_line_identification_residuals_hist'] = params.get('logging_arc_line_identification_residuals_hist', 'arc_line_identification_residuals_hist.png')
     params['logging_em_lines_bisector'] = params.get('logging_em_lines_bisector', 'wavelength_solution_emmission_lines_bisector.png')
+    params['logging_blaze_spec'] = params.get('logging_blaze_spec', 'blaze_spectrum.pdf')
 
     list_txt = ['reference_catalog', 'use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys']
     list_int = ['arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
@@ -3968,6 +3969,77 @@ def find_file_in_allfolders(filename, folders=[]):
     
     return pathfiles, pathfiles_full
     
+def create_blaze_norm(params, im_trace1, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wave_sol_dict, reference_lines_dict):
+    """
+    Creates the file for the blaze correction
+    """
+    fit_poly_orders = 15
+    im_blazecor, im_head = create_image_general(params, 'blazecor')
+    logger('Step: Create the normalised blaze for the night')
+    im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)
+    shift, im_head = find_shift_images(params, im_blazecor, im_trace1, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, extract=True, im_head=im_head)
+    #shift = 0  # for test
+    flat_spec, good_px_mask, extr_width = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='linfit', offset=shift)
+    #flat_spec, good_px_mask, extr_width = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift) # for test
+    med_flux = np.nanmedian(flat_spec)
+    flat_spec_norm = flat_spec/med_flux
+    flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.001)         # Ignore all areas where the flux is 0.1% of median flux
+    if params['blazercor_function'].find('poly') == 0:
+        try:
+            fit_poly_orders = int(params['blazercor_function'].replace('poly',''))
+        except:
+            'keep the standard'
+    blaze_fit = fit_blazefunction(params['logging_blaze_spec'], flat_spec_norm, fit_poly_orders)
+    if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                   # science and calibration traces are at the same position
+        blazecor_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
+    else:
+        blazecor_spec, agood_px_mask, extr_width = extract_orders(params, im_blazecor, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
+    wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, blazecor_spec, wave_sol_dict, reference_lines_dict,
+                                            xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, params['master_blaze_spec_norm_filename'], im_head=im_head)
+    wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, blazecor_spec)
+    im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
+    im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
+    im_head['Comment'] = ' 1: extracted spectrum normalised by the global median flux ({0} ADU)'.format(int(med_flux))
+    im_head['Comment'] = ' 2: 1, with signal below 1% of the flux removed'
+    im_head['Comment'] = ' 3: fit of 1 with a polynomial of order {0}'.format(fit_poly_orders)
+    im_head['Comment'] = ' 4: spectrum of the emission line lamp'
+    save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, blaze_fit, blazecor_spec], params['master_blaze_spec_norm_filename'], im_head)
+
+def fit_blazefunction(fname, spec, fit_poly_orders):
+    """
+    Fits a polynomial to the blaze function
+    :param spec: 2d array with the spectra
+    :param fit_poly_orders: integer, number of orders to be used for the polynomial fit
+    """
+    xarr = np.arange(spec.shape[1], dtype=int)
+    spec_fit = copy.deepcopy(spec)
+    titel_f = 'Extracted spectra of order {0} from the blaze file and fit with a polynomial of order {1}'
+    with PdfPages(fname) as pdf:
+        for order in range(spec.shape[0]):
+            goodvalues = ~np.isnan(spec[order,:])
+            poly = np.polyfit(xarr[goodvalues], spec[order, goodvalues], fit_poly_orders)
+            spec_fit[order, goodvalues] = np.polyval(poly,xarr[goodvalues])
+        
+            fig, frame = plt.subplots(1, 1)
+            title = titel_f.format(order, fit_poly_orders)
+            plot_img_spec.plot_points([xarr,xarr],[spec[order,:],spec_fit[order,:]],['data','fit'],'', show=False, title=title, x_title='x [px]', 
+                                      y_title='Flux (normalsied to global median) [ADU]', marker=['o',''], linestyle=["",'-'], frame=frame, return_frame=True)
+    
+            fig.set_size_inches(16.2, 10)
+            pdf.savefig()  # saves the current figure into a pdf page
+            plt.close()
+    
+        # We can also set the file's metadata via the PdfPages object:
+        d = pdf.infodict()
+        d['Title'] = 'Blaze function '
+        d['Author'] = 'HiFLEx pipeline'
+        d['Subject'] = ''
+        d['Keywords'] = 'Blaze function HiFLEx pipeline'
+        d['CreationDate'] = datetime.datetime.today()
+        d['ModDate'] = datetime.datetime.today()
+    
+    return spec_fit
+
 def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wave_sol_dict, reference_lines_dict, flat_spec_norm, im_trace):
     """
     Extracts the spectra and stores it in a fits file
@@ -4017,7 +4089,12 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
                                                               xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, spectra)
     espectra = combine_photonnoise_readnoise(spectra, im_head['HiFLEx BCKNOISE'] * np.sqrt(extr_width) )     # widths[:,2] is gaussian width
-    fspectra = spectra/(flat_spec_norm[2]+0.0)        # 1: extracted flat, 2: low flux removed
+    if params['blazercor_function'].find('poly') == 0:  index = 3
+    elif params['blazercor_function'] == 'flux':        index = 2
+    else:       index = 2           # 1: extracted flat, 2: low flux removed, 3: fitted with a high order polynomial
+    im_head['HIERARCH HiFLEx BLAZECOR'] = (params['blazercor_function'], 'Parameter blazercor_function')
+    im_head['HIERARCH HiFLEx BLAZECOR INDEX'] = (index, 'Dataset for blaze correction')
+    fspectra = spectra/(flat_spec_norm[index]+0.0)        # 1: extracted flat, 2: low flux removed
     # Doing a wavelength shift for the flat_spec_norm is probably not necessay, as it's only few pixel
     measure_noise_orders = 16
     measure_noise_semiwindow = 10                   # in pixel
@@ -5122,9 +5199,9 @@ def plot_wavelength_solution_spectrum(spec1, spec2, fname, wavelength_solution, 
         # We can also set the file's metadata via the PdfPages object:
         d = pdf.infodict()
         d['Title'] = 'Spectral atlas'
-        d['Author'] = 'EXOhSPEC pipeline'
+        d['Author'] = 'HiFLEx pipeline'
         d['Subject'] = ''
-        d['Keywords'] = 'Spectra atlas EXOhSPEC pipeline'
+        d['Keywords'] = 'Spectra atlas HiFLEx pipeline'
         d['CreationDate'] = datetime.datetime.today()
         d['ModDate'] = datetime.datetime.today()
     
@@ -7291,7 +7368,6 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
                                   ['data', 'abs res', 'abs res used', 'fit flux', 'fit_sn', 'medfilt used'], '', show=True, return_frame=False, \
                                   x_title='wavelength [Angstrom]', y_title='flux [ADU]', title='order {0}'.format(order))
     # Transform the coefficents into data array
-    #ccoefs = np.array(ccoefs)
     contspec, sn_cont = [], []
     showorder = 129
     for order in range(specs[0]):
@@ -7324,88 +7400,6 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
         contspec.append(spec[order] / np.polyval(ccoefs[order],wavelengths[order,:]))
     """
     return np.array(contspec), np.array(sn_cont)
-
-"""def get_cont_ceres(W,F,nc=3,ll=1.,lu = 5.,frac=0.05,window=21):     # Based on CERES pipeline (copied, added comments, maybe changed code), not used anymore
-    blns = [[6755,6769],[6530,6600],[4840,4880],[4320,4360],[4085,4120],[3950,3990],[3880,3910],[3825,3850]]        #These wavelength ranges will be ignored
-    flx = F[0]
-    wav = W[0]
-    I = np.where( (flx!=0) & (~np.isnan(flx)) )[0]
-    wav,flx = wav[I],flx[I]      #only order 0, as preparation for next step
-
-    for i in range(F.shape[0]-1):           # For each-1 order
-        f = F[i+1]
-        w = W[i+1]
-        I = np.where( (f!=0) & (~np.isnan(f)) )[0]
-        w,f = w[I],f[I]                     # wav, flux for order 1 and larger
-        I = np.where(w>=wav[0])[0]          # only wavelengths bigger than the smallest in the previous order   (all in the wrong setup, overlapping in the harps)
-        
-        if len(I)>5:                        # check for the overlap with previous order
-            J = np.where(wav<w[-1])[0]      # in the previous order get the wavelengths which are smaller than the biggest one in this order    (all in the wrong setup, overlapping in the harps)
-            tck = scipy.interpolate.splrep(w[I],f[I],k=3)       # Get the B-sline of the overlapping flux in the current order
-            nf = scipy.interpolate.splev(wav[J],tck)            # Apply the B-spline to the previous order
-            flx[J] = .5*(flx[J]+nf)         # Adjust the overlapping flux in the previous order to the average of the flux and the flux of the bspline
-        I = np.where(w<wav[0])[0]           # only wavelengths smaller than the smallest in the previous order  (none in the wrong setup, non-overlapping the the harps
-        wav = np.hstack((w[I],wav))         # Add the missing wavelengths
-        flx = np.hstack((f[I],flx))         # ... and the according flux
-    # The steps until here are done in order to allow smooth overlap between orders (I think)
-
-    wavo,flxo = wav.copy(),flx.copy()
-    for lns in blns:                                    # Get rid off flux in problematic wavelength ranges
-        I = np.where((wav>lns[0])&(wav<lns[1]))[0]
-        wav,flx = np.delete(wav,I),np.delete(flx,I)
-    for i in range(F.shape[0]):             # for each order get some section of the wavelengths (+-2 orders if possible), full wavelength range
-        if i == 0:
-            wi = W[i+2,0]                   # (harps: smallest wavelength)
-            wf = W[i,-1]                    # (harps: biggest wavelength)
-        elif i == 1:
-            wi = W[i+2,0]
-            wf = W[i-1,-1]                  # changed line to remove bug
-        elif i == W.shape[0] - 1:
-            wi = W[i,0]
-            wf = W[i-2,-1]
-        elif i == W.shape[0] - 2:
-            wi = W[i+1,0]
-            wf = W[i-2,-1]
-        else:
-            wi = W[i+2,0]
-            wf = W[i-2,-1]
-
-        IM = np.where((wav>wi) & (wav<wf))[0]
-        tw,tf = wav[IM],scipy.signal.medfilt(flx[IM],window)    # wavelength and median filtered flux (with 21px window) for the flux in +-2 orders     # changed line to remove bug
-        #JJJ = np.where((wav>W[i,0])&(wav<W[i,-1]))[0]           # only wavelength in this order     # not used
-        
-        # Fit the polynomial only through the selected set of data +-2 orders
-        ori = len(tw)
-        coef = np.polyfit(tw,tf,nc)     # it says "RankWarning: Polyfit may be poorly conditioned", even though that more than 6000 entries are in tw, tf. Does happen for nc=5 or nc=10, but not nc=3
-        #plot_img_spec.plot_points([tw,tw], [tf, np.polyval(coef,tw)], ['data', 'fit'], '', show=True, return_frame=False, x_title='wavelength [Angstrom]', y_title='flux [ADU]')
-        res = tf - np.polyval(coef,tw)
-        IU = np.where(res>0)[0]
-        dev = np.mean(res[IU])
-        I = np.where((res<lu*dev)&(res>-ll*dev))[0]
-        cond = True
-
-        while cond:
-            tw,tf = tw[I],tf[I]
-            coef = np.polyfit(tw,tf,nc)
-            #plot_img_spec.plot_points([tw,tw], [tf, np.polyval(coef,tw)], ['data', 'fit'], '', show=True, return_frame=False, x_title='wavelength [Angstrom]', y_title='flux [ADU]')
-            res = tf - np.polyval(coef,tw)
-            IU = np.where(res>0)[0]
-            dev = np.mean(res[IU])
-            #print dev
-            #plot_img_spec.plot_points([tw], [res], ['res'], '', show=True, return_frame=False, x_title='wavelength [Angstrom]', y_title='flux [ADU]')
-            I = np.where((res<lu*dev)&(res>-ll*dev))[0]
-            J1 = np.where(res>=lu*dev)[0]
-            J2 = np.where(res<=-ll*dev)[0]
-        
-            if (len(J1)==0 and len(J2)==0) or len(tw)<frac*ori:
-                cond = False
-        #plot_img_spec.plot_points([tw,tw], [tf, np.polyval(coef,tw)], ['data', 'fit'], '', show=True, return_frame=False, x_title='wavelength [Angstrom]', y_title='flux [ADU]')
-        if i == 0:
-            coefs = coef
-        else:
-            coefs = np.vstack((coefs,coef))
-
-    return coefs"""
 
 def linearise_wavelength_spec(params, wavelength_solution, spectra, method='sum', weight=[]):    
     """

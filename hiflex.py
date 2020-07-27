@@ -311,28 +311,12 @@ if __name__ == "__main__":
     
     params['extract_wavecal'] = False
     
-    im_blazecor, im_blazecor_head = create_image_general(params, 'blazecor')    # -> cont1cal2
-    
     # Extract the flat spectrum and normalise it
     if os.path.isfile(params['master_blaze_spec_norm_filename']) :
         logger('Info: Normalised blaze already exists: {0}'.format(params['master_blaze_spec_norm_filename']))
         # The file is read later on purpose
     else:
-        logger('Step: Create the normalised blaze for the night')
-        im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_blazecor_head)
-        shift, im_head = find_shift_images(params, im_blazecor, im_trace1, sci_tr_poly, xlows, xhighs, widths, 0, cal_tr_poly, extract=True, im_head=im_head)
-        flat_spec, good_px_mask, extr_width = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='linfit', offset=shift)
-        flat_spec_norm = flat_spec/np.nanmedian(flat_spec)
-        flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.001)         # Ignore all areas where the flux is 0.5% of median flux
-        if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
-            blazecor_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
-        else:
-            blazecor_spec, agood_px_mask, extr_width = extract_orders(params, im_blazecor, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
-        wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, blazecor_spec, wave_sol_dict, reference_lines_dict,
-                                            xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, params['master_blaze_spec_norm_filename'], im_head=im_head)
-        wavelengths = create_wavelengths_from_solution(wavelength_solution_shift, blazecor_spec)
-        save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, blazecor_spec], params['master_blaze_spec_norm_filename'], im_blazecor_head)
-        #save_im_fits(params, flat_spec_norm, im_sflat_head, params['master_flat_spec_norm_filename'])
+        create_blaze_norm(params, im_trace1, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, wave_sol_dict, reference_lines_dict)
     
     logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the loging directory {0}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?\n'.format(params['logging_path']))
     
@@ -366,8 +350,8 @@ if __name__ == "__main__":
     calimages['flat_spec_norm'] = copy.deepcopy( flat_spec_norm )
     calimages['sci_trace'] = copy.deepcopy( [sci_tr_poly, xlows, xhighs, widths] )
     calimages['cal_trace'] = copy.deepcopy( [cal_tr_poly, axlows, axhighs, awidths] )
-    #calimages['wavelength_solution'] = copy.deepcopy( wavelength_solution )
     calimages['wave_sol_dict'] = copy.deepcopy( wave_sol_dict )
+    calimages['wavelength_solution'] = copy.deepcopy( wave_sol_dict['wavesol'] )    # Needed for templates later
     
     if ( params['arcshift_side'] == 0 or params['two_solutions'] ) and len(wavelengthcals_cal)+len(wavelengthcals_sci) > 0:         # no calibration spectrum at the same time
         def wavecal_multicore(parameter):

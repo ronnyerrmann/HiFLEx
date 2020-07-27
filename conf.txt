@@ -176,7 +176,10 @@ pxshift_between_wavesolutions = 0
 wavelength_scale_resolution = 0.00
 
   ## Use the extracted flux from the files for blaze correction to correct for the trace or use the fitted flux to correct for the blaze
-blazercor_function = flux
+  #     Options:
+  #         flux: use the flux
+  #         poly<number of orders>: use a polynom of a certain order, standard is "poly15" for 15th order polynomial
+blazercor_function = poly15
 
   ## general filenames which should be the same for a long time.
   # Path and filename to the badpixel mask. Created by create_badpx_mask.py. Leave empty 
@@ -370,6 +373,7 @@ logging_find_arc_traces             = arctraces_find.png
 logging_arctraces_im                = arctraces_in_master_trace2.png
 logging_map_shift_orders            = map_shifts.fits
 logging_orig_for_background         = orig_for_background_map.fits
+logging_blaze_spec                  = blaze_spectrum.pdf
 logging_found_arc_lines             = arc_lines_found.txt
 logging_identified_arc_lines        = arc_lines_identified.txt
 logging_wavelength_solution_form    = wavelength_solution_form.png
