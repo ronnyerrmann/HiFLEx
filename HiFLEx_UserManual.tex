@@ -55,11 +55,12 @@
 
 This program is designed to take a fits image file (i.e. a CCD image) and run data reduction steps, extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another), apply the wavelength correction, measure the radial velocity, and perform further calibration steps.
 
-Please cite Errmann, et al. (submitted).
+If you use this package, please cite Errmann, et al. 2020\footnote{\url{https://adsabs.harvard.edu/abs/2020PASP..132f4504E}} and let me know.
 
 If you use the barycentric corrected radial velocities, the barycentric velocity, or the BJDTDB, please cite Kanodia and Wright 2018\footnote{\url{https://iopscience.iop.org/article/10.3847/2515-5172/aaa4b7}}.
 
-
+If you use the radial velocities from TERRA, SERVAL, or CERES please cite the corresponding papers: Anglada-Escud{\'e} et al. 2012\footnote{\url{https://adsabs.harvard.edu/abs/2012ApJS..200...15A}}, Zechmeister et al. 2018\footnote{\url{http://adsabs.harvard.edu/abs/2018A&A...609A..12Z}}, or 
+Brahm et al. 2017\footnote{\url{https://adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
 
 % -------------------------------------------------------------------------------------------
 %\newpage
@@ -99,9 +100,10 @@ In order to work with the spectra, the following steps have to be done:
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
 
-\subsection*{v1.2.0 (in preparation)}
+\subsection*{v1.2.0}
 \begin{itemize}\setlength\itemsep{0em}
-  \item Added parameters \verb|pxshift_between_wavesolutions|, \verb|dataset_rv_analysis|, \verb|logging_arc_line_identification_residuals_hist|, \verb|logging_em_lines_bisector|, \verb|logging_blaze_spec|
+  \item Added parameters \verb|pxshift_between_wavesolutions|, \verb|dataset_rv_analysis|,\\ \verb|logging_arc_line_identification_residuals_hist|, \verb|logging_em_lines_bisector|, \verb|logging_blaze_spec|
+  \item Python~3 ready (Pipeline will also keep working under Python~2)
   \item Blaze correction with a fitted function (polynomial of user defined order)
   \item Extra logging information: Distribution of the residuals for the wavelength solution, graphs for measurements offsets to the wavelength solution, Bisector of the emission lines used for the wavelength solution
 \end{itemize}
@@ -116,7 +118,7 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 \begin{itemize}\setlength\itemsep{0em}
   \item Rename of \verb|prepare_file_list.py| to \verb|file_assignment.py|
   \item Rename of \verb|reduction_day.py| to \verb|hiflex.py|
-  \item Added parameters \verb|logging_traces_bisector|, \verb|extraction_shift|, \verb|extraction_min_ident_part_of_trace_percent|, \verb|extraction_precision|, \verb|sigmaclip_spectrum|
+  \item Added parameters \verb|logging_traces_bisector|, \verb|extraction_shift|,\\ \verb|extraction_min_ident_part_of_trace_percent|, \verb|extraction_precision|, \verb|sigmaclip_spectrum|
   \item Added parameter \verb|path_rv_serval|
   \item Renamed parameter \verb|path_csv_terra| to \verb|path_rv_terra|
   \item Added parameters \verb|max_cores_used_pct|, \verb|dataset_rv_analysis|, \verb|blazercor_function|
@@ -1230,44 +1232,41 @@ If you observe strange behaviour, please contact Ronny\footnote{r.errmann@herts.
 \section{Installation and dependencies}
 \label{Section:installation}
 
-\noindent This program was written to work with modules installed in Anaconda 2 and python 2.7. It is recommended to use an installation of anaconda 2 to use this program (If this is not possible, the whole module dependency is given in Appendix~\ref{section:module_dependency}).
+\noindent This program was written to work with modules installed in Anaconda and Python (3.8 or 2.7). It is recommended to use an installation of anaconda to use this program (If this is not possible, the whole module dependency is given in Appendix~\ref{section:module_dependency}).
 
-
-\subsection{With Anaconda and python 2.7}
-
-\noindent Anaconda can be downloaded from \url{https://www.anaconda.com/distribution/#linux}. Please select the version for python 2.7. After download it can be installed by running
+\subsection{With Anaconda} 
+\noindent Anaconda can be downloaded from \url{https://www.anaconda.com/products/individual}. After download it can be installed by running
 \begin{lstlisting}[style=base]
-sh Downloads/Anaconda2-5.0.1-Linux-x86_64.sh
+sh Downloads/Anaconda3-2020.07-Linux-x86_64.sh
 \end{lstlisting}
-%sh Downloads/Anaconda3-2018.12-Linux-x86_64.sh
-(no superuser permissions are needed, the version might need to be changed).
+(no superuser permissions are needed, the version might need to be changed). Anaconda will ask if \textit{Do you wish the installer to initialize Anaconda3 by running conda init?}, which is recomended to answer with yes, otherwise you might need to follow the steps below
 
 After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. %
 If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. Check with \verb|echo $0| what environment you are using.
 \begin{description}
   \item[\textbf{bash}]: add the following line (replace \textit{/home/hiflex} by the path you used for the installation) to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
     \begin{lstlisting}[style=base]
-export PATH="/home/hiflex/anaconda2/bin:$PATH"
+export PATH="/home/hiflex/anaconda3/bin:$PATH"
     \end{lstlisting}
   \item[\textbf{tcsh}]: add the following line (replace \textit{/home/hiflex} by the path you used for the installation) to your \verb|.tcshrc|
     \begin{lstlisting}[style=base]
-setenv PATH /home/hiflex/anaconda2/bin:$PATH
+setenv PATH /home/hiflex/anaconda3/bin:$PATH
     \end{lstlisting}
 \end{description}
 
 After making the change and opening a new terminal, python should point to the file in the Anaconda installation (\verb|which python|).
 
-\subsubsection{Making an environment for hiflex}
+\subsubsection{Creating an environment for hiflex}
 \label{Sec:Creating_conda_environment}
 \noindent Once Anaconda is installed a new environment with the required packages can be created:
 
 %conda deactivate
 %conda remove --name hiflex --all
 \begin{lstlisting}[style=base]
-conda create --name hiflex python=2.7 numpy scipy matplotlib astropy pycurl ephem \
-      rpy2 tqdm psutil statsmodels 
+conda create --name hiflex python=3 numpy scipy matplotlib astropy pycurl \
+      ephem rpy2 tqdm psutil statsmodels
 conda activate hiflex
-pip install gatspy barycorrpy==0.2.2.1 PyAstronomy multiprocessing
+pip install gatspy barycorrpy deepCR PyAstronomy
 \end{lstlisting}
 
 This environment has to be loaded in each terminal in which HiFLEx should be run:
@@ -1275,94 +1274,28 @@ This environment has to be loaded in each terminal in which HiFLEx should be run
 conda activate hiflex
 \end{lstlisting}
 
+\paragraph{Creating an environment for Python 2 routines:}
+Some external packages (SERVAL and CERES) only work under Python~2.7. Therefore, if you want to use these packages, it is necessary to create a python~2 environment, called (hiflex\_p2):
+\begin{lstlisting}[style=base]
+conda create --name hiflex_p2 python=2.7 numpy scipy matplotlib astropy pycurl \
+      ephem rpy2 tqdm psutil statsmodels
+conda activate hiflex_p2
+pip install gatspy barycorrpy==0.2.2.1 PyAstronomy
+conda deactivate
+\end{lstlisting}
 
-% For BJD (but not needed anymore):
-%pip install jplephem
-%pip install de423
-
-\subsubsection{Manual installation of barycorrpy }
+\subsection{Manual installation of barycorrpy }
 In case \textit{barycorrpy} is not available using \textit{pip}, please install it by using the instruction of the package: \url{https://github.com/shbhuk/barycorrpy/wiki/1.-Installation}
 Afterwards, please make sure that \verb|import barycorrpy| works in python.
 
-% Not needed anymore, as CERES was updated
-%\subsubsection{Install pyfits for radial velocity analysis}
-%To use the cross-correlation based radial velocity from the CERES pipeline (see Section~\ref{Section:Explanation_CERES_pipeline}) the package pyfits is necessary:
-%\begin{lstlisting}[style=base]
-%conda install gsl=2.2.1
-%pip install pyfits
-%\end{lstlisting}
-%
-%If the installation of pyfits fails, the following two commands can be tried to install it under conda:
-%\begin{lstlisting}[style=base]
-%conda install -c cefca pyfits
-%conda install -c sherpa pyfits
-%\end{lstlisting}
-%This might downgrade numpy, which will cause problems. Therefore, after installing pyfits, numpy needs to be upgraded again:
-%\begin{lstlisting}[style=base]
-%pip install numpy --upgrade
-%\end{lstlisting}
-%
-%Updating anaconda might also solve it:
-%\begin{lstlisting}[style=base]
-%conda update --prefix /home/hiflex/anaconda2 anaconda
-%\end{lstlisting}
-%
-%\subsubsection{Upgrading numpy for radial velocity analysis}
-%To use the cross-correlation based radial velocity from the CERES pipeline (see Section~\ref{Section:serval_package}) the package numpy needs to be on version 1.13 or newer. To check please run:
-%\begin{lstlisting}[style=base]
-%pip show numpy
-%\end{lstlisting}
-%
-%Numpy can be upgraded in anaconda using:
-%\begin{lstlisting}[style=base]
-%pip install numpy --upgrade
-%\end{lstlisting}
-%
-%If the version after the upgrade hasn't change, it might be necessary to run
-%\begin{lstlisting}[style=base]
-%pip uninstall numpy
-%conda update numpy
-%\end{lstlisting}
-
-%\subsection{With Anaconda and python 3.7 (in preparation)} % Modify it completely and just create a new anaconda environment
-%\textbf{Next thing to \url{https://sebastianraschka.com/Articles/2014_python_2_3_key_diff.html\#returning-iterable-objects-instead-of-lists}, procedures.py after line 2077 needs be done}.
-%
-%\noindent Anaconda can be downloaded from \url{https://www.anaconda.com/distribution/#linux}. Please select the version for python 3.7. After download it can be installed by running
-%\begin{lstlisting}[style=base]
-%sh Downloads/Anaconda3-2018.12-Linux-x86_64.sh
-%\end{lstlisting}
-%(no superuser permissions are needed, the version might need to be changed).
-%
-%After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. %
-%If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. If you use \verb|bash| (check with \verb|echo $0| what environment you are using) add the following line (replace \textit{/home/hiflex} by the path you used for the installation to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
-%\begin{lstlisting}[style=base]
-%export PATH="/home/hiflex/anaconda3/bin:$PATH"
-%\end{lstlisting}
-%If you use \verb|tcsh| add the following line (replace \textit{/home/hiflex} by the path you used for the installation to your \verb|.tcshrc|
-%\begin{lstlisting}[style=base]
-%setenv PATH /home/hiflex/anaconda3/bin\:$PATH
-%\end{lstlisting}
-%
-%Please make also sure that the environmental variable \verb|PYTHONPATH| does not point to any python-2.7 folders by checking \verb|echo $PYTHONPATH|~.
-%If python-2.7 folders appear, set the \verb|PYTHONPATH| variable only to python-3 folders using 
-%\begin{lstlisting}[style=base]
-%export PYTHONPATH="<subsection of PYTHONPATH>"
-%\end{lstlisting}
-%in a bash environment or
-%\begin{lstlisting}[style=base]
-%setenv PYTHONPATH <subsection of PYTHONPATH>
-%\end{lstlisting}
-%in a c-shell environment.
-%
-%After making the change and opening a new terminal, python should point to the file in the Anaconda installation (\verb|which python|) and the path should be set correctly (\verb|echo $PYTHONPATH|).
-
-
+% Modify it completely and just create a new anaconda environment
+%\textbf{Next thing to \url{https://sebastianraschka.com/Articles/2014_python_2_3_key_diff.html\#returning-iterable-objects-instead-of-lists}}.
 
 \subsection{Necessary files}
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/HiFLEx/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.1.0.tar.gz
+wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.2.0.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
 
@@ -1386,7 +1319,7 @@ When running the scripts for the first time, python will create a new file calle
 The pipeline creates extracted spectra in different formats, which then can be further analysed using available software. Additionally the pipeline can use available packages to find the radial velocity of the object. Below are described the requirements of the external software.
 
 \subsubsection{TERRA}
-If you make use of the Radial Velocity analysis from the SERVAL , please cite Anglada-Escud{\'e} et al. 2012\footnote{\url{https://adsabs.harvard.edu/abs/2012ApJS..200...15A}}.
+If you make use of the Radial Velocity analysis from the TERRA , please cite Anglada-Escud{\'e} et al. 2012\footnote{\url{https://adsabs.harvard.edu/abs/2012ApJS..200...15A}}.
 
 TERRA can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}~. It only has to be extracted. To check that all dependencies are installed on the system one can run.
 \begin{lstlisting}[style=base]
@@ -1401,9 +1334,9 @@ java --version
 \label{Section:serval_package}
 If you make use of the Radial Velocity analysis from the SERVAL , please cite Zechmeister et al. 2018\footnote{\url{http://adsabs.harvard.edu/abs/2018A&A...609A..12Z}}.
 
-To install Serval please follow the instructions as given on\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. Serval only works with python~2.7.
+To install SERVAL please follow the instructions as given at\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. Serval only works with python~2.7, hence for testing you might want to load the Python~2 environment.
 
-Serval can be controlled with an instrument file. This has to be provided in the serval \verb|src| folder. Below is a way to create a soft link it when following the installing instructions.
+SERVAL can be controlled with an instrument file. This has to be provided in the serval \verb|src| folder. Below is a way to create a soft link it when following the installing instructions.
 \begin{lstlisting}[style=base]
 ln -s <full/path/to/hiflex>/inst_HIFLEX*.py $SERVALHOME/serval/src/
 \end{lstlisting}
@@ -1452,12 +1385,103 @@ If the script crashes with:
 \begin{lstlisting}[style=base]
 ValueError: math domain error
 \end{lstlisting}
-The problem is that the variable \verb|c| is negative (scipy.integrate.simps can create negative values\footnote{\url{https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve}}. This is a problem if there are big gaps in wavelength). You might want to search for math.sqrt in \verb|ceres/utils/Correlation/correlation.py| and put the line with CCF in an \textit{if clause}, e.g. around line 110 and 160:
+The problem is that the variable \verb|c| is negative (scipy.integrate.simps can create negative values\footnote{\url{https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve}}. This is a problem if there are big gaps in wavelength). You might want to search for math.sqrt in\\ \verb|ceres/utils/Correlation/correlation.py| and put the line with CCF in an \textit{if clause}, e.g. around line 110 and 160:
 \begin{lstlisting}[style=base]
 	if b*c >= 0:
 	    CCF  = CCF+(a/math.sqrt(b*c))*(Ll[-2]-Ll[1])
 	    NOR = NOR+Ll[-2]-Ll[1]
 \end{lstlisting}
+
+
+\subsection{With Anaconda and python 2.7 (until v1.1.0)}
+\textbf{Note: Python 2.7 support is ending 2020.}
+\noindent Anaconda can be downloaded from \url{https://www.anaconda.com/distribution/#linux}. After download it can be installed by running
+\begin{lstlisting}[style=base]
+sh Downloads/Anaconda2-5.0.1-Linux-x86_64.sh
+\end{lstlisting}
+%sh Downloads/Anaconda3-2018.12-Linux-x86_64.sh
+(no superuser permissions are needed, the version might need to be changed).
+
+After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. %
+If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. Check with \verb|echo $0| what environment you are using.
+\begin{description}
+  \item[\textbf{bash}]: add the following line (replace \textit{/home/hiflex} by the path you used for the installation) to your \verb|.bashrc|. %, \textit{/home/\textless username\textgreater} is the standard installation path)
+    \begin{lstlisting}[style=base]
+export PATH="/home/hiflex/anaconda2/bin:$PATH"
+    \end{lstlisting}
+  \item[\textbf{tcsh}]: add the following line (replace \textit{/home/hiflex} by the path you used for the installation) to your \verb|.tcshrc|
+    \begin{lstlisting}[style=base]
+setenv PATH /home/hiflex/anaconda2/bin:$PATH
+    \end{lstlisting}
+\end{description}
+
+After making the change and opening a new terminal, python should point to the file in the Anaconda installation (\verb|which python|).
+
+\subsubsection{Making an environment for hiflex}
+\label{Sec:Creating_conda_environment}
+\noindent Once Anaconda is installed a new environment with the required packages can be created:
+
+%conda deactivate
+%conda remove --name hiflex --all
+\begin{lstlisting}[style=base]
+conda create --name hiflex python=2.7 numpy scipy matplotlib astropy pycurl ephem \
+      rpy2 tqdm psutil statsmodels 
+conda activate hiflex
+pip install gatspy barycorrpy==0.2.2.1 PyAstronomy multiprocessing
+\end{lstlisting}
+
+This environment has to be loaded in each terminal in which HiFLEx should be run:
+\begin{lstlisting}[style=base]
+conda activate hiflex
+\end{lstlisting}
+
+
+% For BJD (but not needed anymore):
+%pip install jplephem
+%pip install de423
+
+
+
+% Not needed anymore, as CERES was updated
+%\subsubsection{Install pyfits for radial velocity analysis}
+%To use the cross-correlation based radial velocity from the CERES pipeline (see Section~\ref{Section:Explanation_CERES_pipeline}) the package pyfits is necessary:
+%\begin{lstlisting}[style=base]
+%conda install gsl=2.2.1
+%pip install pyfits
+%\end{lstlisting}
+%
+%If the installation of pyfits fails, the following two commands can be tried to install it under conda:
+%\begin{lstlisting}[style=base]
+%conda install -c cefca pyfits
+%conda install -c sherpa pyfits
+%\end{lstlisting}
+%This might downgrade numpy, which will cause problems. Therefore, after installing pyfits, numpy needs to be upgraded again:
+%\begin{lstlisting}[style=base]
+%pip install numpy --upgrade
+%\end{lstlisting}
+%
+%Updating anaconda might also solve it:
+%\begin{lstlisting}[style=base]
+%conda update --prefix /home/hiflex/anaconda2 anaconda
+%\end{lstlisting}
+%
+%\subsubsection{Upgrading numpy for radial velocity analysis}
+%To use the cross-correlation based radial velocity from the CERES pipeline (see Section~\ref{Section:serval_package}) the package numpy needs to be on version 1.13 or newer. To check please run:
+%\begin{lstlisting}[style=base]
+%pip show numpy
+%\end{lstlisting}
+%
+%Numpy can be upgraded in anaconda using:
+%\begin{lstlisting}[style=base]
+%pip install numpy --upgrade
+%\end{lstlisting}
+%
+%If the version after the upgrade hasn't change, it might be necessary to run
+%\begin{lstlisting}[style=base]
+%pip uninstall numpy
+%conda update numpy
+%\end{lstlisting}
+
 
 % -------------------------------------------------------------------------------------------
 
