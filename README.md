@@ -9,7 +9,7 @@ If you publish data using the barycentric correction, please cite (https://githu
 
 
 ## Recent changes
-* Python~3 ready (Pipeline will also keep working under Python~2)
+* Python 3 ready (Pipeline will also keep working under Python 2)
 * Blaze correction with a fitted function (polynomial of user defined order)
 * Extra logging information for wavelength solution and drift of the wavelength solution
 * Improved measurement of the offset between emission line spectra and the wavelength solution
