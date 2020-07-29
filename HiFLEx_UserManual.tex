@@ -55,12 +55,12 @@
 
 This program is designed to take a fits image file (i.e. a CCD image) and run data reduction steps, extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another), apply the wavelength correction, measure the radial velocity, and perform further calibration steps.
 
-If you use this package, please cite Errmann, et al. 2020\footnote{\url{https://adsabs.harvard.edu/abs/2020PASP..132f4504E}} and let me know.
+If you use this package, please cite Errmann, et al. 2020\footnote{\url{https://ui.adsabs.harvard.edu/abs/2020PASP..132f4504E}} and let me know.
 
 If you use the barycentric corrected radial velocities, the barycentric velocity, or the BJDTDB, please cite Kanodia and Wright 2018\footnote{\url{https://iopscience.iop.org/article/10.3847/2515-5172/aaa4b7}}.
 
-If you use the radial velocities from TERRA, SERVAL, or CERES please cite the corresponding papers: Anglada-Escud{\'e} et al. 2012\footnote{\url{https://adsabs.harvard.edu/abs/2012ApJS..200...15A}}, Zechmeister et al. 2018\footnote{\url{http://adsabs.harvard.edu/abs/2018A&A...609A..12Z}}, or 
-Brahm et al. 2017\footnote{\url{https://adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
+If you use the radial velocities from TERRA, SERVAL, or CERES please cite the corresponding papers: Anglada-Escud{\'e} et al. 2012\footnote{\url{https://ui.adsabs.harvard.edu/abs/2012ApJS..200...15A}}, Zechmeister et al. 2018\footnote{\url{http://ui.adsabs.harvard.edu/abs/2018A&A...609A..12Z}}, or 
+Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
 
 % -------------------------------------------------------------------------------------------
 %\newpage
@@ -972,7 +972,7 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
 
 \subsubsection{Getting the data}
 %  observations with HARPS: http://www.eso.org/public/archives/releases/sciencepapers/eso1609/eso1609a.pdf
-% HD 10180: G1V star with 7 planets: http://adsabs.harvard.edu/abs/2011A%26A...528A.112L
+% HD 10180: G1V star with 7 planets: http://ui.adsabs.harvard.edu/abs/2011A%26A...528A.112L
 Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres, use '2004 07 12' and Program ID '072.C-0488(E)' for calibration data taken by the RV exoplanet search team, or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*fits.Z) can be extracted with:
 \begin{lstlisting}[style=base]
 gunzip *
@@ -1319,7 +1319,7 @@ When running the scripts for the first time, python will create a new file calle
 The pipeline creates extracted spectra in different formats, which then can be further analysed using available software. Additionally the pipeline can use available packages to find the radial velocity of the object. Below are described the requirements of the external software.
 
 \subsubsection{TERRA}
-If you make use of the Radial Velocity analysis from the TERRA , please cite Anglada-Escud{\'e} et al. 2012\footnote{\url{https://adsabs.harvard.edu/abs/2012ApJS..200...15A}}.
+If you make use of the Radial Velocity analysis from the TERRA , please cite Anglada-Escud{\'e} et al. 2012\footnote{\url{https://ui.adsabs.harvard.edu/abs/2012ApJS..200...15A}}.
 
 TERRA can be downloaded from\\ \url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}~. It only has to be extracted. To check that all dependencies are installed on the system one can run.
 \begin{lstlisting}[style=base]
@@ -1332,7 +1332,7 @@ java --version
 
 \subsubsection{SERVAL}
 \label{Section:serval_package}
-If you make use of the Radial Velocity analysis from the SERVAL , please cite Zechmeister et al. 2018\footnote{\url{http://adsabs.harvard.edu/abs/2018A&A...609A..12Z}}.
+If you make use of the Radial Velocity analysis from the SERVAL , please cite Zechmeister et al. 2018\footnote{\url{http://ui.adsabs.harvard.edu/abs/2018A&A...609A..12Z}}.
 
 To install SERVAL please follow the instructions as given at\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. Serval only works with python~2.7, hence for testing you might want to load the Python~2 environment.
 
@@ -1349,7 +1349,7 @@ If the SERVAL RV analysis fails, try to run it with a subset of orders for the \
 
 \subsubsection{CERES Pipeline}
 \label{Section:Explanation_CERES_pipeline}
-If you make use of the Radial Velocity analysis from the CERES , please cite Brahm et al. 2017\footnote{\url{https://adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
+If you make use of the Radial Velocity analysis from the CERES , please cite Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
 
 The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres}. To make it work, please follow the Installation Chapter in the README.md. CERES requires python 2.7. Please note that the compilers in the CERES install process ignore any anconda settings and go straight to the system packages (e.g. for SSEPhem), hence you might want to install it when anaconda is not loaded. The following lines worked in Mai 2020:
 \begin{lstlisting}[style=base]

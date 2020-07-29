@@ -1,7 +1,7 @@
 # HiFLEx
 A highly flexible package to reduce echelle data (taken with a bifurcated or single fiber)
 
-The Package is described in (https://ui.adsabs.harvard.edu/abs/2020PASP..132f4504E).
+The Package is described in [Errmann et al.](https://ui.adsabs.harvard.edu/abs/2020PASP..132f4504E) (https://ui.adsabs.harvard.edu/abs/2020PASP..132f4504E).
 
 For information on how to use the software please check the Manual: [HiFLEx_UserManual.pdf](https://github.com/ronnyerrmann/HiFLEx/blob/master/HiFLEx_UserManual.pdf).
 
@@ -15,14 +15,19 @@ If you publish data using the barycentric correction, please cite (https://githu
 ## Install instruction
 
 Requirements:
-- python 2.7 + numpy, scipy, pyfits, astropy
+- python 3.8 (and 2.7) + numpy, scipy, pyfits, astropy
 - (only tested under linux)
 
-Create a new [Anaconda](https://www.anaconda.com/distribution/#linux) environment:
+Create two new [Anaconda](https://www.anaconda.com/distribution/#linux) environments (python 3 required for cosmic ray removal, python 2.7 required for SERVAL and CERES):
 ```
-conda create --name hiflex python=2.7 numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels 
-conda activate hiflex
+conda create --name hiflex_p2 python=2.7 numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels 
+conda activate hiflex_p2
 pip install gatspy barycorrpy==0.2.2.1 PyAstronomy multiprocessing
+conda deactivate
+
+conda create --name hiflex python=3 numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels
+conda activate hiflex
+pip install gatspy barycorrpy deepCR PyAstronomy
 ```
 
 Download and extract the [latest relase](https://github.com/ronnyerrmann/HiFLEx/releases) or clone the repository
