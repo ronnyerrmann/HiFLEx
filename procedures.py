@@ -36,6 +36,10 @@ else:                           # Python 3
     import tkinter as Tk
     import urllib3 as urllib2
     raw_input = input
+if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
+    from deepCR import deepCR   # Only available for python 3.5
+else:
+    deepCR = None
 import plot_img_spec
 import psutil
 import ephem
@@ -269,7 +273,7 @@ def textfileargs(params, textfile=None):
     params['logging_em_lines_bisector'] = params.get('logging_em_lines_bisector', 'wavelength_solution_emmission_lines_bisector.png')
     params['logging_blaze_spec'] = params.get('logging_blaze_spec', 'blaze_spectrum.pdf')
 
-    list_txt = ['reference_catalog', 'use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys']
+    list_txt = ['reference_catalog', 'use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys', 'cosmic_ray_settings']
     list_int = ['arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck', 'dataset_rv_analysis']
     list_float = ['opt_px_range', 'background_width_multiplier', 'sigmaclip_spectrum']
@@ -371,7 +375,7 @@ def textfileargs(params, textfile=None):
                     params[entry][ii] = (params[entry][ii]+os.sep).replace(os.sep+os.sep, os.sep)      # Add a / at the end in case the user didn't
             if entry in ['raw_data_paths', 'path_ceres', 'path_serval']:         # raw_data_paths is list, hence has to be checked before
                 continue
-            if params[entry].lower() not in ['na/', params['result_path']+'na/', params['result_path']+'/na/']:
+            if params[entry].lower() not in ['na'+os.sep, params['result_path']+'na'+os.sep, params['result_path']+os.sep+'na'+os.sep]:
                 make_directory(params[entry])               # Create folders, if necessary
         #if entry in list_raw:                                           # deal with lists of raw data filenames -> add path
         #    for i in range(len(params[entry])):
@@ -393,6 +397,7 @@ def textfileargs(params, textfile=None):
     params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)     # Use 80% of the CPU cores
     params['dataset_rv_analysis'] = params.get('dataset_rv_analysis', [5, 6])
     params['pxshift_between_wavesolutions'] = params.get('pxshift_between_wavesolutions', 0)
+    params['cosmic_ray_settings'] =  params.get('cosmic_ray_settings', ['deepCR', 'ACS-WFC-F606W-2-32', '0.999'])
     
     return params
 
@@ -423,7 +428,7 @@ def round_sig(value, sig=5):
     """
     :param value: number
     """
-    rounded = round(x, sig-int(np.floor(np.log10(abs(x))))-1)
+    rounded = round(value, sig-int(np.floor(np.log10(abs(value))))-1)
 
 def read_text_file(filename, no_empty_lines=False, warn_missing_file=True):
     """
@@ -678,15 +683,7 @@ def read_file_calibration(params, filename, level=0):
             warn_images_not_same([im, calimages[entry]], [filename,entry])
             im = im / (calimages[entry] / np.median(calimages[entry]) )
             logtxt, headtxt = ['flat correction applied with normalised flat (rflat)'], ['redu{0}d'.format(level), 'Flat']
-        #elif entry.lower().find('background') > -1 and not entry.lower().find('localbackground') > -1:
-        #    if entry not in calimages:
-        #         calimages[entry] = read_background(params, params[entry+'filename'])
-        #    warn_images_not_same([im, calimages[entry]], [filename,params[entry+'filename']])
-        #    im = im - calimages[entry]*exptime
-        #    logger('Info: {1}: background correction applied: {0}'.format(params[entry], level))
-        #    im_head['HIERARCH HiFLEx redu{0}e'.format(level)] = 'Background: {0}'.format(params[entry])
         elif entry.lower().find('badpx_mask') > -1:
-            ims =  im.shape
             if entry not in calimages:
                 calimages[entry] = read_badpx_mask(params, ims)
             warn_images_not_same([im, calimages[entry]], [filename,entry])
@@ -704,6 +701,27 @@ def read_file_calibration(params, filename, level=0):
                     im[nonzeroind[0][i],nonzeroind[1][i]] = np.median(section)  #replace bad px with the median of each surrounding area
             logger('Info: {1}: badpx correction applied: {0}'.format(entry, level))
             im_head['HIERARCH HiFLEx redu{0}f'.format(level)] = 'Bad-pixel-mask: {0}'.format(entry)
+        elif entry.lower().find('cosmic_ray') > -1:
+            cr_setting = params['cosmic_ray_settings']
+            if cr_setting[0].lower() == 'deepcr' and deepCR is not None:
+                if multiprocessing.current_process().name == 'MainProcess':     n_jobs = params['use_cores']
+                else:                                                           n_jobs = 1
+                mdl = deepCR(mask=cr_setting[1], inpaint=cr_setting[1], device="CPU")     # mdl could be initialised earlier
+                logger('Step: Cosmic ray removal')
+                mask, im_clean = mdl.clean(im, threshold=float(cr_setting[2]), segment=True, n_jobs=n_jobs)            # best threshold is highest value that generate mask covering full extent of CR; choose threshold by visualizing outputs.
+                pos = np.where(mask)
+                #for ii in range(pos[0].shape[0]):
+                #    print(filename, ii, pos[0][ii],pos[1][ii])
+                fname = filename.rsplit(os.sep,1)
+                if mask.any() and os.path.exists(params['path_reduced']) and params['path_reduced'].lower() != 'na'+os.sep:      # at least one entry is True/1
+                    im_head['Comment'] = 'In this file {0} cosmic rays were marked.'.format(np.sum(mask)) +\
+                                         ' The first image shows the cleaned image, the second the mask and the third the uncleaned image'
+                    save_im_fits(params, [im_clean, mask, im], im_head,  params['path_reduced']+fname[-1].replace('.fit','_cr.fit'))
+                print(fname[-1], np.sum(mask) )
+                im = im_clean
+                logger('Info: {1}: cosmic ray correction applied: {0}'.format(entry, level))
+                im_head['HIERARCH HiFLEx redu{0}g'.format(level)] = 'Cosmic ray correction: {0}'.format(entry)
+                im_head['HIERARCH HiFLEx deepCR'] = '{0} pixel from cosmic rays'.format(np.sum(mask))
         elif entry.lower().find('background') > -1:         # was localbackground before 20200108, this search covers *background
             if 'sci_trace' in calimages.keys() and 'cal_trace' in calimages.keys():
                 logger('Step: Performing the background fit')
@@ -745,7 +763,7 @@ def read_file_calibration(params, filename, level=0):
             logger('Info: {4}: {3}: {0} (median={1}, std={2})'.format(entry, im_median, im_std, logtxt[0], level))
             im_head['HIERARCH HiFLEx '+headtxt[0]] = '{3}: {0}, median={1}, std={2}'.format(entry, im_median, im_std, headtxt[1])
     #logger('Info: image loaded and processed: {0}'.format(filename))
-    if os.path.exists(params['path_reduced']) and params['path_reduced'].lower() != 'na/':       # Save the reduced image
+    if os.path.exists(params['path_reduced']) and params['path_reduced'].lower() != 'na'+os.sep:       # Save the reduced image
         fname = filename.rsplit(os.sep,1)
         save_im_fits(params, im, im_head,  params['path_reduced']+fname[-1])
     return im, im_head
@@ -906,7 +924,15 @@ def save_im_fits(params, im, im_head, filename):
         logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( filename, os.getcwd() ))
     elif not os.path.exists(filename.rsplit(os.sep,1)[0]):
         logger('Error: Folder to save {0} does not exists.'.format(filename))
-    im = rotate_flip_frame(im, params, invert=True)
+    if type(im).__name__ == 'list':
+        for ii in range(len(im)):
+            im[ii] = rotate_flip_frame(im[ii], params, invert=True)
+        im = np.array(im)
+        ims = im.shape
+        #im = im.reshape((ims[1],ims[2],ims[0]))
+        print(im.shape,ims)
+    elif len(im.shape) == 2:
+        im = rotate_flip_frame(im, params, invert=True)
     #im = get_minimum_data_type(im, allow_unsigned=False)   #That doen't make the fits files smaller for uint16, int16, or float32. Additionally, plotting a file with uint16 or int16 with ds9 or gaia doesn't show the data correctly
     fits.writeto(filename, im, im_head, overwrite=True)
     logger('Info: image saved: {0}'.format(filename))
@@ -8602,7 +8628,7 @@ def prepare_for_rv_packages(params):
         headers[file_RV] = im_head      # for CERES
         files_RV.append(file_RV)        # for CERES
         spec = im[0].data
-        if 'HiFLEx OBJNAME' not in im_head.keys():
+        if 'HiFLEx BCV' not in im_head.keys():          # BCV can be only calculated if coordinates are available -> only do RV on these stars
             continue
         obj_name = im_head['HiFLEx OBJNAME'].lower()
         obsdate_midexp = datetime.datetime.strptime(im_head['HiFLEx DATE-MID'],"%Y-%m-%dT%H:%M:%S.%f")
@@ -8760,7 +8786,7 @@ def run_serval_rvs(params,):
           ' The command history can be found in {0}cmdhistory.txt. Before running serval: cd {0}').format(params['path_rv_serval']))
 
 def run_ceres_multicore(kwargs):
-    [file_RV, params, headers, force_rvs] = kwargs
+    [file_RV, params, headers, force_rvs, stellar_par] = kwargs
     #params = kwargs['params']
     #stellar_par = kwargs['stellar_par']
     #spec = kwargs['spec']
@@ -8885,7 +8911,7 @@ def run_ceres_rvs(params, files_RV, headers):
                      stellar_par[obname][1], stellar_par[obname][2], stellar_par[obname][3], stellar_par[obname][4])
         logger('Info: With the CERES routine the following parameters have been determined for {0} using {1} spectra: {2}'.format(obname, nspec, text))
 
-    kwargs = [[file_RV, params, headers, force_rvs] for file_RV in files_RV]
+    kwargs = [[file_RV, params, headers, force_rvs, stellar_par] for file_RV in files_RV]
     if params['use_cores'] > 1:
         logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
         p = multiprocessing.Pool(params['use_cores'])

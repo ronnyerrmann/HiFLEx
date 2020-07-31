@@ -225,9 +225,9 @@ raw_data_object_name_keys  = [OBJECT]
   # For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create gives the information which corrections will be applied before the <filetype>_rawfiles are combined.
   #   Corrections will applied in the order given!
   # The <filetype>_calibs_create_g define thereby the general values, which will be assinged by prepare_file_list.py to <filetype>_calibs_create
-  #   The following settings are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, background, normalise, combine_mean, combine_sum. Please check the manual for more information
+  #   The following settings are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, cosmic_ray, background, normalise, combine_mean, combine_sum. Please check the manual for more information
   #   For dark calibration darks with the correct exposure time will be used. 
-  #   For background the key 'background_filename' needs to be defined
+  #   For cosmic_ray removal deepCR is used and the parameters cosmic_ray_settings need to be set.
 bias_calibs_create_g            = [subframe, badpx_mask]
 dark_calibs_create_g            = [subframe, badpx_mask, bias]
 rflat_calibs_create_g           = subframe, badpx_mask, dark, bias, normalise
@@ -245,6 +245,10 @@ standard_calibs_create = []
   # When reading already processed images from the result path, this defines what calibrations should be done. If one file type should be handled different, then <filetype>_calibs_read can be used.
   # Normally this can be empty.
 calibs_read = []
+
+  ## Seetings for cosmic ray removal. The first entry gives the algorithm to be used (only deepCR at the moment), the other parameters give details to the algorithm:
+  #     deepCR: 2nd parameter: which model to use. Change to path of the model for your camera. 3rd parameter: threashold, best threshold is highest value that generate mask covering full extent of CR
+cosmic_ray_settings = [deepCR, ACS-WFC-F606W-2-32, 0.999]
 
   ## Getting oject site and object coordinates to perform barycentric correction. If the values are stored in the header, then the header values are used
   #-------------------------------------------------------------------------------
@@ -317,11 +321,6 @@ master_wavelensolution_filename     = master_wavelength.fits
 master_blaze_spec_norm_filename     = master_blaze_spec_norm.fits
 master_wavelengths_shift_filename   = master_wavelengths_shift.txt
 
-  # master file for identifiying which pixel contain background. Created by hiflex.py
-background_px_filename          = background_px.fits
-
-  # master file for the background correction. Created by hiflex.py
-background_filename             = background.fits
 
   ## RV analysis: please read the manual to check how to install the packages.
   #--------------

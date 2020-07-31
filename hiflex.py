@@ -78,26 +78,7 @@ if __name__ == "__main__":
                       .format(params['width_percentile']),printarrayformat=printarrayformat, printarray=data)
             # Do a bisector analysis: plot position as fuction of flux
             bisector_measurements_orders(im_trace1,  params.get('logging_traces_bisector', params['logging_path']+'bisector_traces1.png'), sci_tr_poly, xlows, xhighs, widths)
-        
-    """Not really useful
-    # Create the background map, if it doesn't exist
-    if os.path.isfile(params['background_filename']) :
-        logger('Info: Background map already exists: {0}'.format(params['result_path']+params['background_filename']))
-    else:
-        # create the background map
-        if params['GUI'] :
-            bck_px, params = bck_px_UI(params, im_trace1, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0], params['GUI'])
-        else:
-            bck_px = find_bck_px(im_trace1, sci_tr_poly, xlows, xhighs, widths, params['background_width_multiplier'][0])
-        bad_values = ( im_trace1*bck_px > np.percentile(im_trace1[bck_px==1],95) )
-        bck_px[bad_values] = 0
-        save_im_fits(params, bck_px, im_trace1_head, params['background_px_filename'])
-        save_im_fits(params, bck_px*im_trace1, im_trace1_head, params['logging_orig_for_background'])
-        # Create the fitted background map
-        #im_bck = find_bck_fit(im_trace1, im_bck_px, params['polynom_bck'], params['GUI'])       #Old
-        bck_im = fit_2d_image(im_trace1, params['polynom_bck'][1], params['polynom_bck'][0], w=bck_px)
-        save_im_fits(params, bck_im, im_trace1_head, params['background_filename'])"""
-        
+                
     # Create the file for the calibration orders, if it doesn't exist
     if os.path.isfile(params['master_trace_cal_filename']) :
         logger('Info: Arc trace solution already exists: {0}'.format(params['master_trace_cal_filename']))

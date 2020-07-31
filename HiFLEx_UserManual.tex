@@ -33,8 +33,8 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 
-\title{User Manual for Data Reduction using the HiFLEx package\\ Working version: v1.0.0}
-\date{May, 2020}
+\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.2.0}
+\date{August, 2020}
 \author{Ronny Errmann, EXOhSPEC team\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -59,6 +59,8 @@ If you use this package, please cite Errmann, et al. 2020\footnote{\url{https://
 
 If you use the barycentric corrected radial velocities, the barycentric velocity, or the BJDTDB, please cite Kanodia and Wright 2018\footnote{\url{https://iopscience.iop.org/article/10.3847/2515-5172/aaa4b7}}.
 
+If you use the cosmic ray correction using deepCR, please cite Keming Zhang \& Joshua Bloom 2020\footnote{\url{https://ui.adsabs.harvard.edu/abs/2020ApJ...889...24Z}}.
+
 If you use the radial velocities from TERRA, SERVAL, or CERES please cite the corresponding papers: Anglada-Escud{\'e} et al. 2012\footnote{\url{https://ui.adsabs.harvard.edu/abs/2012ApJS..200...15A}}, Zechmeister et al. 2018\footnote{\url{http://ui.adsabs.harvard.edu/abs/2018A&A...609A..12Z}}, or 
 Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
 
@@ -70,10 +72,10 @@ Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c
 This Pipeline was intended to be written as a black box for the unskilled user, however a basic understanding of echelle spectroscopy and data reduction of digital astronomical images is necessary in order to use it.
 
 
-\subsection{Data reduction of CCD or CMOS images (photometry or spectroscopy)}
-Please refer to Howell (1976,2006)\footnote{\url{https://www.cambridge.org/core/books/handbook-of-ccd-astronomy/97D3D910788D44D11394B3B57C3FA743}} or check Chapter~\ref{Section:data_reduction_CCD}.
+\subsection*{Data reduction of CCD or CMOS images (photometry or spectroscopy)}
+Please refer to Howell (1976,2006)\footnote{\url{https://www.cambridge.org/core/books/handbook-of-ccd-astronomy/97D3D910788D44D11394B3B57C3FA743}} or check Chapter~\ref{Section:data_reduction_CCD}. A guide for data reduction using python is provided by Craig and Chambers\footnote{\url{https://mwcraig.github.io/ccd-as-book/00-00-Preface.html}}
 
-\subsection{Echelle spectroscopy}
+\subsection*{Echelle spectroscopy}
 Echelle spectrographs image the disperse the light into a 2-dimensional plane by using a high-dispersing grating and a low-dispersing prism (or grating). The low-dispersing element is thereby necessary to separate the individual orders produced by the high-dispersing grating. Some of the wavelengths can be covered by several orders. An example for an echelle spectrum of a black body is shown in Figure~\ref{Fig:apertures_in_master_flat} with the individual orders going up to down and order number increasing from left to right.
 
 In order to work with the spectra, the following steps have to be done:
@@ -84,7 +86,7 @@ In order to work with the spectra, the following steps have to be done:
   \item Apply instrument specific corrections.
 \end{itemize}
 
-\subsection{Programming (Python)}
+\subsection*{Programming (Python)}
 
 \begin{itemize}
   \item Lines starting with one or more \# are comments, which will be ignored  by the pipeline.
@@ -99,6 +101,11 @@ In order to work with the spectra, the following steps have to be done:
 \section{Changelog (recently)}
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
+
+\subsection*{v1.3.0 (in preparation)}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Cosmic ray removal (deepCR), new parameter \verb|cosmic_ray_settings|
+\end{itemize}
 
 \subsection*{v1.2.0}
 \begin{itemize}\setlength\itemsep{0em}
@@ -257,7 +264,7 @@ After all the calibration steps have been performed for a given instrument (see\
   \item[bias] : Apply a master bias. This can be either a pre-reduced image, or it can be created by the pipeline. %, which will be created from the files given in the parameter \verb|bias_rawfiles| by using the settings given in the parameter \verb|bias_calibs_create|. These two parameters are created automatically by the script \verb|file_assignment.py| if bias frames exist in the raw data path.
   \item[dark] : Apply a master dark. A dark with the same exposure time as read from the fits header will be applied. %The necessary parameters are created automatically by the script \verb|file_assignment.py|.
   \item[rflat] : Apply a master true flat. %The necessary parameters are created automatically by the script \verb|file_assignment.py|.
-  %\item[background] : Applies background correction using the filename given in the parameter \verb|background_filename|. The background image will be scaled by the exposure time of the scientific image, before its subtracted from the scientific image.
+  \item[cosmic\_ray] : Do the cosmic ray correction using deepCR (best only on science spectra, otherwise rely on median combination). See more in Chapter~\ref{Section:train_deepCR}.
   \item[background] : For Scattered light removal. Applies background correction by fitting a 2d polynomial against the current reduced image, excluding the area of the science and calibration traces. The fitted 2d-image is then subtracted from the current image.
 \end{description}
 
@@ -681,6 +688,15 @@ This is done in the procedure \verb|file_assignment.py|. However, the user can a
 
 Please note that the position of Moon, Jupiter, and Sun are calculated by the pipeline using the mid-exposure time. This requires that the filename contains the (case-insensitive) object name. Therefore the object is not required in the object list.
 
+
+\subsection{Cosmic ray removal}
+\subsubsection{Training the cosmic ray removal deepCR for a new camera}
+\label{Section:train_deepCR}
+So far deepCR comes only with the training set for HST WFC\footnote{\url{https://github.com/profjsb/deepCR\#quick-start}}. Testing this approach has identified (science-) traces as cosmic rays (settings: \verb|cosmic_ray_settings = [deepCR, ACS-WFC-F606W-2-32, 0.999]| and \verb|path_reduced| set to a valid path to check cosmic ray removal results).
+
+It is possible to train the model on the users camera. The steps are described in 
+\url{https://github.com/profjsb/deepCR/blob/master/docs/tutorial_train.rst}~. A good dataset is probably to use as many science frames as possible and search for cosmic rays (inlcuding along the traces).
+% started cooding train_cosmic_ray_deep_learning.py
 
 \subsection{Format of the extracted files}
 Different types of extracted files are created. They are described in the following subsections.
@@ -1418,7 +1434,6 @@ setenv PATH /home/hiflex/anaconda2/bin:$PATH
 After making the change and opening a new terminal, python should point to the file in the Anaconda installation (\verb|which python|).
 
 \subsubsection{Making an environment for hiflex}
-\label{Sec:Creating_conda_environment}
 \noindent Once Anaconda is installed a new environment with the required packages can be created:
 
 %conda deactivate
