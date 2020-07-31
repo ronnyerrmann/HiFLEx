@@ -5,10 +5,11 @@ The Package is described in [Errmann et al.](https://ui.adsabs.harvard.edu/abs/2
 
 For information on how to use the software please check the Manual: [HiFLEx_UserManual.pdf](https://github.com/ronnyerrmann/HiFLEx/blob/master/HiFLEx_UserManual.pdf).
 
-If you publish data using the barycentric correction, please cite (https://github.com/shbhuk/barycorrpy#citation). If you publish radial velocities using [TERRA](https://ui.adsabs.harvard.edu/abs/2012ApJS..200...15A), [SERVAL](http://ui.adsabs.harvard.edu/abs/2017A&A...609A..12Z), or [CERES](https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B), please cite the packages (paper behind the links).
+If you publish data using the barycentric correction, please cite (https://github.com/shbhuk/barycorrpy#citation). If you use the deepCR cosmic ray removal please cite (https://github.com/profjsb/deepCR). If you publish radial velocities using [TERRA](https://ui.adsabs.harvard.edu/abs/2012ApJS..200...15A), [SERVAL](http://ui.adsabs.harvard.edu/abs/2017A&A...609A..12Z), or [CERES](https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B), please cite the packages (paper behind the links).
 
 
 ## Recent changes
+* Cosmic ray removal using deepCR available
 * Python 3 ready (Pipeline will also keep working under Python 2)
 * Blaze correction with a fitted function (polynomial of user defined order)
 * Extra logging information for wavelength solution and drift of the wavelength solution
@@ -21,7 +22,7 @@ Requirements:
 - python 3.8 (and 2.7) + numpy, scipy, pyfits, astropy
 - (only tested under linux)
 
-Create two new [Anaconda](https://www.anaconda.com/distribution/#linux) environments (python 3 required for cosmic ray removal, python 2.7 required for SERVAL and CERES):
+Create two new [Anaconda](https://www.anaconda.com/distribution/#linux) environments (python >= 3.5 required for deepCR, python 2.7 required for SERVAL and CERES):
 ```
 conda create --name hiflex_p2 python=2.7 numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels 
 conda activate hiflex_p2

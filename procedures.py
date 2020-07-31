@@ -707,7 +707,7 @@ def read_file_calibration(params, filename, level=0):
                 if multiprocessing.current_process().name == 'MainProcess':     n_jobs = params['use_cores']
                 else:                                                           n_jobs = 1
                 mdl = deepCR(mask=cr_setting[1], inpaint=cr_setting[1], device="CPU")     # mdl could be initialised earlier
-                logger('Step: Cosmic ray removal')
+                #logger('Step: Cosmic ray removal')
                 mask, im_clean = mdl.clean(im, threshold=float(cr_setting[2]), segment=True, n_jobs=n_jobs)            # best threshold is highest value that generate mask covering full extent of CR; choose threshold by visualizing outputs.
                 pos = np.where(mask)
                 #for ii in range(pos[0].shape[0]):
@@ -717,7 +717,6 @@ def read_file_calibration(params, filename, level=0):
                     im_head['Comment'] = 'In this file {0} cosmic rays were marked.'.format(np.sum(mask)) +\
                                          ' The first image shows the cleaned image, the second the mask and the third the uncleaned image'
                     save_im_fits(params, [im_clean, mask, im], im_head,  params['path_reduced']+fname[-1].replace('.fit','_cr.fit'))
-                print(fname[-1], np.sum(mask) )
                 im = im_clean
                 logger('Info: {1}: cosmic ray correction applied: {0}'.format(entry, level))
                 im_head['HIERARCH HiFLEx redu{0}g'.format(level)] = 'Cosmic ray correction: {0}'.format(entry)
@@ -928,9 +927,6 @@ def save_im_fits(params, im, im_head, filename):
         for ii in range(len(im)):
             im[ii] = rotate_flip_frame(im[ii], params, invert=True)
         im = np.array(im)
-        ims = im.shape
-        #im = im.reshape((ims[1],ims[2],ims[0]))
-        print(im.shape,ims)
     elif len(im.shape) == 2:
         im = rotate_flip_frame(im, params, invert=True)
     #im = get_minimum_data_type(im, allow_unsigned=False)   #That doen't make the fits files smaller for uint16, int16, or float32. Additionally, plotting a file with uint16 or int16 with ds9 or gaia doesn't show the data correctly
