@@ -3306,17 +3306,20 @@ def read_reference_catalog(params, filenames=None, wavelength_muliplier=None, ar
         
     return reference_lines_dict
 
-def remove_orders_from_wavelength_solution(wave_sol_dict, keep_orders):
+def remove_orders_from_wavelength_solution(params, wave_sol_dict, keep_orders):
     """
     In order to remove some orders from the extracted data
     """
     for entry in wave_sol_dict.keys():
         if type(wave_sol_dict[entry]).__name__ == 'ndarray':
-            if wave_sol_dict[entry].shape[0] == keep_orders.shape[0]:
+            # wave_sol_dict[entry].shape[0] == keep_orders.shape[0] doesn't work, as keep_orders was created with where
+            if max(keep_orders) < wave_sol_dict[entry].shape[0]:
                 if len(wave_sol_dict[entry].shape) == 0:
                     wave_sol_dict[entry] = wave_sol_dict[entry][keep_orders]
                 elif len(wave_sol_dict[entry].shape) >= 1:
                     wave_sol_dict[entry] = wave_sol_dict[entry][keep_orders,:]
+            else:
+                logger('Error: Something went wrong with the numbers of orders. This should not have happened. Please consult Ronny')
 
     return wave_sol_dict
 
@@ -3437,9 +3440,10 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         #shift_avg, shift_std = np.mean( (shifts[:,4]-shifts[:,2]) / shifts[:,2] ), np.std( (shifts[:,4]-shifts[:,2]) / shifts[:,2], ddof=1)    # Will vary along the CCD
         
         # Create an image of the gaussian widths of the identified lines
-        fname = '{0}_{1}.{2}'.format(params['logging_em_lines_gauss_width_form'].rsplit('.',1)[0], objname, params['logging_em_lines_gauss_width_form'].rsplit('.',1)[-1])
+        objname_txt = objname.rsplit(os.sep,1)[-1]      # If the name contains a / there will be a problem
+        fname = '{0}_{1}.{2}'.format(params['logging_em_lines_gauss_width_form'].rsplit('.',1)[0], objname_txt, params['logging_em_lines_gauss_width_form'].rsplit('.',1)[-1])
         plot_wavelength_solution_width_emmission_lines(fname, ass, shifts, [0,3,6]) # order at 0, pixel at 3, gauss at 6
-        fname = '{0}_{1}.{2}'.format(params['logging_arc_line_identification_residuals_hist'].rsplit('.',1)[0], objname, params['logging_arc_line_identification_residuals_hist'].rsplit('.',1)[-1])
+        fname = '{0}_{1}.{2}'.format(params['logging_arc_line_identification_residuals_hist'].rsplit('.',1)[0], objname_txt, params['logging_arc_line_identification_residuals_hist'].rsplit('.',1)[-1])
         plot_hist_residuals_wavesol(fname, shifts, [0,3,4,8] )
     
         x, w, y, l = [], [], [], []
@@ -3450,8 +3454,8 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
             y.append(shifts[inorder,3]-shifts[inorder,7])    # Residuals
             l.append('{0}'.format(order))
         text = 'Residuals of the to the wavelength solution: used {0} out of {1} lines'.format(shifts.shape[0], checked_arc_lines)
-        fname_px   =   '{0}_{1}_px.{2}'.format(params['logging_arc_line_identification_residuals'].rsplit('.',1)[0], objname, params['logging_arc_line_identification_residuals'].rsplit('.',1)[-1])
-        fname_wave = '{0}_{1}_wave.{2}'.format(params['logging_arc_line_identification_residuals'].rsplit('.',1)[0], objname, params['logging_arc_line_identification_residuals'].rsplit('.',1)[-1])
+        fname_px   =   '{0}_{1}_px.{2}'.format(params['logging_arc_line_identification_residuals'].rsplit('.',1)[0], objname_txt, params['logging_arc_line_identification_residuals'].rsplit('.',1)[-1])
+        fname_wave = '{0}_{1}_wave.{2}'.format(params['logging_arc_line_identification_residuals'].rsplit('.',1)[0], objname_txt, params['logging_arc_line_identification_residuals'].rsplit('.',1)[-1])
         plot_img_spec.plot_points(x,y,l,[fname_px],   show=False, title=text, x_title='Pixel', 
                                   y_title='Residual (O-C) [Pixel]', marker=['o','s','*','P','^','v','>','<','x'])
         plot_img_spec.plot_points(w,y,l,[fname_wave], show=False, title=text, x_title='Wavelength [Angstrom]', 
@@ -3919,7 +3923,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_tr_poly, xlows, x
     im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
     im_head['Comment'] = ' 1: spectrum of the emission line lamp'
     im_head['Comment'] = ' 2: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
-    ceres_spec = np.array([wavelengths, aspectra, agood_px_mask])
+    ceres_spec = [wavelengths, aspectra, agood_px_mask]
     save_multispec(ceres_spec, params['path_extraction']+im_name, im_head, bitpix=params['extracted_bitpix'])
 
 def get_possible_object_names(filename, header, header_keywords, replacements=['_arc','arc', '_thar','thar', '_une','une', 'extract_combine']):
@@ -6571,12 +6575,12 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     text = 'Info: used {0} lines. The standard deviation of the residuals between the lines and the fit is {1} Angstrom '+\
                   '(the average of the abs of the residuals is {7} Angstrom). This converts into a resolution R = {2}. '+\
                   'The Gaussian width of the emission lines results in an R = {3} +- {4}. The 2-pixel resolution (around the identified lines) is R = {5} +- {6}.'
-    logger(text.format(arc_lines_wavelength.shape[0], round(std_diff_fit,4), int(std_R_fit), int(avg_R_gauss), int(std_R_gauss), int(avg_R_2px), int(std_R_2px), round(avg_diff_fit,4) ))
+    logger(text.format(arc_lines_wavelength.shape[0], round_sig(std_diff_fit,4), int(std_R_fit), int(avg_R_gauss), int(std_R_gauss), int(avg_R_2px), int(std_R_2px), round_sig(avg_diff_fit,4) ))
     p_cen_px = np.round(p_cen_px,3)
     text = 'Info: A 2d polynom fit with {0} orders in dispersion direction (along the traces) and {1} orders in cross-dispersion direction was used. '+\
                   'With this solution, the offset between aperture and real orders is {2}. To fulfil the grating equation the central pixel of the individual orders needs to be {5} + {6}*order + {7}*order**2.'+\
                   'With this values the standard deviation of the residuals between the central wavelengths and the grating equation is {3} Angstrom. Using the original solution gives an offset of {4}.'
-    logger(text.format(polynom_order_trace, polynom_order_intertrace, int(order_offset), round(np.std(diff_real_cent, ddof=len(p_real_cent)),4), order_offset_old, p_cen_px[2], p_cen_px[1], p_cen_px[0] ))
+    logger(text.format(polynom_order_trace, polynom_order_intertrace, int(order_offset), round_sig(np.std(diff_real_cent, ddof=len(p_real_cent)),4), order_offset_old, p_cen_px[2], p_cen_px[1], p_cen_px[0] ))
     
     # Create a wavelength solution
     wavelength_solution2d = np.array( [polynom_order_trace, polynom_order_intertrace, np.mean(cen_px), order_offset] + list(poly2d_params) )

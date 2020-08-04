@@ -81,7 +81,7 @@ if __name__ == "__main__":
                 
     # Create the file for the calibration orders, if it doesn't exist
     if os.path.isfile(params['master_trace_cal_filename']) :
-        logger('Info: Arc trace solution already exists: {0}'.format(params['master_trace_cal_filename']))
+        logger('Info: Trace for calibration orders already exists: {0}'.format(params['master_trace_cal_filename']))
         cal_tr_poly, axlows, axhighs, awidths = read_fits_width(params['master_trace_cal_filename'])
     else:
         # use im_trace2 for automatic solution
@@ -119,7 +119,8 @@ if __name__ == "__main__":
         elif calib[1] == 'cal1':                            # Update and rename a few parameters
             if 'master_wavelensolution'+calib[0]+'_filename' not in params.keys():
                 params['master_wavelensolution'+calib[0]+'_filename'] = params['master_wavelensolution_filename'].replace('.fit',calib[0]+'.fit')
-            for pngparam in ['logging_wavelength_solution_form', 'logging_em_lines_gauss_width_form', 'logging_arc_line_identification_residuals', 'logging_arc_line_identification_positions']:
+            for pngparam in ['logging_wavelength_solution_form', 'logging_em_lines_gauss_width_form', 'logging_arc_line_identification_residuals',
+                             'logging_arc_line_identification_positions', 'logging_arc_line_identification_residuals_hist', 'logging_em_lines_bisector']:
                 params[pngparam] = params[pngparam].replace('.png','')+calib[0]+'.png'
             for pdfparam in ['logging_arc_line_identification_spectrum']:
                 params[pdfparam] = params[pdfparam].replace('.pdf','')+calib[0]+'.pdf'
@@ -170,7 +171,7 @@ if __name__ == "__main__":
                 printarrayformat = ['%1.1i', '%3.2f', '%3.2f', '%3.1f']
                 logger('order\tpixel\twidth\theight of the line', show=False, printarrayformat=printarrayformat, printarray=arc_lines_px, logfile=fname)
     
-            if calib[1] == 'cal2':          # for the calibration fiber
+            if calib[1] == 'cal2':          # for the calibration fiber, runs first
                 if os.path.isfile(params['original_master_wavelensolution_filename']) == False:                                                         # Create a new solution
                     params['px_to_wavelength_file'] = params.get('px_to_wavelength_file', 'pixel_to_wavelength.txt')                                    # Backwards compatible
                     wave_sol_dict = create_new_wavelength_UI(params, cal_l_spec, cal_s_spec, arc_lines_px, reference_lines_dict)
@@ -194,7 +195,7 @@ if __name__ == "__main__":
                 # Find the new wavelength solution
                 wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_ori_dict['wavesol'], 
                                                            wave_sol_ori_dict['reflines'], reference_lines_dict, xlows, xhighs, show_res=params['GUI'], search_order_offset=True)
-            else:                           # Science fiber
+            else:                           # Science fiber, runs second
                 params['order_offset'] = [0,0]
                 params['px_offset'] = [-60,60,6]
                 params['px_offset_order'] = [-0.4,0.4,0.2]
@@ -320,12 +321,12 @@ if __name__ == "__main__":
     
     remove_orders, keep_orders = remove_orders_low_flux(params, flat_spec_norm)
     if len(remove_orders) > 0:
-        #print wavelength_solution.shape, wavelength_solution_arclines.shape, sci_tr_poly.shape, xlows.shape, xhighs.shape, widths.shape, cal_tr_poly.shape, axlows.shape, axhighs.shape, awidths.shape, flat_spec_norm.shape
+        #print(sci_tr_poly.shape, xlows.shape, xhighs.shape, widths.shape, cal_tr_poly.shape, axlows.shape, axhighs.shape, awidths.shape, flat_spec_norm.shape, wave_sol_dict['wavesol'].shape, wave_sol_dict['reflines'].shape)
         sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths, flat_spec_norm = \
                     sci_tr_poly[keep_orders,:,:], xlows[keep_orders], xhighs[keep_orders], widths[keep_orders,:], \
                     cal_tr_poly[keep_orders,:,:], axlows[keep_orders], axhighs[keep_orders], awidths[keep_orders,:], \
                     flat_spec_norm[:,keep_orders,:]                                                 # remove the bad orders
-        wave_sol_dict = remove_orders_from_wavelength_solution(wave_sol_dict, keep_orders)
+        wave_sol_dict = remove_orders_from_wavelength_solution(params, wave_sol_dict, keep_orders)
     
     calimages['flat_spec_norm'] = copy.deepcopy( flat_spec_norm )
     calimages['sci_trace'] = copy.deepcopy( [sci_tr_poly, xlows, xhighs, widths] )
