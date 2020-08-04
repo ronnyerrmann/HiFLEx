@@ -3313,15 +3313,19 @@ def remove_orders_from_wavelength_solution(params, wave_sol_dict, keep_orders):
     In order to remove some orders from the extracted data
     """
     for entry in wave_sol_dict.keys():
+        if entry in ['wavesol2d']:
+            continue
         if type(wave_sol_dict[entry]).__name__ == 'ndarray':
             # wave_sol_dict[entry].shape[0] == keep_orders.shape[0] doesn't work, as keep_orders was created with where
-            if max(keep_orders) < wave_sol_dict[entry].shape[0]:
+            if np.max(keep_orders) < wave_sol_dict[entry].shape[0]:
                 if len(wave_sol_dict[entry].shape) == 0:
                     wave_sol_dict[entry] = wave_sol_dict[entry][keep_orders]
                 elif len(wave_sol_dict[entry].shape) >= 1:
                     wave_sol_dict[entry] = wave_sol_dict[entry][keep_orders,:]
             else:
-                logger('Error: Something went wrong with the numbers of orders. This should not have happened. Please consult Ronny')
+                logger(('Error: Something went wrong with the numbers of orders: highest order to keep: '+\
+                        '{0}, wave_sol[{1}] has shape {2}. This should not have happened. '+\
+                        'Please consult Ronny').format(np.max(keep_orders), entry, wave_sol_dict[entry].shape))
 
     return wave_sol_dict
 
