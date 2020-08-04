@@ -274,9 +274,9 @@ def textfileargs(params, textfile=None):
     params['logging_blaze_spec'] = params.get('logging_blaze_spec', 'blaze_spectrum.pdf')
 
     list_txt = ['reference_catalog', 'use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys', 'cosmic_ray_settings']
-    list_int = ['arcshift_range', 'order_offset', 'px_offset', 'px_offset_order', 'polynom_order_traces', 'polynom_order_intertraces',
+    list_int = ['arcshift_range', 'order_offset', 'px_offset', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck', 'dataset_rv_analysis']
-    list_float = ['opt_px_range', 'background_width_multiplier', 'sigmaclip_spectrum']
+    list_float = ['opt_px_range', 'px_offset_order', 'background_width_multiplier', 'sigmaclip_spectrum']
     list_abs = ['arcshift_range']
     ints = ['polynom_order_apertures', 'rotate_frame']
     floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier',
@@ -4635,54 +4635,6 @@ def create_grid_data(y, x=[], ysteps=20):
         
     return data_g[0,:], data_g[1,:]
 
-"""def calculate_bisector_combine_before(data, data_x, deg=2):
-    "x""
-    :param data: list of lists/arrays of floats, e.g. the flux of an absorption line. The feature needs to have lower flux than the continuum
-    :param data_x: list of lists/arrays of floats, e.g. pixel or wavelength or velocity
-    "x""
-    if len(data) == 0:
-        return np.zeros(0), np.zeros(0)             # Empty array
-    if type(data[0]).__name__ not in ['list','ndarray']:
-        data = [data]
-        data_x = [data_x]
-    # Fold the data into a one-D curve by rescaling and fitting the centre
-    data_scaled, popt = scale_data(data[0], data_x[0], mode='gauss')
-    scaled_lines = np.array([ np.array(data_x[0])-popt[1], data_scaled ])
-    for ii in range(1,len(data)):
-        data_scaled, popt = scale_data(data[ii], data_x[ii], mode='gauss')
-        x = np.array(data_x[ii]) - popt[1]
-        
-        #fig, frame = plt.subplots(1,1)
-        #frame.plot(scaled_lines[0], scaled_lines[1])
-        #frame.plot(x, data_scaled)
-        #plt.show()
-        
-        scaled_lines = np.hstack(( scaled_lines, np.vstack((x, data_scaled)) ))
-
-    sort = np.argsort(scaled_lines[0,:])
-    scaled_lines = scaled_lines[:,sort]
-    histy, histx = np.histogram(scaled_lines[0,1:]-scaled_lines[0,:-1])     # How are the steps distributed?
-    xstep = np.percentile(histx,80)*3
-    x, y = create_grid_data( scaled_lines[1,:], scaled_lines[0,:], ysteps=20, xrang=xstep)
-    scaled_lines = np.vstack(( x, y ))
-    
-    
-    mask = ( scaled_lines[1,:] >= 0.1 ) & ( scaled_lines[1,:] <= 0.9 )
-    lines = scaled_lines[:,mask]
-    if lines.shape[1] >= 10:
-        # use the flux as x (scaled_lines[1,:]) and the position as y (scaled_lines[0,:])
-        poly = np.polyfit( lines[1,:], lines[0,:], max(0,min(deg,lines.shape[1]-2)) )
-        x = np.polyval( poly, lines[1,:])        
-    else:
-        x = np.array([])
-    "#""fig, frame = plt.subplots(1,1)
-    frame.plot(scaled_lines[0,:], scaled_lines[1,:])
-    frame.plot(lines[0,:], lines[1,:])
-    frame.plot(x, lines[1,:])
-    fig.show()"#""
-    
-    return x, lines[1,:]        # x and y of the bisector with a data point at each available flux point"""
-
 def find_overlap(stats):
     """
     Find the overlap-ordering of data with different data ranges
@@ -4990,8 +4942,10 @@ def bisector_measurements_emission_lines(fname, spec, data, indexes):     #im, f
                 pos = int(round(entry[xx]))
                 #imslices_x.append( range( max(0,pos-max_width), min(pos+max_width+1,spec.shape[1]) ) )
                 #imslices.append( spec[int(entry[oo]),imslices_x[-1]] )
-                imslices.append( -1*spec[int(entry[oo]), max(0,pos-max_width): min(pos+max_width+1,spec.shape[1])] )
-                imslices_x.append( range(len(imslices[-1])) )
+                spec_sub = spec[int(entry[oo]), max(0,pos-max_width): min(pos+max_width+1,spec.shape[1])]
+                spec_sub = spec_sub[~np.isnan(spec_sub)]
+                imslices.append( -1*spec_sub )
+                imslices_x.append( range(spec_sub.shape[0]) )
                 
             bisecs, bisec_fit, lines = calculate_bisector_multiple(imslices, imslices_x)
             # Plot
@@ -5326,14 +5280,15 @@ def plot_hist_residuals_wavesol(fname, data, indexes):
     range_orders = (max_orders - min_orders + 0.0)/splits
     range_px = (max_px - min_px + 0.0)/splits
     
+    ran_hist = ( np.min(data[:,dd]), np.max(data[:,dd]) )
     data_x, data_y, label = [], [], []
-    for ii in range(splits):
-        for jj in range(splits):
+    for ii in range(splits):            # for orders
+        for jj in range(splits):        # for pixel
             mino, maxo = round(ii*range_orders+min_orders,0), round((ii+1)*range_orders+min_orders,0)
             minx, maxx = jj*range_px+min_px, (jj+1)*range_px+min_px
             good_data = ( (data[:,oo] >= mino) & (data[:,oo] < maxo) & (data[:,xx] >= minx) & (data[:,xx] < maxx) )
             label.append('Orders {0}-{1}\nPixel {2}-{3}'.format(int(mino), int(maxo), int(round(minx,0)), int(round(maxx,0))))
-            hist_y, hist_x = np.histogram( data[good_data,dd], bins )
+            hist_y, hist_x = np.histogram( data[good_data,dd], bins=bins, range=ran_hist )
             data_x.append(hist_x)
             data_y.append(hist_y)
             hist_x2 = (hist_x[1:]+hist_x[:-1])/2.           # center of the bin
@@ -6113,7 +6068,7 @@ def create_pseudo_wavelength_solution(number_orders):
         wavelength_solution_arclines.append([0])     #The wavelength of the reference lines
     return dict(wavesol=np.array(wavelength_solution), reflines=np.array(wavelength_solution_arclines) )
 
-def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, reference_lines_dict, xlows, xhighs, show_res=False):
+def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, reference_lines_dict, xlows, xhighs, show_res=False, search_order_offset=False):
     """
     :param wavelength_solution_ori: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :param arc_lines_px: 2d array with one line for each identified line, sorted by order and amplitude of the line. For each line the following informaiton is given:
@@ -6173,7 +6128,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     #if not ( min(params['px_offset'][0:2]) < 0 and min(params['px_offset'][0:2]) > 0 ):                                     # if it's from -x to +y the user wants only the above pxdiffs
     #    pxdiffs += range(-1*max(params['px_offset'][0:2]),-1*min(params['px_offset'][0:2])+1,params['px_offset'][2])        # if it's from +x to +y, then the user wants the range in +/-
     pxdiffs = list(set(pxdiffs))            # remove duplicates
-    pxdiffords = range(min(params['px_offset_order'][0:2]),max(params['px_offset_order'][0:2])+1,params['px_offset_order'][2])
+    pxdiffords = np.arange(min(params['px_offset_order'][0:2]),max(params['px_offset_order'][0:2])+params['px_offset_order'][2],params['px_offset_order'][2])
     resolution_offset = params['resolution_offset_pct']/100.
     res_steps = 11
     if resolution_offset == 0:
@@ -6268,7 +6223,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     
     # Use this solution to identify lines and fit polynomials in each order
     orderdiff, pxdiff, pxdifford, resdiff = int(np.median(best_matching[:,0])), int(np.median(best_matching[:,1])), np.median(best_matching[:,2]), np.median(best_matching[:,3])
-    logger('Info: To match the most lines in the arc with the old wavelength solution, a shift of {0} orders, a multiplier to the resolution of {1}, a shift of {2} px, and a shift of {3} px per order needs to be applied. {4} lines were identified. The deviation is {5} Angstrom.'.format(orderdiff, resdiff, pxdiff, pxdifford, int(best_matching[0,4]), round(best_matching[0,5],4) ))
+    logger('Info: To match the most lines in the arc with the old wavelength solution, a shift of {0} orders, a multiplier to the resolution of {1}, a shift of {2} px, and a shift of {3} px per order needs to be applied. {4} lines were identified. The deviation is {5} Angstrom.'.format(orderdiff, round_sig(resdiff,3), pxdiff, round(pxdifford,2), int(best_matching[0,4]), round(best_matching[0,5],4) ))
     ## assign lines in the arcline with lines from the reference catalog
     med_arc_width = np.nanmedian(arc_lines_px[:,2])             # median width of the arc lines
     arc_lines_wavelength = []       #order, central pixel of the arc line, wavelength of the assigned reference line, diff between both solutions, height of the arc line, intensity of the reference line, 1/width of the arc line
@@ -6527,9 +6482,10 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     # Get the real order numbers using the grating equation: wavelength propotional to 1/(real_order) -> y(order)=(order_offset_new+order)*central_wavelength should have the smallest slope
     order_offset_old = int(order_offset)
     cenwave = polynomial_value_2d(orders*0, 1.0/(orders+order_offset_old), polynom_order_trace, polynom_order_intertrace, poly2d_params)    #old order_offset
-    order_offset = find_order_offset(orders, cenwave)
-    if 0.0 in order_offset+orders:            # Definitively the wrong order offset
-        order_offset = order_offset_old
+    if search_order_offset:
+        order_offset = find_order_offset(orders, cenwave)
+        if 0.0 in order_offset+orders:            # Definitively the wrong order offset
+            order_offset = order_offset_old
     p_real_cent = np.polyfit(1.0/(order_offset+orders), cenwave, 1)
     diff_real_cent = cenwave-np.polyval(p_real_cent, 1.0/(order_offset+orders))
     cen_px, p_cen_px = find_real_center_wavelength_solution(order_offset, orders, cenwave, cen_px, polynom_order_trace, polynom_order_intertrace, poly2d_params)
@@ -7869,8 +7825,9 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
        
     return params, bcvel_baryc, mephem, im_head
 
-def find_shift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_sol_2, wave_sol_lines_2, spectra, names=['first','second']):     # Doesn't do the job as expected, it's a pixel shift, not an RV shift
+def find_shift_between_wavelength_solutions(wave_sol_1, wave_sol_lines_1, wave_sol_2, wave_sol_lines_2, spectra, names=['first','second']):
     """
+    Finds the conversion polynomial between the two solutions
     :param wave_sol_1, wave_sol_2: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :param wave_sol_lines_1, wave_sol_lines_2: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
                                         sorted by the brightest to faintest (in spectrum from which the solution is derived).

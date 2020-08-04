@@ -193,13 +193,13 @@ if __name__ == "__main__":
                 wave_sol_ori_dict = read_wavelength_solution_from_fits(params['original_master_wavelensolution_filename'])
                 # Find the new wavelength solution
                 wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_ori_dict['wavesol'], 
-                                                           wave_sol_ori_dict['reflines'], reference_lines_dict, xlows, xhighs, params['GUI'])
+                                                           wave_sol_ori_dict['reflines'], reference_lines_dict, xlows, xhighs, show_res=params['GUI'], search_order_offset=True)
             else:                           # Science fiber
                 params['order_offset'] = [0,0]
                 params['px_offset'] = [-60,60,6]
-                params['px_offset_order'] = [-1,1,1]
+                params['px_offset_order'] = [-0.4,0.4,0.2]
                 wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_dict['wavesol'], 
-                                                           wave_sol_dict['reflines'], reference_lines_dict, xlows, xhighs, params['GUI'])
+                                                           wave_sol_dict['reflines'], reference_lines_dict, xlows, xhighs, show_res=params['GUI'], search_order_offset=False)
             save_wavelength_solution_to_fits(wave_sol_dict, params['master_wavelensolution'+calib[0]+'_filename'])
             plot_wavelength_solution_form(params['logging_wavelength_solution_form'], axlows, axhighs, wave_sol_dict['wavesol'])
             plot_wavelength_solution_spectrum(cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'], wave_sol_dict['wavesol'], wave_sol_dict['reflines'], 
@@ -237,7 +237,7 @@ if __name__ == "__main__":
         logger('Error: The number of traces for extraction and for the wavelength calibration do not match. Please remove eighter {0} ({2}) or {1} ({3}) and re-run the script in order to solve.'\
                     .format(params['master_trace_sci_filename'], params['master_wavelensolution_filename'], sci_tr_poly.shape[0], wave_sol_dict['wavesol'].shape[0]))
     
-    # Find the pixel-shift between the two solutions
+    # Find the conversion between the two solutions (px-shift = f(wavelength)
     if params['two_solutions']:
         params['extract_wavecal'] = True
         if calimages['wave_sol_dict_cal']['wavesol'].shape[0] != calimages['wave_sol_dict_sci']['wavesol'].shape[0]:

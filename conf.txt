@@ -122,8 +122,8 @@ order_offset = [-1,1]
   # px_offset: search range and step size to find out by how much the central pixel of all orders was shifted compared to the previous wavelength solution.
   #               Normally the change should be less than 100 pixel. Sign is the pixel shift from old to new. Gives the range and step size. Standard: [-100,100,10].
 px_offset = [-100, 100, 10]
-  # px_offset_order: Additional shift [in pixel per oder] between the orders in case big variations happened. Standard: [-1, 1, 1]
-px_offset_order = [-1, 1, 1]
+  # px_offset_order: Additional shift [in pixel per oder] between the orders in case big variations happened. Standard: [-0.4, 0.4, 0.2]
+px_offset_order = [-0.4, 0.4, 0.2]
   # resultion_offset_pct: Percentage of how much the resolution between the solutions changes. The value is applied in both directions, in total 11 steps will be made. Normally 1 percent should be fine.
 resolution_offset_pct = 1
   # Path and filename to the file with the previous wavelength solution.
