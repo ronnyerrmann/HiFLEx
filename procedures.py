@@ -429,6 +429,8 @@ def round_sig(value, sig=5):
     :param value: number
     """
     rounded = round(value, sig-int(np.floor(np.log10(abs(value))))-1)
+    
+    return rounded
 
 def read_text_file(filename, no_empty_lines=False, warn_missing_file=True):
     """
@@ -4077,8 +4079,8 @@ def extraction_steps(params, im, im_name, im_head, sci_tr_poly, xlows, xhighs, w
         bck_noise_std, bck_noise_var = prepare_measure_background_noise(params, im, sci_tr_poly, xlows, xhighs, widths, cal_tr_poly, axlows, axhighs, awidths)
         if np.isnan(bck_noise_var):
             bck_noise_var = -1
-        im_head['HIERARCH HiFLEx BCKNOISE'] = (round_sig(bck_noise_std,5), 'Background noise in ADU')
-        im_head['HIERARCH HiFLEx BNOISVAR'] = (round_sig(bck_noise_var,5), 'Variation of noise through image')             # Background noise variation can be very high, because some light of the traces remains
+        im_head['HIERARCH HiFLEx BCKNOISE'] = (round_sig(bck_noise_std,4), 'Background noise in ADU')
+        im_head['HIERARCH HiFLEx BNOISVAR'] = (round_sig(bck_noise_var,4), 'Variation of noise through image')             # Background noise variation can be very high, because some light of the traces remains
     if im_head['HiFLEx BCKNOISE'] <= 0 or np.isnan(im_head['HiFLEx BCKNOISE']):
         logger('Warn: Measured an unphysical background noise in the data: {0}. Set the noise to 1'.format(im_head['HiFLEx BCKNOISE']))
         im_head['HIERARCH HiFLEx BNOISVAR'] = (1., '1, because of unphysical measurement')
@@ -5274,8 +5276,8 @@ def plot_hist_residuals_wavesol(fname, data, indexes):
     :param data: 2d darry of floats
     :param indexes: indexes in the data array for order, pixel, wavelength, residuals
     """
-    splits = 3
-    bins = 15
+    splits = 3          # split pixel and orders in 3 parts, e.g. 9 different areas in total
+    bins = 20           # How many bins
     [oo, xx, ww, dd] = indexes
     min_orders, max_orders = np.min(data[:,oo]), np.max(data[:,oo])+1E-6
     min_px, max_px = np.min(data[:,xx]), np.max(data[:,xx])+1E-6
@@ -6575,12 +6577,12 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     text = 'Info: used {0} lines. The standard deviation of the residuals between the lines and the fit is {1} Angstrom '+\
                   '(the average of the abs of the residuals is {7} Angstrom). This converts into a resolution R = {2}. '+\
                   'The Gaussian width of the emission lines results in an R = {3} +- {4}. The 2-pixel resolution (around the identified lines) is R = {5} +- {6}.'
-    logger(text.format(arc_lines_wavelength.shape[0], round_sig(std_diff_fit,4), int(std_R_fit), int(avg_R_gauss), int(std_R_gauss), int(avg_R_2px), int(std_R_2px), round_sig(avg_diff_fit,4) ))
+    logger(text.format(arc_lines_wavelength.shape[0], round_sig(std_diff_fit,3), int(std_R_fit), int(avg_R_gauss), int(std_R_gauss), int(avg_R_2px), int(std_R_2px), round_sig(avg_diff_fit,3) ))
     p_cen_px = np.round(p_cen_px,3)
     text = 'Info: A 2d polynom fit with {0} orders in dispersion direction (along the traces) and {1} orders in cross-dispersion direction was used. '+\
                   'With this solution, the offset between aperture and real orders is {2}. To fulfil the grating equation the central pixel of the individual orders needs to be {5} + {6}*order + {7}*order**2.'+\
                   'With this values the standard deviation of the residuals between the central wavelengths and the grating equation is {3} Angstrom. Using the original solution gives an offset of {4}.'
-    logger(text.format(polynom_order_trace, polynom_order_intertrace, int(order_offset), round_sig(np.std(diff_real_cent, ddof=len(p_real_cent)),4), order_offset_old, p_cen_px[2], p_cen_px[1], p_cen_px[0] ))
+    logger(text.format(polynom_order_trace, polynom_order_intertrace, int(order_offset), round_sig(np.std(diff_real_cent, ddof=len(p_real_cent)),3), order_offset_old, p_cen_px[2], p_cen_px[1], p_cen_px[0] ))
     
     # Create a wavelength solution
     wavelength_solution2d = np.array( [polynom_order_trace, polynom_order_intertrace, np.mean(cen_px), order_offset] + list(poly2d_params) )
