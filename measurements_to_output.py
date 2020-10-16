@@ -34,9 +34,13 @@ if False:       # Change to True to use below list
         header_keywords.append(['HIERARCH HiFLEx BCKNOISE',     'Background noise',             '[ADU]'])
         header_keywords.append(['HIERARCH HiFLEx CD_SHIFT',     'Offset in Cross-Dispersion',   '[px]'])
         header_keywords.append(['HIERARCH HiFLEx CD_S_WDTH',    'Width of the offset in CD',    '[px]'])
+        header_keywords.append(['HIERARCH HiFLEx CD_SHIFT_GAUSS',     'Offset in Cross-Dispersion (Gauss)',   'px'  ])
+        header_keywords.append(['HIERARCH HiFLEx CD_SHIFT_POLY',      'Offset in Cross-Dispersion (Poly)',    'px'  ])
+        header_keywords.append(['HIERARCH HiFLEx CD_SHIFT_MAXFLUX',   'Offset in Cross-Dispersion (Maxflux)', 'px'  ])
         header_keywords.append(['HIERARCH HiFLEx D_SHIFT',      'Offset in Dispersion',         '[px]'])
         header_keywords.append(['HIERARCH HiFLEx D_SHIFT_ERR',  'Uncertainty of the offset in D',               '[px]'])
         header_keywords.append(['HIERARCH HiFLEx D_SHIFT_NUMBER_LINES', 'Number of lines used to calculate the shift', ''])
+        header_keywords.append(['HIERARCH HiFLEx D_SHIFT_GAUSS',      'Offset in Dispersion (Gauss)',         'px'  ])
         header_keywords.append(['HIERARCH HiFLEx D_WIDTH',      'Gaussian width of the calibration lines',      '[px]'])
         header_keywords.append(['HIERARCH HiFLEx D_SHIFT_KMS',  'Offset in Dispersion',                         '[km/s]'])
         header_keywords.append(['HIERARCH HiFLEx DT_SHIFT',     'Offset between wavelength solutions',          '[px]'])
@@ -48,8 +52,7 @@ if False:       # Change to True to use below list
         header_keywords.append(['HIERARCH HiFLEx BCV',          'Barycentric Velocity',         '[km/s]'])
         header_keywords.append(['HIERARCH HiFLEx CERES BS',     'CERES Bisector',               ''  ])
         header_keywords.append(['HIERARCH HiFLEx CERES BS_ERR', 'CERES Bisector error',         ''  ])
-
-
+        
 header_results_to_texfile(params, header_keywords)
 
 

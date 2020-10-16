@@ -40,7 +40,7 @@ def create_parameters(conf_data, warn, param, textparam, parcals, exist_bias, ex
         return conf_data, warn
     if param+'_rawfiles' not in conf_data.keys():           # Do all the long steps as first file for this kind
         conf_data[param+'_rawfiles'] = entry[0]             # Filename
-        if param.find('extract') == -1 or param.find('extract_combine') == 0 or param.find('wavelengthcal') == -1:      # wavecal and normal extraction files don't need a master, only the combined extraction needs one
+        if (param.find('extract') == -1 or param.find('extract_combine') == 0) and param.find('waveoffset') == -1:      # wavecal and normal extraction files don't need a master, only the combined extraction needs one
             conf_data['master_'+param+'_filename'] = 'master_'+textparam+'.fits'
         temp_param = []
         for calib in calibs:
@@ -100,7 +100,7 @@ def add_new_rawfiles_file_list(params, file_list=[]):
                 im_head = fits.getheader(filename)
                 # Identify the image type and find out what the fibers show
                 fiber1, fiber2 = 'none', 'none'
-                fnlow = filename.lower()
+                fnlow = filename.rsplit(os.sep,1)[-1].lower()   # get rid of the path
                 if fnlow.find('bias') >= 0:                     # hardcoded: Bias
                     fiber1, fiber2 = 'bias', 'bias'
                 if fnlow.find('dark') >= 0:                     # hardcoded: Dark
@@ -122,15 +122,19 @@ def add_new_rawfiles_file_list(params, file_list=[]):
                             fiber1, fiber2 = 'rflat', 'rflat'
                         else:
                             fiber1, fiber2 = 'cont', 'cont'
-                posi  = [fnlow.find('arc') , fnlow.find('thar') , fnlow.find('th_ar') , fnlow.find('thorium') , fnlow.find('une') ]        # hardcoded: emission line spectrum in calibration fiber
-                posi2 = [fnlow.find('arc2'), fnlow.find('thar2'), fnlow.find('th_ar2'), fnlow.find('thorium2'), fnlow.find('une2')]        # hardcoded: emission line spectrum in science fiber
+                posi  = [fnlow.find('arc') , fnlow.find('thar') , fnlow.find('th_ar') , fnlow.find('thorium') , fnlow.find('une') ]        # hardcoded: emission line spectrum in calibration/science fiber
+                posi1 = [fnlow.find('arc1'), fnlow.find('thar1'), fnlow.find('th_ar1'), fnlow.find('thorium1'), fnlow.find('une1')]        # hardcoded: emission line spectrum in calibration fiber
+                posi2 = [fnlow.find('arc2'), fnlow.find('thar2'), fnlow.find('th_ar2'), fnlow.find('thorium2'), fnlow.find('une2')]        # hardcoded: emission line spectrum in calibration fiber
                 for i in range(len(posi)):
-                    if posi2[i] >= 0:
+                    if posi1[i] >= 0:                           # name contains "ThAr1"
                         fiber1 = 'wave'
-                        if posi[i] != posi2[i]:                 # both fibers
-                            fiber2 = 'wave'
-                    elif posi[i] >= 0:
+                    if posi2[i] >= 0:                           # name contains "ThAr2"
                         fiber2 = 'wave'
+                    if posi[i] != posi1[i] and posi[i] != posi2[i]:
+                        if posi[i] in [0,1,2]:                  # name starts with ThAr
+                            fiber1 = 'wave'
+                        elif posi[i] > 2:                       # ThAr comes so late that it's probably in calibration fiber
+                            fiber2 = 'wave'
                 if params['raw_data_imtyp_keyword'] in im_head.keys():
                     if im_head[params['raw_data_imtyp_keyword']].replace(' ','') == params['raw_data_imtyp_bias']:
                         fiber1, fiber2 = 'bias', 'bias'
@@ -304,14 +308,15 @@ def create_configuration_file(params, file_list):
         if entry[5].lower().find('e') == -1 and entry[5].lower().find('w') == -1:          # No extraction and no wavelength calibration
             continue
         for extraction in entry[5].replace(' ','').split(','):
-            if extraction.lower() == 'w2':       # use this file for wavelength calibration between spectra
-                param = 'wavelengthcal2'
-                parcal = 'wavelengthcal'
+            if extraction.lower() == 'wc':       # use this file for wavelength calibration between spectra
+                param = 'waveoffsetcal'
+                parcal = 'wavelengthcal'        # !!! Replace this by "waveoffset", but this also needs change in conf.txt: wavelengthcal_calibs_create_g to waveoffset_calibs_create_g
                 conf_data, warn = create_parameters(conf_data, warn, param, param, [parcal], exist_bias, exist_rflat, exp_darks, entry)
                 continue  
-            elif extraction.lower() == 'w':       # use this file for wavelength calibration between spectra
-                param = 'wavelengthcal'
-                conf_data, warn = create_parameters(conf_data, warn, param, param, [param], exist_bias, exist_rflat, exp_darks, entry)
+            elif extraction.lower() == 'ws':       # use this file for wavelength calibration between spectra
+                param = 'waveoffsetsci'
+                parcal = 'wavelengthcal'
+                conf_data, warn = create_parameters(conf_data, warn, param, param, [parcal], exist_bias, exist_rflat, exp_darks, entry)
                 continue                        # otherwise Warn from below will be triggered
             if extraction.lower().find('e') != 0:        # use find as len(extraction) might be 0
                 # warn.append('Warn: I dont know what to do with the extraction parameter {0} (it doesnt begin with "e") for file {1}. This spectrum will therefore not be extracted. Please check {2} and run the script again, if you perform changes.'.format(extraction, entry[0], params['raw_data_file_list'] ))
@@ -342,22 +347,22 @@ def file_list_UI(file_list):
     for entry in file_list:
         maxlen_files = max(maxlen_files, len(entry[0].replace('#','').replace(' ','')) )
     common_path = ''
-    if file_list[0][0][2:].find('/') != -1:         # it contains subfolders
+    if file_list[0][0][2:].find(os.sep) != -1:         # it contains subfolders
         fnames = []
         for entry in file_list:
             fnames.append( entry[0].replace('#','').replace(' ','') )
-        common_path = fnames[0].rsplit('/',1)[0]    # just remove the filename
-        for dummy in range(len(fnames[0].split('/'))-1):
+        common_path = fnames[0].rsplit(os.sep,1)[0]    # just remove the filename
+        for dummy in range(len(fnames[0].split(os.sep))-1):
             found_common_path = True
             for entry in fnames:
                 if entry.find(common_path) == -1:   # This path is not the same
                     found_common_path = False
                     break
             if found_common_path:
-                common_path += '/'
+                common_path += os.sep
                 break
             else:
-                common_path = common_path.rsplit('/',1)     # remove the next subfolder
+                common_path = common_path.rsplit(os.sep,1)     # remove the next subfolder
                 if len(common_path) == 2:                   # Another subfolder in the path
                     common_path = common_path[0]
                 else:                                       # no more subfolders
@@ -370,11 +375,11 @@ def file_list_UI(file_list):
     else:
         common_path_text = common_path
     if len(common_path) > maxlen_files:
-        common_path_temp = common_path[:-1].split('/')          # without the last '/'
-        common_path_text = [common_path_temp[0]+'/']            # start with the first entry
+        common_path_temp = common_path[:-1].split(os.sep)          # without the last '/'
+        common_path_text = [common_path_temp[0]+os.sep]            # start with the first entry
         ii = 0
         for entry in common_path_temp[1:]:
-            entry += '/'
+            entry += os.sep
             if len(common_path_text[ii]+entry) > maxlen_files and len(common_path_text[ii]) > maxlen_files/2.:     # If too long to add
                 common_path_text.append(entry)
                 ii += 1
@@ -397,12 +402,12 @@ def file_list_UI(file_list):
     widgets['t1']      = dict(label='Sci.\ntra-\nce', kind='Label', row=0, column=9)
     widgets['t2']      = dict(label='Cal.\ntra-\nce', kind='Label', row=0, column=10)
     widgets['z']       = dict(label='Blaze', kind='Label', row=0, column=11)
-    widgets['w2l']     = dict(label='Wave\nlong', kind='Label', row=0, column=12)
-    widgets['w2s']     = dict(label='Wave\nshort', kind='Label', row=0, column=13)
-    widgets['w1l']     = dict(label='Wave\nSci.\nlong', kind='Label', row=0, column=14)
-    widgets['w1s']     = dict(label='Wave\nSci.\nshort', kind='Label', row=0, column=15)
-    widgets['w']       = dict(label='Wave\nshft\ncal', kind='Label', row=0, column=16)
-    widgets['w2']      = dict(label='Wave\nSci\nshft', kind='Label', row=0, column=17)
+    widgets['w1l']     = dict(label='Wave\nSci.\nlong', kind='Label', row=0, column=12)
+    widgets['w1s']     = dict(label='Wave\nSci.\nshort', kind='Label', row=0, column=13)
+    widgets['w2l']     = dict(label='Wave\nCal.\nlong', kind='Label', row=0, column=14)
+    widgets['w2s']     = dict(label='Wave\nCal.\nshort', kind='Label', row=0, column=15)
+    widgets['ws']      = dict(label='Wave\nshft\nSci', kind='Label', row=0, column=16)
+    widgets['wc']      = dict(label='Wave\nshft\nCal', kind='Label', row=0, column=17)
     widgets['e']       = dict(label='Ex-\ntract', kind='Label', row=0, column=18)
     widgets['extra']   = dict(label='Further usage\nof files\n(comma separated)', kind='Label', row=0, column=19)
     for ii, entry in enumerate(file_list):
@@ -438,23 +443,23 @@ def file_list_UI(file_list):
         widgets['t2_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['t2_{0}'.format(ii)], row=ii+1, column=10)
         pkwargs['z_{0}'.format(ii)] = ( 'z' in flags )
         widgets['z_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['z_{0}'.format(ii)], row=ii+1, column=11)
-        pkwargs['w2l_{0}'.format(ii)] = ( 'w2l' in flags )
-        widgets['w2l_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2l_{0}'.format(ii)], row=ii+1, column=12)
-        pkwargs['w2s_{0}'.format(ii)] = ( 'w2s' in flags )
-        widgets['w2s_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2s_{0}'.format(ii)], row=ii+1, column=13)
         pkwargs['w1l_{0}'.format(ii)] = ( 'w1l' in flags )
-        widgets['w1l_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1l_{0}'.format(ii)], row=ii+1, column=14)
+        widgets['w1l_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1l_{0}'.format(ii)], row=ii+1, column=12)
         pkwargs['w1s_{0}'.format(ii)] = ( 'w1s' in flags )
-        widgets['w1s_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1s_{0}'.format(ii)], row=ii+1, column=15)
-        pkwargs['w_{0}'.format(ii)] = ( 'w' in flags )
-        widgets['w_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w_{0}'.format(ii)], row=ii+1, column=16)
-        pkwargs['w2_{0}'.format(ii)] = ( 'w2' in flags )
-        widgets['w2_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2_{0}'.format(ii)], row=ii+1, column=17)
+        widgets['w1s_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1s_{0}'.format(ii)], row=ii+1, column=13)
+        pkwargs['w2l_{0}'.format(ii)] = ( 'w2l' in flags )
+        widgets['w2l_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2l_{0}'.format(ii)], row=ii+1, column=14)
+        pkwargs['w2s_{0}'.format(ii)] = ( 'w2s' in flags )
+        widgets['w2s_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2s_{0}'.format(ii)], row=ii+1, column=15)
+        pkwargs['ws_{0}'.format(ii)] = ( 'ws' in flags )
+        widgets['ws_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['ws_{0}'.format(ii)], row=ii+1, column=16)
+        pkwargs['wc_{0}'.format(ii)] = ( 'wc' in flags )
+        widgets['wc_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['wc_{0}'.format(ii)], row=ii+1, column=17)
         pkwargs['e_{0}'.format(ii)] = ( 'e' in flags )
         widgets['e_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['e_{0}'.format(ii)], row=ii+1, column=18)
         extra = ''
         for flag in flags:          # Add extra flags, if necessary
-            if flag not in ['b', 'd', 'a', 't1', 't2', 'z', 'w2l', 'w2s', 'w1l', 'w1s', 'w', 'w2', 'e']:
+            if flag not in ['b', 'd', 'a', 't1', 't2', 'z', 'w2l', 'w2s', 'w1l', 'w1s', 'ws', 'wc', 'e']:
                 extra += ','+flag
         if len(extra) > 0:
             extra = extra[1:]
@@ -470,14 +475,14 @@ def file_list_UI(file_list):
               '-- Science trace: To trace the science orders\n'+\
               '-- Calibration trace: To trace the calibration orders\n'+\
               '-- Blaze: To derive the blaze function\n'+\
-              '-- Wavelength solition (long and short expsoure time)\n'+\
-              '-- Wavelength solution for science fiber (*)\n   (long or short exposure time)\n'+\
-              '-- Wavelength shift calibration (**) to correct for\n   wavelength shift\n'+\
-              '-- Wavelength shift between the Science fiber and\n   Calibration fiber (*)\n'+\
+              '-- Wavelength solition for science fiber \n   (long and short expsoure time)\n'+\
+              '-- Wavelength solution for calibration fiber (*)\n'+\
+              '-- Wavelength offset Science fiber (**) to correct for\n   wavelength drit\n'+\
+              '-- Wavelength offset between the Science fiber and\n   Calibration fiber (*)\n'+\
               '-- Extract: Extract these files on an individual basis\n'+\
               '-- Further settings (manual): e.g. to combine files\n   before extraction\n'+\
               '(*) not for single fiber spectrographs\n'+\
-              '(**) important for unstabilised single fiber\n     spectrographs\n\n'+\
+              '(**) important for unstabilised (single) fiber\n     spectrographs\n\n'+\
               'The automatic assignment is based on the parameters\n raw_data_* in {0} (and in procedure\n add_new_rawfiles_file_list). '.format(CONFIGFILE)
               #'- Type of Science and Calibration\n  fibers are derived from header or\n  filename and can be changed here\n  (optional)\n'+\     # Allows modification of the fiber content
     for ii, commentii in enumerate(explain.split('\n')):
@@ -510,8 +515,8 @@ def file_list_UI(file_list):
                  {True:'w2s',False:''}[gui3.data['w2s_{0}'.format(ii)]] +','+
                  {True:'w1l',False:''}[gui3.data['w1l_{0}'.format(ii)]] +','+
                  {True:'w1s',False:''}[gui3.data['w1s_{0}'.format(ii)]] +','+
-                 {True:'w',False:''}[gui3.data['w_{0}'.format(ii)]] +','+
-                 {True:'w2',False:''}[gui3.data['w2_{0}'.format(ii)]] +','+
+                 {True:'ws',False:''}[gui3.data['ws_{0}'.format(ii)]] +','+
+                 {True:'wc',False:''}[gui3.data['wc_{0}'.format(ii)]] +','+
                  {True:'e',False:''}[gui3.data['e_{0}'.format(ii)]] +','+
                  gui3.data['extra_{0}'.format(ii)]
                ).replace(',,',',').replace(',,',',').replace(',,',',').replace(',,',',').replace(',,',',')
@@ -542,7 +547,7 @@ def get_observed_objects(params, conf_data):
         for im_name in conf_data[entry].split(', '):
             found = False
             im_head = fits.getheader(im_name)
-            obname = im_name.replace('\n','').split('/')    # get rid of the path
+            obname = im_name.replace('\n','').split(os.sep)    # get rid of the path
             obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
             # Check if already in the list
             for obname in obnames:
@@ -610,7 +615,7 @@ def calibration_parameters_coordinates_UI(conf_data, object_information_full, ob
             return widgets, pkwargs, ii, doneftype
             
         widgets['type_{0}'.format(ii)] = dict(label=ftype, kind='Label', row=ii, column=0, columnspan=1, orientation=Tk.W)
-        if 'master_{0}_filename'.format(ftype) in conf_data.keys() and (ftype.find('extract') == -1 or ftype.find('extract_combine') != -1) and ftype.find('wavelengthcal') == -1:
+        if 'master_{0}_filename'.format(ftype) in conf_data.keys() and (ftype.find('extract') == -1 or ftype.find('extract_combine') != -1) and ftype.find('wavelenoffset') == -1:
             elname = 'master_{0}_filename'.format(ftype)
             pkwargs[elname] = conf_data[elname]
             widgets[elname] = dict(kind='TextEntry', fmt=str, start=pkwargs[elname], width=30, row=ii, column=1, columnspan=3, orientation=Tk.W)
@@ -646,7 +651,7 @@ def calibration_parameters_coordinates_UI(conf_data, object_information_full, ob
         darks.append('dark{0}'.format(entry))
     doneftype = []
     ii = 1
-    for ftype in ['bias'] + darks + ['rflat', 'trace1', 'trace2', 'blazecor', 'cal2_l', 'cal2_s', 'cal1_l', 'cal1_s', 'wavelengthcal', 'wavelengthcal2']:
+    for ftype in ['bias'] + darks + ['rflat', 'trace1', 'trace2', 'blazecor', 'cal2_l', 'cal2_s', 'cal1_l', 'cal1_s', 'waveoffsetsci', 'waveoffsetcal']:
             widgets, pkwargs, ii, doneftype = add_widgets(widgets, pkwargs, ii, ftype, doneftype)
     for entry in sorted(conf_data.keys()):
         if entry.find('_rawfiles') >= 0:
@@ -824,12 +829,11 @@ if __name__ == "__main__":
         file.write('###        "z", Spectrum for the blaze correction, e.g. of a continuum source.\n')
         file.write('###        "t1", Spectrum to find the trace [of the science fiber], e.g. a continuum source.\n')
         file.write('###        "t2", Spectrum to find the trace of the calibration fiber.\n')
-        file.write('###        "w2l, w2s", Spectruum to find the wavelength solution (long and short exposure time) [of the calibration fiber].\n')
-        file.write('###        "w1l, w1s", Spectruum to find the wavelength solution of the science fiber.\n')
+        file.write('###        "w1l, w1s", Spectruum to find the wavelength solution of the science fiber (long and short exposure time).\n')
+        file.write('###        "w2l, w2s", Spectruum to find the wavelength solution of the calibration fiber.\n')
         file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n')
         file.write('###             Combination of images before the extraction is possible, please refer to the manual for more information\n')
-        file.write('###        "w" or "w2", if the spectrum contains wavelength information (in case of a spectrograph with single fiber input or\n')
-        file.write('###                     to find the time dependent offset between both fibers of a bifurcated fiber).\n')
+        file.write('###        "ws" or "wc", if the spectrum contains wavelength information to calculate the offset to the wavelength solution and the offset between both fibers of a bifurcated fiber).\n')
         file.write('###             Used to mark the files with calibration spectrum taken before or after the science observation.\n')
         file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
         file.write('### -> When finished with the editing, save the file and close the editor \n\n')

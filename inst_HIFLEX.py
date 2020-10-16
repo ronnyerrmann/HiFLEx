@@ -24,6 +24,7 @@ hdatf = params.get('data_dataset', 5)        # 1: higher scatter of resulting RV
 hdate = params.get('error_dataset', 6)
 hdatw = params.get('wave_dataset', 9)        # 9: Wavelength, drift correcte; 0: + barycentric correction
 hdats = params.get('mask_dataset', 7)
+snord = params.get('order_snr', 0)
 print('Info: Using dataset {0} for the spectral data, {1} for the uncertainty, {2} for the wavelength, and {3} for the mask.'.format(hdatf, hdate, hdatw, hdats))
 
 maskfile = 'telluric_mask_atlas.dat'
@@ -59,7 +60,9 @@ def scan(self, s, pfits=True):
       # for HiFLEx spectra the drift is already included in the wavelength solution
       #self.drift = hdr.get(HIERHIFLEX+'D_SHIFT_KMS', np.nan)    
       #self.e_drift = hdr.get(HIERHIFLEX+'CARACAL DRIFT FP E_RV', np.nan)                         # Adapt HiFLEx so this value could be given
-      self.sn55 = hdr.get(HIERHIFLEX + 'SN_order%2.2i'%(int(iomax/2)), 50)                        # Modfied, flexible, maybe fix it to one order in HiFLEx
+      if snord == 0:
+        snord = int(iomax/2)
+      self.sn55 = hdr.get(HIERHIFLEX + 'SN_order%2.2i'%(snord), 50)                        # Modfied, flexible, maybe fix it to one order in HiFLEx
       self.fileid = self.timeid = hdr.get(HIERHIFLEX + 'DATE-OBS', 0)
       self.calmode = "%s,%s,%s" % (hdr.get('SCI-OBJ', ''), hdr.get('CAL-OBJ', ''), hdr.get('SKY-OBJ', ''))
    #calmodedict = {'objcal':'OBJ,CAL','objsky':'OBJ,SKY'}

@@ -10,7 +10,7 @@ If you publish data using the barycentric correction, please cite (https://githu
 
 ## Recent changes
 * Cosmic ray removal using deepCR available
-* Python 3 ready (Pipeline will also keep working under Python 2)
+* Python 3 (Pipeline will also keep working under Python 2)
 * Blaze correction with a fitted function (polynomial of user defined order)
 * Extra logging information for wavelength solution and drift of the wavelength solution
 * Improved measurement of the offset between emission line spectra and the wavelength solution
@@ -35,7 +35,9 @@ pip install gatspy barycorrpy deepCR PyAstronomy
 ```
 
 Download and extract the [latest relase](https://github.com/ronnyerrmann/HiFLEx/releases) or clone the repository
+```
 git clone https://github.com/ronnyerrmann/hiflex.git
+```
 
 ## First steps
 Create a new folder and copy the `conf.txt` file from your HiFLEx installation path into this folder. Edit the following entries:

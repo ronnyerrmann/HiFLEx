@@ -25,7 +25,7 @@ GUI = True
   # The folder where the raw data is stored. All file names given in this section need to be given relative to this path, e.g. with leading subfolder if data is stored in a subfolder.
   #         Please note that NO SPACEs and NO COMMAs are allowed in the path structure
   #         It is possible to give a list of sources
-raw_data_paths           = /local/home/ronny/data_EXOhSPEC/20190205/
+raw_data_paths           = /local/home/ronny/data_EXOhSPEC/20200813/
 
 
   # To extract the data correctly, the frame should be rotated in the way, that traces (dispersion axis) are along vertical direction
@@ -52,7 +52,7 @@ flip_frame      = False
   # for HARPS:            subframe        = [4096,2048,0,50]
   # for MRES:             subframe        = [1201,511,380,0]
   # for Photometrics:     subframe        = [2048,2048,0,0]
-subframe        = [2048,2048,0,0]
+subframe        = []
 
 
   ## If the positions of the traces between consecutive observations has changed too much, the orders are searched from scratch and then adjusted.
@@ -130,7 +130,7 @@ resolution_offset_pct = 1
   #   If the files don't exist, a solution is created from scratch: File pixel_to_wavelength.txt needs to be created in order to create the wavelength solution. 
   #                                                                        The wavelength solution created from pixel_to_wavelength.txt will be saved in original_master_wavelensolution_filename.
   #                                                                If no wavelength solution is necessay, it can be set to "pseudo".
-original_master_wavelensolution_filename = /data/ronny/Reduced/20190205/master_wavelength.fits
+original_master_wavelensolution_filename = /data/ronny/Reduced/20190205/master_wavelength_sci.fits
 
   ## To determine the background
   # background_width_multiplier defines the area which is excluded for determining the background, e.g. to remove the scattered light.
