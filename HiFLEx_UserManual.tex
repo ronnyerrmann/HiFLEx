@@ -976,9 +976,9 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
 \subsubsection{Getting the data}
 %  observations with HARPS: http://www.eso.org/public/archives/releases/sciencepapers/eso1609/eso1609a.pdf
 % HD 10180: G1V star with 7 planets: http://ui.adsabs.harvard.edu/abs/2011A%26A...528A.112L
-Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres, use '2004 07 12' and Program ID '072.C-0488(E)' for calibration data taken by the RV exoplanet search team, or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*fits.Z) can be extracted with:
+Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres, use '2004 07 12' and Program ID '072.C-0488(E)' for calibration data taken by the RV exoplanet search team, or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*.fits.Z) can be extracted with:
 \begin{lstlisting}[style=base]
-gunzip *
+gunzip *.fits.Z
 cat <<EOT > extract_single_chip.py
 #!/usr/bin/python
 # -*- coding: utf-8 -*-

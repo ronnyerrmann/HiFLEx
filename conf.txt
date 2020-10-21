@@ -43,6 +43,7 @@ flip_frame      = False
 
   # subframe: gives the size in x (dispersion axis) and y (cross-dispersion axis), and the starting coordinates in x and y.
   #           The numbering of the pixel starts with zero.
+  #           The image will be extended if sizes bigger than the image are given. This includes the starting coordinates
   #           possible formats: can be empty, or
   #                             [4250,2838,0,0], or
   #                             4250,2838,0,0
@@ -51,7 +52,6 @@ flip_frame      = False
   # for SBIG:             subframe        = [2750,4096,350,0]
   # for HARPS:            subframe        = [4096,2048,0,50]
   # for MRES:             subframe        = [1201,511,380,0]
-  # for Photometrics:     subframe        = [2048,2048,0,0]
 subframe        = []
 
 
@@ -90,8 +90,6 @@ update_width_orders = False
   ## Finding the traces of the calibration fiber 
   # arcshift_side: On which side of the science orders are the corresponding calibration orders located. Possible values are 
   #               "left" (towards the redder order), "right" (to the bluer order), or "center" (same position as the science orders)
-  # for HARPS, QSI Bill:        arcshift_side = left
-  # for SBIG:                   arcshift_side = right
 arcshift_side = left
   # arcshift_range: Range to search for the shift between the flat traces and arc_traces. This value is determinded by the the script, only in case the process fails the parameter is used.
 arcshift_range  = [25, 60]
@@ -254,6 +252,7 @@ cosmic_ray_settings = [deepCR, ACS-WFC-F606W-2-32, 0.999]
   #-------------------------------------------------------------------------------
   # Define the observatory site. Longitude is measured to the East (comment/uncomment/delete accordingly). 
   #         Values can be set arbitrarily if the information is stored in the fits-headers (check function get_barycent_cor to add header keywords)
+  #         longitude is negative for coordinates west
 site        = UH
 altitude    = 30
 latitude    = 51.7534
@@ -273,6 +272,7 @@ longitude   = -0.2401
   # The file needs to contain the comma separated values (Object name is case sentive for the optional parameters): 
   # Object name , RA (hh:mm:ss.ss), DEC (+-dd:mm:ss.ss), PM RA ("/year), PM DEC ("year), Epoch of the coordinates (only the number), Enable/Disable flag (1 for enabled), 
   #             [optional: Mask (G2,K5,M2), [optional: Velocity width to broaden the lines of the binary mask]]
+  # RA and DEC can be also degrees in float
 object_file = object_list.txt
 
 

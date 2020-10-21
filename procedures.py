@@ -8,6 +8,7 @@ from astropy.table import Table
 import astropy.time as asttime
 import astropy.coordinates as astcoords
 import astropy.units as astunits
+from astropy.utils.exceptions import AstropyUserWarning
 #import astropy.constants as astconst
 import matplotlib
 matplotlib.use('agg')    # Otherwise keeps hanging when using CERES; GUIs work, but plt.show() won't; matplotlib.interactive(True) doesn't show
@@ -427,7 +428,10 @@ def log_returncode(code, explain=''):
 
 def round_sig(value, sig=5):
     """
+    Rounds to a significant number, e.g. to have 5 digits
     :param value: number
+    :param sig: int, number of dgits allowed
+    :return rounded: float, rounded to the number of sig digits
     """
     if np.isnan(value) or np.isinf(value):
         return value
@@ -458,14 +462,14 @@ def read_text_file(filename, no_empty_lines=False, warn_missing_file=True):
 
 def add_text_file(text, filename):
     """
-    Adds a line or lines of text to a file
+    Adds a line or lines of text to a file without checking if the line already exists
     """
     with open(filename, 'a') as file:
         file.write(text+os.linesep)
 
 def add_text_to_file(text, filename, warn_missing_file=True):
     """
-    If the text is not yet in the file, the text is added
+    If the text is not yet in the file, the text is added to the file
     """
     oldtext = read_text_file(filename, warn_missing_file=warn_missing_file)
     exists = False
@@ -610,6 +614,11 @@ def read_badpx_mask(params, imageshape):
     return background"""
 
 def warn_images_not_same(ims, names):
+    """
+    Check that two images have the same size
+    :param ims: list or array of arrays
+    :param names: list of strings, same length as ims
+    """
     if len(ims) <= 1:
         return
     if len(ims) != len(names):
@@ -1193,7 +1202,9 @@ def save_multispec(data, fname, im_head, bitpix='-32'):
         hdu = fits.PrimaryHDU(np.array(data), header=im_head)
     for index in range(hdu.header['NAXIS']):                # NAXISj doesn't has a Comment and Serval fails without it
         hdu.header['NAXIS{0}'.format(index+1)] = ( hdu.header['NAXIS{0}'.format(index+1)], 'length of data axis {0}'.format(index+1) )
-    hdu.writeto(fname+'.fits', overwrite=True)    # as .fits # clobber=True was used earlier
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=AstropyUserWarning)
+        hdu.writeto(fname+'.fits', overwrite=True)    # as .fits # clobber=True was used earlier
     
 def rotate_flip_frame(im, params, invert=False):
     """
@@ -1445,6 +1456,9 @@ def polyfit_adjust_order(xarr, yarr, p_orders, w=None):
     xarr = np.array(xarr)
     yarr = np.array(yarr)
     poly = np.array([np.mean(yarr)])            # if the order = 0 is failing, then report at least the average (which is a polynom of order 0)
+    if yarr.shape[0] > 1:
+        if np.std(yarr) < 1E-10:
+            return poly
     for order in range(p_orders+1)[::-1]:       # Try smaller number of polynomial orders, if there is a RankWarning
             with warnings.catch_warnings():
                 warnings.filterwarnings('error')
@@ -1648,6 +1662,9 @@ def sigmaclip(data, x=[], nc=1, sub=[], ll=3., lu=3., repeats=5, exclude_absorpt
         if len(x) > 0:
             logger('Warn: Got different sized arrays for sigma clipping (y: {0}, x: {1}). This is a programming error and should not happen.'.format(len(data), len(x)))
         x = np.arange(len(data))                        # Create a numbered list
+    if len(data) > 1:
+        if np.std(data) < 1E-10:
+            return np.ones(len(data)), np.array([0]*nc+[data[0]])
     if np.isnan(x_cen):
         x_cen = (np.nanmin(x) + np.nanmax(x))/2.        # central wavelength
     if len(sub) != len(data):
@@ -3594,25 +3611,39 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         logger('Info: Corrected for input shift. The shift of the currect spectrum is {0}'.format(round(shift_avg,4) ))
     #print 'return_shift', shift_avg
     return wavelength_solution_new, shift_med, im_head
+ 
+def read_wavelengths_shift_filename(params):
+    """
+    Reads all the information from params['master_wavelengths_shift_filename'], removes the older entries
+    :return all_shifts_str: 2d array of type string, with each entry containing JD of the mid exposure, Shift to the wavelength solution, Standard deviation of the shift, fiber type
+    """
+    all_shifts = read_text_file(params['master_wavelengths_shift_filename'], no_empty_lines=True)
+    all_shifts = convert_readfile(all_shifts, [float, float, float, str], delimiter='\t', replaces=['\n'])       # jd_midexp, shift_avg, shift_std, can contain duplicate jd_midexp (last one is the reliable one)
+    if len(all_shifts) == 0:
+        logger('Warn: No pixel-shift for the wavelength solution is available. Please re-run prepare_file_list.py and asign "w" to the emission line spectra.')
+        all_shifts_str = np.array([])
+    else:
+        all_shifts_str = np.array(all_shifts)                           # Becomes an array of strings
+        # Remove the double entries, e.g. if better shifts were added later
+        all_shifts_str_n = []
+        for i in range(all_shifts_str.shape[0])[::-1]:
+            if np.sum( ( all_shifts_str[i:,0] == all_shifts_str[i,0] ) & ( all_shifts_str[i:,3] == all_shifts_str[i,3] ) ) == 1:    # Find only exactly this entry with same jd_midexp and same fiber
+                all_shifts_str_n.append(all_shifts_str[i,:])
+        all_shifts_str = np.array(all_shifts_str_n)                     # Only contains the latest entries, newest entry first
     
+    return all_shifts_str
+   
 def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname, im_head):
     """
     In case no calibration spectrum was taken at the same time as the science spectra use the stored information to aply a shift in the lines
     !!! shift_avg = np.average( shifts[:,1], weights=weight )  -> Tested, will work fine for obsdate in range(all_shifts), but will fail for extrapolation. Maybe it's necessary to replace this by a linear fit?
     :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
-    all_shifts = read_text_file(params['master_wavelengths_shift_filename'], no_empty_lines=True)
-    all_shifts = convert_readfile(all_shifts, [float, float, float, str], delimiter='\t', replaces=['\n'])       # jd_midexp, shift_avg, shift_std, can contain duplicate jd_midexp (last one is the reliable one)
-    if len(all_shifts) == 0:
-        logger('Warn: No pixel-shift for the wavelength solution is available. Please re-run prepare_file_list.py and asign "w" to the emission line spectra.')
-        return copy.deepcopy(wavelength_solution), 0.               # No shift is possible
-    all_shifts_str = np.array(all_shifts)                           # Becomes an array of strings
-    # Remove the double entries, e.g. if better shifts were added later
-    all_shifts_str_n = []
-    for i in range(all_shifts_str.shape[0])[::-1]:
-        if np.sum( ( all_shifts_str[i:,0] == all_shifts_str[i,0] ) & ( all_shifts_str[i:,3] == all_shifts_str[i,3] ) ) == 1:    # Find only exactly this entry with same jd_midexp and same fiber
-            all_shifts_str_n.append(all_shifts_str[i,:])
-    all_shifts_str = np.array(all_shifts_str_n)                     # Only contains the latest entries, newest entry first
+    all_shifts_str = read_wavelengths_shift_filename(params)
+    if len(all_shifts_str) == 0:
+        logger('Warn: No pixel-shift for the wavelength solution is available. Please re-run file_assignment.py and asign "ws" to the emission line spectra.')
+        return copy.deepcopy(wavelength_solution), 0., im_head               # No shift is possible
+    
     # select the right data, depending on params['two_solutions']
     hours = 1.
     """ before 20200813
@@ -3639,12 +3670,12 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
             text = 'Linear fit of the datapoints in {0} around the exposure ( {1} to {2} ).'.format( params['master_wavelengths_shift_filename'], np.min(data[:,0]), np.max(data[:,0]) )
     else:                                                           # two wavelength solutions -> compare the two"""
     if True:
-        all_shifts_cal = all_shifts_str[all_shifts_str[:,3]=='cal',0:3].astype(float)
+        all_shifts_cal = all_shifts_str[all_shifts_str[:,3]=='cal',0:3].astype(float)       # jd_midexp, shift_avg, shift_std, fiber
         all_shifts_sci = all_shifts_str[all_shifts_str[:,3]=='sci',0:3].astype(float)
         if len(all_shifts_cal)*len(all_shifts_sci) == 0:
             logger('Warn: Offset between the fibers cannot be determined as the offset is only available for one fiber. '+\
-                    'Please re-run prepare_file_list.py and asign "w" and "w2" to the emission line spectra of the calibration and science fiber, respectively.')
-            return copy.deepcopy(wavelength_solution), 0.               # No shift is possible
+                    'Please re-run file_assignment.py and asign "wc" and "ws" to the emission line spectra of the calibration and science fiber, respectively.')
+            return copy.deepcopy(wavelength_solution), 0., im_head               # No shift is possible
         data = dict()
         data['cal_bef'] = all_shifts_cal[ (all_shifts_cal[:,0] <= jd_midexp), : ]
         data['cal_aft'] = all_shifts_cal[ (all_shifts_cal[:,0] >= jd_midexp), : ]
@@ -3690,50 +3721,70 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
 def create_wavelengths_from_solution(params, wavelength_solution, spectra, wave_sols_sci=None, jd_mid=0, shift=0):
     """
     Converts the wavelength solution into a 2d array with the wavelength for each pixel and order
+    If the wavelength solutions of science fiber exist, use this value
     :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :param spectra: 2d array of floats, spectrum, only needed for the shape of the wavelengths array
+    :param wave_sols_sci: list of wavelength solutions, each entry contains a list of entries: array of the wavelength solution, array of the reference lines, jd, name
+    :param jd_mid: float, JD of the Midexposure to create the wavelength array for
+    :param shift: float, input shift. By how many pixel need the solution be shifted
     :return wavelengths: 2d array of floats, same dimensions as spectra, contains the wavelength for each pixel
     :return wavelength_solution_recreated: only when wave_sols_sci is given, returns a wavelength_solution
     """
     if wave_sols_sci is None:           # Original, no interpolation of different solutions
         wavelength_solution_lst = [wavelength_solution]
         weight = [1]
+        jd_weight_shift = np.ones(3).reshape((1,3))
     else:
+        all_shifts_str = read_wavelengths_shift_filename(params)
+        all_shifts_sci = all_shifts_str[all_shifts_str[:,3]=='sci',0:3].astype(float)       # jd_midexp, shift_avg, shift_std (, fiber)
         # Find the values closest to the opservation (before and after)
-        wavelength_solution_lst, jd, weight, name = [], [], [], []
-        for entry in wave_sols_sci:
+        jd_weight_shift = np.zeros((len(wave_sols_sci), 3))
+        wavelength_solution_lst, name = [], []
+        for ii, entry in enumerate(wave_sols_sci):
             wavelength_solution_lst.append(entry[0])
-            weight.append(jd_mid-entry[2])
-            jd.append(entry[2])
+            jd_weight_shift[ii,0] = entry[2]
             name.append(entry[3])
-        jd, name, weight = np.array(jd), np.array(name), np.array(weight)
-        closestp = ( weight >= 0 )      # after
-        closestn = ( weight <= 0 )      # before
-        if not closestp.any():
+            if all_shifts_sci.shape[0] > 0:
+                diff = np.abs( all_shifts_sci[:,0] - entry[2] )
+                if np.min(diff) < 1E-4:
+                    jd_weight_shift[ii,2] = all_shifts_sci[np.argmin(diff), 1]              # only necessary for bifurcated fibers, for single fibers this will be corrected by the average value
+        name = np.array(name)   # defining beforehand might cut the string
+        jd_weight_shift[:,1] = jd_mid-jd_weight_shift[:,0]
+        closestp = ( jd_weight_shift[:,1] >= 0 )      # after
+        closestn = ( jd_weight_shift[:,1] <= 0 )      # before
+        if not closestp.any():          # no solution after -> use the ones from before as dummy
             closestp = closestn
-        elif not closestn.any():
+        elif not closestn.any():        # no solution before -> use the ones from after as dummy
             closestn = closestp
-        weight = np.abs(weight)
-        closest = ( ( ( weight <= np.min(weight[closestp] + 1./24) ) & closestp ) | ( ( weight <= np.min(weight[closestn] + 1./24) ) & closestn ) )
-        weight = 1./(weight[closest]+5./24/60)                              # everything within 5 minutes is good, then decrease the weight
+        jd_weight_shift[:,1] = np.abs(jd_weight_shift[:,1])
+        closest = ( ( ( jd_weight_shift[:,1] <= np.min(jd_weight_shift[closestp,1] + 1./24) ) & closestp ) | ( ( jd_weight_shift[:,1] <= np.min(jd_weight_shift[closestn,1] + 1./24) ) & closestn ) )
+        jd_weight_shift = jd_weight_shift[closest,:]
+        jd_weight_shift[:,1] = 1./(jd_weight_shift[:,1]+5./24/60)                 # everything within 5 minutes is good, then decrease the weight
         wavelength_solution_lst = np.array(wavelength_solution_lst)[closest]
+        name = name[closest]
         result = []
-        jd, name = jd[closest], name[closest]
-        for ii in range(weight.shape[0]):
-            result.append([ jd[ii], weight[ii], name[ii] ])
-        printarrayformat = ['\t\t%4.4f', '%3.1f', '%s']
-        logger('Info: Use the following wavelength solutions of the science fibers and their corresponding weights to'+\
-               ' calculate the wavelength array for JD (midexposure) of {0} days: '.format(round(jd_mid,4)), show=False)
-        logger('JD (mid)\tweight\tname', printarrayformat=printarrayformat, printarray=result, show=False)
+        if not params['two_solutions']:
+            avg_waveshift = np.average( jd_weight_shift[:,2], weights=jd_weight_shift[:,1] )
+            jd_weight_shift[:,2] -= avg_waveshift
+        for ii in range(jd_weight_shift.shape[0]):
+            result.append(list(jd_weight_shift[ii,0:3])+ [name[ii] ])
+        printarrayformat = ['\t\t%4.4f', '%3.1f', '%4.4f', '%s']
+        textshift = ''
+        if shift != 0:
+            textshift = ' (The input shift was {0} px)'.format(round(shift,4))
+        logger('Info: Used the following wavelength solutions of the science fibers and their corresponding weights to'+\
+               ' calculate the wavelength array for JD (midexposure) of {0} days{1}: '.format(round(jd_mid,4), textshift), show=False)
+        logger('JD (mid)\tweight\tshift\tname', printarrayformat=printarrayformat, printarray=result, show=False)
         order_offset = wavelength_solution[0,0]
         
     wavelengths = np.zeros(( len(wavelength_solution_lst), spectra.shape[0], spectra.shape[1] ))
     xarr = np.arange(np.array(spectra).shape[1])
     for jj, wavesol in enumerate(wavelength_solution_lst):
-        wavesol[:,1] += shift      # Add shift (e.g. between Sci and Cal fiber and between this ThAr and Cal solution
+        wavesol[:,1] += shift-jd_weight_shift[jj,2]      # Add shift (e.g. between Sci and Cal fiber and between this ThAr and Cal solution
         for ii, wls in enumerate(wavesol):
             wavelengths[jj,ii,:] = np.polyval(wls[2:], xarr - wls[1])
-    wavelengths = np.average( wavelengths, axis=0, weights=weight )
+        #print( wavelengths[jj, 34, int(spectra.shape[1]/2)] )
+    wavelengths = np.average( wavelengths, axis=0, weights=jd_weight_shift[:,1] )
     
     if wave_sols_sci is None:
         return wavelengths
@@ -5058,6 +5109,27 @@ def bisector_measurements_orders(im, fname, pfits, xlows, xhighs, widths=[]):
     f1.set_ylim(-0.1,1.1)
     plt.savefig(fname, bbox_inches='tight')
     plt.close()
+
+def get_subframe(frame_list, nr_h, nr_v, ih, iv):
+    if type(frame_list).__name__ == 'ndarray':
+        if len(frame_list.shape) == 2:
+            subframe = frame_list[iv,ih]
+            fx = frame_list[-1,int(nr_h/2)]
+            fy = frame_list[int(nr_v/2),0]
+        elif nr_v == 1:
+            subframe = frame_list[ih]
+            fx = frame_list[int(nr_h/2)]
+            fy = frame_list[0]
+        elif nr_h == 1:
+            subframe = frame_list[ivh]
+            fy = frame_list[-1]
+            fy = frame_list[int(nr_v/2)]
+    else:
+        subframe = frame_list
+        fx = frame_list
+        fy = frame_list
+
+    return subframe, fx, fy
 
 def bisector_measurements_emission_lines(fname, spec, data, indexes):     #im, fname, pfits, xlows, xhighs, widths=[]):
     """
@@ -7436,6 +7508,12 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
         offset = -1 * min(0, np.percentile(data[2,sub[0,:]], 1) )                   # correct the data before fitting to avoid negative values for the fit
         data[4,:] = data[3,:]+offset
         x_cen = (np.nanmin(data[1,sub[1,:]]) + np.nanmax(data[1,sub[1,:]]))/2.        # central wavelength
+        if np.std(spec[order,:]) < 1E-10:
+            ccoefs.append( np.array( [0]*nc + [np.median(spec[order,:])] ) )
+            cen_waves.append( x_cen )
+            sn_coefs.append( np.zeros(nc+1) )
+            offsets.append( 0 )
+            continue
         old_good_values = sum(sub[4,:])
         indexes_search_range = np.zeros((specs[1], specs[1] ), dtype=bool)            # Array to store the indexes which are in a given wavelength difference for each wavelength
         for i in data[0,sub[0,:]].astype(int):                                      # Only use values, for which the wavelength is available
@@ -7444,7 +7522,6 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
         for step in range(1,int(old_good_values/10)):
             #print order, step, len(data[1,sub[4,:]]), len(data[4,sub[4,:]]), sum(np.isnan(data[1,sub[4,:]])), sum(np.isnan(data[4,sub[4,:]])), data[1,sub[4,:]]-x_cen, data[4,sub[4,:]], min(step,nc)
             # New, puttting sigmaclipping into own thing
-            print(data[4,:], sum(data[4,:]), data[1,:], sum(data[1,:]) )
             sub[4,:], p = sigmaclip(data[4,:], x=data[1,:], nc=min(step,nc), sub=sub[4,:], ll=ll, lu=lu, repeats=1, exclude_absorption=True, x_cen=x_cen)
             sub[4,:] *= sub[0,:]            # Remove the nan values again
             # data[5] is not needed
@@ -7829,8 +7906,8 @@ def get_object_site_from_header(params, im_head, obnames, obsdate):
     altitude_keys   = ['HIERARCH ESO TEL GEOELEV', 'ESO TEL GEOELEV']       # HIERARCH will be removed from header keywords in python
     latitude_keys   = ['HIERARCH ESO TEL GEOLAT', 'ESO TEL GEOLAT']
     longitude_keys  = ['HIERARCH ESO TEL GEOLON', 'ESO TEL GEOLON']
-    ra_keys         = ['RA']
-    dec_keys        = ['DEC']
+    ra_keys         = ['RA', 'RA-DEG']
+    dec_keys        = ['DEC', 'DEC-DEG']
     epoch_keys      = ['HIERARCH ESO TEL TARG EQUINOX', 'ESO TEL TARG EQUINOX']
     pmra_keys       = ['HIERARCH ESO TEL TARG PMA', 'ESO TEL TARG PMA']
     pmdec_keys      = ['HIERARCH ESO TEL TARG PMD', 'ESO TEL TARG PMD']
@@ -7866,7 +7943,7 @@ def get_object_site_from_header(params, im_head, obnames, obsdate):
             jephem.compute(gobs)
             params['ra'] = -999                                             # If not changed this means the object coordinates were made up
             for obname in obnames:
-                if obname.lower().find('sun') == 0:     # check with prepare_file_list.py: calibration_parameters_coordinates_UI(), creating the widgets
+                if obname.lower().find('sun') == 0:     # check with file_assignment.py: calibration_parameters_coordinates_UI(), creating the widgets
                     params['ra']          = sephem.ra
                     params['dec']         = sephem.dec
                     source_radec = 'The object coordinates are derived from the calculated solar ephermeris.'
@@ -8307,7 +8384,7 @@ def convert_terra_master_hiflex(params, obname):
         doo = dict(spec=True, blaze=False, norm=True, blue=False, harps=True)
         params['path_extraction_single'] = params['path_rv_terra']
         im_name = 'terra_template_single_'+obname
-        save_single_files(params, [obname], im_name, im_head, im_head_bluefirst, spectra, spec[3], spec[5], [], spec[0], calimages['wavelength_solution'], doo)
+        save_single_files(params, [obname], im_name, im_head, im_head_bluefirst, spectra, spec[3], spec[5], [], spec[0], calimages['wave_sol_dict_sci']['wavesol'], doo)
         
         logger('Info: Created {0} from {1}*'.format(params['path_rv_terra']+'terra_template_hiflexformat_'+obname+'.fits', terra_template))
     else:
@@ -8340,7 +8417,7 @@ def convert_serval_master_hiflex(params, obname):
     doo = dict(spec=True, blaze=False, norm=True, blue=False, harps=True)
     params['path_extraction_single'] = params['path_rv_serval']
     im_name = 'serval_template_single_'+obname
-    save_single_files(params, [obname], im_name, im_head, im_head_bluefirst, spectra, spec[3], spec[5], [], spec[0], calimages['wavelength_solution'], doo)
+    save_single_files(params, [obname], im_name, im_head, im_head_bluefirst, spectra, spec[3], spec[5], [], spec[0], calimages['wave_sol_dict_sci']['wavesol'], doo)
         
     logger('Info: Created {0} from {1}'.format(params['path_rv_serval']+'serval_template_hiflexformat_'+obname+'.fits', serval_template))
     
@@ -8876,6 +8953,7 @@ def run_serval_rvs(params,):
                 if obj_name not in obj_names:
                     obj_names.append(obj_name)                   
     hiflex_file = params['path_rv_serval']+'conf_hiflex_serval.txt'
+    servalparams = dict()
     if os.path.isfile(hiflex_file):
         try:
             keys, values = np.genfromtxt(hiflex_file, dtype=str, comments='#', delimiter='=', filling_values='', autostrip=True, unpack=True)
@@ -8896,7 +8974,7 @@ def run_serval_rvs(params,):
     servalparams['mask_dataset'] = servalparams.get('mask_dataset', 7)
     servalparams['order_snr'] = servalparams.get('order_snr', int(calimages['wave_sol_dict_sci']['wavesol'].shape[0]/2) )
     with open(hiflex_file, 'w') as file:
-        file.write('# This file is used to control which data is used in SERVAL. It is read by inst_HIFLEX'+os.linesep)
+        file.write('# This file is used to control which data is used in SERVAL. It is read when inst_HIFLEX is used by SERVAL.'+os.linesep)
         file.write('orders = {1}{0}data_dataset = {2}{0}error_dataset = {3}{0}wave_dataset = {4}{0}mask_dataset = {5}{0}order_snr = {6}{0}'.format(os.linesep,
                             servalparams['orders'], servalparams['data_dataset'], servalparams['error_dataset'], servalparams['wave_dataset'], 
                             servalparams['mask_dataset'], servalparams['order_snr'] ))
@@ -8933,6 +9011,7 @@ def run_serval_rvs(params,):
     logger(('Info: Finished the SERVAL analysis. Some errors reported by SERVAL are expected.'+\
           ' The results are stored in {0}<object name>/<object name>.rvc.dat.'+\
           ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially orders with low SN).'+\
+          ' You can also modify the parameters in {0}conf_hiflex_serval.txt , e.g. to select a different dataset or a different order to measure the SNR.'+\
           ' The command history can be found in {0}cmdhistory.txt. Before running serval: cd {0}').format(params['path_rv_serval']))
 
 def run_ceres_multicore(kwargs):

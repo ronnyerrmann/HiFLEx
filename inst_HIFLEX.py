@@ -46,6 +46,7 @@ def scan(self, s, pfits=True):
    -------
 
    """
+   global snord
    HIERARCH = 'HIERARCH '
    HIERHIFLEX = HIERARCH + 'HiFLEx '
    hdulist = self.hdulist = pyfits.open(s) # slow 30 ms
