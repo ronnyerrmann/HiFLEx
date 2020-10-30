@@ -218,30 +218,7 @@ def read_parameterfile(textfile):
     
     return textparams
 
-def textfileargs(params, textfile=None):
-    """
-    Imports parameters from text file located at textfile, parameters given in the command line and the parameters given with the programm code
-    Parameters in the programm code will be overwritten by parameters in the text file and parameters in the text file will be overwritten by parameters from the command line
-    :param params: dictionary, default parameter dictionary (the default values)
-    :param textfile: string, location of config file
-    :return params: dictionary with added parameters and updated default parameters 
-    
-    Please note, the parameters are only lists or single entries. No numpy arrays allowed
-    """
-    
-    # Set up standard parameters for 
-    params['in_shift'] = -0
-    params['started_from_p3'] = 'False'
-    
-    emsg = 'Error in config file: '
-    
-    textparams = read_parameterfile(textfile)
-    params.update(textparams)
-    
-    if 'configfile_fitsfiles' in params.keys():
-        if os.path.exists(params['configfile_fitsfiles']):
-            textparams = read_parameterfile(params['configfile_fitsfiles'])
-            params.update(textparams)
+def read_cmdparams():
     
     cmdargs = sys.argv[1:]
     cmdparams = dict()
@@ -268,12 +245,46 @@ def textfileargs(params, textfile=None):
             continue        # Do nothing, just prevent the warning below
         else:
             logger('Warn: I dont know how to handle command line argument: {0}'.format(arg))
+    
+    return cmdparams
+
+def textfileargs(params, textfile=None):
+    """
+    Imports parameters from text file located at textfile, parameters given in the command line and the parameters given with the programm code
+    Parameters in the programm code will be overwritten by parameters in the text file and parameters in the text file will be overwritten by parameters from the command line
+    :param params: dictionary, default parameter dictionary (the default values)
+    :param textfile: string, location of config file
+    :return params: dictionary with added parameters and updated default parameters 
+    
+    Please note, the parameters are only lists or single entries. No numpy arrays allowed
+    """
+    
+    # Set up standard parameters for 
+    params['in_shift'] = -0
+    params['started_from_p3'] = 'False'
+    
+    emsg = 'Error in config file: '
+    
+    textparams = read_parameterfile(textfile)
+    params.update(textparams)
+    
+    cmdparams = read_cmdparams()
     params.update(cmdparams)
+    
+    if 'configfile_fitsfiles' in params.keys():
+        if os.path.exists(params['configfile_fitsfiles']):
+            textparams = read_parameterfile(params['configfile_fitsfiles'])
+            params.update(textparams)
+    
+    params.update(cmdparams)        # Repeat, in case textparams overwrites cmdparams
+    
     # Add standard parameters, if they are missing, more at the end
     params['logging_arc_line_identification_residuals_hist'] = params.get('logging_arc_line_identification_residuals_hist', 'arc_line_identification_residuals_hist.png')
     params['logging_em_lines_bisector'] = params.get('logging_em_lines_bisector', 'wavelength_solution_emmission_lines_bisector.png')
     params['logging_blaze_spec'] = params.get('logging_blaze_spec', 'blaze_spectrum.pdf')
-
+    # Added 20201022:
+    params['logging_crossdispersion_shift'] = params.get('logging_crossdispersion_shift', 'crossdispersions_shift.txt')
+    
     list_txt = ['reference_catalog', 'use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys', 'cosmic_ray_settings']
     list_int = ['arcshift_range', 'order_offset', 'px_offset', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck', 'dataset_rv_analysis']
@@ -662,6 +673,8 @@ def read_file_calibration(params, filename, level=0):
     im = rotate_flip_frame(im, params )
     filename_s = filename[max(0,len(filename)-(80-25-1)):]               # Shorten the filename so it fits into the header, 21 failed, 25 worked, between not tested
     im_head['HIERARCH HiFLEx orig'] = filename_s
+    filename_nopath = filename_s.rsplit(os.sep,1)[-1]
+    im_head ['HIERARCH HiFLEx orid'] = filename_nopath
     calimages['{0}_saturated'.format(filename_s)] = np.where( im > params['max_good_value'] )         # Find the saturated pixel in the original image, consists of (x,y) with x and y are arrays
     for entry in params['calibs']:
         if entry == '':
@@ -2633,7 +2646,7 @@ def extract_order(kwarg):
     
     return ospecs, ogood_px_mask, widths_o
      
-def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0, var='standard', plot_tqdm=True, header=dict() ):
+def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0, var='standard', plot_tqdm=True, header=dict(), plot_traces=False ):
     """
     Extract the spectra from each of the orders and return in a numpy array
     :param params: Dictionary with all the parameters. 'maxgood_value' is required
@@ -2671,12 +2684,11 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0
     badpx_mask = calimages[badpx_mask_name]
     # Prepare saturated map
     saturated_mask = ( image < params['max_good_value'] )       # 1 when not saturated, analogue to bad-pixel
-    if 'HIERARCH HiFLEx orig' in header.keys():
-        filename = header['HIERARCH HiFLEx orig']
-    elif 'HiFLEx orig' in header.keys():
-        filename = header['HiFLEx orig']
-    else:
-        filename = ''
+    filename = header.get('HIERARCH HiFLEx orig', header.get('HiFLEx orig', ''))
+    if plot_traces:
+        fname_short = header.get('HIERARCH HiFLEx orid', header.get('HiFLEx orid', '')).replace('.fits','').replace('.fit','')
+        fname = '{0}_{1}.{2}'.format(params['logging_traces_im'].rsplit('.',1)[0].replace('_master_trace1',''), fname_short, params['logging_traces_im'].rsplit('.',1)[-1])
+        plot_traces_over_image(image, fname, pfits, xlows, xhighs, widths, offset=offset, w_mult=w_mult)
     if '{0}_saturated'.format(filename) in calimages.keys():
         saturated_mask = saturated_mask*0 + 1
         x, y = calimages['{0}_saturated'.format(filename)]
@@ -2910,72 +2922,84 @@ def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extra
     """
     if params['extraction_shift'] == 0.0:
         return 0.0, im_head
-    [sci_tr_poly, xlows, xhighs, widths] = sci_traces
-    # Find the maximum shift by using the space between science and calibration orders
-    for start_order in range(int(sci_tr_poly.shape[0]/3)):             # If orders are to close in the red, then no shift can be determinded -> might ignore the first third of the red orders
-        shifts = []
-        if sci_tr_poly.shape[0] == 1:   # only one order, e.g. when using live_extraction
-            shift = 10 * max(widths[:,2])
-        else:                           # normal case
-            if params['arcshift_side'] != 0:
-                shifts.append( np.abs(sci_tr_poly[start_order  :  ,0,-1] - cal_tr_poly[start_order  :  ,0,-1]) )    # not when science and calibration at the same position
-            shifts.append( np.abs(sci_tr_poly[start_order+1:  ,0,-1] - cal_tr_poly[start_order  :-1,0,-1]) )        # calibration fiber could be left or right of science fiber
-            shifts.append( np.abs(sci_tr_poly[start_order  :-1,0,-1] - cal_tr_poly[start_order+1:  ,0,-1]) )        # calibration fiber could be left or right of science fiber
-            if sci_tr_poly.shape[0] >= 4:           # If enough data, then do a polyfit
+        
+    shift = None
+    fname = im_head.get('HiFLEx orid', im_head.get('HIERARCH HiFLEx orid', '') )
+    if len(fname) > 3 and os.path.isfile(params['logging_crossdispersion_shift']):
+        data_str = read_textfile_remove_double_entries(params['logging_crossdispersion_shift'], [float, float, float, float, str], delimiter='\t', replaces=['\n'], equal_indexes=[4], warn='')
+        index = ( fname == data_str[:,4] )
+        if np.sum(index) == 1:
+            [shift, width, min_shifts, max_shifts] = data_str[index][0,0:4].astype(float)
+            logger('Info: The shift between this frame and the reference frame in Cross-Dispersion direction was read from {4}: shift = {0} px, gaussian width = {1} px. A shift between {2} and {3} pixel was tested.'.format(shift, width, min_shifts, max_shifts, params['logging_crossdispersion_shift'] ))
+            
+    if shift is None:
+        [sci_tr_poly, xlows, xhighs, widths] = sci_traces
+        # Find the maximum shift by using the space between science and calibration orders
+        for start_order in range(int(sci_tr_poly.shape[0]/3)):             # If orders are to close in the red, then no shift can be determinded -> might ignore the first third of the red orders
+            shifts = []
+            if sci_tr_poly.shape[0] == 1:   # only one order, e.g. when using live_extraction
+                shift = 10 * max(widths[:,2])
+            else:                           # normal case
+                if params['arcshift_side'] != 0:
+                    shifts.append( np.abs(sci_tr_poly[start_order  :  ,0,-1] - cal_tr_poly[start_order  :  ,0,-1]) )    # not when science and calibration at the same position
+                shifts.append( np.abs(sci_tr_poly[start_order+1:  ,0,-1] - cal_tr_poly[start_order  :-1,0,-1]) )        # calibration fiber could be left or right of science fiber
+                shifts.append( np.abs(sci_tr_poly[start_order  :-1,0,-1] - cal_tr_poly[start_order+1:  ,0,-1]) )        # calibration fiber could be left or right of science fiber
+                if sci_tr_poly.shape[0] >= 4:           # If enough data, then do a polyfit
+                    for i in range(len(shifts)):
+                        poly = np.polyfit(range(len(shifts[i])), shifts[i], 2)
+                        shifts[i] = np.polyval(poly, range(len(shifts[i])) )
                 for i in range(len(shifts)):
-                    poly = np.polyfit(range(len(shifts[i])), shifts[i], 2)
-                    shifts[i] = np.polyval(poly, range(len(shifts[i])) )
-            for i in range(len(shifts)):
-                shifts[i] = np.min(shifts[i])
-            shift = min(shifts)
-        shift = min(shift, 20 * max(widths[:,2]))
-        if shift >= 3:              
-            break
-    range_shifts = [-int(shift/2),int(shift/2)]
-    ims1 = im.shape[1]
-    #shifts = range(min(range_shifts),max(range_shifts)+1)
-    fluxdiff, shifts = [], []
-    oldcen, olderr = np.nan, np.nan
-    if extract:                                                     # takes a bit longer
-        logger('Step: checking if the current image is shifted compared to the reference frame in which the traces were searched (in cross-dispersion direction)')
-    no_orders = len(xlows)-start_order
-    step = max( 1, int(no_orders/20) )              # only use every 20ths order
-    mask = list(range(start_order,no_orders,step))            # only use part of the orders to speed up calculations
-    for shift in range(max(np.abs(range_shifts))+1):
-        for pm in [-1, +1]:
-            if extract:         # extract and find the maximum flux
-                spec, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, pm*shift, plot_tqdm=False)       
-                fluxes = np.nansum(spec, axis=1)
-                fluxes[np.isnan(fluxes)] = np.nanmin(fluxes)          # replace nans with the minimum flux to avoid problems caused at the borders at the image
-            else:               # Use the difference of the 2 images (old way)
-                fluxes = []
-                diffim = im[:,max(0,pm*shift):ims1-max(0,-pm*shift)] - im_ref[:,max(0,-pm*shift):ims1-max(0,pm*shift)]      # Tested that the minus signs are at the right place
-                ims2 = diffim.shape[1]
-                temp = max(np.abs(range_shifts).astype(int))-abs(shift)
-                for i in range(temp+1):         # For a small shift, the resulting image is bigger than for a big shift -> avoid impact total flux
-                    #print shift, i, diffim.shape, diffim[:,i:ims2-(temp-i)].shape, np.sum(np.abs(diffim[:,i:ims2-(temp-i)]))
-                    fluxes.append(-np.sum(np.abs(diffim[:,i:ims2-(temp-i)])))                   # using a negative flux, so the minimum becomes a maximum, which only can be handled by the script in order to fit a gaussian
-            fluxdiff.append(np.median(fluxes))      # Changed from mean to median on 20190515
-            shifts.append(pm*shift)
-            #print 'shift, pm, fluxdiff[-1], fluxes', shift, pm, fluxdiff[-1], fluxes
-            if shift == 0:      # For 0 shift + and - will be the same
+                    shifts[i] = np.min(shifts[i])
+                shift = min(shifts)
+            shift = min(shift, 20 * max(widths[:,2]))
+            if shift >= 3:              
                 break
-        if len(fluxdiff) >= 7 or abs( shift - abs(min(range_shifts)) ) < 0.001:       # Run at least after the last shift
-            popt = centroid_order(shifts,fluxdiff,shifts[np.argmax(fluxdiff)],max(shifts)-min(shifts))    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
-            #print shifts,fluxdiff,shifts[np.argmax(fluxdiff)],max(shifts)-min(shifts)
-            if abs(oldcen - popt[1]) < 0.05 and abs(olderr - popt[2]) < 0.2 and popt[2] < 0.3 * (max(range_shifts) - min(range_shifts)):        # Stop early, if good enough precission
-                break
-            oldcen, olderr = popt[1], popt[2]
+        shift = min(shift, params['extraction_shift'] *3.0)     # Added 20201027, 3 as division by 2 in next line and a bit wider is necessary for Gaussian fit
+        range_shifts = [-int(shift/2),int(shift/2)]
+        ims1 = im.shape[1]
+        #shifts = range(min(range_shifts),max(range_shifts)+1)
+        fluxdiff, shifts = [], []
+        oldcen, olderr = np.nan, np.nan
+        if extract:                                                     # takes a bit longer
+            logger('Step: checking if the current image is shifted compared to the reference frame in which the traces were searched (in cross-dispersion direction)')
+        no_orders = len(xlows)-start_order
+        step = max( 1, int(no_orders/20) )              # only use every 20ths order
+        mask = list(range(start_order,no_orders,step))            # only use part of the orders to speed up calculations
+        for shift in range(max(np.abs(range_shifts))+1):
+            for pm in [-1, +1]:
+                if extract:         # extract and find the maximum flux
+                    spec, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, pm*shift, plot_tqdm=False)       
+                    fluxes = np.nansum(spec, axis=1)
+                    fluxes[np.isnan(fluxes)] = np.nanmin(fluxes)          # replace nans with the minimum flux to avoid problems caused at the borders at the image
+                else:               # Use the difference of the 2 images (old way)
+                    fluxes = []
+                    diffim = im[:,max(0,pm*shift):ims1-max(0,-pm*shift)] - im_ref[:,max(0,-pm*shift):ims1-max(0,pm*shift)]      # Tested that the minus signs are at the right place
+                    ims2 = diffim.shape[1]
+                    temp = max(np.abs(range_shifts).astype(int))-abs(shift)
+                    for i in range(temp+1):         # For a small shift, the resulting image is bigger than for a big shift -> avoid impact total flux
+                        #print shift, i, diffim.shape, diffim[:,i:ims2-(temp-i)].shape, np.sum(np.abs(diffim[:,i:ims2-(temp-i)]))
+                        fluxes.append(-np.sum(np.abs(diffim[:,i:ims2-(temp-i)])))                   # using a negative flux, so the minimum becomes a maximum, which only can be handled by the script in order to fit a gaussian
+                fluxdiff.append(np.median(fluxes))      # Changed from mean to median on 20190515
+                shifts.append(pm*shift)
+                #print 'shift, pm, fluxdiff[-1], fluxes', shift, pm, fluxdiff[-1], fluxes
+                if shift == 0:      # For 0 shift + and - will be the same
+                    break
+            if len(fluxdiff) >= 7 or abs( shift - abs(min(range_shifts)) ) < 0.001:       # Run at least after the last shift
+                popt = centroid_order(shifts,fluxdiff,shifts[np.argmax(fluxdiff)],max(shifts)-min(shifts))    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+                #print shifts,fluxdiff,shifts[np.argmax(fluxdiff)],max(shifts)-min(shifts)
+                if abs(oldcen - popt[1]) < 0.05 and abs(olderr - popt[2]) < 0.2 and popt[2] < 0.3 * (max(range_shifts) - min(range_shifts)):        # Stop early, if good enough precission
+                    break
+                oldcen, olderr = popt[1], popt[2]
 
-    if popt[2] > 0.3 * (max(range_shifts) - min(range_shifts)) or popt[1] < min(range_shifts) or popt[1] > max(range_shifts) or abs(popt[1]) > params['extraction_shift']:
-        comment = (' The calculated values (shift = {0} px, width = {1} px) were not very precise or'+\
-                   ' outside of the allowed range (Parameter extraction_shift: {4},'+\
-                   ' borders due to next order [{2},{3}]) .').format(round(popt[1],2), round(popt[2],2), 
-                                        min(range_shifts), max(range_shifts), params['extraction_shift'] )
-        shift, width = 0.0, 0.0
-    elif not extract:                                                                               # keep everything if not extracting
-        shift, width, comment = round(popt[1],3), round(popt[2],3), ''
-    else:                                                                                           # Find the place of the maximum flux (and redo the gaussian fit)
+        if popt[2] > 0.3 * (max(range_shifts) - min(range_shifts)) or popt[1] < min(range_shifts) or popt[1] > max(range_shifts) or abs(popt[1]) > params['extraction_shift']:
+            comment = (' The calculated values (shift = {0} px, width = {1} px) were not very precise or'+\
+                       ' outside of the allowed range (Parameter extraction_shift: {4},'+\
+                       ' borders due to next order [{2},{3}]) .').format(round(popt[1],2), round(popt[2],2), 
+                                            min(range_shifts), max(range_shifts), params['extraction_shift'] )
+            shift, width = 0.0, 0.0
+        elif not extract:                                                                               # keep everything if not extracting
+            shift, width, comment = round(popt[1],3), round(popt[2],3), ''
+        else:                                                                                           # Find the place of the maximum flux (and redo the gaussian fit)
             logger('Step: Do the finetuning of the center and find the maximum', show=False)
             #nshifts, fluxes = [], []
             nshifts, fluxes = shifts, fluxdiff
@@ -3007,11 +3031,16 @@ def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extra
                 shift = shift_poly
             elif width == 0 and min(shifts) < mshift < max(shifts):      # If Gaussian fit didn't work, or if shift is close to borders, then mshift might be dogy
                 shift = mshift                                      # use the maximum flux as shift
-    logger('Info: The shift between this frame and the reference frame in Cross-Dispersion direction is {0} px. The gaussian width is {1} px. A shift between {2} and {3} pixel was tested.{4}'.format(shift, width, min(shifts), max(shifts), comment ))
+        min_shifts, max_shifts = min(shifts), max(shifts)
+        logger('Info: The shift between this frame and the reference frame in Cross-Dispersion direction is {0} px. The gaussian width is {1} px. A shift between {2} and {3} pixel was tested.{4}'.format(shift, width, min_shifts, max_shifts, comment ))
+        fname = im_head.get('HiFLEx orid', im_head.get('HIERARCH HiFLEx orid', '') )
+        if (shift !=0 or width !=0) and len(fname) > 3:
+            add_text_to_file('{0}\t{1}\t{2}\t{3}\t{4}'.format(shift, width, round(min_shifts,1), round(max_shifts,1), fname), params['logging_crossdispersion_shift'] ) 
+    
     im_head['HIERARCH HiFLEx CD_SHIFT']  = (shift, 'Applied Shift in Cross-dispersion [px]')        # (value, comment)
     im_head['HIERARCH HiFLEx CD_S_WDTH'] = (width, 'Width of shift in Cross-dispersion [px]')        # (value, comment)
-    im_head['HIERARCH HiFLEx CD_S_MIN']  = (min(shifts), 'Minimum tested shift in Cross-disp. [px]')        # (value, comment)
-    im_head['HIERARCH HiFLEx CD_S_MAX']  = (max(shifts), 'Maximum tested shift in Cross-disp. [px]')        # (value, comment)
+    im_head['HIERARCH HiFLEx CD_S_MIN']  = (min_shifts, 'Minimum tested shift in Cross-disp. [px]')        # (value, comment)
+    im_head['HIERARCH HiFLEx CD_S_MAX']  = (max_shifts, 'Maximum tested shift in Cross-disp. [px]')        # (value, comment)
     
     return shift, im_head
 
@@ -3511,14 +3540,15 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
                 popt = centroid_order(hist_x2, hist_y, np.median(hist_x2), (hist_x2[-1]-hist_x2[0])/2., significance=3, bordersub_fine=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
                 if popt[2] != 0:
                     popts.append(popt)
-            popt_med = np.median(popts, axis=0)
-            shift_med, shift_std = popt_med[1], popt_med[2]
-            logtext += (' The Gaussian centre and width of the distribution of the refitted lines gives: {0} +- {1} px '+\
-                        '(the values depend on the binning, standard deviation between {2} different bins is {3} px). ').format(round(shift_med,4), 
-                                                            round(shift_std,4), len(popts), round_sig(np.std(popts, axis=0, ddof=1)[1],3))
-            textsource = ' Used the Gaussian center and width of the distribution.'
-            #im_head['HIERARCH HiFLEx D_SHIFT_GAUSS'] = (round(shift_med,5), 'Offset from Gauss distribution [px]')
-            #im_head['HIERARCH HiFLEx D_SHIFT_G_ERR'] = (round(shift_std,5), 'Offset from Gauss distribution [px]')
+            if len(popts) > 3:
+                popt_med = np.median(popts, axis=0)
+                shift_med, shift_std = popt_med[1], popt_med[2]
+                logtext += (' The Gaussian centre and width of the distribution of the refitted lines gives: {0} +- {1} px '+\
+                            '(the values depend on the binning, standard deviation between {2} different bins is {3} px). ').format(round(shift_med,4), 
+                                                                round(shift_std,4), len(popts), round_sig(np.std(popts, axis=0, ddof=1)[1],3))
+                textsource = ' Used the Gaussian center and width of the distribution.'
+                #im_head['HIERARCH HiFLEx D_SHIFT_GAUSS'] = (round(shift_med,5), 'Offset from Gauss distribution [px]')
+                #im_head['HIERARCH HiFLEx D_SHIFT_G_ERR'] = (round(shift_std,5), 'Offset from Gauss distribution [px]')
         
         """ This doesn't make it better, in case of bifurcated fiber the scatter between the fiber increases by factor of 3
         if shifts.shape[0] >= 500:      # refitting the wavelength solution if at least 500 lines are available
@@ -3612,26 +3642,39 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     #print 'return_shift', shift_avg
     return wavelength_solution_new, shift_med, im_head
  
-def read_wavelengths_shift_filename(params):
+def read_textfile_remove_double_entries(fname, dataformats, delimiter='\t', replaces=['\n'], equal_indexes=[0], warn='Warn: no data in file {0}'):
     """
     Reads all the information from params['master_wavelengths_shift_filename'], removes the older entries
-    :return all_shifts_str: 2d array of type string, with each entry containing JD of the mid exposure, Shift to the wavelength solution, Standard deviation of the shift, fiber type
+    :param fname: string, filename
+    :param dataformat: list of data types, e.g [float, int, str], must contain
+    :param delimiter: string, how are coloumns are separated
+    :param replaces: sting, what data should be replaced
+    :equal_indexes: list of integers, what indexes (coloumns) should be compared 
+    :return data: 2d array of type string, with each entry containing the last version of the line in fname
     """
-    all_shifts = read_text_file(params['master_wavelengths_shift_filename'], no_empty_lines=True)
-    all_shifts = convert_readfile(all_shifts, [float, float, float, str], delimiter='\t', replaces=['\n'])       # jd_midexp, shift_avg, shift_std, can contain duplicate jd_midexp (last one is the reliable one)
-    if len(all_shifts) == 0:
-        logger('Warn: No pixel-shift for the wavelength solution is available. Please re-run prepare_file_list.py and asign "w" to the emission line spectra.')
-        all_shifts_str = np.array([])
+    if len(dataformats) < max(equal_indexes)+1:
+        logger('Error: Coding error when calling read_textfile_remove_double_entries(): equal_indexes ({0}) contains indexes higher than the length of the dataformats ({1})'.format(equal_indexes, dataformats))
+    data = read_text_file(fname, no_empty_lines=True)
+    data = convert_readfile(data, dataformats, delimiter=delimiter, replaces=['\n'])       # jd_midexp, shift_avg, shift_std, can contain duplicate jd_midexp (last one is the reliable one)
+    if len(data) == 0:
+        if len(warn) > 3:
+            logger(warn.format(fname))
+        data = np.array([])
     else:
-        all_shifts_str = np.array(all_shifts)                           # Becomes an array of strings
-        # Remove the double entries, e.g. if better shifts were added later
-        all_shifts_str_n = []
-        for i in range(all_shifts_str.shape[0])[::-1]:
-            if np.sum( ( all_shifts_str[i:,0] == all_shifts_str[i,0] ) & ( all_shifts_str[i:,3] == all_shifts_str[i,3] ) ) == 1:    # Find only exactly this entry with same jd_midexp and same fiber
-                all_shifts_str_n.append(all_shifts_str[i,:])
-        all_shifts_str = np.array(all_shifts_str_n)                     # Only contains the latest entries, newest entry first
+        data = np.array(data)                           # Becomes an array of strings
+        if len(equal_indexes) > 0:
+            # Remove the double entries, e.g. if better data was added later
+            data_no_doubles = []
+            for i in range(data.shape[0])[::-1]:
+                index = equal_indexes[0]
+                equal_arr = ( data[i:,index] == data[i,index] ) 
+                for index in equal_indexes[1:]:
+                    equal_arr &= ( data[i:,index] == data[i,index] ) 
+                if np.sum( equal_arr ) == 1:    # Find only exactly this entry
+                    data_no_doubles.append(data[i,:])
+            data = np.array(data_no_doubles)                     # Only contains the latest entries, newest entry first
     
-    return all_shifts_str
+    return data
    
 def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname, im_head):
     """
@@ -3639,7 +3682,9 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
     !!! shift_avg = np.average( shifts[:,1], weights=weight )  -> Tested, will work fine for obsdate in range(all_shifts), but will fail for extrapolation. Maybe it's necessary to replace this by a linear fit?
     :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
-    all_shifts_str = read_wavelengths_shift_filename(params)
+    warn = 'Warn: No pixel-shift for the wavelength solution is available. Please re-run prepare_file_list.py and asign "w" to the emission line spectra.'
+    all_shifts_str = read_textfile_remove_double_entries(params['master_wavelengths_shift_filename'], [float, float, float, str], equal_indexes=[0,3], warn=warn) # Find only exactly this entry with same jd_midexp and same fiber
+    # all_shifts_str = 2d array of type string, with each entry containing JD of the mid exposure, Shift to the wavelength solution, Standard deviation of the shift, fiber type
     if len(all_shifts_str) == 0:
         logger('Warn: No pixel-shift for the wavelength solution is available. Please re-run file_assignment.py and asign "ws" to the emission line spectra.')
         return copy.deepcopy(wavelength_solution), 0., im_head               # No shift is possible
@@ -3735,7 +3780,8 @@ def create_wavelengths_from_solution(params, wavelength_solution, spectra, wave_
         weight = [1]
         jd_weight_shift = np.ones(3).reshape((1,3))
     else:
-        all_shifts_str = read_wavelengths_shift_filename(params)
+        warn = 'Warn: No pixel-shift for the wavelength solution is available. Please re-run prepare_file_list.py and asign "w" to the emission line spectra.'
+        all_shifts_str = read_textfile_remove_double_entries(params['master_wavelengths_shift_filename'], [float, float, float, str], equal_indexes=[0,3], warn=warn)
         all_shifts_sci = all_shifts_str[all_shifts_str[:,3]=='sci',0:3].astype(float)       # jd_midexp, shift_avg, shift_std (, fiber)
         # Find the values closest to the opservation (before and after)
         jd_weight_shift = np.zeros((len(wave_sols_sci), 3))
@@ -4072,10 +4118,10 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_traces, cal_trace
         #shift = 0
         #logger('Warn: Line 3469: Searching for shift is switched off in the code')
     if im_name.endswith('_wavecal'):
-        aspectra, agood_px_mask, extr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head)
+        aspectra, agood_px_mask, extr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head, plot_traces=True)
         fib = 'cal'
     elif im_name.endswith('_wavesci'):   
-        aspectra, agood_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head)
+        aspectra, agood_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head, plot_traces=True)
         fib = 'sci'
     else:
         logger('Error: The filename does not end as expected: {0} . It should end with _wavecal or _wavesci. This is probably a programming error.'.format(im_name))
@@ -4246,7 +4292,7 @@ def read_create_spec(params, fname, im, im_head, trace_def, wmult, offset):
         spec = np.array(fits.getdata(fname))
     else:           # Create the extracted spectrum
         [tr_poly, xlows, xhighs, widths] = trace_def
-        emission_spec, good_px_mask, extr_width = extract_orders(params, im, tr_poly, xlows, xhighs, widths, wmult, offset=offset, header=im_head)
+        emission_spec, good_px_mask, extr_width = extract_orders(params, im, tr_poly, xlows, xhighs, widths, wmult, offset=offset, header=im_head, plot_traces=True)
         spec = np.array([emission_spec, good_px_mask])
         im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
         im_head['Comment'] = ' 0: spectrum of the emission line lamp'
@@ -4296,7 +4342,7 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     params, bcvel_baryc, mephem, im_head = get_barycent_cor(params, im_head, obnames[0], ra2, dec2, epoch, pmra, pmdec, obsdate_midexp)
     
     shift, im_head = find_shift_images(params, im, im_trace, sci_traces, 0, cal_tr_poly, im_head=im_head)     # w_mult=1 so that the same area is covered as for the find traces, w_mult=0 so that only the central pixel is extracted
-    spectra, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift, header=im_head, var=params['extraction_precision'])
+    spectra, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift, header=im_head, var=params['extraction_precision'], plot_traces=True)
     orders = range(spectra.shape[0])
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
         aspectra, agood_px_mask = spectra*0, copy.copy(good_px_mask)
@@ -4581,7 +4627,7 @@ def n_Edlen(l):
     n = 1 + 8.34213e-5 + 2.406030e-2/(130-s2) + 1.5997e-4/(38.9-s2)    # applied from https://www.as.utexas.edu/~hebe/apogee/docs/air_vacuum.pdf same formular as in CERES
     return n
 
-def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1, mask=[], frame=None, return_frame=False, color=['r','b','g'], showtext=True, imscale=None):
+def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1, offset=0, mask=[], frame=None, return_frame=False, color=['r','b','g'], showtext=True, imscale=None):
     """
     Plot the found traces over the CCD image in order to allow the detection of mistakes made by the automatic steps
     :param im: 2d array of floats with the image
@@ -4624,15 +4670,15 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
             if mask[pp] == False:
                 continue
             xarr = np.arange(xlows[pp], xhighs[pp], 1)
-            yarr = np.polyval(pf[1:], xarr-pf[0])
+            yarr = np.polyval(pf[1:], xarr-pf[0]) + offset
             if len(leftfit) == 0:                        # old 2d array, use gaussian width (single value) as width
                 yarrl = yarr - widths[pp][2]*w_mult
                 yarrr = yarr + widths[pp][2]*w_mult
             else:
                 #yarrl = np.polyval(leftfit[pp, 1:], xarr - leftfit[pp, 0]) - widths[pp][0]*(w_mult-1)
                 #yarrr = np.polyval(rightfit[pp, 1:], xarr- rightfit[pp, 0]) + widths[pp][1]*(w_mult-1)
-                yarrl = np.polyval(leftfit[pp, 1:], xarr - leftfit[pp, 0])
-                yarrr = np.polyval(rightfit[pp, 1:], xarr- rightfit[pp, 0])
+                yarrl = np.polyval(leftfit[pp, 1:], xarr - leftfit[pp, 0]) + offset
+                yarrr = np.polyval(rightfit[pp, 1:], xarr- rightfit[pp, 0]) + offset
                 yarrl, yarrr = adjust_width_orders(yarr, yarrl, yarrr, [w_mult, w_mult])              # Adjust width
             # Take into account the boundaries of the image
             yarr[yarr < 0] = 0

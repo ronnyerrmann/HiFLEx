@@ -102,6 +102,14 @@ In order to work with the spectra, the following steps have to be done:
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
 
+\subsection*{v1.3.1}
+
+\begin{itemize}\setlength\itemsep{0em}
+  \item Added parameter \verb|logging_crossdispersion_shift|
+  \item Improved measurement of the offset between wavelength solutions between fibers in a bifurcated setting; bugfixed so that wavelength solution in the science fiber is used for science spectrum
+  \item General improvements and bugfixing
+\end{itemize}
+
 \subsection*{v1.3.0}
 \begin{itemize}\setlength\itemsep{0em}
   \item Cosmic ray removal (deepCR), new parameter \verb|cosmic_ray_settings|
@@ -1003,7 +1011,7 @@ python extract_single_chip.py
 
 \subsubsection{Preparing for data extraction}
 
-\noindent The following replacements are necessary in the conf.txt file:
+\noindent The following replacements are necessary in the conf.txt file (in addition to setting the \verb|raw_data_paths| parameter):
 \begin{itemize}\small\setlength\itemsep{-0.1cm}
   \small
   \item \verb|subframe                = [4096,2048,0,50]|
@@ -1017,7 +1025,7 @@ python extract_single_chip.py
   \item \verb|raw_data_imtyp_keyword  = OBJECT|
   \item \verb|raw_data_imtyp_bias     = BIAS,BIAS|
   \item \verb|raw_data_imtyp_trace1   = LAMP,DARK,TUN|
-  \item \verb|raw_data_imtyp_trace2   = WAVE,WAVE,THAR2|
+  \item \verb|raw_data_imtyp_trace2   = DARK,LAMP,TUN|
   \item \verb|raw_data_imtyp_blaze    = LAMP,LAMP,TUN|
   \item \verb|bias_calibs_create_g    = subframe|
   \item \verb|trace1_calibs_create_g  = subframe, bias|
@@ -1027,9 +1035,10 @@ python extract_single_chip.py
   \item \verb|extract_calibs_create_g = subframe, bias|
   \item \verb|polynom_order_traces    = [2,3]|
   \item \verb|polynom_order_intertraces = 2,3|
+  \item \verb|extraction_shift        = 0|
 \end{itemize}
 
-\noindent Afterwards, \verb|file_assignment.py| and \verb|hiflex.py| can be run as described above.
+\noindent Afterwards, \verb|file_assignment.py| and \verb|hiflex.py| can be run as described above. We advise against running the data reduction in the folder of the raw files and suggest to put them at least into a subfolder.
 
 \subsubsection{HARPS data reduced by the CERES pipeline}
 The results can also be compared with the results from the CERES pipeline (\url{https://ui.adsabs.harvard.edu/#abs/2017PASP..129c4002B/abstract}, \url{https://github.com/rabrahm/ceres}). The extraction can be run with:

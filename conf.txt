@@ -145,7 +145,7 @@ polynom_bck = [4, 4]
   #         format: float or integer
   #         Gives the maximum allowed shift. Set to 0 if shift shouldn't be measured. 
   #         Shift can't be larger as the minimum distance between consecutive orders (single fiber) or between science and calibration orders (bifurcated fiber input).
-extraction_shift = 10
+extraction_shift = 3
   # Orders, which are only partially identified can be ignored for the extraction.
   #         format: int or float between 0 and 100
   #         To disable set extraction_min_ident_part_of_trace_percent to 0. A value of 25 will mean orders that have a length of less than 25% compared to the longest order are ignored.
@@ -315,12 +315,11 @@ path_reduced                = NA
   ## Standard filenames:
   #---------------------
   # master file for the orders of the scientific traces, of the calibration (arc) traces, and the normalised extracted flat spectrum. Created by hiflex.py
-master_trace_sci_filename           = master_traces_sci.fits
-master_trace_cal_filename           = master_traces_cal.fits
-master_wavelensolution_filename     = master_wavelength.fits
-master_blaze_spec_norm_filename     = master_blaze_spec_norm.fits
-master_wavelengths_shift_filename   = master_wavelengths_shift.txt
-
+master_trace_sci_filename               = master_traces_sci.fits
+master_trace_cal_filename               = master_traces_cal.fits
+master_wavelensolution_filename         = master_wavelength.fits
+master_blaze_spec_norm_filename         = master_blaze_spec_norm.fits
+master_wavelengths_shift_filename       = master_wavelengths_shift.txt
 
   ## RV analysis: please read the manual to check how to install the packages.
   #--------------
@@ -382,5 +381,5 @@ logging_arc_line_identification_residuals       = arc_line_identification_residu
 logging_arc_line_identification_residuals_hist  = arc_line_identification_residuals_hist.png
 logging_arc_line_identification_spectrum        = arc_line_identification_spectrum.pdf
 logging_arc_line_identification_positions       = arc_line_identification_positions.png
-
+logging_crossdispersion_shift       = crossdispersions_shift.txt
 
