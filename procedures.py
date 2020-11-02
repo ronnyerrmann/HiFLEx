@@ -452,6 +452,27 @@ def round_sig(value, sig=5):
     
     return rounded
 
+def sort_for_multiproc_map(inputlist, number_cores):
+    """
+    multiprocessing.Pool.map will give the first part of the list to the first subprocess, second part to second subprocess and so on.
+    So in order to get data reduced in a more linear way, resorting the list will be helpful
+    :param inputlist: list of anthing
+    :param number_cores: integer
+    :return outlist: same length as inputlist, only resorted (e.g. number_cores=3: inputlist=[1,'a',3,4,5,6,7,8] -> outlist=[1,4,7,'a',5,8,3,6]
+    """
+    outlist = []
+    for ii in range(number_cores): 
+        outlist.append([])       # [[]]*number will create empty arrays that are all the same, so if one is filled, also the others are filled
+    # Resort
+    for ii in range(len(inputlist)): 
+        outlist[ii%number_cores].append(inputlist[ii])
+    # Combine into one list again
+    for entry in outlist[1:]: 
+        outlist[0] += entry
+    outlist = outlist[0]
+    
+    return outlist
+
 def read_text_file(filename, no_empty_lines=False, warn_missing_file=True):
     """
     Read a textfile and put it into a list, one entry per line
@@ -2991,7 +3012,7 @@ def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extra
                     break
                 oldcen, olderr = popt[1], popt[2]
 
-        if popt[2] > 0.3 * (max(range_shifts) - min(range_shifts)) or popt[1] < min(range_shifts) or popt[1] > max(range_shifts) or abs(popt[1]) > params['extraction_shift']:
+        if popt[2] > 0.5 * (max(range_shifts) - min(range_shifts)) or popt[1] < min(range_shifts) or popt[1] > max(range_shifts) or abs(popt[1]) > params['extraction_shift']:
             comment = (' The calculated values (shift = {0} px, width = {1} px) were not very precise or'+\
                        ' outside of the allowed range (Parameter extraction_shift: {4},'+\
                        ' borders due to next order [{2},{3}]) .').format(round(popt[1],2), round(popt[2],2), 

@@ -788,11 +788,13 @@ def comment_out_nonexisting_rawfiles_file_list(params, file_list):
     commented_out = 0
     for ii in range(len(file_list)):
         if file_list[ii][0].find('#') == -1:
-            if not os.path.exist(file_list[ii][0]):
+            if not os.path.isfile(file_list[ii][0]):
                 file_list[ii][0] = '#' + file_list[ii][0]       # files doesn't exist -> comment out
                 commented_out += 1
     if commented_out > 0:
         logger('Warn: {0} Files in {1} could not be found and have been commented out.'.format(commented_out, params['raw_data_file_list']))
+    
+    return file_list
 
 if __name__ == "__main__":
     logger('Info: Preparing a list with the files')
@@ -805,8 +807,8 @@ if __name__ == "__main__":
         file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '])     #new way of storing the data
     except:
         file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' ']) # old way of reading the data, To stay backwards compatible, can be removed in a few versions after v0.4.1
-    file_list = comment_out_nonexisting_rawfiles_file_list(file_list)
-    number_old_entries = len(params, file_list)
+    file_list = comment_out_nonexisting_rawfiles_file_list(params, file_list)
+    number_old_entries = len(file_list)
     
     # get the new files
     file_list = add_new_rawfiles_file_list(params, file_list)           # Check for new entries for file_list

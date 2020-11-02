@@ -376,8 +376,9 @@ if __name__ == "__main__":
                     wavecal_multicore(all_wavelengthcals[0])         # run the first one single, so that not all calibration data will be created in the same moment
                 if len(all_wavelengthcals) > 1:
                     logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
+                    sort_wavelengthcals = sort_for_multiproc_map(all_wavelengthcals[1:], params['use_cores'])
                     p = multiprocessing.Pool(params['use_cores'])
-                    p.map(wavecal_multicore, all_wavelengthcals[1:])
+                    p.map(wavecal_multicore, sort_wavelengthcals)
                     p.terminate()
                     p.join()
             else:
@@ -440,7 +441,8 @@ if __name__ == "__main__":
             if len(all_extractions) > 1:
                 logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
                 p = multiprocessing.Pool(params['use_cores'])
-                obj_names += p.map(extraction_multicore, all_extractions[1:])
+                sort_extractions = sort_for_multiproc_map(all_extractions[1:], params['use_cores'])
+                obj_names += p.map(extraction_multicore, sort_extractions)
                 p.terminate()
                 p.join()
         else:
