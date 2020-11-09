@@ -234,17 +234,6 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
             plt.savefig(spath, bbox_inches='tight')
         plt.close()
 
-def save_obj(obj, name ):
-    try:
-        with open(name + '.pkl', 'wb') as f:
-            pickle.dump(obj, f, 0)
-    except:
-        logger('Warn: Cannot save {0}.'.format(name + '.pkl'))
-
-def load_obj(name ):
-    with open(name + '.pkl', 'rb') as f:
-        return pickle.load(f)
-
 def plot_spectra_UI(im, title=''):
 
     ims = im.shape

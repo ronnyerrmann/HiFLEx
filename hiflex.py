@@ -127,6 +127,7 @@ if __name__ == "__main__":
         logger('Warning: Using a pseudo solution for the wavelength (1 step per px)')
         calimages['wave_sol_dict_sci'] = create_pseudo_wavelength_solution(sci_tr_poly.shape[0])
         calimages['wave_sol_dict_cal'] = calimages['wave_sol_dict_sci']
+        calimages['wave_sols_sci'] = None
         calibs = []
     prev = ''
     done_sci = False
@@ -220,7 +221,6 @@ if __name__ == "__main__":
                 wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_dict['wavesol'], 
                                                            wave_sol_dict['reflines'], reference_lines_dict, calimages['{0}_trace'.format(calib[2])], show_res=params['GUI'], search_order_offset=False)
             save_wavelength_solution_to_fits(wave_sol_dict, params['master_wavelensolution'+calib[0]+'_filename'])
-            calimages['sci_trace'], calimages['cal_trace']
             plot_wavelength_solution_form(params['logging_wavelength_solution_form'], calimages['{0}_trace'.format(calib[2])], wave_sol_dict['wavesol'])
             plot_wavelength_solution_spectrum(params, cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'], wave_sol_dict['wavesol'], wave_sol_dict['reflines'], 
                                               reference_lines_dict['reference_catalog'][0], reference_lines_dict['reference_names'][0], plot_log=True)
@@ -234,7 +234,6 @@ if __name__ == "__main__":
         if params['arcshift_side'] == 0:
             break
         prev = calib[0]
-        
     if 'wave_sol_dict_sci' in calimages.keys() and 'wave_sol_dict_cal' in calimages.keys():
         params['two_solutions'] = True                  # Needed for create_wavelengths_from_solution, as shift needs to be applied
         # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
@@ -312,7 +311,6 @@ if __name__ == "__main__":
         # The file is read later on purpose
     else:
         create_blaze_norm(params, im_trace1, calimages['sci_trace'], calimages['cal_trace'], calimages['wave_sol_dict_sci'], reference_lines_dict)
-    
     if not params['started_from_p3']:       # if started from python3 environment, this won't be necessary
         logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the loging directory {1}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?{0}'.format(os.linesep, params['logging_path']))
         
@@ -457,7 +455,6 @@ if __name__ == "__main__":
         logger('Info: Will try to do the RV analysis in a moment') 
         header_results_to_texfile(params)           # Save the results from the header in a logfile
         #time.sleep(2)
-    
     if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) > 100:
         run_here = True
         if sys.version_info[0] > 2:             # Try to load a python 2 environment

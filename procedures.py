@@ -695,7 +695,7 @@ def read_file_calibration(params, filename, level=0):
     filename_s = filename[max(0,len(filename)-(80-25-1)):]               # Shorten the filename so it fits into the header, 21 failed, 25 worked, between not tested
     im_head['HIERARCH HiFLEx orig'] = filename_s
     filename_nopath = filename_s.rsplit(os.sep,1)[-1]
-    im_head ['HIERARCH HiFLEx orid'] = filename_nopath
+    im_head['HIERARCH HiFLEx orid'] = filename_nopath
     calimages['{0}_saturated'.format(filename_s)] = np.where( im > params['max_good_value'] )         # Find the saturated pixel in the original image, consists of (x,y) with x and y are arrays
     for entry in params['calibs']:
         if entry == '':
@@ -923,9 +923,15 @@ def create_image_general(params, imtype, level=0):
         im_head['HIERARCH HiFLEx BEGIN FIRST'] = datetime.datetime.utcfromtimestamp(first).strftime('%Y-%m-%dT%H:%M:%S.%f')
         im_head['HIERARCH HiFLEx END LAST']    = datetime.datetime.utcfromtimestamp(last ).strftime('%Y-%m-%dT%H:%M:%S.%f')
         im_head['HIERARCH HiFLEx EXP_RANGE']   = (last - first, 'sec, from BEGIN to END')
+        filename = params['master_{0}_filename'.format(imtype)]
+        filename_s = filename[max(0,len(filename)-(80-25-1)):]               # Shorten the filename so it fits into the header, 21 failed, 25 worked, between not tested
+        im_head['HIERARCH HiFLEx orig'] = filename_s
+        filename_nopath = filename_s.rsplit(os.sep,1)[-1]
+        im_head['HIERARCH HiFLEx orid'] = filename_nopath
         if 'master_{0}_filename'.format(imtype) in params.keys():
             if params['master_{0}_filename'.format(imtype)] != '':
                 save_im_fits(params, im, im_head,  params['master_{0}_filename'.format(imtype)])
+        
     calimages[imtype] = im
     calimages['{0}_head'.format(imtype)] = im_head
     return im, im_head
@@ -963,6 +969,17 @@ def get_minimum_data_type(arr, allow_unsigned=True):
         elif (arr == arr.astype(np.float32) ).all():
             arr.dtype = np.float32
     return arr
+
+def save_obj(obj, name ):
+    try:
+        with open(name + '.pkl', 'wb') as f:
+            pickle.dump(obj, f, 0)
+    except:
+        logger('Warn: Cannot save {0}.'.format(name + '.pkl'))
+
+def load_obj(name ):
+    with open(name + '.pkl', 'rb') as f:
+        return pickle.load(f)
 
 def read_fits_file(filename, dtype=np.float64):
     if os.path.isfile(filename) == False:
@@ -1038,7 +1055,7 @@ def read_fits_width(filename):
     atable = Table.read(filename)
     orders = np.array(atable['Order'], dtype=int)
     
-    if 'cen_poly0' not in atable.colnames:                                # Old way of storing the data, can be removed at a few months after July 2018
+    """if 'cen_poly0' not in atable.colnames:                                # Old way of storing the data, can be removed at a few months after July 2018
         pfits, xlows, xhighs, widths = [], [], [], np.array([])
         for order in orders:
             pfit = []
@@ -1053,7 +1070,7 @@ def read_fits_width(filename):
             except:
                 widths = []
         logger('Info: Master file to trace orders read: {0}'.format(filename))
-        return np.array(pfits), np.array(xlows), np.array(xhighs), np.array(widths)
+        return np.array(pfits), np.array(xlows), np.array(xhighs), np.array(widths)"""
     
     # new way of storing the data
     pfits, widths = [], []
@@ -2442,10 +2459,12 @@ def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
     ims = im.shape
     imus = im_unbinned.shape
     cen_px = int(ims[0]*binx/2)
+    if len(pfits.shape) == 3:     # in case a finalised trace will be used (e.g. cp master_traces_sci.fits logging/master_traces_sci_searched.fits
+        pfits = pfits[:,0,:]
     # maxFWHM = 25/biny for old lens
     # maxFWHM = 15/biny+2            # !! Determine in values of space between orders
     maxFWHM = max(1, int(round(estimate_width(im)*2.35482*1.5)))   # The average Gaussian width, transformed into a FWHM and extendet, as this is the maximum FWHM
-    if len(pfits) > 1:                              # move at maximum by 20% of the minimum space between the orders, but at old binning in cross-dispersion direction is allowed
+    if len(pfits.shape) > 1:                # move at maximum by 20% of the minimum space between the orders, but at old binning in cross-dispersion direction is allowed
         mask = ( (xlows-10 <= np.percentile(xlows, 80.)) & (xhighs+10 > np.percentile(xhighs, 20.)) )   # use the orders, which cover most of the CCD
         maxshift = max(params['bin_search_apertures'][1], int(min(np.abs(pfits[mask,-1][1:] - pfits[mask,-1][:-1] ))/5) )
     else:
@@ -2571,8 +2590,10 @@ def extract_order(kwarg):
         #old: uppers = yarr + w[2]*w_mult
         lowers = np.polyval(pfits[pp, 1, 1:], xarr-pfits[pp, 1, 0]) + offset 
         uppers = np.polyval(pfits[pp, 2, 1:], xarr-pfits[pp, 2, 0]) + offset
+        #print( 2580, pp, np.sum(np.isnan(lowers)), np.sum(np.isnan(uppers)), np.sum(uppers<lowers) )
         lowers, uppers = adjust_width_orders(yarr, lowers, uppers, [w_mult, w_mult])          # Adjust the width of the orders
-        widths_o = uppers - lowers
+        #print( 2582, pp, np.sum(np.isnan(lowers)), np.sum(np.isnan(uppers)), np.sum(uppers<lowers) )
+        widths_o = uppers - lowers      # can be below 0, but shouldn't be!! e.g. 20201104/con4_50mu_bc
         #print pp,np.nanmean(uppers-lowers), np.nanmedian(uppers-lowers), np.nansum(uppers-lowers)
         if w_mult == 0.0:                                                       # only the central full pixel
             widths_o = widths_o * 0 + 1.
@@ -2689,8 +2710,10 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0
     :param var: can be 'standard' or 'linfit'.
         'standard': extraction of the fraction of the border pixel
         'linfit': fit a polynomial around the border of the extraction width to extract with higher precission
-    :return spec: list,  length same as number of orders, each containing
+    :return spec: array,  length same as number of orders, each containing
                   a 1D numpy array with the spectrum of each order in
+    :return good_px_mask: same format as spec, contains 1 for good data and values between 0 and 1 for bad data (saturated, bad pixel, ...)
+    :return widths_m: same format as spec, contains the extracted with for each spectral pixel
 
     """
     if plot_tqdm:
@@ -2730,7 +2753,7 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0
         for pp in plot_tqdm(orders, desc='Extract Spectrum'):        # pp is order
             results.append( extract_order([pp, kwargs]) )
     for result in results:
-        ospecs, ogood_px_mask, widths_o = result    
+        ospecs, ogood_px_mask, widths_o = result
         spec.append(ospecs)
         good_px_mask.append(ogood_px_mask)
         widths_m.append(widths_o)
@@ -3797,9 +3820,8 @@ def create_wavelengths_from_solution(params, wavelength_solution, spectra, wave_
     :return wavelength_solution_recreated: only when wave_sols_sci is given, returns a wavelength_solution
     """
     if wave_sols_sci is None:           # Original, no interpolation of different solutions
-        wavelength_solution_lst = [wavelength_solution]
-        weight = [1]
-        jd_weight_shift = np.ones(3).reshape((1,3))
+        wavelength_solution_lst = [copy.deepcopy(wavelength_solution)]     # copy, otherwise it will be changed in wavesol[:,1] += 
+        jd_weight_shift = np.array([[0,1,0]])
     else:
         warn = 'Warn: No pixel-shift for the wavelength solution is available. Please re-run prepare_file_list.py and asign "w" to the emission line spectra.'
         all_shifts_str = read_textfile_remove_double_entries(params['master_wavelengths_shift_filename'], [float, float, float, str], equal_indexes=[0,3], warn=warn)
@@ -3847,6 +3869,7 @@ def create_wavelengths_from_solution(params, wavelength_solution, spectra, wave_
     wavelengths = np.zeros(( len(wavelength_solution_lst), spectra.shape[0], spectra.shape[1] ))
     xarr = np.arange(np.array(spectra).shape[1])
     for jj, wavesol in enumerate(wavelength_solution_lst):
+        print(3873, shift, jd_weight_shift[jj,2])
         wavesol[:,1] += shift-jd_weight_shift[jj,2]      # Add shift (e.g. between Sci and Cal fiber and between this ThAr and Cal solution
         for ii, wls in enumerate(wavesol):
             wavelengths[jj,ii,:] = np.polyval(wls[2:], xarr - wls[1])
@@ -3854,7 +3877,7 @@ def create_wavelengths_from_solution(params, wavelength_solution, spectra, wave_
     wavelengths = np.average( wavelengths, axis=0, weights=jd_weight_shift[:,1] )
     
     if wave_sols_sci is None:
-        return wavelengths
+        return wavelengths, wavelength_solution
     else:
         wavelength_solution_recreated = create_wavelength_solution_from_array(params, wavelengths, order_offset)
         
@@ -4148,7 +4171,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_traces, cal_trace
         logger('Error: The filename does not end as expected: {0} . It should end with _wavecal or _wavesci. This is probably a programming error.'.format(im_name))
     wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_dict, 
                                                               xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, fib=fib, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
-    wavelengths = create_wavelengths_from_solution(params, wavelength_solution_shift, aspectra)
+    wavelengths, dummy = create_wavelengths_from_solution(params, wavelength_solution_shift, aspectra)
     im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
     im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
     im_head['Comment'] = ' 1: spectrum of the emission line lamp'
@@ -4260,7 +4283,7 @@ def create_blaze_norm(params, im_trace1, sci_traces, cal_traces, wave_sol_dict, 
         blazecor_spec, agood_px_mask, extr_width = extract_orders(params, im_blazecor, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
     wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, blazecor_spec, wave_sol_dict, reference_lines_dict,
                                             xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, params['master_blaze_spec_norm_filename'], im_head=im_head)
-    wavelengths = create_wavelengths_from_solution(params, wavelength_solution_shift, blazecor_spec)
+    wavelengths, dummy = create_wavelengths_from_solution(params, wavelength_solution_shift, blazecor_spec)
     im_head['Comment'] = 'File contains a 3d array with the following data in the form [data type, order, pixel]:'
     im_head['Comment'] = ' 0: wavelength for each order and pixel in barycentric coordinates'
     im_head['Comment'] = ' 1: extracted spectrum normalised by the global median flux ({0} ADU)'.format(int(med_flux))
@@ -4372,7 +4395,7 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wave_sol_dict_cal, reference_lines_dict, 
                                                               xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths, wavelength_solution_shift = create_wavelengths_from_solution(params, wavelength_solution_shift, spectra, wave_sols_sci=calimages['wave_sols_sci'], jd_mid=jd_midexp, shift=shift)
-    espectra = combine_photonnoise_readnoise(spectra, im_head['HiFLEx BCKNOISE'] * np.sqrt(extr_width) )     # widths[:,2] is gaussian width
+    espectra = combine_photonnoise_readnoise(spectra, im_head['HiFLEx BCKNOISE'] * np.sqrt(np.abs(extr_width)) )     # widths[:,2] is gaussian width
     if params['blazercor_function'].find('poly') == 0:  index = 3
     elif params['blazercor_function'] == 'flux':        index = 2
     else:       index = 2           # 1: extracted flat, 2: low flux removed, 3: fitted with a high order polynomial
@@ -5396,8 +5419,9 @@ def plot_wavelength_solution_spectrum(params, spec1, spec2, fname, wavelength_so
         spec1 = adjust_data_log(spec1)
         spec2 = adjust_data_log(spec2)
     reference_catalog = np.array(sorted(reference_catalog, key=operator.itemgetter(1), reverse=True ))          # Sort by intensity in reverse order
-    wavelengths = create_wavelengths_from_solution(params, wavelength_solution, spec1)
-    
+    print("a1a", wavelength_solution[[0,-1]], wavelength_solution_arclines[[0,-1]])
+    wavelengths, dummy = create_wavelengths_from_solution(params, wavelength_solution, spec1)
+    print("a1b", wavelength_solution[[0,-1]], wavelength_solution_arclines[[0,-1]])
     # multiple pdf pages from https://matplotlib.org/examples/pylab_examples/multipage_pdf.html
     with PdfPages(fname) as pdf:
         for order in range(wavelength_solution.shape[0]):
@@ -8146,8 +8170,8 @@ def find_shift_between_wavelength_solutions(params, wave_sol_1, wave_sol_lines_1
     """
     # make it into wavelength, find the wavelengths of the first arclines in both, find the wavelengths of the second arclines in both, find the overlapping lines -> directly to lambda-shift -> RV
     # Make the solutions into wavelengths
-    wavelengths1 = create_wavelengths_from_solution(params, wave_sol_1, spectra)
-    wavelengths2 = create_wavelengths_from_solution(params, wave_sol_2, spectra)
+    wavelengths1, dummy = create_wavelengths_from_solution(params, wave_sol_1, spectra)
+    wavelengths2, dummy = create_wavelengths_from_solution(params, wave_sol_2, spectra)
     # find the closest pixel of each catalog line
     result = []
     for order in range(spectra.shape[0]):
