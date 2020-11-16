@@ -62,7 +62,7 @@ If you use the barycentric corrected radial velocities, the barycentric velocity
 If you use the cosmic ray correction using deepCR, please cite Keming Zhang \& Joshua Bloom 2020\footnote{\url{https://ui.adsabs.harvard.edu/abs/2020ApJ...889...24Z}}.
 
 If you use the radial velocities from TERRA, SERVAL, or CERES please cite the corresponding papers: Anglada-Escud{\'e} et al. 2012\footnote{\url{https://ui.adsabs.harvard.edu/abs/2012ApJS..200...15A}}, Zechmeister et al. 2018\footnote{\url{http://ui.adsabs.harvard.edu/abs/2018A&A...609A..12Z}}, or 
-Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
+Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B}}, respectively.
 
 % -------------------------------------------------------------------------------------------
 %\newpage
@@ -76,7 +76,7 @@ This Pipeline was intended to be written as a black box for the unskilled user, 
 Please refer to Howell (1976,2006)\footnote{\url{https://www.cambridge.org/core/books/handbook-of-ccd-astronomy/97D3D910788D44D11394B3B57C3FA743}} or check Chapter~\ref{Section:data_reduction_CCD}. A guide for data reduction using python is provided by Craig and Chambers\footnote{\url{https://mwcraig.github.io/ccd-as-book/00-00-Preface.html}}
 
 \subsection*{Echelle spectroscopy}
-Echelle spectrographs image the disperse the light into a 2-dimensional plane by using a high-dispersing grating and a low-dispersing prism (or grating). The low-dispersing element is thereby necessary to separate the individual orders produced by the high-dispersing grating. Some of the wavelengths can be covered by several orders. An example for an echelle spectrum of a black body is shown in Figure~\ref{Fig:apertures_in_master_flat} with the individual orders going up to down and order number increasing from left to right.
+Echelle spectrographs image the disperse the light into a 2-dimensional plane by using a high-dispersing grating (optimised for orders > 50) and a low-dispersing prism (or grating). The low-dispersing element is thereby necessary to separate the individual orders produced by the high-dispersing grating. Some of the wavelengths can be covered by several orders. An example for an echelle spectrum of a black body is shown in Figure~\ref{Fig:apertures_in_master_flat} with the individual orders going up to down and order number increasing from left to right.
 
 In order to work with the spectra, the following steps have to be done:
 \begin{itemize}
@@ -85,9 +85,10 @@ In order to work with the spectra, the following steps have to be done:
   \item Extract the spectra.
   \item Apply instrument specific corrections.
 \end{itemize}
+In case of a bifurcated spectrograph, some steps have to applied to the traces of both fibers.
 
 \subsection*{Programming (Python)}
-
+The basic things for Python (and the configuration file) are:
 \begin{itemize}
   \item Lines starting with one or more \# are comments, which will be ignored  by the pipeline.
   \item Any text is case-sensitive (except when mentioned otherwise).

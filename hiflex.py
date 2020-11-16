@@ -62,7 +62,7 @@ if __name__ == "__main__":
             # save parameters of the polynoms into a fitsfile (from Neil)
             save_fits_width(sci_tr_poly, xlows, xhighs, widths, params['master_trace_sci_filename'])
             # Produce some useful statistics
-            plot_traces_over_image(im_trace1, params['logging_traces_im'], sci_tr_poly, xlows, xhighs, widths)
+            plot_traces_over_image(im_trace1, params['logging_traces_im'].replace('*', 'master_trace1'), sci_tr_poly, xlows, xhighs, widths)
             data = np.insert(widths, 0, list(range(len(sci_tr_poly))), axis=1)       # order, left, right, gausswidth
             positio, pctlwidth = [], []
             for order in range(sci_tr_poly.shape[0]):                      # For the central data
@@ -454,7 +454,7 @@ if __name__ == "__main__":
         logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The nineth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))
         logger('Info: Will try to do the RV analysis in a moment') 
         header_results_to_texfile(params)           # Save the results from the header in a logfile
-        #time.sleep(2)
+        #time.sleep(2)  
     if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) > 100:
         run_here = True
         if sys.version_info[0] > 2:             # Try to load a python 2 environment

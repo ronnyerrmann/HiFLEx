@@ -460,6 +460,8 @@ def sort_for_multiproc_map(inputlist, number_cores):
     :param number_cores: integer
     :return outlist: same length as inputlist, only resorted (e.g. number_cores=3: inputlist=[1,'a',3,4,5,6,7,8] -> outlist=[1,4,7,'a',5,8,3,6]
     """
+    return inputlist
+    # !!! Doesn't work as expected
     outlist = []
     for ii in range(number_cores): 
         outlist.append([])       # [[]]*number will create empty arrays that are all the same, so if one is filled, also the others are filled
@@ -2315,23 +2317,23 @@ def find_trace_orders(params, im, imageshape):
             im[positions[goodpos,0].astype(int),yarr[goodpos]+i] = breakvalue
         goodpos = (yarr>=0) & (yarr<=ims[1]-1)
         im_traces[positions[goodpos,0].astype(int),yarr[goodpos]] = 1
-        traces.append([[cen_px]+list(pfs), min(positions[:,0])*binx, min(imageshape[0],(max(positions[:,0])+1)*binx-1), np.polyval(pfs, cen_px)])
+        traces.append( [cen_px] + list(pfs) + [min(positions[:,0])*binx, min(imageshape[0],(max(positions[:,0])+1)*binx-1), np.polyval(pfs, cen_px)] )
         logger('Step: order found at central pixel: {0} / {3} (frame/trace). The trace was identified between Pixels {1} and {2}'.format(round(np.polyval(pfs, cen_px),1),
                                                 round(traces[-1][1]), round(traces[-1][2]), round(np.polyval(pfs, np.mean(traces[-1][1:3]) ),1) ))
     # sort
     traces = np.array(traces)
-    cen_px2 = np.mean([ np.max(traces[:,1]), np.min(traces[:,2]) ])      # Center of the area covered by all orders
+    cen_px2 = np.mean([ np.max(traces[:,-3]), np.min(traces[:,-2]) ])      # Center of the area covered by all orders
     for order in range(traces.shape[0]):
-        pfs = traces[order, 0]
-        if cen_px2 >= traces[order, 1] and cen_px2 <= traces[order, 2]:
-            traces[order, 3] = np.polyval(pfs[1:], cen_px2 - pfs[0])     # Position in Cross-dispersion direction
+        pfs = traces[order, 0:-3]
+        if cen_px2 >= traces[order, -3] and cen_px2 <= traces[order, -2]:
+            traces[order, -1] = np.polyval(pfs[1:], cen_px2 - pfs[0])     # Position in Cross-dispersion direction
         else:
             logger('Warn: Please check that all orders have been identified correctly')
-            if abs(cen_px2 - traces[order, 1]) < abs(cen_px2 - traces[order, 2]):     # Use the closest value for which the trace is still defined
-                traces[order, 3] = np.polyval(pfs[1:], traces[order, 1] - pfs[0])
+            if abs(cen_px2 - traces[order, -3]) < abs(cen_px2 - traces[order, -2]):     # Use the closest value for which the trace is still defined
+                traces[order, -1] = np.polyval(pfs[1:], traces[order, -3] - pfs[0])
             else:
-                traces[order, 3] = np.polyval(pfs[1:], traces[order, 2] - pfs[0])
-    traces = np.array(sorted(traces, key=operator.itemgetter(3)))
+                traces[order, -1] = np.polyval(pfs[1:], traces[order, -2] - pfs[0])
+    traces = np.array(sorted(traces, key=operator.itemgetter(-1)))
     #plot_img_spec.plot_image(im+im_traces*np.max(im), ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'cleared')
     if traces.shape[0] < 2:
         logger('Error: Only found {0} traces. Please check that the binned image ({1}) looks as expected.'.format(traces.shape[0], params['logging_trace1_binned'])+\
@@ -2339,7 +2341,7 @@ def find_trace_orders(params, im, imageshape):
                'After you selected different file(s) for parameter "trace1_rawfiles", please run the following command before restarting the pipeline'+\
                '\nrm {0}'.format( params['master_trace1_filename'] ))
     logger('Info: {0} orders found and traced'.format(traces.shape[0]))
-    return traces[:,0], traces[:,1].astype(int), traces[:,2].astype(int)            # polyfits, xlows, xhighs
+    return traces[:,0:-3], traces[:,-3].astype(int), traces[:,-2].astype(int)            # polyfits, xlows, xhighs
 
 def adjust_trace_order(kwargs):
     """
@@ -2729,9 +2731,9 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0
     # Prepare saturated map
     saturated_mask = ( image < params['max_good_value'] )       # 1 when not saturated, analogue to bad-pixel
     filename = header.get('HIERARCH HiFLEx orig', header.get('HiFLEx orig', ''))
-    if plot_traces:
+    if plot_traces and params['logging_traces_im'].find('*') != -1 :
         fname_short = header.get('HIERARCH HiFLEx orid', header.get('HiFLEx orid', '')).replace('.fits','').replace('.fit','')
-        fname = '{0}_{1}.{2}'.format(params['logging_traces_im'].rsplit('.',1)[0].replace('_master_trace1',''), fname_short, params['logging_traces_im'].rsplit('.',1)[-1])
+        fname = '{0}_{1}.{2}'.format( params['logging_traces_im'].replace('*', fname_short) )
         plot_traces_over_image(image, fname, pfits, xlows, xhighs, widths, offset=offset, w_mult=w_mult)
     if '{0}_saturated'.format(filename) in calimages.keys():
         saturated_mask = saturated_mask*0 + 1
@@ -3650,6 +3652,9 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         # Save the shift for later use
         if params['extract_wavecal']:            # This values are not correct, as later the shift has to be applied
             add_text_to_file('{0}\t{1}\t{2}\t{3}'.format(jd_midexp, round(shift_med-in_shift,4), round(shift_std,4), fib), params['master_wavelengths_shift_filename'] )    # Not the shift between the two solutions
+        params['force_DT_SHIFT'] = False
+    else:       # not enough lines identified
+        params['force_DT_SHIFT'] = True         # If wavelength solution only in calibration fiber, but not in this file use stored information
     
     logtext = 'The overal shift between wavelength solution and the current calibration spectrum'
     if not params['extract_wavecal']:         # science and calibration traces are at the same position and it's not the calibration spectrum
@@ -3723,8 +3728,10 @@ def read_textfile_remove_double_entries(fname, dataformats, delimiter='\t', repl
 def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname, im_head):
     """
     In case no calibration spectrum was taken at the same time as the science spectra use the stored information to aply a shift in the lines
-    !!! shift_avg = np.average( shifts[:,1], weights=weight )  -> Tested, will work fine for obsdate in range(all_shifts), but will fail for extrapolation. Maybe it's necessary to replace this by a linear fit?
+    :param wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    
     :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :return shift_avg: Float, shift from science to calibration fiber
     """
     warn = 'Warn: No pixel-shift for the wavelength solution is available. Please re-run prepare_file_list.py and asign "w" to the emission line spectra.'
     all_shifts_str = read_textfile_remove_double_entries(params['master_wavelengths_shift_filename'], [float, float, float, str], equal_indexes=[0,3], warn=warn) # Find only exactly this entry with same jd_midexp and same fiber
@@ -3761,15 +3768,22 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
     if True:
         all_shifts_cal = all_shifts_str[all_shifts_str[:,3]=='cal',0:3].astype(float)       # jd_midexp, shift_avg, shift_std, fiber
         all_shifts_sci = all_shifts_str[all_shifts_str[:,3]=='sci',0:3].astype(float)
+        modes = ['cal','sci']
         if len(all_shifts_cal)*len(all_shifts_sci) == 0:
             logger('Warn: Offset between the fibers cannot be determined as the offset is only available for one fiber. '+\
                     'Please re-run file_assignment.py and asign "wc" and "ws" to the emission line spectra of the calibration and science fiber, respectively.')
-            return copy.deepcopy(wavelength_solution), 0., im_head               # No shift is possible
+            #return copy.deepcopy(wavelength_solution), 0., im_head               # No shift is possible
+            if len(all_shifts_sci) == 0 and params['force_DT_SHIFT']:           # Do it only if no lines in the cal are available
+                modes = ['cal']
+            else:
+                return copy.deepcopy(wavelength_solution), 0., im_head               # No shift is possible
         data = dict()
-        data['cal_bef'] = all_shifts_cal[ (all_shifts_cal[:,0] <= jd_midexp), : ]
-        data['cal_aft'] = all_shifts_cal[ (all_shifts_cal[:,0] >= jd_midexp), : ]
-        data['sci_bef'] = all_shifts_sci[ (all_shifts_sci[:,0] <= jd_midexp), : ]
-        data['sci_aft'] = all_shifts_sci[ (all_shifts_sci[:,0] >= jd_midexp), : ]
+        if 'cal' in modes:
+            data['cal_bef'] = all_shifts_cal[ (all_shifts_cal[:,0] <= jd_midexp), : ]
+            data['cal_aft'] = all_shifts_cal[ (all_shifts_cal[:,0] >= jd_midexp), : ]
+        if 'sci' in modes:
+            data['sci_bef'] = all_shifts_sci[ (all_shifts_sci[:,0] <= jd_midexp), : ]
+            data['sci_aft'] = all_shifts_sci[ (all_shifts_sci[:,0] >= jd_midexp), : ]
         for entry in data.keys():
             if data[entry].shape[0] > 1:
                 if entry.endswith('_bef'):
@@ -3777,7 +3791,7 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
                 if entry.endswith('_aft'):
                     goodtime = data[entry][:,0] <= np.min(data[entry][:,0]) + hours / 24.      # only use data taken within 1 hour of the closest data for the fit
                 data[entry] = data[entry][goodtime ,:]
-        for mode in ['cal','sci']:
+        for mode in modes:
             if data[mode+'_bef'].shape[0] == 0:
                 data[mode+'_jd'] = np.median(data[mode+'_aft'][:,1])
                 data[mode+'_text'] = 'Median after the exposure: {0} - {1} '.format( round(np.min(data[mode+'_aft'][:,0]),4), round(np.max(data[mode+'_aft'][:,0]),4) )
@@ -3789,8 +3803,12 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
                 data[mode+'_p'] = np.polyfit(data[mode][:,0], data[mode][:,1], 1)
                 data[mode+'_jd'] = np.polyval(data[mode+'_p'], jd_midexp)
                 data[mode+'_text'] = 'Linear fit around the exposure: {0} - {1} '.format( round(np.min(data[mode][:,0]),4), round(np.max(data[mode][:,0]),4) )
-        shift_avg = (data['sci_jd'] - data['cal_jd'])                 # Thought about no - on 20200612
-        text = 'It is the difference between science ({1}) and calibration ({2}) datapoints in {0}.'.format( params['master_wavelengths_shift_filename'], data['sci_text'], data['cal_text'] )
+        if 'cal' in modes and 'sci' in modes:
+            shift_avg = (data['sci_jd'] - data['cal_jd'])                 # Thought about no - on 20200612
+            text = 'It is the difference between science ({1}) and calibration ({2}) datapoints in {0}.'.format( params['master_wavelengths_shift_filename'], data['sci_text'], data['cal_text'] )
+        else:       # only cal data
+            shift_avg = 0 - data['cal_jd']
+            text = 'It is the difference between calibration ({1}) datapoints in {0}.'.format( params['master_wavelengths_shift_filename'], data['cal_text'] )
         
     logger('Info: The wavelength solutions of both fibers drifted to a relative offset at the current file {0} (center of exposure is {1}, JD = {2}) of {3} px ({4} km/s). {5}'.format(\
                         objname, datetime.datetime.utcfromtimestamp(obsdate_float).strftime('%Y-%m-%d %H:%M:%S'), round(jd_midexp,5),
@@ -3869,7 +3887,6 @@ def create_wavelengths_from_solution(params, wavelength_solution, spectra, wave_
     wavelengths = np.zeros(( len(wavelength_solution_lst), spectra.shape[0], spectra.shape[1] ))
     xarr = np.arange(np.array(spectra).shape[1])
     for jj, wavesol in enumerate(wavelength_solution_lst):
-        print(3873, shift, jd_weight_shift[jj,2])
         wavesol[:,1] += shift-jd_weight_shift[jj,2]      # Add shift (e.g. between Sci and Cal fiber and between this ThAr and Cal solution
         for ii, wls in enumerate(wavesol):
             wavelengths[jj,ii,:] = np.polyval(wls[2:], xarr - wls[1])
@@ -4461,6 +4478,7 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     im_head['Comment'] = ' 8: spectrum of the emission line lamp'
     im_head['Comment'] = ' 9: wavelength for each order and pixel without barycentric correction'
     save_multispec(ceres_spec, params['path_extraction']+im_name, im_head, bitpix=params['extracted_bitpix'])
+    logger('Info: Finished extraction of {0}'.format(im_name))
 
     return obnames[0]
 
@@ -5419,9 +5437,7 @@ def plot_wavelength_solution_spectrum(params, spec1, spec2, fname, wavelength_so
         spec1 = adjust_data_log(spec1)
         spec2 = adjust_data_log(spec2)
     reference_catalog = np.array(sorted(reference_catalog, key=operator.itemgetter(1), reverse=True ))          # Sort by intensity in reverse order
-    print("a1a", wavelength_solution[[0,-1]], wavelength_solution_arclines[[0,-1]])
     wavelengths, dummy = create_wavelengths_from_solution(params, wavelength_solution, spec1)
-    print("a1b", wavelength_solution[[0,-1]], wavelength_solution_arclines[[0,-1]])
     # multiple pdf pages from https://matplotlib.org/examples/pylab_examples/multipage_pdf.html
     with PdfPages(fname) as pdf:
         for order in range(wavelength_solution.shape[0]):
@@ -7723,7 +7739,7 @@ def linearise_wavelength_spec(params, wavelength_solution, spectra, method='sum'
     dwave = params['wavelength_scale_resolution']
     px_range = np.arange(specs[1])
     data = []
-    for order in range(specs[0]):
+    for order in tqdm(range(specs[0]), desc='Info: Linearise the spectrum'):
         wave_range = np.polyval(wavelength_solution[order,2:], px_range-wavelength_solution[order,1])
         wave_diff = np.nanmax(np.abs(wave_range[1:] - wave_range[:-1]))        # Difference in wavelength between 2 data points, abs needed for dodgy wavelength solutions
         start = int(min(wave_range)/dwave) * dwave          # Minumum wavelength should a multiple of the wavelength_scale_resolution

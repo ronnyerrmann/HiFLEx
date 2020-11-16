@@ -299,7 +299,7 @@ max_good_value  = 63000
 
   ## extracted data:
   #-----------------
-  # path for the extracted data (CERES format / single files / HARPS format for extracted spectrum and wavelength). path_extraction and path_extraction_single will be relative to the result_path.
+  # path for the extracted data (CERES format / single files (including 1d spectrum) / HARPS format for extracted spectrum and wavelength). All paths will be relative to the result_path.
 path_extraction             = extracted
 path_extraction_single      = extracted/single
 path_harpsformat            = extracted/HARPS_format
@@ -365,7 +365,9 @@ logging_path                        = logging
 logging_trace1_binned               = master_trace1_binned.fits
 logging_traces_binned               = master_traces_sci_searched.fits
 logging_traces_im_binned            = traces_in_master_trace1_binned.png
-logging_traces_im                   = traces_in_master_trace1.png
+    # If "*" in logging_traces_im, then it will save a picture with the traces for each extraction, the * will replaced by the filename. This will require about 11MB per file.
+logging_traces_im                   = traces_in_*.png
+logging_traces_im                   = traces_in_master_traces1.png
 logging_traces_bisector             = bisector_traces1.png
 logging_find_arc_traces             = arctraces_find.png
 logging_arctraces_im                = arctraces_in_master_trace2.png
