@@ -35,7 +35,7 @@ if sys.version_info[0] < 3:     # Python 2
     import urllib2
 else:                           # Python 3
     import tkinter as Tk
-    import urllib3 as urllib2
+    import urllib3
     raw_input = input
 if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
     from deepCR import deepCR   # Only available for python 3.5
@@ -56,16 +56,24 @@ iers_conf.iers_auto_url = 'ftp://cddis.gsfc.nasa.gov/pub/products/iers/finals200
 iers_conf.auto_max_age = None 
 success = False
 for ii in range(5):
-    try:
-        import barycorrpy
-        success = True
-        break
-    except (urllib2.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
-        print('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+    if sys.version_info[0] < 3:     # Python 2
         try:
-            logger('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+            import barycorrpy
+            success = True
+            break
+        except (urllib2.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
+            print('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+            try:
+                logger('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+            except:
+                logger('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}'.format(4-ii, e))
+    else:       ## !!!!!!!!!!!!!!! also change the urllib2 further down
+        try:
+            import barycorrpy
+            success = True
+            break
         except:
-            logger('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}'.format(4-ii, e))
+            logger('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}'.format(4-ii))
 if not success:
     print('Error: barrycorrpy could not be loaded. It needs an active internet connection in order to download the IERS_B file. This failure will lead to a crash of the program later!'+os.linesep)
 import glob

@@ -129,6 +129,8 @@ resolution_offset_pct = 1
   #                                                                        The wavelength solution created from pixel_to_wavelength.txt will be saved in original_master_wavelensolution_filename.
   #                                                                If no wavelength solution is necessay, it can be set to "pseudo".
 original_master_wavelensolution_filename = /data/ronny/Reduced/20190205/master_wavelength_sci.fits
+  # If a new wavelength is created, a file correlating pixels and wavelengths can be given, or it will be created when the user adds lines in a GUI
+px_to_wavelength_file        = pixel_to_wavelength.txt
 
   ## To determine the background
   # background_width_multiplier defines the area which is excluded for determining the background, e.g. to remove the scattered light.
