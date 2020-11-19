@@ -30,7 +30,7 @@ raw_data_paths           = /local/home/ronny/data_EXOhSPEC/20200813/
 
   # To extract the data correctly, the frame should be rotated in the way, that traces (dispersion axis) are along vertical direction
   #           with wavelength increasing with increasing pixel number (blue on top). 
-  #           If necessary the image can be flipped after the rotation so that the central wavelength of the orders decreases with increasing 
+  #           If necessary the image can be flipped (left-right) after the rotation so that the central wavelength of the orders decreases with increasing 
   #           pixel number (blue orders on the right of the (rotated) image and the red orders on the left).
   #               format: multiple of 90
   # for QSI (both), Photometrics:     rotate_frame = 90
@@ -43,7 +43,7 @@ flip_frame      = False
 
   # subframe: gives the size in x (dispersion axis) and y (cross-dispersion axis), and the starting coordinates in x and y.
   #           The numbering of the pixel starts with zero.
-  #           The image will be extended if sizes bigger than the image are given. This includes the starting coordinates
+  #           The image will be extended with values of 0 if sizes bigger than the image are given. This includes the starting coordinates
   #           possible formats: can be empty, or
   #                             [4250,2838,0,0], or
   #                             4250,2838,0,0

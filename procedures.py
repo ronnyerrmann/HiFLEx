@@ -35,7 +35,7 @@ if sys.version_info[0] < 3:     # Python 2
     import urllib2
 else:                           # Python 3
     import tkinter as Tk
-    import urllib3
+    import urllib
     raw_input = input
 if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
     from deepCR import deepCR   # Only available for python 3.5
@@ -64,16 +64,16 @@ for ii in range(5):
         except (urllib2.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
             print('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
             try:
-                logger('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+                print('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
             except:
-                logger('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}'.format(4-ii, e))
+                print('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}'.format(4-ii, e))
     else:       ## !!!!!!!!!!!!!!! also change the urllib2 further down
         try:
             import barycorrpy
             success = True
             break
-        except:
-            logger('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}'.format(4-ii))
+        except (urllib.error.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
+            print('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
 if not success:
     print('Error: barrycorrpy could not be loaded. It needs an active internet connection in order to download the IERS_B file. This failure will lead to a crash of the program later!'+os.linesep)
 import glob
@@ -728,7 +728,7 @@ def read_file_calibration(params, filename, level=0):
                 # Last: cut the image
                 if im.shape != (subframe[0],subframe[1]):                   # only apply subframe if the file doesn't have the size already
                     im = im[subframe[2]: subframe[0]+subframe[2], subframe[3]: subframe[1]+subframe[3]]
-                
+            ims = im.shape
             logger('Info: {1}: subframe applied: {0} ({2})'.format(entry, level, params[entry]))
             calimages['{0}_saturated'.format(filename_s)] = np.where( im > params['max_good_value'] )         # Find the saturated pixel in the original image, do it again if the image was cut
             im_head['HIERARCH HiFLEx redu{0}a'.format(level)] = 'Subframe: {0}'.format(entry)
@@ -8140,17 +8140,28 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
         jd_range = [jd] + list(np.arange(jd_start, jd_start+exposure/(3600.*24), 60/(3600.*24))) + [jd_start+exposure/(3600.*24)]   # Every minute
         success = False
         for ii in range(5):
-            try:
-                bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
-                                                  pmra=params['pmra'],pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],
-                                                  ephemeris=ephemeris2,leap_dir=params['logging_path'], leap_update=leap_update)
-                success = True
-                break
-            except (urllib2.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
+            if sys.version_info[0] < 3:     # Python 2
                 try:
+                    bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
+                                                      pmra=params['pmra'],pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],
+                                                      ephemeris=ephemeris2,leap_dir=params['logging_path'], leap_update=leap_update)
+                    success = True
+                    break
+                except (urllib2.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
+                    try:
+                        logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+                    except:
+                        logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}'.format(4-ii, e))
+             else:       ## !!!!!!!!!!!!!!! also change the urllib2 further down
+                try:
+                    bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
+                                                      pmra=params['pmra'],pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],
+                                                      ephemeris=ephemeris2,leap_dir=params['logging_path'], leap_update=leap_update)
+                    success = True
+                    break
+                except (urllib.error.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
                     logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
-                except:
-                    logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}'.format(4-ii, e))
+
         if not success:
             logger('Error: Barycentric velocities could not be calculated.')
         bcvel_baryc_range = bcvel_baryc_range[0] / 1E3       # in km/s
