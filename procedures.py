@@ -67,7 +67,7 @@ for ii in range(5):
                 print('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
             except:
                 print('Warn: Cannot import barrycorrpy. Will try {0} more times. Error: {1}'.format(4-ii, e))
-    else:       ## !!!!!!!!!!!!!!! also change the urllib2 further down
+    else:
         try:
             import barycorrpy
             success = True
@@ -8152,7 +8152,7 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
                         logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
                     except:
                         logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}'.format(4-ii, e))
-             else:       ## !!!!!!!!!!!!!!! also change the urllib2 further down
+            else:
                 try:
                     bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
                                                       pmra=params['pmra'],pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],
