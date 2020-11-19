@@ -171,8 +171,8 @@ if __name__ == "__main__":
                 calimages['shift_{0}_l'.format(calib[2])], im_arclhead = find_shift_images(params, im_cal_l, im_trace1, calimages['sci_trace'], 0, 
                                                                                            cal_tr_poly, extract=True, im_head=im_arclhead)        # that needs to be science traces
             [cal_l_spec, cal_l_gpm] = read_create_spec(params, fname_em_spec, im_cal_l, im_arclhead, calimages['{0}_trace'.format(calib[2])], 
-                                                       params['{0}extraction_width_multiplier'.format(calib[3])], calimages.get('shift_{0}_l'.format(calib[2]),0))
-            
+                                                       params['{0}extraction_width_multiplier'.format(calib[3])], calimages.get('shift_{0}_l'.format(calib[2]),0) )
+            # gpm: good-pixel-mask: 1 is good, below 1 not so good
             fname_em_spec = params['path_extraction'] + params.get('master_{0}_s_filename'.format(calib[1]), 'master_emission_{0}_short.fits'.format(calib[1])).rsplit(os.sep,1)[-1]
             if os.path.isfile(fname_em_spec):
                 im_cal_s, im_head = [], []

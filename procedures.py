@@ -4359,6 +4359,8 @@ def read_create_spec(params, fname, im, im_head, trace_def, wmult, offset):
     if os.path.isfile(fname):
         logger('Info: extracted emission spectrum already exist: {0}'.format(fname))
         spec = np.array(fits.getdata(fname))
+        good_px_mask = spec[1,:,:]
+        spec = spec[0,:,:]
     else:           # Create the extracted spectrum
         [tr_poly, xlows, xhighs, widths] = trace_def
         emission_spec, good_px_mask, extr_width = extract_orders(params, im, tr_poly, xlows, xhighs, widths, wmult, offset=offset, header=im_head, plot_traces=True)
@@ -4368,7 +4370,7 @@ def read_create_spec(params, fname, im, im_head, trace_def, wmult, offset):
         im_head['Comment'] = ' 1: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
         save_multispec(spec, fname, im_head)
     
-    return spec
+    return spec, good_px_mask
 
 def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_sol_dict_cal, reference_lines_dict, flat_spec_norm, im_trace):
     """
