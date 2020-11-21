@@ -7823,7 +7823,7 @@ def linearise_wavelength_spec(params, wavelength_solution, spectra, method='sum'
                 logger('Warn: method {0} is not known, using sum'.format(method))
                 nolog = True
             data[indexes[0],1] = np.nansum(data[indexes,1])
-    data = np.delete(data, todel, axis=0)
+    data = np.delete(data, todel.astype(int), axis=0)
     #print 'data.shape, len(todel)',data.shape, len(todel)
     # Add wavelengths in case there are gaps between orders
     lwave_range = np.arange(np.nanmin(data[:,0]), np.nanmax(data[:,0])+dwave/2., dwave )
