@@ -204,11 +204,14 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     cycler_plt = create_plot_linestyle_marker_markersize_color(len(data_x), linestyle, marker, markersize, color)
     frame.set_prop_cycle(cycler_plt)
     label = ''
+    plot_legend = False
     for i in range(len(data_x)):
         if len(labels) > 0:
             label = labels[i]
-            if label == '':
-                label = None
+        if label == '':
+            label = None
+        if label is not None:
+            plot_legend = True
         if type(data_x[i]) is not np.ndarray and type(data_x[i]) is not list:
             frame.plot(data_x[i], data_y[i], label=label)#, linestyle=linestyle[i], marker=marker[i])
         elif len(data_x[i]) - len(data_y[i]) == 1:        # Histogram (one data point less in y
@@ -221,7 +224,8 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     frame.set_xlabel(x_title, fontsize=13)
     frame.set_ylabel(y_title, fontsize=13)
     frame.set_title(title, fontsize=15)
-    frame.legend(loc='upper left', bbox_to_anchor=(adjust[4], adjust[5]))
+    if plot_legend:
+        frame.legend(loc='upper left', bbox_to_anchor=(adjust[4], adjust[5]))
     if return_frame:
         return frame
     elif show:
