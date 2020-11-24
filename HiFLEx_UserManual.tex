@@ -246,11 +246,6 @@ After all the calibration steps have been performed for a given instrument (see\
 \end{itemize}
 
 
-\subsection{Create a bad pixel mask}
-\label{Section:create_badpxmask}
-\noindent The bad pixel masked used by the pipeline is fits file which consists of a 2 dimensional image consisting of '1' for good data and '0' for bad pixels. It can be created by the script \verb|create_badpx_mask.py|, but this is script is really work in progress at the moment.
-
-
 \subsection{Possible parameters for the CCD processing}
 \label{Section:parameters_CCD_proc}
 \noindent The list below shows all standard CCD calibration options available in the pipeline. The corrections are done on a pixel-by-pixel basis. The steps will be executed in the same order as given here.
@@ -553,8 +548,8 @@ You might also want to read Chapter~\ref{Section:FAQ_wavelength_solution}.
 % -------------------------------------------------------------------------------------------
 
 
-%\newpage
-%\section{More information about how the pipeline works}
+\newpage
+\section{Technical details to some steps}
 
 
 \subsection{Detailed steps performed by the pipeline}
@@ -624,21 +619,31 @@ The following steps give an overview about additional parameters which are not c
 \end{figure}
 
 
-\subsection{Necessary CCD images}
+\subsection{Necessary data to process}
 
 To get the best results, the following data (or more files) should be taken. Please note that all filenames are case-insensitive. \textbf{No spaces or commas are allowed in the file names.}
 \begin{itemize}
-  \item \textit{(optional) true Flat (at least 11 files of the evenly illuminated CCD)}. This has tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{rflat} for automatic processing.
-  \item Flat (11x, white light source through the science fiber), with the filename containing \textbf{sflat}, \textbf{tung}, or \textbf{whli}. The calibration fiber should be dark for this data.
-  \item Arc (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc}, \textbf{ThAr}, \textbf{Th\_Ar}, or \textbf{UNe}. Results might be better, if the science fiber is dark.
-  \item (\textit{Only necessary, if the offset in dispersion direction between the fibers of a bifurcated fiber should be measured}): Arc2 (5x, calibration lamp through the science fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc2}, \textbf{ThAr2}, \textbf{Th\_Ar2}, or \textbf{UNe2}.
+  \item \textit{(optional) true Flat (at least 11 files of the evenly illuminated detector)}. This has been tested to improve the data quality when using a camera with small full well depth. The filename should contain \textbf{rflat} for automatic processing.
+  \item Tungsten (11x, white light source through the science fiber), with the filename containing \textbf{flat}, \textbf{tung}, or \textbf{whli}. The calibration fiber should be dark for this data.
+  \item Wavelength calibration data for the science fiber (5x, calibration lamp through the science fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc}, \textbf{ThAr}, \textbf{Th\_Ar}, or \textbf{UNe}.
+  \item Wavelength calibration data for the calibration fiber (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc2}, \textbf{ThAr2}, \textbf{Th\_Ar2}, or \textbf{UNe2}. Can be taken with the wavelength calibration in the science fiber, in this case both names should be in the filename, e.g.  \textbf{thar\_thar2}.
+  \item (\textit{Only necessary for unstabilised spectrographs, where the the offset in dispersion direction between the fibers of a bifurcated fiber might vary over time}): wavelength calibration in science (and calibration fiber). Occationally a long (e.g. 60\,s) exposure time between science frames. Same filename as before.
 %  \item Blazecor (11x, white light source and calibration lamp), the filename should be \textbf{blazecor}, \textbf{sflatThAr}, \textbf{whli-UNe}, or similar.
-  \item (optinal) Bias (11x) and/or Darks (11x, for the exposure time of the true Flat and Flat)% and Blazecor)
+  \item (optinal) Bias (11x) and/or Darks (11x, for the exposure time of the true Flat, Tungsten, and Science images)% and Blazecor)
   \item Science images: It is best to start the filename with the object name (as in reference file given by parameter \verb|object_file|, see \ref{Section:create_object_list_file}). However, in order to try to match the object name with entries in the \verb|object_file| the parts of the filename containing ``\_'' and ``-'' are stripped away one by one from the end of the filename.
-  \item (optional) Emission line spectra all fibers (not necessarily at the same time) to measure the drift spectrum along the detector.
 \end{itemize}
 The suggestions are for bifurcated fiber input to the spectrograph. If a spectrograph with a single fiber is used, then the same data should be taken using the same fiber (setting parameter \verb|arcshift_side = center| will process the data correctly).
 
+
+\subsection{Measuring the drift of the wavelength solution}
+The wavelength solution is only created once, assuming that the user provides a high quality set of spectra for this step. To calibrate the spectrum during the observation the drift can be measured using emission lamp spectra. For each line that was used to create the wavelength solution a Gaussian fit is applied to the expected area in the emssion line spectrum and the pixel-offset measured. The distribution of the offsets is then binned with few different binning widths and a Gaussian fitted. The centre of the Gaussian and the width are used for the corrections.
+
+Depending on the spectrograph and available data, they can be used to
+\begin{itemize}
+  \item Measure the offset between science and calibration fiber (at different times during the night).
+  \item Monitor the drift during the night, so the drift can be interpolated for the science spectra (single fiber spectrograph).
+  \item Measure the the drift for the current science frame (bifurcated spectrograph).
+\end{itemize}
 
 
 \subsection{Necessary information to calculate the barycentric correction}
@@ -667,6 +672,11 @@ In order to calculate the barycentric correction the time of the observation (or
 %\textit{At the moment DE403 is used (the CERES pipeline uses DE403). This can be changed by updating \verb|ssephem_update.py|, \verb|SSEphem/update_ssephem.py| (updating the procedure} SSEphemDownload \textit{, and at the beginning of \verb|procedures.py|.} However, this doesn't seem to have an impact on the resulting barycentric corrections.
 
 
+\subsection{Create a bad pixel mask}
+\label{Section:create_badpxmask}
+\noindent The bad pixel masked used by the pipeline is fits file which consists of a 2 dimensional image consisting of '1' for good data and '0' for bad pixels. It can be created by the script \verb|create_badpx_mask.py|, but this is script is really work in progress at the moment.
+
+
 \subsection{Creating a list of objects}
 \label{Section:create_object_list_file}
 This is done in the procedure \verb|file_assignment.py|. However, the user can also provide their own list using a the file specified in parameter \verb|object_file| (standard: \verb|object_list.txt|). The file can be located in the \verb|result_path| or \verb|raw_data_paths| (the first one has higher priority, in case different file exists in the two folders only the first file will be read). The file must contain one line per object. For each object the following comma-separated values need to be given:
@@ -684,15 +694,6 @@ This is done in the procedure \verb|file_assignment.py|. However, the user can a
 
 Please note that the position of Moon, Jupiter, and Sun are calculated by the pipeline using the mid-exposure time. This requires that the filename contains the (case-insensitive) object name. Therefore the object is not required in the object list.
 
-
-\subsection{Cosmic ray removal}
-\subsubsection{Training the cosmic ray removal deepCR for a new camera}
-\label{Section:train_deepCR}
-So far deepCR comes only with the training set for HST WFC\footnote{\url{https://github.com/profjsb/deepCR\#quick-start}}. Testing this approach has identified (science-) traces as cosmic rays (settings: \verb|cosmic_ray_settings = [deepCR, ACS-WFC-F606W-2-32, 0.999]| and \verb|path_reduced| set to a valid path to check cosmic ray removal results).
-
-It is possible to train the model on the users camera. The steps are described in 
-\url{https://github.com/profjsb/deepCR/blob/master/docs/tutorial_train.rst}~. A good dataset is probably to use as many science frames as possible and search for cosmic rays (inlcuding along the traces).
-% started cooding train_cosmic_ray_deep_learning.py
 
 \subsection{Format of the extracted files}
 Different types of extracted files are created. They are described in the following subsections.
@@ -904,20 +905,16 @@ This step is only done, if the CERES pipeline is installed and \verb|path_ceres|
   \item Some parameters can be overwritten during the run time of the script by user input if the GUI is enabled.
 \end{enumerate}
 
-% -------------------------------------------------------------------------------------------
 
-\newpage
-\section{Technical details to some steps}
+\subsection{Cosmic ray removal}
+\subsubsection{Training the cosmic ray removal deepCR for a new camera}
+\label{Section:train_deepCR}
+So far deepCR comes only with the training set for HST WFC\footnote{\url{https://github.com/profjsb/deepCR\#quick-start}}. Testing this approach has identified (science-) traces as cosmic rays (settings: \verb|cosmic_ray_settings = [deepCR, ACS-WFC-F606W-2-32, 0.999]| and \verb|path_reduced| set to a valid path to check cosmic ray removal results).
 
-\subsection{Measuring the drift of the wavelength solution}
-The wavelength solution is only created once, assuming that the user provides a high quality set of spectra for this step. To calibrate the spectrum during the observation the drift can be measured using emission lamp spectra. For each line that was used to create the wavelength solution a Gaussian fit is applied to the expected area in the emssion line spectrum and the pixel-offset measured. The distribution of the offsets is then binned with few different binning widths and a Gaussian fitted. The centre of the Gaussian and the width are used for the corrections.
+It is possible to train the model on the users camera. The steps are described in 
+\url{https://github.com/profjsb/deepCR/blob/master/docs/tutorial_train.rst}~. A good dataset is probably to use as many science frames as possible and search for cosmic rays (inlcuding along the traces).
+% started cooding train_cosmic_ray_deep_learning.py
 
-Depending on the spectrograph and available data, they can be used to
-\begin{itemize}
-  \item Measure the offset between science and calibration fiber (at different times during the night).
-  \item Monitor the drift during the night, so the drift can be interpolated for the science spectra (single fiber spectrograph).
-  \item Measure the the drift for the current science frame (bifurcated spectrograph).
-\end{itemize}
 
 % -------------------------------------------------------------------------------------------
 
