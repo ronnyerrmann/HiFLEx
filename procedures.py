@@ -1811,8 +1811,6 @@ def centroid_order(x, y, center, width, significance=3, bordersub_fine=True, ble
     x, y = np.array(x), np.array(y)
     width = abs(width)
     notnan = ~np.isnan(y)
-    if len(x.shape) != len(y.shape) or len(x.shape) != len(notnan.shape):
-        print('This should never be seen 1815',x,y,notnan)       # This should never be seen 1815
     x = x[notnan]
     y = y[notnan]
     if len(y) < 7:
@@ -2114,7 +2112,6 @@ def estimate_width(im):
     :return width: float, median of the measured Gaussian widths
     """
     ims = im.shape
-    print( ims.shape )
     widths = []
     logger('Info: Estimate the width of the bright features')
     maxtests = max( 200, int(np.prod(ims)/50) )
@@ -2132,7 +2129,6 @@ def estimate_width(im):
                 if yy.shape[0] < 5:
                     continue
                 xx = np.arange(yy.shape[0])
-                print( xx.shape, yy.shape )
                 popt = centroid_order(xx, yy, int(yy.shape[0]/2), w1)    # x,y,pos,width ; result: a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
                 
                 """title = '{}, {}, {}, {} - {}, {}, {}, {}'.format(x,y,len(yr),pos_max, popt[0],popt[1],popt[2],popt[3])
@@ -4369,7 +4365,7 @@ def read_create_spec(params, fname, im, im_head, trace_def, wmult, offset):
         logger('Info: extracted emission spectrum already exist: {0}'.format(fname))
         spec = np.array(fits.getdata(fname))
         good_px_mask = spec[1,:,:]
-        spec = spec[0,:,:]
+        emission_spec = spec[0,:,:]
     else:           # Create the extracted spectrum
         [tr_poly, xlows, xhighs, widths] = trace_def
         emission_spec, good_px_mask, extr_width = extract_orders(params, im, tr_poly, xlows, xhighs, widths, wmult, offset=offset, header=im_head, plot_traces=True)
@@ -4379,7 +4375,7 @@ def read_create_spec(params, fname, im, im_head, trace_def, wmult, offset):
         im_head['Comment'] = ' 1: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
         save_multispec(spec, fname, im_head)
     
-    return spec, good_px_mask
+    return emission_spec, good_px_mask
 
 def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_sol_dict_cal, reference_lines_dict, flat_spec_norm, im_trace):
     """
