@@ -2114,6 +2114,7 @@ def estimate_width(im):
     :return width: float, median of the measured Gaussian widths
     """
     ims = im.shape
+    print( ims.shape )
     widths = []
     logger('Info: Estimate the width of the bright features')
     maxtests = max( 200, int(np.prod(ims)/50) )
@@ -2131,6 +2132,7 @@ def estimate_width(im):
                 if yy.shape[0] < 5:
                     continue
                 xx = np.arange(yy.shape[0])
+                print( xx.shape, yy.shape )
                 popt = centroid_order(xx, yy, int(yy.shape[0]/2), w1)    # x,y,pos,width ; result: a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
                 
                 """title = '{}, {}, {}, {} - {}, {}, {}, {}'.format(x,y,len(yr),pos_max, popt[0],popt[1],popt[2],popt[3])
