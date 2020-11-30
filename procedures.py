@@ -533,9 +533,13 @@ def convert_readfile(input_list, textformats, delimiter='\t', replaces=[], ignor
                         If a string is given this will be used to convert it into a datetime object
                         If a float, int, or str is run on a datetime object, then the datetime object will be converted into a number
     :param delimiter: string, used to split each line into the eleements
-    :param replaces: 1d list or array of strings, contains the strings which should be replaced by ''
+    :param replaces: 1d list or array of strings and/or lists of 2 strings, contains the strings which should be replaced by '' (if string) or by the second entry (if list)
     :param ignorelines: List of strings and/or lists. A list within ignorelines needs to consist of a string and the maximum position this string can be found.
                         If the string is found before the position, the entry of the input list is ignored
+    :param expand_input: bool, if the line in the input_list contains less elements than textformats the line will be filled up with ''s
+    :param shorten_input: bool, if the  line in the input_list contains more elements than textformats the line will be shortened to len(textformats)
+    :param ignore_badlines: bool, if True will raise Warnings, if False will raise Errors (which will terminate code)
+    :param replacewithnan: bool, if True and conversion with textformats is not possible will replace with NaN, otherwise will raise Warning/Error
     :retrun result_list: 2d list with numbers or strings, formated acording to textformats
     """
     # Make the textformats, replaces, and ignorelines consistent
@@ -1807,6 +1811,8 @@ def centroid_order(x, y, center, width, significance=3, bordersub_fine=True, ble
     x, y = np.array(x), np.array(y)
     width = abs(width)
     notnan = ~np.isnan(y)
+    if len(x.shape) != len(y.shape) or len(x.shape) != len(notnan.shape):
+        print('This should never be seen 1815',x,y,notnan)       # This should never be seen 1815
     x = x[notnan]
     y = y[notnan]
     if len(y) < 7:
@@ -2114,17 +2120,18 @@ def estimate_width(im):
     for i in range(maxtests):     # Use at least 200 positions in order to be sure to find at least 10
         x = random.randint(int(0.05*ims[0]), int(0.95*ims[0]))
         y = random.randint(int(min(50,0.05*ims[1])), int(max(ims[1]-50,0.95*ims[1])))
-        yr = list(range(max(0,y-30), min(ims[1],y+31)))
+        ys = max(0,y-30)
+        yr = list(range(ys, min(ims[1],y+31)))
         data = im[x,yr]
-        pos_max = data.argmax() + max(0,y-30)       # Maximum in total y (from im)
+        pos_max = data.argmax() + ys       # Maximum in total y (from im)
         widths1 = []
         for w1 in range(2,10,1):
             for w2 in range(1,4,1):
                 yy = im[x, max(0,pos_max-w1*w2):min(ims[1],pos_max+w1*w2+1)]
-                if len(yy) < 5:
+                if yy.shape[0] < 5:
                     continue
-                xx = list(range(len(yy)))
-                popt = centroid_order(xx, yy, int(len(xx)/2), w1)    # x,y,pos,width ; result: a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+                xx = np.arange(yy.shape[0])
+                popt = centroid_order(xx, yy, int(yy.shape[0]/2), w1)    # x,y,pos,width ; result: a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
                 
                 """title = '{}, {}, {}, {} - {}, {}, {}, {}'.format(x,y,len(yr),pos_max, popt[0],popt[1],popt[2],popt[3])
                 label_datapoins = '{}, '.format(popt[2])
