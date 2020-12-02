@@ -14,7 +14,7 @@ CONFIGFILE = 'conf.txt'
 params = textfileargs(params, CONFIGFILE)
 global calimages    # dictionary for all calibration images
 
-for calib in [ ['','cal2','cal'], ['_sci','cal1', 'sci'] ]:
+for calib in [ ['_cal','cal2','cal'], ['_sci','cal1', 'sci'] ]:
     if 'master_wavelensolution'+calib[0]+'_filename' not in params.keys():
         params['master_wavelensolution'+calib[0]+'_filename'] = params['master_wavelensolution_filename'].replace('.fit',calib[0]+'.fit')
     if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']):

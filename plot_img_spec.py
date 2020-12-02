@@ -614,7 +614,7 @@ if __name__ == "__main__":
                 #print data_sg.shape
             titel_sg += ',\n{0}'.format(fitsfile[0])
         #print data_sg.shape, data_sg.dtype, data_sg.itemsize, data_sg.nbytes, sys.getsizeof(data_sg), data_sg.nbytes   # size about the size of the fits file
-    if data_sg != []:
+    if len(data_sg) > 0:
         max_orders = 0
         for im in data_sg:
             max_orders = max(max_orders, im.shape[1])
