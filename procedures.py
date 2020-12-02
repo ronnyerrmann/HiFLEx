@@ -2332,7 +2332,7 @@ def find_trace_orders(params, im, imageshape):
         im_traces[positions[goodpos,0].astype(int),yarr[goodpos]] = 1
         traces.append( [cen_px] + list(pfs) + [min(positions[:,0])*binx, min(imageshape[0],(max(positions[:,0])+1)*binx-1), np.polyval(pfs, cen_px)] )
         logger('Step: order found at central pixel: {0} / {3} (frame/trace). The trace was identified between Pixels {1} and {2}'.format(round(np.polyval(pfs, cen_px),1),
-                                                round(traces[-1][1]), round(traces[-1][2]), round(np.polyval(pfs, np.mean(traces[-1][1:3]) ),1) ))
+                                                round(traces[-1][-3]), round(traces[-1][-2]), round(np.polyval(pfs, np.mean(traces[-1][-3:-1]) ),1) ))
     # sort
     traces = np.array(traces)
     cen_px2 = np.mean([ np.max(traces[:,-3]), np.min(traces[:,-2]) ])      # Center of the area covered by all orders
