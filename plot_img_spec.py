@@ -13,7 +13,11 @@ import matplotlib.cm as cmaps
 import matplotlib.colors as colors
 import sys
 from astropy.table import Table
-from gatspy.periodic import LombScargleFast
+try:
+    from gatspy.periodic import LombScargleFast
+except:
+    print('Error: gatspy could not be loaded. Did you activate the Anaconda hiflex environment?')
+    exit(1)
 import tkcanvas as tkc
 if sys.version_info[0] < 3:
     import Tkinter as Tk
