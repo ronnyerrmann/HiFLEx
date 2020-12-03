@@ -40,6 +40,10 @@ git clone https://github.com/ronnyerrmann/hiflex.git
 ```
 
 ## First steps
+Activate the hiflex environment (if not done already):
+```
+conda activate hiflex
+```
 Create a new folder and copy the `conf.txt` file from your HiFLEx installation path into this folder. Edit the following entries:
 - Change parameter `raw_data_paths` to point to the folder or folders with your raw or pre-reduced fits-files. The data can be stored in sub-folders.
 - Set the parameter `badpx_mask_filename` if a bad-pixel-mask exists. Otherwise leave empty or 'NA'.

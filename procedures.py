@@ -38,7 +38,11 @@ else:                           # Python 3
     import urllib
     raw_input = input
 if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
-    from deepCR import deepCR   # Only available for python 3.5
+    try:
+        from deepCR import deepCR   # Only available for python 3.5
+    except:
+        print('Error: deepCR could not be loaded. Did you activate the Anaconda hiflex environment?')
+        deepCR = None
 else:
     deepCR = None
 import plot_img_spec
