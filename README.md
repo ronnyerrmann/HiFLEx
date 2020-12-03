@@ -22,7 +22,7 @@ Requirements:
 - python 3.8 (and 2.7) + numpy, scipy, pyfits, astropy
 - (only tested under linux)
 
-Create two new [Anaconda](https://www.anaconda.com/distribution/#linux) environments (python >= 3.5 required for deepCR, python 2.7 required for SERVAL and CERES):
+The easiest way is to download and install [Anaconda](https://www.anaconda.com/distribution/#linux). Afterwards log out and log in again and create two environments (python >= 3.5 required for deepCR, python 2.7 required for SERVAL and CERES):
 ```
 conda create --name hiflex_p2 python=2.7 numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels 
 conda activate hiflex_p2
