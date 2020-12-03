@@ -147,7 +147,7 @@ polynom_bck = [4, 4]
   #         format: float or integer
   #         Gives the maximum allowed shift. Set to 0 if shift shouldn't be measured. 
   #         Shift can't be larger as the minimum distance between consecutive orders (single fiber) or between science and calibration orders (bifurcated fiber input).
-extraction_shift = 3
+extraction_shift = 0
   # Orders, which are only partially identified can be ignored for the extraction.
   #         format: int or float between 0 and 100
   #         To disable set extraction_min_ident_part_of_trace_percent to 0. A value of 25 will mean orders that have a length of less than 25% compared to the longest order are ignored.
@@ -172,7 +172,7 @@ sigmaclip_spectrum = []
   #         This value will be overwritten by the entry in the second column with "sci-cal" as fourth column in the file from parameter 'master_wavelengths_shift_filename'
 pxshift_between_wavesolutions = 0
 
-  # In order to create a linear wavelength scale for the normalised spectrum, what should the resolution of the scale be in Angstrom. Set to 0 to skip the step
+  # In order to create a linear wavelength scale for the normalised spectrum, what should the resolution of the scale be in Angstrom. Set to 0 to skip the step.
 wavelength_scale_resolution = 0.00
 
   ## Use the extracted flux from the files for blaze correction to correct for the trace or use the fitted flux to correct for the blaze

@@ -19,7 +19,9 @@ for calib in [ ['_cal','cal2','cal'], ['_sci','cal1', 'sci'] ]:
         params['master_wavelensolution'+calib[0]+'_filename'] = params['master_wavelensolution_filename'].replace('.fit',calib[0]+'.fit')
     if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']):
         wave_sol_dict = read_wavelength_solution_from_fits(params['master_wavelensolution'+calib[0]+'_filename'])
-calimages['wavelength_solution'] = copy.deepcopy( wave_sol_dict['wavesol'] )
+        calimages['wave_sol_dict_'+calib[2]] = copy.deepcopy( wave_sol_dict )
+if 'wave_sol_dict_sci' not in calimages.keys():                             # Use the calibration fiber solution for the science solution
+        calimages['wave_sol_dict_sci'] = calimages['wave_sol_dict_cal']
 
 rv_results_to_hiflex(params)
 
