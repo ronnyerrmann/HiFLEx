@@ -6946,14 +6946,15 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     R_gauss     = R_gauss[good_values]
     avg_R_gauss = np.mean(R_gauss)
     std_R_gauss = np.std(R_gauss, ddof=1)
+    avg_R_fwhm, std_R_fwhm = 2.35482*avg_R_gauss, 2.35482*std_R_gauss
     # 2px Resolution (using only the identified arc lines
     R_2px     = arc_lines_wavelength[:,2]/(2.*arc_lines_wavelength[:,-3])    # lambda/d_lambda
     avg_R_2px = np.mean(R_2px)
     std_R_2px = np.std(R_2px, ddof=1) 
     text = 'Info: used {0} lines. The standard deviation of the residuals between the lines and the fit is {1} Angstrom '+\
                   '(the average of the abs of the residuals is {7} Angstrom). This converts into a resolution R = {2}. '+\
-                  'The Gaussian width of the emission lines results in an R = {3} +- {4}. The 2-pixel resolution (around the identified lines) is R = {5} +- {6}.'
-    logger(text.format(arc_lines_wavelength.shape[0], round_sig(std_diff_fit,3), int(std_R_fit), int(avg_R_gauss), int(std_R_gauss), int(avg_R_2px), int(std_R_2px), round_sig(avg_diff_fit,3) ))
+                  'The FWHM of the emission lines results in an R = {3} +- {4} (final resolution). The 2-pixel resolution (around the identified lines) is R = {5} +- {6}.'
+    logger(text.format(arc_lines_wavelength.shape[0], round_sig(std_diff_fit,3), int(std_R_fit), int(avg_R_fwhm), int(std_R_fwhm), int(avg_R_2px), int(std_R_2px), round_sig(avg_diff_fit,3) ))
     p_cen_px = np.round(p_cen_px,3)
     text = 'Info: A 2d polynom fit with {0} orders in dispersion direction (along the traces) and {1} orders in cross-dispersion direction was used. '+\
                   'With this solution, the offset between aperture and real orders is {2}. To fulfil the grating equation the central pixel of the individual orders needs to be {5} + {6}*order + {7}*order**2.'+\
