@@ -25,7 +25,11 @@ from scipy.optimize import curve_fit            # Curve-fit Gauss takes the long
 # import scipy.interpolate as inter             # Not used anymore
 import scipy
 import scipy.signal
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except:
+    print('Error: tqdm could not be loaded. Did you activate the Anaconda hiflex environment?')
+    exit(1)
 import tkcanvas as tkc
 import json
 # detect python version
@@ -52,7 +56,11 @@ import math
 import multiprocessing
 import subprocess
 # Necessary because of https://github.com/astropy/astropy/issues/9427       # commented out again on 20/5/2020 after "WARNING: IERSStaleWarning: IERS_Auto predictive values are older than 15.0 days but downloading the latest table did not find newer values [astropy.utils.iers.iers]"
-import astropy
+try:
+    import astropy
+except:
+    print('Error: astropy could not be loaded. Did you activate the Anaconda hiflex environment?')
+    exit(1)
 from astropy.utils.iers import conf as iers_conf 
 #iers_conf.iers_auto_url = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all'         # is too old as of May 2020
 iers_conf.iers_auto_url = 'https://datacenter.iers.org/data/9/finals2000A.all'                          # untested
