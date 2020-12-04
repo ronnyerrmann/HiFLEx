@@ -3115,6 +3115,14 @@ def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extra
     
     return shift, im_head
 
+def arc_shift_multicore(kwargs):
+    [shift, params, im, pfits, xlows, xhighs, widths, wmult, shift, plot_tqdm] = kwargs
+    arc_spec, good_px_mask, extr_width = extract_orders(params, im, pfits, xlows, xhighs, widths, 0, shift, plot_tqdm=False)          # w_mult == 0: only central pixel
+    flux = np.nansum(arc_spec, axis=1)
+    flux[np.isnan(flux)] = np.nanmin(flux)          # replace nans with the minimum flux
+    
+    return flux
+
 def arc_shift(params, im, pfits, xlows, xhighs, widths):
     """
     Determines the difference between the science orders and arc orders in cross-dispersion direction
@@ -3162,15 +3170,18 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
     arcshifts = params['arcshift_side'] * np.abs(arcshift_range)                            # Translate into the right shifts
     arcshifts = np.arange(min(arcshifts),max(arcshifts)+1, 1)
     fluxes = []
-    logger('Step: Search for the shift of the calibration traces, compared to the science traces')
-    # plot_img_spec.plot_image(im, ['savename'], pctile=0, show=True, adjust=[0.05,0.95,0.95,0.05], title='Title', autotranspose=False)
-    for shift in tqdm(arcshifts, desc='Search for the shift of the calibration traces, compared to the science traces'):
-        # Shift the solution -> give parameter offset; and extract the arc_spectrum with the offset
-        # arc_spec, good_px_mask, extr_width = extract_orders(params, im, pfits, xlows, xhighs, widths, w_mult/2., shift, plot_tqdm=False)          # The smaller w_mult -> the better the gauss (hopefully)
-        arc_spec, good_px_mask, extr_width = extract_orders(params, im, pfits, xlows, xhighs, widths, 0, shift, plot_tqdm=False)          # w_mult == 0: only central pixel
-        flux = np.nansum(arc_spec, axis=1)
-        flux[np.isnan(flux)] = np.nanmin(flux)          # replace nans with the minimum flux
-        fluxes.append(flux)
+    kwargs = []
+    for shift in arcshifts:
+        kwargs.append([shift, params, im, pfits, xlows, xhighs, widths, 0, shift, False])
+    if w_mult != 0 and params['use_cores'] > 1 and multiprocessing.current_process().name == 'MainProcess':
+        logger('Step: Search for the shift of the calibration traces, compared to the science traces')
+        p = multiprocessing.Pool(params['use_cores'])
+        fluxes = p.map(arc_shift_multicore, kwargs)
+        p.terminate()
+    else:
+        results = []
+        for kwarg in tqdm(kwargs, desc='Search for the shift of the calibration traces, compared to the science traces'):        # pp is order
+            fluxes.append( arc_shift_multicore(kwarg) )
     fluxes = np.array(fluxes)
     # Find the center in each order: where is the flux the highest
     gauss, goodvalues = [], []

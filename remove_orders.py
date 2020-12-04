@@ -42,7 +42,9 @@ if __name__ == "__main__":
     # Move original data into a sub-folder
     #os.system('mv {0} {1}/'.format(params['master_trace_sci_filename'], params['folder_original_traces']))
     params['master_wavelensolution_sci_filename'] = params['master_wavelensolution_filename'].replace('.fits','_sci.fits')
-    for entry in ['master_trace_sci_filename', 'master_trace_cal_filename', 'master_wavelensolution_filename', 'master_blaze_spec_norm_filename', 'logging_path', 'path_extraction']:
+    params['master_wavelensolution_cal_filename'] = params['master_wavelensolution_filename'].replace('.fits','_cal.fits')
+    for entry in ['master_trace_sci_filename', 'master_trace_cal_filename', 'master_wavelensolution_filename', 'master_wavelensolution_sci_filename', 
+                  'master_wavelensolution_cal_filename', 'master_blaze_spec_norm_filename', 'logging_path', 'path_extraction']:
         if entry in params.keys(): 
             if os.path.exists(params[entry]):           # Covers folders, links, files
                 os.system('mv {0} {1}/'.format(params[entry], params['folder_original_traces']))
