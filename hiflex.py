@@ -192,7 +192,7 @@ if __name__ == "__main__":
             else:       # Need to identify the lines
                 
                 arc_lines_px = identify_emission_lines(params, cal_l_spec, cal_s_spec, cal_l_gpm, cal_s_gpm)
-                logger('Info: Identified {0} lines in the arc spectrum. These lines are stored in file {1}'.format(len(arc_lines_px), fname_arclines ))
+                logger('Info: Identified {0} lines in the emission line spectrum. These lines are stored in file {1}'.format(len(arc_lines_px), fname_arclines ))
                 printarrayformat = ['%1.1i', '%3.2f', '%3.2f', '%3.1f']
                 logger('order\tpixel\twidth\theight of the line', show=False, printarrayformat=printarrayformat, printarray=arc_lines_px, logfile=fname_arclines)
             
