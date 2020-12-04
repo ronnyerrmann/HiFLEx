@@ -691,7 +691,7 @@ def warn_images_not_same(ims, names):
                'This is most likely caused by a missing "subframe" in one of the parameters "calib*". Please check.\n {0}'.format(problems[:-1]) )
     return
 
-def read_file_calibration(params, filename, level=0):
+def read_file_calibration(params, filename, level=0, realrun=True):
     """
     Reads the filename and applies the calibrations as given in params['calibs']
     This works also if the files are stored with the following header: BITPIX = 16, BZERO = 32768
@@ -700,34 +700,36 @@ def read_file_calibration(params, filename, level=0):
     :return: 2D numpy array of the file, and the header of the file read
     """
     global calimages
-    im, im_head = read_fits_file(filename)
-    ims = im.shape
-    while len(ims) > 2:
-        if ims[0] == 1:                 # e.g. MRES from NARIT
-            im = im[0,:,:]
-        elif ims[-1] == 1:
-            im = im[:,:,0]
-        else:
-            logger(('Error: The file is stored in a multi-demensional array, which I do not know how to handle. The size of the image is {0}. '+\
-                    '\tThis requires a small adjustment to the code in procedure read_file_calibration.').format(ims))
+    im, im_head = read_fits_file(filename, realrun=realrun)
+    if realrun:
         ims = im.shape
+        while len(ims) > 2:
+            if ims[0] == 1:                 # e.g. MRES from NARIT
+                im = im[0,:,:]
+            elif ims[-1] == 1:
+                im = im[:,:,0]
+            else:
+                logger(('Error: The file is stored in a multi-demensional array, which I do not know how to handle. The size of the image is {0}. '+\
+                        '\tThis requires a small adjustment to the code in procedure read_file_calibration.').format(ims))
+            ims = im.shape
     if params['raw_data_exptim_keyword'] in im_head.keys():
         exptime = im_head[params['raw_data_exptim_keyword']]        #saved as float
     else:
         exptime = 0.0
         logger('Warn: Cannot find the raw_data_exptim_keyword = {0} in the header. Assuming 0 seconds.'.format(params['raw_data_exptim_keyword'] ))
-    logger('Info: image loaded: {0}'.format(filename))
-    im = rotate_flip_frame(im, params )
-    filename_s = filename[max(0,len(filename)-(80-25-1)):]               # Shorten the filename so it fits into the header, 21 failed, 25 worked, between not tested
-    im_head['HIERARCH HiFLEx orig'] = filename_s
-    filename_nopath = filename_s.rsplit(os.sep,1)[-1]
-    im_head['HIERARCH HiFLEx orid'] = filename_nopath
-    calimages['{0}_saturated'.format(filename_s)] = np.where( im > params['max_good_value'] )         # Find the saturated pixel in the original image, consists of (x,y) with x and y are arrays
+    if realrun:
+        logger('Info: image loaded: {0}'.format(filename))
+        im = rotate_flip_frame(im, params )
+        filename_s = filename[max(0,len(filename)-(80-25-1)):]               # Shorten the filename so it fits into the header, 21 failed, 25 worked, between not tested
+        im_head['HIERARCH HiFLEx orig'] = filename_s
+        filename_nopath = filename_s.rsplit(os.sep,1)[-1]
+        im_head['HIERARCH HiFLEx orid'] = filename_nopath
+        calimages['{0}_saturated'.format(filename_s)] = np.where( im > params['max_good_value'] )         # Find the saturated pixel in the original image, consists of (x,y) with x and y are arrays
     for entry in params['calibs']:
         if entry == '':
             continue
         logtxt, headtxt = [], []
-        if entry.lower().find('subframe') > -1:
+        if entry.lower().find('subframe') > -1 and realrun:
             subframe = copy.deepcopy(params[entry])
             if len(subframe) >= 4:
                 # First: extend the image, if necessary
@@ -751,28 +753,31 @@ def read_file_calibration(params, filename, level=0):
         elif entry.lower().find('bias') > -1:
             if entry not in calimages:
                  create_image_general(params, entry, level=level+1)
-            warn_images_not_same([im, calimages[entry]], [filename,entry])
-            if np.percentile(calimages[entry], 90) > 2000 or np.percentile(calimages[entry], 10) < -100:
-                logger('Warn: The bias ({0}) has unphysical values: 10%-percentile = {1}, 90%-percentile = {2}'.format(entry, np.percentile(calimages[entry], 10), np.percentile(calimages[entry], 90)))
-            im = im - calimages[entry]
-            logtxt, headtxt = ['bias correction applied'], ['redu{0}b'.format(level), 'Bias']
+            if realrun:
+                warn_images_not_same([im, calimages[entry]], [filename,entry])
+                if np.percentile(calimages[entry], 90) > 2000 or np.percentile(calimages[entry], 10) < -100:
+                    logger('Warn: The bias ({0}) has unphysical values: 10%-percentile = {1}, 90%-percentile = {2}'.format(entry, np.percentile(calimages[entry], 10), np.percentile(calimages[entry], 90)))
+                im = im - calimages[entry]
+                logtxt, headtxt = ['bias correction applied'], ['redu{0}b'.format(level), 'Bias']
         elif entry.lower().find('dark') > -1:
             if entry == 'dark':             #only add exposure time, if just dark is given
                 entry = entry+str(exptime)
             if entry not in calimages:
                  create_image_general(params, entry, level=level+1)
-            warn_images_not_same([im, calimages[entry]], [filename,entry])
-            if np.percentile(calimages[entry], 90) > 2000 or np.percentile(calimages[entry], 10) < -100:
-                logger('Warn: The dark ({0}) has unphysical values: 10%-percentile = {1}, 90%-percentile = {2}'.format(entry, np.percentile(calimages[entry], 10), np.percentile(calimages[entry], 90)))
-            im = im - calimages[entry]
-            logtxt, headtxt = ['dark correction applied'], ['redu{0}c'.format(level), 'Dark']
+            if realrun:
+                warn_images_not_same([im, calimages[entry]], [filename,entry])
+                if np.percentile(calimages[entry], 90) > 2000 or np.percentile(calimages[entry], 10) < -100:
+                    logger('Warn: The dark ({0}) has unphysical values: 10%-percentile = {1}, 90%-percentile = {2}'.format(entry, np.percentile(calimages[entry], 10), np.percentile(calimages[entry], 90)))
+                im = im - calimages[entry]
+                logtxt, headtxt = ['dark correction applied'], ['redu{0}c'.format(level), 'Dark']
         elif entry.lower().find('rflat') > -1:
             if entry not in calimages:
                  create_image_general(params, entry, level=level+1)
-            warn_images_not_same([im, calimages[entry]], [filename,entry])
-            im = im / (calimages[entry] / np.median(calimages[entry]) )
-            logtxt, headtxt = ['flat correction applied with normalised flat (rflat)'], ['redu{0}d'.format(level), 'Flat']
-        elif entry.lower().find('badpx_mask') > -1:
+            if realrun:
+                warn_images_not_same([im, calimages[entry]], [filename,entry])
+                im = im / (calimages[entry] / np.median(calimages[entry]) )
+                logtxt, headtxt = ['flat correction applied with normalised flat (rflat)'], ['redu{0}d'.format(level), 'Flat']
+        elif entry.lower().find('badpx_mask') > -1 and realrun:
             if entry not in calimages:
                 calimages[entry] = read_badpx_mask(params, ims)
             warn_images_not_same([im, calimages[entry]], [filename,entry])
@@ -790,7 +795,7 @@ def read_file_calibration(params, filename, level=0):
                     im[nonzeroind[0][i],nonzeroind[1][i]] = np.median(section)  #replace bad px with the median of each surrounding area
             logger('Info: {1}: badpx correction applied: {0}'.format(entry, level))
             im_head['HIERARCH HiFLEx redu{0}f'.format(level)] = 'Bad-pixel-mask: {0}'.format(entry)
-        elif entry.lower().find('cosmic_ray') > -1:
+        elif entry.lower().find('cosmic_ray') > -1 and realrun:
             cr_setting = params['cosmic_ray_settings']
             if cr_setting[0].lower() == 'deepcr' and deepCR is not None:
                 if multiprocessing.current_process().name == 'MainProcess':     n_jobs = params['use_cores']
@@ -810,7 +815,7 @@ def read_file_calibration(params, filename, level=0):
                 logger('Info: {1}: cosmic ray correction applied: {0}'.format(entry, level))
                 im_head['HIERARCH HiFLEx redu{0}g'.format(level)] = 'Cosmic ray correction: {0}'.format(entry)
                 im_head['HIERARCH HiFLEx deepCR'] = '{0} pixel from cosmic rays'.format(np.sum(mask))
-        elif entry.lower().find('background') > -1:         # was localbackground before 20200108, this search covers *background
+        elif entry.lower().find('background') > -1 and realrun:         # was localbackground before 20200108, this search covers *background
             if 'sci_trace' in calimages.keys() and 'cal_trace' in calimages.keys():
                 logger('Step: Performing the background fit')
                 sci_tr_poly, xlows, xhighs, widths = calimages['sci_trace']
@@ -843,20 +848,20 @@ def read_file_calibration(params, filename, level=0):
                 logger('Warn: Could not apply the calibration step {0} because the science and/or calibration traces are not yet known.'.format(entry))
         elif entry.lower().find('combine_sum') > -1 or entry.lower().find('combine_mean') > -1 or entry.lower().find('normalise') > -1:
             'nothing to do, as for a different step'
-        else:
+        elif realrun:
             logger('Warn: do not know what to do with this correction: {0}'.format(entry))
-        if len(logtxt) > 0 and len(headtxt) > 0:
+        if len(logtxt) > 0 and len(headtxt) > 0 and realrun:
             #print "np.where(np.isnan(calimages[entry])), calimages[entry].shape", np.where(np.isnan(calimages[entry])), calimages[entry].shape, np.median(calimages[entry]), np.nanmedian(calimages[entry]), np.mean(calimages[entry]), np.nanstd(calimages[entry], ddof=1, axis=None), np.where( np.isinf(calimages[entry]) )
             im_median, im_std = int(round(np.nanmedian(calimages[entry], axis=None))), int(round(np.nanstd(calimages[entry], ddof=1, axis=None)))
             logger('Info: {4}: {3}: {0} (median={1}, std={2})'.format(entry, im_median, im_std, logtxt[0], level))
             im_head['HIERARCH HiFLEx '+headtxt[0]] = '{3}: {0}, median={1}, std={2}'.format(entry, im_median, im_std, headtxt[1])
     #logger('Info: image loaded and processed: {0}'.format(filename))
-    if os.path.exists(params['path_reduced']) and params['path_reduced'].lower() != 'na'+os.sep:       # Save the reduced image
+    if os.path.exists(params['path_reduced']) and params['path_reduced'].lower() != 'na'+os.sep and realrun:       # Save the reduced image
         fname = filename.rsplit(os.sep,1)
         save_im_fits(params, im, im_head,  params['path_reduced']+fname[-1])
     return im, im_head
 
-def create_image_general(params, imtype, level=0):
+def create_image_general(params, imtype, level=0, realrun=True):
     """
     Reads or creates the imtype file. If the key and file for master_<imtype>_filename exists the file is read, otherwise the file is created by combining the <imtype>_rawfiles
     :param params: Dictionary with all the parameters
@@ -870,15 +875,16 @@ def create_image_general(params, imtype, level=0):
     loaded = False
     if 'master_{0}_filename'.format(imtype) in params.keys():
         if params['master_{0}_filename'.format(imtype)] != '' and os.path.isfile(params['master_{0}_filename'.format(imtype)]) == True:
-            logger('Info: Using existing {0}: {1}'.format(imtype,params['master_{0}_filename'.format(imtype)]))
+            if realrun:
+                logger('Info: Using existing {0}: {1}'.format(imtype,params['master_{0}_filename'.format(imtype)]))
             params['calibs'] = params['calibs_read']
             if '{0}_calibs_read'.format(imtype) in params.keys():
                 params['calibs'] = params['{0}_calibs_read'.format(imtype)]
-            im, im_head = read_file_calibration(params, params['master_{0}_filename'.format(imtype)], level=level)
+            im, im_head = read_file_calibration(params, params['master_{0}_filename'.format(imtype)], level=level, realrun=realrun)
             loaded = True
     if loaded == False:
         if '{0}_calibs_create'.format(imtype) not in params.keys():
-            if 'standard_calibs_create' not in params.keys():
+            if 'standard_calibs_create' not in params.keys() and realrun:
                 logger('Error: Missing entry in the configuration file. Neigther "{0}_calibs_create" nor "standard_calibs_create" is given. Please update the configuration file(s).'.format(imtype))
             params['{0}_calibs_create'.format(imtype)] = params['standard_calibs_create']
         for i in range(len(params['{0}_calibs_create'.format(imtype)])):                                                                    # make it safe from different user input
@@ -886,80 +892,83 @@ def create_image_general(params, imtype, level=0):
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].replace('normaliz', 'normalis')
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].replace('normalisation', 'normalise')
         im, med_fluxes, std_fluxes = None, [], []
-        if '{0}_rawfiles'.format(imtype) not in params.keys():
+        if '{0}_rawfiles'.format(imtype) not in params.keys() and realrun:
             logger('Error: The list of raw files for image type {0} is not defined in the configuration. Please check the configuration files.'.format(imtype))
-        if len(params['{0}_rawfiles'.format(imtype)]) == 0:
+        if len(params['{0}_rawfiles'.format(imtype)]) == 0 and realrun:
             logger('Error: The list of raw files for image type {0} is empty. Please check the configuration files.'.format(imtype))
         num_imgs = len(params['{0}_rawfiles'.format(imtype)])                # how many images are expected
         header_updates = np.zeros((num_imgs,2))
         for im_index, imf in enumerate(params['{0}_rawfiles'.format(imtype)]):                   # Only works for maximum 40 images on neils machine
             params['calibs'] = params['{0}_calibs_create'.format(imtype)]       # get's overwritten when other files are being read
-            img, im_head = read_file_calibration(params, imf, level=level)
-            im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # unix_timestamp of mid exposure time
-            header_updates[im_index,:] = [im_head['HIERARCH HiFLEx EXPOSURE'], obsdate_mid_float]         # !!! Improve this calculation and write in the header so it can be used later by get_obsdate 
-            med_flux = np.median(img, axis=None)
-            med_fluxes.append(med_flux)
-            std_fluxes.append(np.std(img, axis=None, ddof=1))
+            img, im_head = read_file_calibration(params, imf, level=level, realrun=realrun)
+            if realrun:
+                im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # unix_timestamp of mid exposure time
+                header_updates[im_index,:] = [im_head['HIERARCH HiFLEx EXPOSURE'], obsdate_mid_float]         # !!! Improve this calculation and write in the header so it can be used later by get_obsdate 
+                med_flux = np.median(img, axis=None)
+                med_fluxes.append(med_flux)
+                std_fluxes.append(np.std(img, axis=None, ddof=1))
+                if 'normalise' in params['{0}_calibs_create'.format(imtype)]:
+                    img = img/(med_flux+0.0)
+                if im is None:                                                # Initiate the array with correct precission to avoid swapping
+                    if num_imgs * np.prod(img.shape) * 2 > mem[1] * 0.49:
+                        prec = np.float16
+                        logger('Warn: The ammount of pictures will most likely cause swapping, which might cause the system to become unresponsive.')
+                    elif num_imgs * np.prod(img.shape) * 4 > mem[1] * 0.49:
+                        prec = np.float16  
+                    elif num_imgs * np.prod(img.shape) * 8 > mem[1] * 0.49:
+                        prec = np.float32  
+                    else:
+                        prec = np.float64
+                    #logger('Test: Precision {0} is used'.format(prec))
+                    im = np.zeros( (num_imgs, img.shape[0], img.shape[1]) ).astype(prec)
+                    #print 'Created:', im.dtype, im.itemsize, im.nbytes, sys.getsizeof(im), im.nbytes/7979408000., mem
+                im[im_index,:,:] = img
+                #print im.dtype, im.itemsize, im.nbytes, sys.getsizeof(im), im.nbytes/7979408000.
+        if realrun:
+            for i in range(len(med_fluxes)):
+                im_head['HIERARCH HiFLEx NORM_{0}'.format(i)] = (med_fluxes[i], 'Median flux in image {0}'.format(i))
+            for i in range(len(std_fluxes)):
+                im_head['HIERARCH HiFLEx STDV_{0}'.format(i)] = (round(std_fluxes[i],5), 'Stdev of flux')
+            if 'combine_mean' in params['{0}_calibs_create'.format(imtype)]:
+                im = combine_sum(im)/(len(im)+0.0)
+                im_head['HIERARCH HiFLEx redu07'] = 'Average of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
+                exposure_time = np.mean(header_updates[:,0])                     # Average of the exposure times
+            elif 'combine_sum' in params['{0}_calibs_create'.format(imtype)]:
+                im = combine_sum(im)
+                im_head['HIERARCH HiFLEx redu07'] = 'Sum of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
+                exposure_time = np.sum(header_updates[:,0])                      # Sum of the exposure times
+            else:           # Median combine
+                im = combine_median(im)
+                #imt = combine_median(im)
+                #aa = np.where(np.isinf(imt))
+                #for ii in range(aa[0].shape):
+                #    print aa[0],aa[1], im[:,aa[0],aa[1]]
+                im_head['HIERARCH HiFLEx redu07'] = 'Median of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
+                exposure_time = np.median(header_updates[:,0])                   # Median of the exposure times
             if 'normalise' in params['{0}_calibs_create'.format(imtype)]:
-                img = img/(med_flux+0.0)
-            if im is None:                                                # Initiate the array with correct precission to avoid swapping
-                if num_imgs * np.prod(img.shape) * 2 > mem[1] * 0.49:
-                    prec = np.float16
-                    logger('Warn: The ammount of pictures will most likely cause swapping, which might cause the system to become unresponsive.')
-                elif num_imgs * np.prod(img.shape) * 4 > mem[1] * 0.49:
-                    prec = np.float16  
-                elif num_imgs * np.prod(img.shape) * 8 > mem[1] * 0.49:
-                    prec = np.float32  
-                else:
-                    prec = np.float64
-                #logger('Test: Precision {0} is used'.format(prec))
-                im = np.zeros( (num_imgs, img.shape[0], img.shape[1]) ).astype(prec)
-                #print 'Created:', im.dtype, im.itemsize, im.nbytes, sys.getsizeof(im), im.nbytes/7979408000., mem
-            im[im_index,:,:] = img
-            #print im.dtype, im.itemsize, im.nbytes, sys.getsizeof(im), im.nbytes/7979408000.
-        for i in range(len(med_fluxes)):
-            im_head['HIERARCH HiFLEx NORM_{0}'.format(i)] = (med_fluxes[i], 'Median flux in image {0}'.format(i))
-        for i in range(len(std_fluxes)):
-            im_head['HIERARCH HiFLEx STDV_{0}'.format(i)] = (round(std_fluxes[i],5), 'Stdev of flux')
-        if 'combine_mean' in params['{0}_calibs_create'.format(imtype)]:
-            im = combine_sum(im)/(len(im)+0.0)
-            im_head['HIERARCH HiFLEx redu07'] = 'Average of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
-            exposure_time = np.mean(header_updates[:,0])                     # Average of the exposure times
-        elif 'combine_sum' in params['{0}_calibs_create'.format(imtype)]:
-            im = combine_sum(im)
-            im_head['HIERARCH HiFLEx redu07'] = 'Sum of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
-            exposure_time = np.sum(header_updates[:,0])                      # Sum of the exposure times
-        else:           # Median combine
-            im = combine_median(im)
-            #imt = combine_median(im)
-            #aa = np.where(np.isinf(imt))
-            #for ii in range(aa[0].shape):
-            #    print aa[0],aa[1], im[:,aa[0],aa[1]]
-            im_head['HIERARCH HiFLEx redu07'] = 'Median of {0} images'.format(len(params['{0}_rawfiles'.format(imtype)]))
-            exposure_time = np.median(header_updates[:,0])                   # Median of the exposure times
-        if 'normalise' in params['{0}_calibs_create'.format(imtype)]:
-            norm_factor = np.median(med_fluxes)
-            im = im * norm_factor
-            im_head['HIERARCH HiFLEx NORM_MED'] = norm_factor
-        im_head['HIERARCH HiFLEx MID_'+params['raw_data_dateobs_keyword']] = datetime.datetime.utcfromtimestamp(np.median(header_updates[:,1])).strftime('%Y-%m-%dT%H:%M:%S.%f')
-        im_head['HIERARCH HiFLEx '+params['raw_data_exptim_keyword']] = exposure_time
-        first, last = np.argmin(header_updates[:,1]), np.argmax(header_updates[:,1])
-        first = header_updates[first,1]-header_updates[first,0]/2.
-        last  = header_updates[last, 1]+header_updates[last, 0]/2.
-        im_head['HIERARCH HiFLEx BEGIN FIRST'] = datetime.datetime.utcfromtimestamp(first).strftime('%Y-%m-%dT%H:%M:%S.%f')
-        im_head['HIERARCH HiFLEx END LAST']    = datetime.datetime.utcfromtimestamp(last ).strftime('%Y-%m-%dT%H:%M:%S.%f')
-        im_head['HIERARCH HiFLEx EXP_RANGE']   = (last - first, 'sec, from BEGIN to END')
-        filename = params['master_{0}_filename'.format(imtype)]
-        filename_s = filename[max(0,len(filename)-(80-25-1)):]               # Shorten the filename so it fits into the header, 21 failed, 25 worked, between not tested
-        im_head['HIERARCH HiFLEx orig'] = filename_s
-        filename_nopath = filename_s.rsplit(os.sep,1)[-1]
-        im_head['HIERARCH HiFLEx orid'] = filename_nopath
-        if 'master_{0}_filename'.format(imtype) in params.keys():
-            if params['master_{0}_filename'.format(imtype)] != '':
-                save_im_fits(params, im, im_head,  params['master_{0}_filename'.format(imtype)])
-        
-    calimages[imtype] = im
-    calimages['{0}_head'.format(imtype)] = im_head
+                norm_factor = np.median(med_fluxes)
+                im = im * norm_factor
+                im_head['HIERARCH HiFLEx NORM_MED'] = norm_factor
+            im_head['HIERARCH HiFLEx MID_'+params['raw_data_dateobs_keyword']] = datetime.datetime.utcfromtimestamp(np.median(header_updates[:,1])).strftime('%Y-%m-%dT%H:%M:%S.%f')
+            im_head['HIERARCH HiFLEx '+params['raw_data_exptim_keyword']] = exposure_time
+            first, last = np.argmin(header_updates[:,1]), np.argmax(header_updates[:,1])
+            first = header_updates[first,1]-header_updates[first,0]/2.
+            last  = header_updates[last, 1]+header_updates[last, 0]/2.
+            im_head['HIERARCH HiFLEx BEGIN FIRST'] = datetime.datetime.utcfromtimestamp(first).strftime('%Y-%m-%dT%H:%M:%S.%f')
+            im_head['HIERARCH HiFLEx END LAST']    = datetime.datetime.utcfromtimestamp(last ).strftime('%Y-%m-%dT%H:%M:%S.%f')
+            im_head['HIERARCH HiFLEx EXP_RANGE']   = (last - first, 'sec, from BEGIN to END')
+            filename = params['master_{0}_filename'.format(imtype)]
+            filename_s = filename[max(0,len(filename)-(80-25-1)):]               # Shorten the filename so it fits into the header, 21 failed, 25 worked, between not tested
+            im_head['HIERARCH HiFLEx orig'] = filename_s
+            filename_nopath = filename_s.rsplit(os.sep,1)[-1]
+            im_head['HIERARCH HiFLEx orid'] = filename_nopath
+            if 'master_{0}_filename'.format(imtype) in params.keys():
+                if params['master_{0}_filename'.format(imtype)] != '':
+                    save_im_fits(params, im, im_head,  params['master_{0}_filename'.format(imtype)])
+    
+    if realrun:    
+        calimages[imtype] = im
+        calimages['{0}_head'.format(imtype)] = im_head
     return im, im_head
 
 def get_minimum_data_type(arr, allow_unsigned=True):
@@ -1007,22 +1016,24 @@ def load_obj(name ):
     with open(name + '.pkl', 'rb') as f:
         return pickle.load(f)
 
-def read_fits_file(filename, dtype=np.float64):
+def read_fits_file(filename, dtype=np.float64, realrun=True):
     if os.path.isfile(filename) == False:
         logger('Error: File {0} is missing.'.format(filename))
     hdu = fits.open(filename)
     founddata = False
-    for ii in range(len(hdu)):
+    for ii in range(len(hdu)):      # Use all headers but only the first data set
         if ii == 0:
             im_head = hdu[ii].header
         else:
             im_head.extend(hdu[ii].header)
-        if len(hdu[ii].shape) >= 2 and not founddata:
+        if len(hdu[ii].shape) >= 2 and not founddata and realrun:
             im = np.array(hdu[ii].data, dtype=dtype)
             founddata = True        
-    if not founddata:
+    if not founddata and realrun:
         logger('Error: Found no useful data in file {0} . This probably requires a modification in the code. header.info() gives:\n{1}'.format(filename, hdu.info() ))
-    
+    if not realrun:       # just open the header
+        im = np.array([])
+        
     return im, im_head
 
 def save_im_fits(params, im, im_head, filename):
@@ -1488,43 +1499,6 @@ def twoD_Gaussian(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):      
     g = offset + amplitude*np.exp( - (a*((x-xo)**2) + 2*b*(x-xo)*(y-yo) 
                             + c*((y-yo)**2)))
     return g.ravel()
-
-def unify_pord(pfits):                          # Only required because of the use of polynomialfit
-    """
-    Different orders are tested for each polynom. In order to create a np.array from of them zeros need to be added for the missing parameters
-    :param pfits: 2d list of floats, the parameters for the polynoms
-    :return: 2d array of floats, the parameters for the polynoms
-    """
-    # What is the maximum numbers of orders used for the polynomial fit
-    porder = 0
-    for pfit in pfits:
-        porder = max(porder,len(pfit)-1)
-    polyfits = []
-    for pfit in pfits:
-        polyfit = pfit
-        while len(polyfit)-1 < porder:
-            polyfit.insert(0,0)
-        polyfits.append(polyfit)
-    return np.array(polyfits)
-
-"""def polynomialfit_notusedanymore(x, y, nmin=1, nmax=3):        # Not really necessary, the result is always that nmax fits best
-    ""
-    Select the minimum chi squared polynomial fit between nmin and nmax
-    :param x: x axis array
-    :param y: y axis array
-    :param nmin: minimum order to fit
-    :param nmax: maximum order to fit
-    return ps: array of the parameters from the fit
-    return nrange: number of parameters for the best fit, e.g. len(ps)
-    ""
-    chis, ps = [], []
-    nrange = range(nmin, nmax+1)
-    for n in nrange:
-        p = np.polyfit(x, y, n)
-        ps.append(p)
-        chis.append(np.sum((y-np.polyval(p, x))**2))
-    argmin = np.argmin(chis)
-    return ps[argmin], nrange[argmin]"""
 
 def polyfit_adjust_order(xarr, yarr, p_orders, w=None):
     """
@@ -2320,7 +2294,6 @@ def find_trace_orders(params, im, imageshape):
                  np.nanmean(percentile_list(np.array(widths)[:,2],0.1))]      #average left, right, and gaussian width
         #print positions
         # Fit to the original image
-        #pfs, ns = polynomialfit(positions[:,0]*binx, positions[:,1]*biny, 1, params['polynom_order_apertures'])     # (positions[:,1]-ims[0]/2)*biny for fit in the center of the image, but this needs to be taken into account for the next step
         pfs = np.polyfit(positions[:,0]*binx - cen_px, positions[:,1]*biny, params['polynom_order_apertures'])
         # Remove values which were added only to follow the curve
         positions = positions[positions[:,2]==0,0:2]
@@ -2422,14 +2395,6 @@ def adjust_trace_order(kwargs):
             return [], [], [], [], [], [], []
         positions = np.array(positions)
         widths_o = np.array(widths_o)
-        # Fit to the original image
-        """
-        pfs, ns = polynomialfit(positions[:,0]*binx, positions[:,1]*biny, 1, params['polynom_order_apertures'])
-        # Remove values which were added only to follow the curve
-        positions = positions[positions[:,2]==0,0:2]
-        traces.append([ list(pfs) ,ns, max(0,min(positions[:,0])*binx-5), min(params['subframe'][0],(max(positions[:,0])+1)*binx+5), list(width) ])
-        #print len(positions), min(positions[:,0]),(max(positions[:,0])+1)*binx-1
-        logger('Step: order {0} adjusted: avg shift = {1}, min shift = {2}, max shift = {3}, avg width: gauss = {6}, left = {4}, right = {5}'.format(order, round(np.mean(shifts),2),round(min(shifts),2),round(max(shifts),2), round(width[0],2),round(width[1],2),round(width[2],2) ))"""
         # Fit the center
         pfs = np.polyfit(positions[:,0]*binx - cen_px, positions[:,1]*biny, params['polynom_order_apertures'])
         #centerfit.append(pfs)
@@ -4032,7 +3997,6 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
      
         # Search for orders in the small image
         polyfits, xlows, xhighs = find_trace_orders(params, sim_sflat, im_sflat.shape)
-        polyfits = unify_pord(polyfits)
         # save parameters of the polynoms into a fitsfile (from Neil)
         save_fits_width(polyfits, xlows, xhighs, [], params['logging_traces_binned'])
         plot_traces_over_image(im_sflat, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
@@ -4481,8 +4445,9 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     # Doing a wavelength shift for the flat_spec_norm is probably not necessay, as it's only few pixel
     measure_noise_orders = 16
     measure_noise_semiwindow = 10                   # in pixel
-    efspectra = measure_noise(fspectra, p_order=measure_noise_orders, semi_window=measure_noise_semiwindow)             # Noise will be high at areas wih absorption lines
-    cspectra, noise_cont = normalise_continuum(fspectra, wavelengths, nc=6, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders)      
+    efspectra = measure_noise(fspectra, p_order=measure_noise_orders, semi_window=measure_noise_semiwindow)             # Noise will be high at areas wih absorption lines, takes about a minute for 75o6000px
+    cspectra, noise_cont = normalise_continuum(fspectra, wavelengths, nc=6, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders)  # takes about 3 (22) minutes for 75o6000px for Tungsten (for noise)
+
     # normalise_continuum measures the noise different than measure_noise
     if len(params['sigmaclip_spectrum']) == 3:        # sigmaclipping
         removed = 0
@@ -4497,7 +4462,7 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
         
     # Correct wavelength by barycentric velocity
     wavelengths_bary = wavelengths * (1 + bcvel_baryc/(Constants.c/1E3) )
-    
+
     do_RV = True
     for no_RV_name in params['no_RV_names']:
         if im_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
@@ -4509,9 +4474,9 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     im_head_bluefirst = add_specinfo_head(spectra[::-1,:], spectra[::-1,:], noise_cont[::-1,:], extr_width[::-1,:], im_head_bluefirst)
     wspec = good_px_mask* flat_spec_norm[1]
     doo = dict(spec=True, blaze=True, weight=True, norm=True, blue=True, harps=do_RV)
-    
+
     save_single_files(params, obnames, im_name, im_head, im_head_bluefirst, spectra, fspectra, cspectra, wspec, wavelengths, wavelength_solution_shift, doo)
-    
+
     if params['wavelength_scale_resolution'] > 0.0 and np.max(wave_sol_dict_cal['wavesol'][:,-1]) > 100:
         # Create a linearised solution for the input spectrum and the continuum corrected spectrum
         #logger('Step: Linearising the spectrum (commented out)')

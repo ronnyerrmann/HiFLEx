@@ -343,18 +343,11 @@ if __name__ == "__main__":
         
         if ( params['arcshift_side'] == 0 or params['two_solutions'] or True ) and len(wavelengthcals_cal)+len(wavelengthcals_sci) > 0:         # or True: added 20201016, do it in any case, as there might be ThAr only sometimes in cal fiber
             def wavecal_multicore(parameter):
-                        wavelengthcal, fib, im_name_full = parameter
-                        # !!! Posible improvement: combine a few files if they are taken close to each other
-                        im_name = im_name_full.rsplit(os.sep)
-                        im_name = im_name[-1].rsplit('.',1)         # remove the file ending
-                        im_name = im_name[0]
-                        im_name_wc = im_name+'_wave'+fib
-                        if os.path.isfile(params['path_extraction']+im_name_wc+'.fits'):
-                            logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name_wc, params['path_extraction']))
-                        else:
-                            params['calibs'] = params[wavelengthcal+'_calibs_create']
-                            im, im_head = read_file_calibration(params, im_name_full)
-                            extraction_wavelengthcal(params, im, im_name_wc, im_head, calimages['sci_trace'], calimages['cal_trace'],
+                wavelengthcal, fib, im_name_full, im_name_wc, im_name, realrun = parameter
+                params['calibs'] = params[wavelengthcal+'_calibs_create']
+                im, im_head = read_file_calibration(params, im_name_full, realrun=realrun)
+                if realrun:
+                    extraction_wavelengthcal(params, im, im_name_wc, im_head, calimages['sci_trace'], calimages['cal_trace'],
                                                         calimages['wave_sol_dict_'+fib], reference_lines_dict, im_trace1, im_name)
                         
             
@@ -367,18 +360,24 @@ if __name__ == "__main__":
                 if 'wave_sol_dict_'+fib not in calimages.keys():                    # Ignore cal if it's a single fiber spectrograph
                     continue
                 for wavelengthcal in wavelengthcals:
+                    # !!! Posible improvement: combine a few files if they are taken close to each other
                     for im_name_full in params[wavelengthcal+'_rawfiles']:
-                        all_wavelengthcals.append([ wavelengthcal, fib, im_name_full ])
+                        im_name = im_name_full.rsplit(os.sep)
+                        im_name = im_name[-1].rsplit('.',1)         # remove the file ending
+                        im_name = im_name[0]
+                        im_name_wc = im_name+'_wave'+fib
+                        if os.path.isfile(params['path_extraction']+im_name_wc+'.fits'):
+                            logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name_wc, params['path_extraction']))
+                        else:
+                            wavecal_multicore([ wavelengthcal, fib, im_name_full, im_name_wc, im_name, False ])      # Try run to get the calibration data
+                            all_wavelengthcals.append([ wavelengthcal, fib, im_name_full, im_name_wc, im_name, True ])
             if params['use_cores'] > 1:
-                if len(all_wavelengthcals) > 0:
-                    wavecal_multicore(all_wavelengthcals[0])         # run the first one single, so that not all calibration data will be created in the same moment
-                if len(all_wavelengthcals) > 1:
-                    logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
-                    sort_wavelengthcals = sort_for_multiproc_map(all_wavelengthcals[1:], params['use_cores'])
-                    p = multiprocessing.Pool(params['use_cores'])
-                    p.map(wavecal_multicore, sort_wavelengthcals)
-                    p.terminate()
-                    p.join()
+                logger('Info using multiprocessing on {0} cores, hence output will be for several files in parallel.'.format(params['use_cores']))
+                sort_wavelengthcals = sort_for_multiproc_map(all_wavelengthcals, params['use_cores'])
+                p = multiprocessing.Pool(params['use_cores'])
+                p.map(wavecal_multicore, sort_wavelengthcals)
+                p.terminate()
+                p.join()
             else:
                 for all_wavelengthcal in all_wavelengthcals:
                     wavecal_multicore(all_wavelengthcal)
@@ -399,50 +398,48 @@ if __name__ == "__main__":
             header_results_to_texfile(params)           # Save the results from the header in a logfile
             exit(0)
         logger('Info: Starting to extract spectra')
-        if params['use_cores'] > 1:
-            print('Note: Will use multiple cores, hence output will be for several files in parallel')
+        
         def extraction_multicore(all_extractions):
-            [extraction, im_name_full] = all_extractions
+            [extraction, im_name_full, im_name, realrun] = all_extractions
+            if os.path.isfile(params['path_extraction']+im_name+'.fits'):
+                logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
+                return ''
             if  extraction.find('extract_combine') == -1:     # Single file extraction
-                #for im_name_full in params[extraction+'_rawfiles']:
-                if True:
-                    im_name = im_name_full.rsplit(os.sep)
-                    im_name = im_name[-1].rsplit('.',1)         # remove the file ending
-                    im_name = im_name[0]
-                    if os.path.isfile(params['path_extraction']+im_name+'.fits'):
-                        logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
-                        return ''
-                    #print extraction, im_name_full, im_name
-                    params['calibs'] = params[extraction+'_calibs_create']
-                    im, im_head = read_file_calibration(params, im_name_full)
-                    
+                params['calibs'] = params[extraction+'_calibs_create']
+                im, im_head = read_file_calibration(params, im_name_full, realrun=realrun)   
             else:                                       # Combine files before extraction
-                im_name = extraction
-                if os.path.isfile(params['path_extraction']+im_name+'.fits'):
-                    logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
-                    return ''
-                im, im_head = create_image_general(params, extraction)
-            obj_name = extraction_steps(params, im, im_name, im_head, calimages['sci_trace'], calimages['cal_trace'], 
+                im, im_head = create_image_general(params, extraction, realrun=realrun)
+            if realrun:
+                obj_name = extraction_steps(params, im, im_name, im_head, calimages['sci_trace'], calimages['cal_trace'], 
                                         calimages.get('wave_sol_dict_cal',calimages['wave_sol_dict_sci']), reference_lines_dict, calimages['flat_spec_norm'], im_trace1)
-            return obj_name.lower()
+                return obj_name.lower()
+
         
         all_extractions = []
         for extraction in extractions:
             if  extraction.find('extract_combine') == -1:     # Single file extraction
                 for im_name_full in params[extraction+'_rawfiles']:
-                    all_extractions.append([extraction, im_name_full])
+                    im_name = im_name_full.rsplit(os.sep)
+                    im_name = im_name[-1].rsplit('.',1)         # remove the file ending
+                    im_name = im_name[0]
+                    if os.path.isfile(params['path_extraction']+im_name+'.fits'):
+                        logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
+                    else:
+                        extraction_multicore([extraction, im_name_full, im_name, False])
+                        all_extractions.append([extraction, im_name_full, im_name, True])
             else:
-                all_extractions.append([extraction, extraction])
+                if os.path.isfile(params['path_extraction']+extraction+'.fits'):
+                    logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(extraction, params['path_extraction']))
+                else:
+                    extraction_multicore([extraction, extraction, extraction, False])
+                    all_extractions.append([extraction, extraction, extraction, True])
         if params['use_cores'] > 1:
-            if len(all_extractions) > 0:
-                obj_names.append( extraction_multicore(all_extractions[0]) )
-            if len(all_extractions) > 1:
-                logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
-                p = multiprocessing.Pool(params['use_cores'])
-                sort_extractions = sort_for_multiproc_map(all_extractions[1:], params['use_cores'])
-                obj_names += p.map(extraction_multicore, sort_extractions)
-                p.terminate()
-                p.join()
+            logger('Info using multiprocessing on {0} cores, hence output will be for several files in parallel'.format(params['use_cores']))
+            p = multiprocessing.Pool(params['use_cores'])
+            sort_extractions = sort_for_multiproc_map(all_extractions, params['use_cores'])
+            obj_names += p.map(extraction_multicore, sort_extractions)
+            p.terminate()
+            p.join()
         else:
             for all_extraction in all_extractions:
                 obj_names.append( extraction_multicore(all_extraction) )
