@@ -34,10 +34,15 @@ conda activate hiflex
 pip install gatspy barycorrpy deepCR PyAstronomy
 ```
 
-Download and extract the [latest relase](https://github.com/ronnyerrmann/HiFLEx/releases) or clone the repository
+Download and extract the [latest relase](https://github.com/ronnyerrmann/HiFLEx/releases) or clone the repository:
 ```
 git clone https://github.com/ronnyerrmann/hiflex.git
 ```
+(Later on the latest version can be obtained by running the following command in the hiflex folder:
+```
+git pull
+```
+)
 
 ## First steps
 Activate the hiflex environment (if not done already):

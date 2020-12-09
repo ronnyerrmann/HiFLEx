@@ -107,6 +107,7 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 
 \begin{itemize}\setlength\itemsep{0em}
   \item Parallelisation of long running steps
+  \item Logging of the resolution along the detector. Added parameter \verb|logging_resolution_form|
 \end{itemize}
 
 \subsection*{v1.3.1}
@@ -806,12 +807,18 @@ The identification of the traces can be checked easily in the file given in para
 
 During the step to find the wavelength solution, the pipeline logs data similar to the following output:
 \begin{lstlisting}[style=base, basicstyle=\tiny]
-Info: To match the most lines in the arc with the old wavelength solution, a shift
-of -2 orders, a multiplier to the resolution of 0.994, a shift of -10 px, and a
-shift of 0.0 px per order needs to be applied. 1046 lines were identified. The
-deviation is 0.1197 Angstrom.
-Info: used 1054 lines. The standard deviation of the residuals between the lines and the fit is 0.0344 Angstrom (the average of the abs of the residuals is 0.0223 Angstrom). This converts into a resoution R = 183169. The Gaussian width of the emssion lines results in an R = 46223 +- 12192. The 2-pixel resolution (around the identified lines) is R = 72840 +- 4107.
-Info: A 2d polynom fit with 5 orders in dispersion direction (along the traces) and 5 orders in cross-dispersion direction was used. With this solution, the offset between aperture and real orders is 75. With this offset, the standard deviation of the residuals between the central wavelengths and the grating equation is 0.042 Angstrom (abs of average is 0.0336 Angstrom). Using the original solution gives an offset of 75.
+Info: To match the most lines in the emission line spectrum with the old wavelength solution, a shift of 8 orders,
+ a multiplier to the resolution of 0.994, a shift of -300 px, and a shift of 0.0 px per order needs to be applied.
+ 7628 lines were identified. The deviation is 0.1074 Angstrom.
+Info: used 3413 lines. The standard deviation (using 8 degrees of freedom) of the residuals between the lines and
+ the fit is 0.00334 Angstrom. The FWHM of the emission lines results in an R = 156231 +- 45280. The 2-pixel
+ resolution (around the identified lines) is R = 312437 +- 12940. The deviation to the line fit converts into a
+ resolution R = 1635506. The average of the abs of the residuals is 0.00252 Angstrom. 
+Info: A 2d polynom fit with 4 orders in dispersion direction (along the traces) and 4 orders in cross-dispersion
+ direction was used. With this solution, the offset between aperture and real orders is 84. To fulfil the grating
+ equation the central pixel of the individual orders needs to be 3067.0 + -0.0*order + 0.0*order**2.With this values
+ the standard deviation of the residuals between the central wavelengths and the grating equation is 0.159 Angstrom.
+ Using the original solution gives an offset of 84.
 
 ap cenwav minwav maxwav range Ang/  name numb gausswi gausswi min_   max_   range_reflin
                                px             dth_avg dth_std reflin reflin _whole_order
@@ -824,7 +831,7 @@ ap cenwav minwav maxwav range Ang/  name numb gausswi gausswi min_   max_   rang
 -1   -1.0   -1.0   -1.0 -1.0  1.000 Ar I  148    2.07    0.61 5802.1 7948.2  2146.1
 -1   -1.0   -1.0   -1.0 -1.0  1.000 Th I  376    2.04    0.66 5789.6 8014.5  2224.9
 \end{lstlisting} 
-Thereby the table contains the following information:
+Thereby the Resolution of the FWHM is the best value to use. The distribution of the resolution along the detector is shown in Figure~\ref{figure_wavelength_solution_resolution}. The table contains the following information:
 \begin{description}
   \item[apert] Aperture of the trace, starting with 0 for the reddest aperture ($\tilde{m}$). To get the real order the offset $m_0$ is given in the text before (here: 72). The offset is determined using two different ways. First the data is compared to the grating equation $\lambda \propto m_0 + \tilde{m}$. In Practical this was done by searching for the smallest slope in the formula $y = (m_0 + \tilde{m})\lambda_c$, were $\lambda_c$ is central wavelength of each order. The second value for the real order offset is determined from the shift towards the previous wavelength solution. Both values for the offset should be the same. Only the first value is saved in the file for the wavelength solution.
   \item[cenwave] Central wavelength of the order, determines the zero point of the wavelength solution.
@@ -862,6 +869,16 @@ The last lines give the information for all apertures. Columns, for which no use
   \caption{Residuals between the identified catalogue lines and the wavelength solution. Colorcoded are the different apertures.
     \label{figure_arc_line_identification_residuals}}
 \end{figure}
+
+\begin{figure} 
+  \begin{center}
+    \includegraphics[width=\textwidth]{./figures/wavelength_solution_resolution_on_detector_cal}
+  \end{center} 
+  \caption{Resolution along the detector. Measurements were only possible were catalogue lines were matched with emission lines. Local areas of low resolution are most likely caused by blended lines. The wavelength solution might be improved by removing these lines from the catalogue.
+    \label{figure_wavelength_solution_resolution}}
+\end{figure}
+
+
 
 \vspace{0.5em}\noindent \textbf{Step 5:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \textit{master\_flat\_spec\_norm.fits}). The extraction and data format is described in Chapter~\ref{section:extraction_data_format}
 
@@ -1311,9 +1328,18 @@ Afterwards, please make sure that \verb|import barycorrpy| works in python.
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/HiFLEx/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.3.0.tar.gz
+wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.3.2.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
+Alternatively, the following command downloads the latest version of the files:
+\begin{lstlisting}[style=base]
+git clone https://github.com/ronnyerrmann/hiflex.git
+\end{lstlisting}
+Later updates can be obtained by running the following command in the hiflex folder:
+\begin{lstlisting}[style=base]
+git pull
+\end{lstlisting}
+
 
 \noindent The following files should be available now in the program folder:
 \begin{description}

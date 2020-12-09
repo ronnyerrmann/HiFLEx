@@ -136,7 +136,8 @@ if __name__ == "__main__":
         if 'master_wavelensolution'+calib[0]+'_filename' not in params.keys():
             params['master_wavelensolution'+calib[0]+'_filename'] = params['master_wavelensolution_filename'].replace('.fit',calib[0]+'.fit')
         for pngparam in ['logging_wavelength_solution_form', 'logging_em_lines_gauss_width_form', 'logging_arc_line_identification_residuals',
-                         'logging_arc_line_identification_positions', 'logging_arc_line_identification_residuals_hist', 'logging_em_lines_bisector']:
+                         'logging_arc_line_identification_positions', 'logging_arc_line_identification_residuals_hist', 
+                         'logging_em_lines_bisector', 'logging_resolution_form']:
             params[pngparam] = params[pngparam].replace(prev+'.png','')+calib[0]+'.png'
         for pdfparam in ['logging_arc_line_identification_spectrum']:
             params[pdfparam] = params[pdfparam].replace(prev+'.pdf','')+calib[0]+'.pdf'

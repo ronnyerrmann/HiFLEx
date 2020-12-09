@@ -301,6 +301,7 @@ def textfileargs(params, textfile=None):
     # Add standard parameters, if they are missing, more at the end
     params['logging_arc_line_identification_residuals_hist'] = params.get('logging_arc_line_identification_residuals_hist', 'arc_line_identification_residuals_hist.png')
     params['logging_em_lines_bisector'] = params.get('logging_em_lines_bisector', 'wavelength_solution_emmission_lines_bisector.png')
+    params['logging_resolution_form'] = params.get('logging_resolution_form', 'wavelength_solution_resolution_on_detector.png')
     params['logging_blaze_spec'] = params.get('logging_blaze_spec', 'blaze_spectrum.pdf')
     # Added 20201022:
     params['logging_crossdispersion_shift'] = params.get('logging_crossdispersion_shift', 'crossdispersions_shift.txt')
@@ -5373,7 +5374,7 @@ def plot_wavelength_solution_form(fname, traces_def, wavelength_solution):
     axis_name = ['Order', 'Position in Dispersion direction [{0} px]'.format(step), 'wavelength difference [Angstrom/{0}px]'.format(step)]
     plot_img_spec.plot_image(im, [fname], pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, autotranspose=False, colorbar=colorbar, axis_name=axis_name, size=[16,10])
 
-def plot_wavelength_solution_width_emmission_lines(fname, specs, data, indexes, step=20):
+def plot_wavelength_solution_width_emmission_lines(fname, specs, data, indexes, step=20, title='Gaussian width'):
     """
     Creates a map of the Gaussian width of the emmission lines
     :param fname: Filename to which the image is saved
@@ -5390,9 +5391,10 @@ def plot_wavelength_solution_width_emmission_lines(fname, specs, data, indexes, 
             if np.sum(good_values) > 0:
                 gauss_ima[order,i] = np.median(data[good_values,gg])
     gauss_ima[np.isnan(gauss_ima)] = np.nanmax(gauss_ima)+1
-    title = 'Plot of the Gaussian width every {0} pixel (white shows areas with no data available)'.format(step)
-    axis_name = ['Position in Dispersion direction [{0} px]'.format(step), 'Order', 'Gaussian width of the emission lines [px] (white shows areas with no data available)'.format(step)]
-    plot_img_spec.plot_image(gauss_ima, [fname], pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title, autotranspose=False, colorbar=True, axis_name=axis_name, size=[16,10])
+    title_f = 'Plot of the {1} every {0} pixel (white shows areas with no data available)'.format(step, title)
+    axis_name = ['Position in Dispersion direction [{0} px]'.format(step), 'Order', '{0} of the emission lines [px] (white shows areas with no data available)'.format(title)]
+    plot_img_spec.plot_image(gauss_ima, [fname], pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title_f, autotranspose=False, colorbar=True, axis_name=axis_name, size=[16,10])
+    print(fname) 
 
 def plot_overlapping_orders(order, x_full, y1_full, y2_full=None, labels=[]):
     """
@@ -6968,14 +6970,16 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     # Resolution from the precission of the fit
     std_R_fit = 1.0/np.std(arc_lines_wavelength[:,3]/(arc_lines_wavelength[:,2]+0.0), ddof=(polynom_order_trace+polynom_order_intertrace+1))    # lambda/d_lambda
     # Resolution using the Gaussian width of the arc lines
-    R_gauss     = arc_lines_wavelength[:,2]/(1.*arc_lines_wavelength[:,-1]*arc_lines_wavelength[:,-3])    # lambda/d_lambda ; -1 is in px, -3 is resolution
+    R_gauss     = arc_lines_wavelength[:,2]/(1.*arc_lines_wavelength[:,9]*arc_lines_wavelength[:,7])    # lambda/d_lambda ; -1=9 is in Gauss width in px, -3=7 is resolution
+    arc_lines_wavelength = np.hstack(( arc_lines_wavelength, (R_gauss/2.35482).reshape(( R_gauss.shape[0], 1 )) ))      # Resolution
+    R_gauss     = arc_lines_wavelength[:,2]/(1.*arc_lines_wavelength[:,9]*arc_lines_wavelength[:,7])    # lambda/d_lambda ; -1=9 is in Gauss width in px, -3=7 is resolution
     good_values, p = sigmaclip(R_gauss, nc=0, ll=3, lu=3)   #y, order of polynom (if 0 than average -> x doesn't matter), sigma, sigma
     R_gauss     = R_gauss[good_values]
     avg_R_gauss = np.mean(R_gauss)
     std_R_gauss = np.std(R_gauss, ddof=1)
     avg_R_fwhm, std_R_fwhm = avg_R_gauss/2.35482, std_R_gauss/2.35482
     # 2px Resolution (using only the identified arc lines
-    R_2px     = arc_lines_wavelength[:,2]/(2.*arc_lines_wavelength[:,-3])    # lambda/d_lambda
+    R_2px     = arc_lines_wavelength[:,2]/(2.*arc_lines_wavelength[:,7])    # lambda/d_lambda
     avg_R_2px = np.mean(R_2px)
     std_R_2px = np.std(R_2px, ddof=1) 
     text = 'Info: used {0} lines. The standard deviation (using {8} degrees of freedom) of the residuals between the lines and the fit is {1} Angstrom. '+\
@@ -7000,6 +7004,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     logger('order\tpixel\twavelength\tdwavel', show=False, printarrayformat=printarrayformat, printarray=arc_lines_wavelength[:,0:4], logfile=params['logging_identified_arc_lines'])
     
     # Create an image of the gaussian widths of the identified lines
+    plot_wavelength_solution_width_emmission_lines(params['logging_resolution_form'], specs, arc_lines_wavelength, [0,1,10], title='Resolution')   # order, wavelength, gauss width
     plot_wavelength_solution_width_emmission_lines(params['logging_em_lines_gauss_width_form'], specs, arc_lines_wavelength, [0,1,9])   # order, wavelength, gauss width
     plot_hist_residuals_wavesol(params['logging_arc_line_identification_residuals_hist'], arc_lines_wavelength, [0,1,2,3] )             # order, pixel, wavelength, residuals
     bisector_measurements_emission_lines(params['logging_em_lines_bisector'], spectrum, arc_lines_wavelength, [0,1,9])         # order, pixel, width
@@ -7024,7 +7029,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     wavelength_solution, wavelength_solution_arclines, line_stats = transform_wavelength_solution_2d_to_n1d(specs[0], specs[1], 
                                 polynom_order_trace, polynom_order_intertrace, poly2d_params, order_offset, cen_px, arc_lines_wavelength)
     
-    statistics_arc_reference_lines(arc_lines_wavelength, [0,-2,-1,2], reference_names, wavelength_solution, xlows, xhighs)
+    statistics_arc_reference_lines(arc_lines_wavelength, [0,8,9,2], reference_names, wavelength_solution, xlows, xhighs)
         
     if std_diff_fit > 2*max(wavelength_solution[:,-2]) or std_diff_fit < 1E-8:        # if residuals are bigger than 1px or unreasonable small
         plot_wavelength_solution_spectrum(params, spectrum, spectrum, params['logging_arc_line_identification_spectrum'], wavelength_solution, 
