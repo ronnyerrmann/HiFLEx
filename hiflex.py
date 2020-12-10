@@ -350,11 +350,6 @@ if __name__ == "__main__":
                 if realrun:
                     extraction_wavelengthcal(params, im, im_name_wc, im_head, calimages['sci_trace'], calimages['cal_trace'],
                                                         calimages['wave_sol_dict_'+fib], reference_lines_dict, im_trace1, im_name)
-                        
-            
-            logger('Info: Starting to extract wavelength calibrations')
-            if params['use_cores'] > 1:
-                print('Note: Will use multiple cores, hence output will be for several files in parallel')
             params['extract_wavecal'] = True                                                                                # necessary for shift_wavelength_solution so the shift is stored in a file
             all_wavelengthcals = []
             for [wavelengthcals, fib] in [ [wavelengthcals_cal,'cal'], [wavelengthcals_sci,'sci'] ]:
@@ -373,13 +368,14 @@ if __name__ == "__main__":
                             wavecal_multicore([ wavelengthcal, fib, im_name_full, im_name_wc, im_name, False ])      # Try run to get the calibration data
                             all_wavelengthcals.append([ wavelengthcal, fib, im_name_full, im_name_wc, im_name, True ])
             if params['use_cores'] > 1:
-                logger('Info using multiprocessing on {0} cores, hence output will be for several files in parallel.'.format(params['use_cores']))
+                logger('Info: Starting to extract wavelength calibrations using multiprocessing on {0} cores, hence output will be for several files in parallel.'.format(params['use_cores']))
                 sort_wavelengthcals = sort_for_multiproc_map(all_wavelengthcals, params['use_cores'])
                 p = multiprocessing.Pool(params['use_cores'])
                 p.map(wavecal_multicore, sort_wavelengthcals)
                 p.terminate()
                 p.join()
             else:
+                logger('Info: Starting to extract wavelength calibrations')
                 for all_wavelengthcal in all_wavelengthcals:
                     wavecal_multicore(all_wavelengthcal)
         
@@ -398,7 +394,6 @@ if __name__ == "__main__":
             logger('Warn: Nothing to extract. -> Exiting')
             header_results_to_texfile(params)           # Save the results from the header in a logfile
             exit(0)
-        logger('Info: Starting to extract spectra')
         
         def extraction_multicore(all_extractions):
             [extraction, im_name_full, im_name, realrun] = all_extractions
@@ -435,13 +430,14 @@ if __name__ == "__main__":
                     extraction_multicore([extraction, extraction, extraction, False])
                     all_extractions.append([extraction, extraction, extraction, True])
         if params['use_cores'] > 1:
-            logger('Info using multiprocessing on {0} cores, hence output will be for several files in parallel'.format(params['use_cores']))
+            logger('Info: Starting to extract spectra using multiprocessing on {0} cores, hence output will be for several files in parallel'.format(params['use_cores']))
             p = multiprocessing.Pool(params['use_cores'])
             sort_extractions = sort_for_multiproc_map(all_extractions, params['use_cores'])
             obj_names += p.map(extraction_multicore, sort_extractions)
             p.terminate()
             p.join()
         else:
+            logger('Info: Starting to extract spectra')
             for all_extraction in all_extractions:
                 obj_names.append( extraction_multicore(all_extraction) )
                 

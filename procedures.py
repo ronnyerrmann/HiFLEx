@@ -4483,7 +4483,11 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
         #logger('Step: Linearising the spectrum (commented out)')
         #wavelenghts_lin, spectrum_lin = linearise_wavelength_spec(params, wavelength_solution_shift, spectra, method='sum', weight=espectra)
         #save_multispec([wavelenghts_lin,spectrum_lin], params['path_extraction_single']+im_name+'_lin', im_head)
-        wavelenghts_lin, spectrum_lin = linearise_wavelength_spec(params, wavelength_solution_shift, cspectra, method='weight', weight=espectra)
+        if True:
+            wavearray = wavelengths_bary
+        else:
+            wavearray = wavelengths
+        wavelenghts_lin, spectrum_lin = linearise_wavelength_spec(params, wavearray, cspectra, method='weight', weight=espectra)
         save_multispec([wavelenghts_lin,spectrum_lin], params['path_extraction_single']+im_name+'_lin_cont', im_head)
         
     # For easier plotting
@@ -7780,7 +7784,7 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
     """
     return np.array(contspec), np.array(sn_cont)
 
-def linearise_wavelength_spec(params, wavelength_solution, spectra, method='sum', weight=[]):    
+def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight=[]):    
     """
     :param spectra: list of 2d array of floats, contains the spectrum to be linearised
     """
@@ -7789,7 +7793,7 @@ def linearise_wavelength_spec(params, wavelength_solution, spectra, method='sum'
     px_range = np.arange(specs[1])
     data = []
     for order in tqdm(range(specs[0]), desc='Info: Linearise the spectrum'):
-        wave_range = np.polyval(wavelength_solution[order,2:], px_range-wavelength_solution[order,1])
+        wave_range = wavelengths[order,:]
         wave_diff = np.nanmax(np.abs(wave_range[1:] - wave_range[:-1]))        # Difference in wavelength between 2 data points, abs needed for dodgy wavelength solutions
         start = int(min(wave_range)/dwave) * dwave          # Minumum wavelength should a multiple of the wavelength_scale_resolution
         lwave_range = np.arange(start, max(wave_range)+dwave, dwave )
@@ -7820,14 +7824,16 @@ def linearise_wavelength_spec(params, wavelength_solution, spectra, method='sum'
                 lweight[i] = weight[order,index]
         """
         # Short and simple solution, but the minimum and maximum points of curves get lost, if the original data point ends up between 2 linear wavelengths
+        # Using a interpolation can create much bigger maxima or minima
         lspec = np.empty(lwave_range.shape)
         lspec.fill(np.nan)
         lweight = np.ones(lwave_range.shape)
         for i,wave in enumerate(lwave_range):
             diff = np.abs(wave_range - wave)                # Wavelength difference to the original wavelengths
             indexes = np.where( diff < wave_diff )[0]
-            #print order,i, diff.shape, indexes.shape, diff, np.min(diff), wave_diff
-            #print i, wave, spectra[order,indexes].shape, diff[indexes].shape
+            #print( order,i, diff.shape, indexes.shape, diff, np.min(diff), wave_diff, wave, spectra[order,indexes].shape, diff[indexes] )
+            if indexes.shape[0] == 0:
+                continue
             lspec[i] = np.average( spectra[order,indexes], weights=1./diff[indexes] )
             lweight[i] = np.average( weight[order,indexes], weights=1./diff[indexes] )
         #print np.nanmean(spectra[order]), np.nanmean(lspec)

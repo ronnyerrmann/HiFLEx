@@ -172,7 +172,7 @@ sigmaclip_spectrum = []
   #         This value will be overwritten by the entry in the second column with "sci-cal" as fourth column in the file from parameter 'master_wavelengths_shift_filename'
 pxshift_between_wavesolutions = 0
 
-  # In order to create a linear wavelength scale for the normalised spectrum, what should the resolution of the scale be in Angstrom. Set to 0 to skip the step.
+  # In order to create a linear wavelength scale for the normalised spectrum, what should the resolution of the scale be in Angstrom (e.g. 0.01). Set to 0 to skip the step.
 wavelength_scale_resolution = 0.00
 
   ## Use the extracted flux from the files for blaze correction to correct for the trace or use the fitted flux to correct for the blaze
