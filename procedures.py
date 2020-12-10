@@ -4487,7 +4487,7 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
             wavearray = wavelengths_bary
         else:
             wavearray = wavelengths
-        wavelenghts_lin, spectrum_lin = linearise_wavelength_spec(params, wavearray, cspectra, method='weight', weight=espectra)
+        wavelenghts_lin, spectrum_lin = linearise_wavelength_spec( params, wavearray, cspectra, method='weight', weight=((flat_spec_norm[index]+0.0)/espectra)**2 )
         save_multispec([wavelenghts_lin,spectrum_lin], params['path_extraction_single']+im_name+'_lin_cont', im_head)
         
     # For easier plotting
@@ -7791,7 +7791,7 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
     specs = spectra.shape
     dwave = params['wavelength_scale_resolution']
     px_range = np.arange(specs[1])
-    data = []
+    data = np.array([]).reshape(0,3)
     for order in tqdm(range(specs[0]), desc='Info: Linearise the spectrum'):
         wave_range = wavelengths[order,:]
         wave_diff = np.nanmax(np.abs(wave_range[1:] - wave_range[:-1]))        # Difference in wavelength between 2 data points, abs needed for dodgy wavelength solutions
@@ -7825,26 +7825,21 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
         """
         # Short and simple solution, but the minimum and maximum points of curves get lost, if the original data point ends up between 2 linear wavelengths
         # Using a interpolation can create much bigger maxima or minima
-        lspec = np.empty(lwave_range.shape)
-        lspec.fill(np.nan)
-        lweight = np.ones(lwave_range.shape)
+        data_o = np.ones(( lwave_range.shape[0], 3 ))
+        data_o[:,0] = lwave_range
+        data_o[:,1] = np.nan
         for i,wave in enumerate(lwave_range):
             diff = np.abs(wave_range - wave)                # Wavelength difference to the original wavelengths
             indexes = np.where( diff < wave_diff )[0]
             #print( order,i, diff.shape, indexes.shape, diff, np.min(diff), wave_diff, wave, spectra[order,indexes].shape, diff[indexes] )
             if indexes.shape[0] == 0:
                 continue
-            lspec[i] = np.average( spectra[order,indexes], weights=1./diff[indexes] )
-            lweight[i] = np.average( weight[order,indexes], weights=1./diff[indexes] )
-        #print np.nanmean(spectra[order]), np.nanmean(lspec)
-        #plot_img_spec.plot_points([wave_range, lwave_range], [spectra[order], lspec], ['orig', 'lin'], '', show=True, return_frame=False, x_title='wavelength [Angstrom]', y_title='flux [ADU]')
+            weights = 1./(diff[indexes]+0.01*dwave)
+            data_o[i,1] = np.average( spectra[order,indexes], weights=weights )
+            data_o[i,2] = np.average( weight[order,indexes], weights=weights )
         
-        
-        if len(data) == 0:
-            data = np.vstack([lwave_range,lspec, lweight])
-        else:
-            data = np.hstack([data, np.vstack([lwave_range,lspec, lweight]) ])
-    data = data.T                # wavelengths in first column, flux in second
+        data_o = data_o[ ~np.isnan(data_o[:,1]),:]
+        data = np.vstack([data, data_o ])       # wavelengths in first column, flux in second, weights in third
     # Combine the overlapping orders
     clr_dat = np.round(data[:,0]/dwave).astype(int)                             # make into integer, as both 7391.58 and 7391.58000001 can be in the wavelength column
     uniq_wave, number = np.unique(clr_dat,return_counts=True)
@@ -7860,8 +7855,9 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
             data[indexes[0],1] = np.nanmean(data[indexes,1])
         elif method == 'weight':
             notnan = ~np.isnan(data[indexes,1])
-            if len(data[indexes,1][notnan]) > 0:
-                #print data[indexes,:], data[indexes,1][notnan], data[indexes,2][notnan], sum(data[indexes,2][notnan])
+            if notnan.any() > 0:
+                #if wave*dwave>6343 and wave*dwave<6348:
+                #    print( data[indexes,:], data[indexes,1][notnan], data[indexes,2][notnan], sum(data[indexes,2][notnan]) )
                 data[indexes[0],1] = np.average(data[indexes,1][notnan], weights=data[indexes,2][notnan])
         else:
             if not nolog:
