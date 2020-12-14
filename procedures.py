@@ -301,15 +301,16 @@ def textfileargs(params, textfile=None):
     # Add standard parameters, if they are missing, more at the end
     params['logging_arc_line_identification_residuals_hist'] = params.get('logging_arc_line_identification_residuals_hist', 'arc_line_identification_residuals_hist.png')
     params['logging_em_lines_bisector'] = params.get('logging_em_lines_bisector', 'wavelength_solution_emmission_lines_bisector.png')
-    params['logging_resolution_form'] = params.get('logging_resolution_form', 'wavelength_solution_resolution_on_detector.png')
     params['logging_blaze_spec'] = params.get('logging_blaze_spec', 'blaze_spectrum.pdf')
     # Added 20201022:
     params['logging_crossdispersion_shift'] = params.get('logging_crossdispersion_shift', 'crossdispersions_shift.txt')
+    # Added 20201210:
+    params['logging_resolution_form'] = params.get('logging_resolution_form', 'wavelength_solution_resolution_on_detector.png')
     
     list_txt = ['reference_catalog', 'use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys', 'cosmic_ray_settings']
     list_int = ['arcshift_range', 'order_offset', 'px_offset', 'polynom_order_traces', 'polynom_order_intertraces',
              'bin_search_apertures', 'bin_adjust_apertures', 'polynom_bck', 'dataset_rv_analysis']
-    list_float = ['opt_px_range', 'px_offset_order', 'background_width_multiplier', 'sigmaclip_spectrum']
+    list_float = ['opt_px_range', 'px_offset_order', 'background_width_multiplier', 'sigmaclip_spectrum', 'traces_searchlimit_brightness']
     list_abs = ['arcshift_range']
     ints = ['polynom_order_apertures', 'rotate_frame']
     floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier',
@@ -431,7 +432,7 @@ def textfileargs(params, textfile=None):
     params['dataset_rv_analysis'] = params.get('dataset_rv_analysis', [5, 6])
     params['pxshift_between_wavesolutions'] = params.get('pxshift_between_wavesolutions', 0)
     params['cosmic_ray_settings'] =  params.get('cosmic_ray_settings', ['deepCR', 'ACS-WFC-F606W-2-32', '0.999'])
-    
+    params['traces_searchlimit_brightness'] =  params.get('traces_searchlimit_brightness', 50)
     return params
 
 def make_directory(directory, errormsg='Warn: Cannot create directory {0}'):
@@ -1337,9 +1338,28 @@ def bin_im(im, binxy, method='median'):
         return im, im*0+1, im*0
     nim, gim, sim = [], [], []
     if binx > 1 and biny > 1:
-        x_range = list(range(int((ims[0]+binx-1)/binx)))
+        xx = np.arange(0, ims[0]+binx-1, binx)
+        yy = np.arange(0, ims[1]+biny-1, biny)
+        xx[-1] = ims[0]
+        yy[-1] = ims[1]
+        data = np.zeros(( xx.shape[0], yy.shape[0], 3 ))
+        data.fill(np.nan)
+        for ii in range(xx.shape[0]-1):
+            for jj in range(yy.shape[0]-1):
+                temdata = im[ xx[ii]:xx[ii+1], yy[jj]:yy[jj+1] ]
+                nonan = np.sum( ~np.isnan(temdata) )
+                if nonan >= 0.9 * np.prod(temdata.shape):    # only if at least 90% of data points available
+                    data[ii,jj,0] = bin_im_function(temdata, method, axis=None)     # binning
+                data[ii,jj,1] = nonan                        # number of the elements not nan
+                if nonan > 1:
+                    data[ii,jj,2] = np.nanstd(temdata, ddof=1)                      # standard deviation
+                elif nonan == 1:
+                    data[ii,jj,2] = 0
+                
+        """x_range = list(range(int((ims[0]+binx-1)/binx)))
         y_range = list(range(int((ims[1]+biny-1)/biny)))
-        data = np.zeros(( len(x_range), len(y_range), 3 ))*np.nan
+        data = np.zeros(( len(x_range), len(y_range), 3 ))
+        data.fill(np.nan)
         for ii in x_range:
             iline = im[ii*binx:min(ims[0],(ii+1)*binx),:]
             for jj in y_range:
@@ -1353,6 +1373,7 @@ def bin_im(im, binxy, method='median'):
                     data[ii,jj,2] = 0
                  
                 #nline.append(sum(percentile_list(list((im[i*binx:(i+1)*binx,j*biny:(j+1)*biny]).flat),.2)))   #sum after 80% clipping -> more flux -> more lines find with gauss of height 50
+        """
         nim = data[:,:,0]
         gim = data[:,:,1].astype(int)
         sim = data[:,:,2]
@@ -2153,12 +2174,17 @@ def find_trace_orders(params, im, imageshape):
     maxshift = max(0.5,0.17*binx)                    # Only 0.15px shift per pixel along one order
     ims = im.shape
     cen_px = int(ims[0]*binx/2)             # central pixel to base the fit on
-    breakvalue = np.percentile(im,15)       # The brightes pixel of one order needs to be brighter than this value, otherwise it won't be identified (lower values -> darker orders are found)
+    #breakvalue = np.percentile(im,15)       # The brightes pixel of one order needs to be brighter than this value, otherwise it won't be identified (lower values -> darker orders are found)
+    breakvalue = params['traces_searchlimit_brightness']
     im_orig = copy.deepcopy(im)
     im_traces = np.zeros(ims)               # Masks the orders in order to avoid overlapping traces
     traces = []
     trace_pos = [list(range(ims[0]))]     # fill array with index of slice, later for each order found the y values calculated from the polyfit are added -- this entry is not needed
-    for dummy in tqdm(range(max( 2600, int(ims[0]*ims[1] * maxFWHM*2 / 1000) )), desc='Searching for traces'):      # 2600 is necessary for the tight orders using Clark's lens and a low diffraction prism
+    #bright10 = np.percentile(im, 5, axis=None)      # background
+    #searchnumbers = np.sum(im >= breakvalue+bright10, axis=None)     # At most so many searches
+    searchnumbers = np.sum( (im >= breakvalue), axis=None)     # At most so many searches
+    searchnumbers = searchnumbers *0.1 / maxFWHM       # FWHM pixel are bright, 90% along the length of an order is brighter than seachnumbers -> less area to search
+    for dummy in tqdm(range(int(searchnumbers)), desc='Searching for traces'):      # 2600 is necessary for the tight orders using Clark's lens and a low diffraction prism
         pos_max = np.unravel_index(im.argmax(), ims)
         if im_orig[pos_max] <= breakvalue:
             break
@@ -3152,8 +3178,9 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
     # Find the center in each order: where is the flux the highest
     gauss, goodvalues = [], []
     label_datapoins, label_gauss, label_poly, label_centroids = [],[],[],[]
+    w_mult = max(1, w_mult)
     for order in orders:
-        if cen_pos_diff != []:                          # Automatic determination of the search area
+        if len(cen_pos_diff) > 0:                          # Automatic determination of the search area
             for i in range(5):                          # If the cen_pos_diff is NaN for this order then check neightboring orders
                 orderi = min(len(cen_pos_diff)-1,order+i)
                 if not np.isnan(cen_pos_diff[orderi]):
@@ -3163,10 +3190,10 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
                     break
             goodpos = [0]
             w_mult_test = w_mult*2./0.9
-            while len(arcshifts[goodpos]) < widths[order,2]*w_mult*2:           # Enough data to have at least one extra order between the 2 orders
+            while len(arcshifts[goodpos]) < widths[order,2]*w_mult_test:           # Enough data to have at least one extra order between the 2 orders
                 w_mult_test *= 0.9
                 goodpos = ( (np.abs(arcshifts) > widths[order,2]*w_mult_test) & (np.abs(arcshifts) < cen_pos_diff[orderi]-widths[order,2]*w_mult_test) )   # factor 2 to avoid the science fiber
-                #print arcshifts[goodpos], widths[order,2]*w_mult_test, cen_pos_diff[orderi]-widths[order,2]*w_mult_test
+                #print( arcshifts[goodpos], widths[order,2]*w_mult_test, cen_pos_diff[orderi]-widths[order,2]*w_mult_test )
                 if w_mult_test < 0.1 * w_mult*2:
                     goodpos = ( (np.abs(arcshifts) >= min(params['arcshift_side']*np.array(params['arcshift_range']))) & (np.abs(arcshifts) <= max(params['arcshift_side']*np.array(params['arcshift_range']))) )
                     break
@@ -4487,8 +4514,12 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
             wavearray = wavelengths_bary
         else:
             wavearray = wavelengths
-        wavelenghts_lin, spectrum_lin = linearise_wavelength_spec( params, wavearray, cspectra, method='weight', weight=((flat_spec_norm[index]+0.0)/espectra)**2 )
+        wavelenghts_lin, spectrum_lin = linearise_wavelength_spec( params, wavearray, cspectra, method='weight', weight=((flat_spec_norm[index]+0.0)/espectra)**2 ) # highest throughput and lowest error should have the highest weight
         save_multispec([wavelenghts_lin,spectrum_lin], params['path_extraction_single']+im_name+'_lin_cont', im_head)
+        with open(params['path_extraction_single']+im_name+'_lin_cont.csv', 'w') as file:
+            for ii in range(wavelenghts_lin.shape[0]):
+                if ~np.isnan(wavelenghts_lin[ii]) and ~np.isnan(spectrum_lin[ii]):
+                    file.write('{1},{2}{0}'.format(os.linesep, round(wavelenghts_lin[ii],4), round(spectrum_lin[ii],5) ))
         
     # For easier plotting
     add_text_to_file(params['path_extraction']+im_name+'.fits', 'plot_files.lst')
@@ -5398,7 +5429,6 @@ def plot_wavelength_solution_width_emmission_lines(fname, specs, data, indexes, 
     title_f = 'Plot of the {1} every {0} pixel (white shows areas with no data available)'.format(step, title)
     axis_name = ['Position in Dispersion direction [{0} px]'.format(step), 'Order', '{0} of the emission lines [px] (white shows areas with no data available)'.format(title)]
     plot_img_spec.plot_image(gauss_ima, [fname], pctile=0, show=False, adjust=[0.05,0.95,0.95,0.05], title=title_f, autotranspose=False, colorbar=True, axis_name=axis_name, size=[16,10])
-    print(fname) 
 
 def plot_overlapping_orders(order, x_full, y1_full, y2_full=None, labels=[]):
     """
@@ -6943,7 +6973,8 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     #print np.histogram(arc_lines_wavelength[:,3], 20), arc_lines_wavelength.shape
     
     # Remove outliers
-    len_orig = len(arc_lines_wavelength)
+    len_orig = arc_lines_wavelength.shape[0]
+    logger('Info: {0} before final sigma clipping'.format(len_orig), show=False)
     good_values = ( np.abs(arc_lines_wavelength[:,3]) < 100 )               # Initialise
     for ii in range(20):                                                    # make this graphical!!
         # Remove the most scattered lines (highest 0.5% and lowest 0.5%
@@ -7003,9 +7034,11 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                   'offset to real order, parameters of the 2d polynomial(px^0*m^0, px^1*m^0, px^0*m^1, px^2*m^0, px^1*m^1, px^0*m^2, ....)]: \n'+\
                   '{0}'
     logger(text.format(wavelength_solution2d), show=False)
-    
-    printarrayformat = ['%1.1i', '%3.1f', '%9.4f', '%6.4f']
-    logger('order\tpixel\twavelength\tdwavel', show=False, printarrayformat=printarrayformat, printarray=arc_lines_wavelength[:,0:4], logfile=params['logging_identified_arc_lines'])
+    # Log into text file and make it ready to copy to pixel_to_wavelength
+    printarrayformat = ['%1.1i', '%1.1i', '%3.1f', '%9.4f', '%6.4f']
+    printarray = copy.deepcopy(arc_lines_wavelength[:,[0,0,1,2,3]])
+    printarray[:,1] += int(order_offset)
+    logger('order\treal_o\tpixel\twavelength\tdwavel', show=False, printarrayformat=printarrayformat, printarray=printarray, logfile=params['logging_identified_arc_lines'])
     
     # Create an image of the gaussian widths of the identified lines
     plot_wavelength_solution_width_emmission_lines(params['logging_resolution_form'], specs, arc_lines_wavelength, [0,1,10], title='Resolution')   # order, wavelength, gauss width
@@ -8085,6 +8118,8 @@ def get_object_site_from_header(params, im_head, obnames, obsdate):
     settings.append( [0, epoch_keys, 'epoch'] )
     settings.append( [0, pmra_keys,  'pmra'] )
     settings.append( [0, pmdec_keys, 'pmdec'] )
+    if type(obnames).__name__ not in ['list', 'ndarray']:
+        obnames = [obnames]
     for [i, header_key_words, parentr] in settings:
         if parentr == 'longitude':                  # Enough information to calculate the ephemerides of sun and moon.
             gobs = ephem.Observer()  

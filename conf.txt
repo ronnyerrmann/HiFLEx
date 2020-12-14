@@ -68,6 +68,9 @@ bin_search_apertures    = 20,2
   # bin_adjust_apertures: Adjust the center of the apertures in a less binned image. Description as for bin_search_apertures. The second value should be 1 to reach best precission
   #                 format: list of two integers
 bin_adjust_apertures    = 3,1
+  # What is the brightest pixel of the faintest order (after binning). The higher this number the quicker, but fainter orders might not be traced
+traces_searchlimit_brightness = 2000
+traces_searchlimit_brightness = 200
   # polynom_order_apertures: Order of the polynomial to define the form of the traces along the CCD
   #                format: integer; standard: 5
 polynom_order_apertures = 5

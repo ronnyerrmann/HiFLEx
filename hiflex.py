@@ -380,6 +380,7 @@ if __name__ == "__main__":
                     wavecal_multicore(all_wavelengthcal)
         
         # Load all the wavelength solutions
+        last_shape = None
         for wavesol in sorted(os.listdir(params['path_extraction'])):
             if not wavesol.endswith(".fits"):                  continue
             if wavesol.find('_wavesol_') == -1:    continue
@@ -387,6 +388,9 @@ if __name__ == "__main__":
             jd_midexp = float( wavesol.split('_wavesol_')[-1].replace('_{0}.fits'.format(fib),'') )
             name = wavesol.split('_wavesol_')[0]
             wavelength_solution_shift_dict = read_wavelength_solution_from_fits(params['path_extraction']+wavesol)
+            if wavelength_solution_shift_dict['wavesol'].shape[1] != last_shape and last_shape is None:
+                logger('Warn: This wavelength solution has a different number of freedoms {0} than the previous solution {1}.'.format(wavelength_solution_shift_dict['wavesol'].shape[1], last_shape))
+            last_shape = wavelength_solution_shift_dict['wavesol'].shape[1]
             calimages['wave_sols_'+fib].append( [wavelength_solution_shift_dict['wavesol'], wavelength_solution_shift_dict['reflines'], jd_midexp, name])
             
         params['extract_wavecal'] = False
@@ -432,8 +436,8 @@ if __name__ == "__main__":
         if params['use_cores'] > 1:
             logger('Info: Starting to extract spectra using multiprocessing on {0} cores, hence output will be for several files in parallel'.format(params['use_cores']))
             p = multiprocessing.Pool(params['use_cores'])
-            sort_extractions = sort_for_multiproc_map(all_extractions, params['use_cores'])
-            obj_names += p.map(extraction_multicore, sort_extractions)
+            #sort_extractions = sort_for_multiproc_map(all_extractions, params['use_cores'])
+            obj_names += p.map(extraction_multicore, all_extractions)
             p.terminate()
             p.join()
         else:
