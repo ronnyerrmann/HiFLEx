@@ -4325,6 +4325,7 @@ def create_blaze_norm(params, im_trace1, sci_traces, cal_traces, wave_sol_dict, 
     Creates the file for the blaze correction
     """
     fit_poly_orders = 15
+    minflux = 0.001          # The blaze below 
     [sci_tr_poly, xlows, xhighs, widths] = sci_traces
     [cal_tr_poly, axlows, axhighs, awidths] = cal_traces
     im_blazecor, im_head = create_image_general(params, 'blazecor')
@@ -4336,13 +4337,13 @@ def create_blaze_norm(params, im_trace1, sci_traces, cal_traces, wave_sol_dict, 
     #flat_spec, good_px_mask, extr_width = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift) # for test
     med_flux = np.nanmedian(flat_spec)
     flat_spec_norm = flat_spec/med_flux
-    flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.001)         # Ignore all areas where the flux is 0.1% of median flux
+    flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.01)         # Ignore all areas where the flux is 0.1% of median flux
     if params['blazercor_function'].find('poly') == 0:
         try:
             fit_poly_orders = int(params['blazercor_function'].replace('poly',''))
         except:
             'keep the standard'
-    blaze_fit = fit_blazefunction(params['logging_blaze_spec'], flat_spec_norm, fit_poly_orders)
+    blaze_fit = fit_blazefunction(params['logging_blaze_spec'], flat_spec_norm, fit_poly_orders, minflux)
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                   # science and calibration traces are at the same position
         blazecor_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
     else:
@@ -4358,7 +4359,7 @@ def create_blaze_norm(params, im_trace1, sci_traces, cal_traces, wave_sol_dict, 
     im_head['Comment'] = ' 4: spectrum of the emission line lamp'
     save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, blaze_fit, blazecor_spec], params['master_blaze_spec_norm_filename'], im_head)
 
-def fit_blazefunction(fname, spec, fit_poly_orders):
+def fit_blazefunction(fname, spec, fit_poly_orders, minflux=0.01):
     """
     Fits a polynomial to the blaze function
     :param spec: 2d array with the spectra
@@ -4371,8 +4372,9 @@ def fit_blazefunction(fname, spec, fit_poly_orders):
         for order in range(spec.shape[0]):
             goodvalues = ~np.isnan(spec[order,:])
             poly = np.polyfit(xarr[goodvalues], spec[order, goodvalues], fit_poly_orders)
-            spec_fit[order, goodvalues] = np.polyval(poly,xarr[goodvalues])
-        
+            fit = np.polyval(poly,xarr[goodvalues])
+            fit[ fit < minflux*np.max(fit) ] = np.nan       # remove all that is 0.1% of maximum flux
+            spec_fit[order, goodvalues] = fit
             fig, frame = plt.subplots(1, 1)
             title = titel_f.format(order, fit_poly_orders)
             plot_img_spec.plot_points([xarr,xarr],[spec[order,:],spec_fit[order,:]],['data','fit'],'', show=False, title=title, x_title='x [px]', 
@@ -7766,6 +7768,8 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
                     if sum(~sub[5,:]*sub[1,:]) > 0:                                     # There are values that can be replaced
                         index = data[0,sub[1,:]][np.abs(data[6,sub[1,:]] - np.nanmin(data[6,~sub[5,:]]) ) < 1E-4].astype(int)   # Find the position where the fit has the smallest value and the residual there isn't used for the fit
                     else:
+                        if sub[6,:].all():      # ~sub[6,:] are all False -> things will fail
+                            continue
                         index = data[0,~sub[6,:]][np.abs(data[6,~sub[6,:]] - np.nanmin(data[6,~sub[6,:]]) ) < 1E-4].astype(int) # Find the smalles value of the fit, ignore already changed values
                 #print order,index, np.max(data[5,sub[5,:]]), data[5,index], sub[5,index]
                 data[5,index] = np.max(np.abs(data[5,sub[5,:]]))                                            # Replace with the maximum residual as worst case
@@ -9142,7 +9146,7 @@ def run_serval_rvs(params,):
         logger('Warn: parameters "path_serval" or "path_rv_serval" are not set.')
         return
     if not( os.path.exists(params['path_serval']+'serval') and os.path.exists(params['path_serval']+'python') and os.path.exists(params['path_rv_serval']) ):
-        logger('SERVAL is not installed or path_serval is wrong (currently: {0}), or the folder for the "filelist_* are missing in {1}'.format(params['path_serval'], params['path_rv_serval']))
+        logger('Warn: SERVAL is not installed or path_serval is wrong (currently: {0}), or the folder for the "filelist_* are missing in {1}'.format(params['path_serval'], params['path_rv_serval']))
         return
     if sys.version_info[0] > 2:
         logger('Warn: This is a python3 environment, however, SERVAL requires a python2 environment')
