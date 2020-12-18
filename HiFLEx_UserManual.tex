@@ -103,8 +103,14 @@ The basic things for Python (and the configuration file) are:
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
 
-\subsection*{v1.3.2}
+\subsection*{v1.3.3}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Improvement of blaze correction to avoid massive brightness peaks at boundaries of the orders
+  \item Bugfixing
+  \item Added parameter \verb|traces_searchlimit_brightness| to allow user defined search for orders
+\end{itemize}
 
+\subsection*{v1.3.2}
 \begin{itemize}\setlength\itemsep{0em}
   \item Parallelisation of long running steps
   \item Improvement of linearisation of the wavelength solution
@@ -112,7 +118,6 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 \end{itemize}
 
 \subsection*{v1.3.1}
-
 \begin{itemize}\setlength\itemsep{0em}
   \item Added parameter \verb|logging_crossdispersion_shift|
   \item Improved measurement of the offset between wavelength solutions between fibers in a bifurcated setting; bugfixed so that wavelength solution in the science fiber is used for science spectrum
@@ -122,20 +127,6 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 \subsection*{v1.3.0}
 \begin{itemize}\setlength\itemsep{0em}
   \item Cosmic ray removal (deepCR), new parameter \verb|cosmic_ray_settings|
-\end{itemize}
-
-\subsection*{v1.2.0}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Added parameters \verb|pxshift_between_wavesolutions|, \verb|dataset_rv_analysis|,\\ \verb|logging_arc_line_identification_residuals_hist|, \verb|logging_em_lines_bisector|, \verb|logging_blaze_spec|
-  \item Python~3 ready (Pipeline will also keep working under Python~2)
-  \item Blaze correction with a fitted function (polynomial of user defined order)
-  \item Extra logging information: Distribution of the residuals for the wavelength solution, graphs for measurements offsets to the wavelength solution, Bisector of the emission lines used for the wavelength solution
-\end{itemize}
-
-\subsection*{v1.1.0}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Improved measurement of the offset between emission line spectra and the wavelength solution
-  \item Small improvements in the code
 \end{itemize}
 
 
@@ -1535,6 +1526,20 @@ conda activate hiflex
 \section{Changelog (old)}
 \label{Section:Changelog_old}
 Please find the changes of newer versions in Chapter~\ref{Section:Changelog_new}.
+
+\subsection*{v1.2.0}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Added parameters \verb|pxshift_between_wavesolutions|, \verb|dataset_rv_analysis|,\\ \verb|logging_arc_line_identification_residuals_hist|, \verb|logging_em_lines_bisector|, \verb|logging_blaze_spec|
+  \item Python~3 ready (Pipeline will also keep working under Python~2)
+  \item Blaze correction with a fitted function (polynomial of user defined order)
+  \item Extra logging information: Distribution of the residuals for the wavelength solution, graphs for measurements offsets to the wavelength solution, Bisector of the emission lines used for the wavelength solution
+\end{itemize}
+
+\subsection*{v1.1.0}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Improved measurement of the offset between emission line spectra and the wavelength solution
+  \item Small improvements in the code
+\end{itemize}
 
 \subsection*{v1.0.0}
 \begin{itemize}\setlength\itemsep{0em}

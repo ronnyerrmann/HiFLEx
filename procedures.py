@@ -2779,6 +2779,42 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0
     
     return np.array(spec), np.array(good_px_mask), np.array(widths_m)
 
+def shift_orders_multicore(kwarg):
+        [order, params, im, sci_tr_poly, xlows, xhighs, steps, oldwidths, in_shift] = kwarg
+        xarr = range(max(0,int(xlows[order])), min(im.shape[0],int(xhighs[order])), steps)
+        yarr = np.polyval(sci_tr_poly[order, 0, 1:], xarr-sci_tr_poly[order, 0, 0])+in_shift          #apply input shift
+        widths, shifts, shift_map = [], [], []
+        for px,oldcenter in enumerate(yarr):        #each pixel
+            #if px>6000 or px%100 == 0:
+            #    print(order, px, len(xarr), yarr.shape, im.shape)
+            #    print(xarr[px])
+            cen_gauss, cen_poly, width, leftmin,rightmin = find_center(im[xarr[px],:], int(round(oldcenter)), xarr[px], 2*params['maxshift_orders'], border_pctl=0, significance=3.0, polymax=True)
+            if width*2.35482*3 < 2*params['maxshift_orders']:
+                cen_gauss, cen_poly, width, leftmin,rightmin = find_center(im[xarr[px],:], int(round(cen_gauss)), xarr[px], width*2.35482*3, border_pctl=params['width_percentile'], significance=3.0, polymax=True)
+            #if width != 0:
+            #    print 'order,px, cen_gauss, cen_poly, width, leftmin,rightmin',order,px,center, width, leftmin,rightmin
+            #center = cen_gauss         # Old, but this might not cover the centre well
+            center = cen_poly
+            if width != 0 and abs(center-oldcenter) < params['maxshift_orders']:
+                widths.append([center-leftmin, rightmin-center, width])
+                #shifts.append(center-oldcenter)
+                #shift_map[max(0,int(xarr[px]-steps/2)):min(im.shape[0],int(xarr[px]+steps/2))+1,order] = center-oldcenter
+                shifts.append(center-oldcenter)
+                shift_map.append([ max(0,int(xarr[px]-steps/2)), min(im.shape[0],int(xarr[px]+steps/2))+1, order ])
+        if len(widths) == 0:
+            width = oldwidths[order]
+            problem_order = order
+            #twidths.append(oldwidths[order])
+            #problem_order.append(order)
+        else:
+            widths = np.array(widths)
+            width = np.zeros(3)*np.nan
+            for ii in range(3):
+                if np.sum(~np.isnan(widths[:,ii])) > 0:                         # left and right might be np.nan all the time
+                    width[ii] = np.nanmean(percentile_list(widths[:,ii],0.1))   # average left, right, and gaussian width
+            problem_order = None
+        return width, problem_order, np.array(shifts), shift_map
+
 def shift_orders(im, params, sci_tr_poly, xlows, xhighs, oldwidths, in_shift = 0):
     """
     Determines the shift in spacial direction between the current flat {im} and an available solution. This is done by fitting the center again
@@ -2800,37 +2836,30 @@ def shift_orders(im, params, sci_tr_poly, xlows, xhighs, oldwidths, in_shift = 0
     :return shift_error: Standard deviation of the shifts.
     """
     steps = 10                              # is worse than binning, only every step will be checked
-    shifts, twidths, positions = [], [], []
+    shifts, twidths = [], []
     problem_order = []
     shift_map = np.zeros((im.shape[0],sci_tr_poly.shape[0]))
     logger('Step: Searching for shifts of the orders', show=False) 
-    for order in tqdm(range(sci_tr_poly.shape[0]), desc='Searching for shifts of the orders'):       # For each order
-        xarr = range(int(xlows[order]),int(xhighs[order]),steps)
-        yarr = np.polyval(sci_tr_poly[order, 0, 1:], xarr-sci_tr_poly[order, 0, 0])+in_shift          #apply input shift
-        widths = []
-        for px,oldcenter in enumerate(yarr):        #each pixel
-            cen_gauss, cen_poly, width, leftmin,rightmin = find_center(im[xarr[px],:], int(round(oldcenter)), xarr[px], 2*params['maxshift_orders'], border_pctl=0, significance=3.0, polymax=True)
-            if width*2.35482*3 < 2*params['maxshift_orders']:
-                cen_gauss, cen_poly, width, leftmin,rightmin = find_center(im[xarr[px],:], int(round(cen_gauss)), xarr[px], width*2.35482*3, border_pctl=params['width_percentile'], significance=3.0, polymax=True)
-            #if width != 0:
-            #    print 'order,px, cen_gauss, cen_poly, width, leftmin,rightmin',order,px,center, width, leftmin,rightmin
-            #center = cen_gauss         # Old, but this might not cover the centre well
-            center = cen_poly
-            if width != 0 and abs(center-oldcenter) < params['maxshift_orders']:
-                widths.append([center-leftmin,rightmin-center, width])
-                shifts.append(center-oldcenter)
-                shift_map[max(0,int(xarr[px]-steps/2)):min(im.shape[0],int(xarr[px]+steps/2))+1,order] = center-oldcenter
-        if widths == []:
-            twidths.append(oldwidths[order])
-            problem_order.append(order)
-            continue
-        widths = np.array(widths)
-        width = np.zeros(3)*np.nan
-        for ii in range(3):
-            if np.sum(~np.isnan(widths[:,ii])) > 0:                         # left and right might be np.nan all the time
-                width[ii] = np.nanmean(percentile_list(widths[:,ii],0.1))   # average left, right, and gaussian width
-        twidths.append(width)
-    if shifts != []:
+    kwargs = []
+    for order in range(sci_tr_poly.shape[0]):
+        kwargs.append([order, params, im, sci_tr_poly, xlows, xhighs, steps, oldwidths, in_shift])
+    if params['use_cores'] > 1 and multiprocessing.current_process().name == 'MainProcess':
+        logger('Step: Searching for shifts of the orders (multicore).')
+        p = multiprocessing.Pool(params['use_cores'])
+        data = p.map(shift_orders_multicore, kwargs)
+        p.terminate()
+    else:
+        data = []
+        for kwarg in tqdm(kwargs, desc='Searching for shifts of the orders'):        # pp is order
+            data.append( shift_orders_multicore(kwarg) )
+    for entry in data:          # width, problem_order, np.array(shifts), shift_map
+        shifts += list(entry[2])        # center-oldcenter
+        twidths.append(entry[0])
+        if entry[1] is not None:
+            problem_order.append(entry[1])
+        for ii, entry3 in enumerate(entry[3]):
+            shift_map[entry3[0]:entry3[1], entry3[2] ] = entry[2][ii]  
+    if len(shifts) > 0:
         shift = np.mean(percentile_list(np.array(shifts),0.1))
         shift_error = np.std(percentile_list(np.array(shifts),0.1), ddof=1)
     else:
@@ -2839,7 +2868,7 @@ def shift_orders(im, params, sci_tr_poly, xlows, xhighs, oldwidths, in_shift = 0
     printarrayformat = ['%1.1i', '%4.2f', '%4.2f']
     printarray = np.array([ range(sci_tr_poly.shape[0]), np.array(oldwidths)[:,2], twidths[:,2] ]).T
     problem_text = ''
-    if problem_order != []:
+    if len(problem_order) > 0:
         problem_text = ' The shift in the following orders could not be measured: {0}'.format(problem_order)
         if len(problem_order) > 0.5*sci_tr_poly.shape[0]:
             problem_text += '. No shift could be measured for {0} out of {1} orders.'.format(len(problem_order), sci_tr_poly.shape[0])
@@ -3108,7 +3137,7 @@ def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extra
     return shift, im_head
 
 def arc_shift_multicore(kwargs):
-    [shift, params, im, pfits, xlows, xhighs, widths, wmult, shift, plot_tqdm] = kwargs
+    [shift, params, im, pfits, xlows, xhighs, widths, wmult, plot_tqdm] = kwargs
     arc_spec, good_px_mask, extr_width = extract_orders(params, im, pfits, xlows, xhighs, widths, 0, shift, plot_tqdm=False)          # w_mult == 0: only central pixel
     flux = np.nansum(arc_spec, axis=1)
     flux[np.isnan(flux)] = np.nanmin(flux)          # replace nans with the minimum flux
@@ -3161,17 +3190,16 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
     #print cen_pos, cen_pos_diff
     arcshifts = params['arcshift_side'] * np.abs(arcshift_range)                            # Translate into the right shifts
     arcshifts = np.arange(min(arcshifts),max(arcshifts)+1, 1)
-    fluxes = []
     kwargs = []
     for shift in arcshifts:
-        kwargs.append([shift, params, im, pfits, xlows, xhighs, widths, w_mult, shift, False])
+        kwargs.append([shift, params, im, pfits, xlows, xhighs, widths, w_mult, False])
     if params['use_cores'] > 1 and multiprocessing.current_process().name == 'MainProcess':
         logger('Step: Search for the shift of the calibration traces, compared to the science traces (multicore).')
         p = multiprocessing.Pool(params['use_cores'])
         fluxes = p.map(arc_shift_multicore, kwargs)
         p.terminate()
     else:
-        results = []
+        fluxes = []
         for kwarg in tqdm(kwargs, desc='Search for the shift of the calibration traces, compared to the science traces'):        # pp is order
             fluxes.append( arc_shift_multicore(kwarg) )
     fluxes = np.array(fluxes)
@@ -4325,7 +4353,7 @@ def create_blaze_norm(params, im_trace1, sci_traces, cal_traces, wave_sol_dict, 
     Creates the file for the blaze correction
     """
     fit_poly_orders = 15
-    minflux = 0.001          # The blaze below 
+    minflux = 0.002          # The blaze below 
     [sci_tr_poly, xlows, xhighs, widths] = sci_traces
     [cal_tr_poly, axlows, axhighs, awidths] = cal_traces
     im_blazecor, im_head = create_image_general(params, 'blazecor')
@@ -8409,10 +8437,10 @@ def header_results_to_texfile(params, header_keywords=[]):
         results.append(result)
          
     if len(results) > 2:
-        with open('measurement_table.cvs','w') as file:
+        with open('measurement_table.csv','w') as file:
             for entry in results:
                 file.write("\t".join(entry)+'\n')
-        logger('Info: Created {0}'.format('measurement_table.cvs'))
+        logger('Info: Created {0}'.format('measurement_table.csv'))
      
 def rv_results_to_hiflex(params):
     """

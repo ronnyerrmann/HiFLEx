@@ -41,6 +41,7 @@ if __name__ == "__main__":
         if os.path.isfile(params['original_master_traces_filename']) :
             sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['original_master_traces_filename'])
             # find the shift between the original solution and the current flat
+            xhighs[ xhighs > im_trace1.shape[0] ] = im_trace1.shape[0]      # otherwise problems if the image is cut a bit
             shift, widths_new, shift_map, shift_error = shift_orders(im_trace1, params, sci_tr_poly, xlows, xhighs, widths, params['in_shift'])
             # save the map of the shifts
             save_im_fits(params, shift_map, im_trace1_head, params['logging_map_shift_orders'])

@@ -14,7 +14,7 @@ If you publish data using the barycentric correction, please cite (https://githu
 * Blaze correction with a fitted function (polynomial of user defined order)
 * Extra logging information for wavelength solution and drift of the wavelength solution
 * Improved measurement of the offset between emission line spectra and the wavelength solution
-* Bugfixing
+* Bugfixing and improvement of parallelisation; optional excludition of steps to speed up
 
 ## Install instruction
 
