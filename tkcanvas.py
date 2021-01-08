@@ -538,10 +538,13 @@ class TkCanvas:
 # ============================================================================= 
 class TkCanvasGrid:                                             # Completely new by Ronny
     def __init__(self, figure=None, ax=None, **kwargs):         # "=None" added by Ronny; to use it just as text field
-        screeen_geometry = get_curr_screen_geometry()
+        try:
+            screeen_geometry = get_curr_screen_geometry()
+        except:
+            print('Warn: Could not get the Screen Geometry: This terminal needs to be able to acces a graphical display.')
+            screeen_geometry = '1024x768+1+1'
         self.master = Tk.Tk()
         self.screen_w_h = (str(screeen_geometry).replace('-','+').split('+')[0]).split('x')       # list of width and height
-        
         
         # Adopted from https://blog.tecladocode.com/tkinter-scrollable-frames/
         container = ttk.Frame(self.master)

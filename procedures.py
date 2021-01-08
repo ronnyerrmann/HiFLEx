@@ -3554,6 +3554,7 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     sigma = 3.0
     precision = 0.0001      # in pixel; 0.001 is a milli-pixel
     ratio_lines_identified = 0.15       # if more than ratio_lines_identified of the checked_arc_lines has been identified, then a sigma_clipping will be applied. If less than this number of lines remain after sigma clipping, then the assumption is, that the calibration fiber wasn't used and therefore no wavelength shift is applied
+    #print(aspectra, wave_sol_dict, xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift, in_shift, fib, fine)
     
     wavelength_solution = wave_sol_dict['wavesol']
     wavelength_solution_arclines = wave_sol_dict['reflines']
@@ -3750,7 +3751,7 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
             ' The calibration lines have a Gaussian width of {3} +- {4} px, which corresponds to a FWHM of {5} +- {6} px.').format(round(shift_med,4), round(shift_std,4), 
                         shifts.shape[0], round(width_avg,3), round(width_std,3), round(width_avg*2.35482,3), round(width_std*2.35482,3), checked_arc_lines,
                         d_shift_kms, objname, round(jd_midexp,5), textsource ))
-    im_head['HIERARCH HiFLEx D_SHIFT'] = (round(shift_med,5), 'Offset in dispersion direction [px]')
+    im_head['HIERARCH HiFLEx D_SHIFT'] = (round(shift_med,5), 'Offset in dispersion direction [px]')        # Includes DT_SHIFT
     im_head['HIERARCH HiFLEx D_SHIFT_ERR'] = (round(shift_std,5), 'Uncertainty of the offset [px]')
     im_head['HIERARCH HiFLEx D_SHIFT_NUMBER_LINES'] = (shifts.shape[0], 'out of {0} calibration lines'.format(checked_arc_lines))
     im_head['HIERARCH HiFLEx D_WIDTH'] = (round(width_avg,2), 'Gaussian width of the calibration lines [px]')
@@ -5919,7 +5920,7 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
                     continue
             pos_index = 0
             ytop = ymax+y_range*0.01
-            if np.sum(~np.isnan(px_to_wave_sub[:,3])) == 0:
+            if np.sum(~np.isnan(px_to_wave_sub[:,3])) == 0 and px_to_wave_sub.shape[0] > 0:
                 px_to_wave_sub[0,3] = -10000                    # Dummy wavelength
             for kk, w_f in enumerate([w_fl, w_fa]):
                 if len(w_f) < 10:

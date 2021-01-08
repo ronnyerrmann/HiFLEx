@@ -284,7 +284,7 @@ def plot_spectra_UI(im, title=''):
         #print "param['name_data_{0}'.format(iml-1-1)]",param['name_data_{0}'.format(iml-1-1)]
         settings = dict()
         for entry in param.keys():
-            if entry.find('plot_sub_') == 0 or entry.find('exclude_') == 0:
+            if entry.find('plot_sub_') == 0 or entry.find('exclude_') == 0 or entry in ['wavelength_bool', 'plot_format', 'reset_plot', 'draw_legend', 'draw_filenames', 'xlabel', 'ylabel']:
                 settings[entry] = param[entry]
         save_obj(settings, 'plot_settings')
         plot_ranges = [1E10,0,1E10,0]
@@ -293,12 +293,13 @@ def plot_spectra_UI(im, title=''):
             for data_entry in tqdm(param['name_data_{0}'.format(iml-1-1)]):
                 data_label = data_entry.replace('data_','')
                 data = np.array(param[data_entry], float)
-                if param['wavelength_plot'].find('w') != -1:
+                if param['wavelength_bool']:    # Use wavelength
                     w_pos = 0
-                    searchpos = param['wavelength_plot'].find('w')+1
-                    for searchlength in range(len(param['wavelength_plot'])-searchpos, 0,-1):
+                    #searchpos = param['plot_format'].find('w')+1
+                    searchpos = 1
+                    for searchlength in range(len(param['plot_format'])-searchpos, 0,-1):
                         try:
-                            w_pos = int(param['wavelength_plot'][searchpos:searchpos+searchlength+1])
+                            w_pos = int(param['plot_format'][searchpos:searchpos+searchlength+1])
                             break
                         except:
                             w_pos = 0
@@ -332,15 +333,15 @@ def plot_spectra_UI(im, title=''):
                 # Create the full signal
                 data = A * np.sin(omega * x_axis + phi)"""
 
-                if param['wavelength_plot'] == 'f':    # make a fft
+                if param['plot_format'] == 'f':    # make a fft
                     x_axis = np.fft.fftfreq(len(data))
                     data = np.abs(np.fft.fft(data))         # px -> 1/px (dT -> f = 1/dT)
                     good_values = list(range(1,int(len(data)/2)))      # 0 contains the sum of the data, and n/2+1 the negative frequencies
                     data = data * 2 / data.shape[0]
                     data, x_axis = data[good_values], 1/x_axis[good_values]
                     xlabel_text = 'period [px]'
-                elif param['wavelength_plot'].find('l') != -1:       # http://joseph-long.com/writing/recovering-signals-from-unevenly-sampled-data/
-                    nout = 4*len(data) # number of frequency-space points at which to calculate the signal strength (output)
+                elif param['plot_format'].find('l') != -1:       # http://joseph-long.com/writing/recovering-signals-from-unevenly-sampled-data/
+                    nout = min(20000, 4*len(data)) # number of frequency-space points at which to calculate the signal strength (output)        # 10k needed 4 min to calculate for 35k datapoints
                     # the posible Periods in px scale: 2 to 10% length of the data; in wave-scale: diff between 2 closest to 10% diff between furthest away:
                     period_range = np.array([ 2*np.nanmin(np.abs(x_axis[1:] - x_axis[:-1])), 0.5*(np.nanmax(x_axis)-np.nanmin(x_axis)) ])
                     freq_range = 1.0 / period_range
@@ -359,7 +360,7 @@ def plot_spectra_UI(im, title=''):
                     normalized_pgram = np.sqrt(4 * (pgram / data.shape[0]))
                     data = normalized_pgram
                     x_axis = periods
-                    if param['wavelength_plot'].find('w') != -1:
+                    if param['wavelength_bool']:
                         xlabel_text = 'period [Angstrom]'
                     else:
                         xlabel_text = 'period [px]'
@@ -381,9 +382,13 @@ def plot_spectra_UI(im, title=''):
             dy = (plot_ranges[3] - plot_ranges[2])*0.01
             plt.axis([plot_ranges[0]-dx,plot_ranges[1]+dx, plot_ranges[2]-dy, plot_ranges[3]+dy])
             param['reset_plot']=True
-        
+        ylabel_text = 'flux [ADU]'
+        if len(param['xlabel']) > 0:
+            xlabel_text = param['xlabel']
+        if len(param['ylabel']) > 0:
+            ylabel_text = param['ylabel']
         frame.set_xlabel(xlabel_text, fontsize=14)
-        frame.set_ylabel('flux [ADU]', fontsize=14)
+        frame.set_ylabel(ylabel_text, fontsize=14)
         if param['draw_legend']:
             frame.legend(loc='upper left', bbox_to_anchor=(adjust[4], adjust[5]))
             
@@ -423,12 +428,15 @@ def plot_spectra_UI(im, title=''):
         return True, xs
     # define widgets
     widgets = dict()
-    widgets['wavelength_plot'] = dict(label='Wavelength, FFT,\nLomb-Scargle',
-                                comment='w/f/l/wl' ,
+    pkwargs['wavelength_bool'] = settings.get('wavelength_bool', False)
+    widgets['wavelength_bool'] = dict(label='Wavelength\ninstead of\nPixel',
+                                kind='CheckBox', start=pkwargs['wavelength_bool'])
+    pkwargs['plot_format'] = settings.get('plot_format', '')
+    widgets['plot_format'] = dict(label='Wavelength set,\nFFT, or\nLomb-Scargle',
+                                comment='number/f/l' ,
                                 kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start='', valid_function=None,
+                                fmt=str, start=pkwargs['plot_format'], valid_function=None,
                                 width=5)
-    pkwargs['wavelength_plot'] = ''
     for i in range(iml-1):
         starta, startb = [], True
         text = [ 'Which data?', 'comma or colon\nseparated list' ]
@@ -448,23 +456,33 @@ def plot_spectra_UI(im, title=''):
         widgets['plot_sub_{0}'.format(i)] = dict(label=text[0], comment=None, #text[1],
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start=startat, valid_function=vfunc,
-                                width=10)
+                                width=12)
         widgets['exclude_{0}'.format(i)] = dict(label='Exclude',
                                 kind='CheckBox', start=startb)
         pkwargs['plot_sub_{0}'.format(i)] = starta
         pkwargs['exclude_{0}'.format(i)] = startb
+    pkwargs['reset_plot'] = settings.get('reset_plot', False)
     widgets['reset_plot'] = dict(label='reset plot',
-                                kind='CheckBox', start=False)
-    pkwargs['reset_plot'] = False
+                                kind='CheckBox', start=pkwargs['reset_plot'])
+    pkwargs['draw_legend'] = settings.get('draw_legend', True)
     widgets['draw_legend'] = dict(label='draw legend',
-                                kind='CheckBox', start=True)
-    pkwargs['draw_legend'] = True
+                                kind='CheckBox', start=pkwargs['draw_legend'])
+    pkwargs['draw_filenames'] = settings.get('draw_filenames', True)
     widgets['draw_filenames'] = dict(label='draw filenames',
-                                kind='CheckBox', start=True)
-    pkwargs['draw_filenames'] = True
+                                kind='CheckBox', start=pkwargs['draw_filenames'])
     #widgets['draw_size'] = dict(label='12.8 x 9.6 inch',
     #                            kind='CheckBox', start=False)
     #pkwargs['draw_size'] = False
+    pkwargs['xlabel'] = settings.get('xlabel', '')
+    pkwargs['ylabel'] = settings.get('ylabel', '')
+    widgets['xlabel'] = dict(label='x label',
+                                kind='TextEntry', minval=None, maxval=None,
+                                fmt=str, start=pkwargs['xlabel'], valid_function=None,
+                                width=14)
+    widgets['ylabel'] = dict(label='y label',
+                                kind='TextEntry', minval=None, maxval=None,
+                                fmt=str, start=pkwargs['ylabel'], valid_function=None,
+                                width=14)
     
     widgets['accept'] = dict(label='Close', kind='ExitButton', position=Tk.BOTTOM)
     widgets['update'] = dict(label='Update', kind='UpdatePlot', position=Tk.BOTTOM)
