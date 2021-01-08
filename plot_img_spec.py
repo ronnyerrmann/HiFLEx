@@ -204,7 +204,7 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     dx = max(1,maxx - minx)*0.01
     dy = max(1,maxy - miny)*0.01
     plt.axis([minx-dx,maxx+dx, miny-dy,maxy+dy])
-
+    print(len(data_x), linestyle, marker, markersize, color)
     cycler_plt = create_plot_linestyle_marker_markersize_color(len(data_x), linestyle, marker, markersize, color)
     frame.set_prop_cycle(cycler_plt)
     label = ''
