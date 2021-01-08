@@ -125,6 +125,7 @@ def create_plot_linestyle_marker_markersize_color(length, linestyle=None, marker
                 If None is given for color then the matplotlib standards are used
     :return cycler_plt: cycler.Cycler, contains the information to make a easy looking graph
     """
+    length = max(1,length)
     cycler_ori = plt.rcParams["axes.prop_cycle"]            # Get the current properties of the cycler
     #if linestyle == None:                       # replace None by empty string
     #    linestyle = ['']
@@ -204,7 +205,7 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     dx = max(1,maxx - minx)*0.01
     dy = max(1,maxy - miny)*0.01
     plt.axis([minx-dx,maxx+dx, miny-dy,maxy+dy])
-    print(len(data_x), linestyle, marker, markersize, color)
+    #print(len(data_x), linestyle, marker, markersize, color
     cycler_plt = create_plot_linestyle_marker_markersize_color(len(data_x), linestyle, marker, markersize, color)
     frame.set_prop_cycle(cycler_plt)
     label = ''
