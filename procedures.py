@@ -316,7 +316,7 @@ def textfileargs(params, textfile=None):
     floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier',
               'resolution_offset_pct', 'diff_pxs', 'maxshift_orders', 'wavelength_scale_resolution', 'width_percentile', 'raw_data_timezone_cor',
               'altitude', 'latitude', 'longitude', 'in_shift', 'extraction_shift', 'extraction_min_ident_part_of_trace_percent',
-              'max_cores_used_pct', 'pxshift_between_wavesolutions']
+              'max_cores_used_pct', 'pxshift_between_wavesolutions', 'minimum_SNR']
     bools = ['flip_frame', 'update_width_orders', 'GUI', 'started_from_p3']
     text_selection = ['arcshift_side', 'extraction_precision']
     results = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_rv_terra', 'path_rv_serval',
@@ -427,12 +427,13 @@ def textfileargs(params, textfile=None):
     if len(undeclared_params) > 0:
         logger('Warn: The following parameters appear in the configuration files, but the programm did not expect them: {0}'.format(undeclared_params[:-2]))
      
-    # Use standard parameters, if not given; more at the beginning, e.g. when modification of paths is necessary
+    # Use standard parameters, if not given iin configuration; more at the beginning, e.g. when modification of paths is necessary
     params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)     # Use 80% of the CPU cores
     params['dataset_rv_analysis'] = params.get('dataset_rv_analysis', [5, 6])
     params['pxshift_between_wavesolutions'] = params.get('pxshift_between_wavesolutions', 0)
     params['cosmic_ray_settings'] =  params.get('cosmic_ray_settings', ['deepCR', 'ACS-WFC-F606W-2-32', '0.999'])
     params['traces_searchlimit_brightness'] =  params.get('traces_searchlimit_brightness', 50)
+    params['minimum_SNR'] =  params.get('minimum_SNR', 1.0)
     return params
 
 def make_directory(directory, errormsg='Warn: Cannot create directory {0}'):
@@ -1342,6 +1343,37 @@ def bin_im(im, binxy, method='median'):
         yy = np.arange(0, ims[1]+biny-1, biny)
         xx[-1] = ims[0]
         yy[-1] = ims[1]
+        reshaped = np.zeros((xx.shape[0] * yy.shape[0], binx*biny))
+        reshaped.fill(np.nan)
+        original_points = np.zeros(xx.shape[0] * yy.shape[0])
+        #original_points.fill(binx*biny)
+        data = np.zeros(( xx.shape[0] * yy.shape[0], 3 ))
+        data.fill(np.nan)
+        for ii in range(xx.shape[0]-1):     # This loop needs 3s when doing 10x10 binning on 6000x6000 image
+            posii = ii*yy.shape[0]
+            for jj in range(yy.shape[0]-1):
+                tempdata = im[ xx[ii]:xx[ii+1], yy[jj]:yy[jj+1] ].flatten()
+                reshaped[posii+jj,:tempdata.shape[0]] = tempdata
+                original_points[posii+jj] = tempdata.shape[0]
+        # non-nans
+        nonan = np.sum( ~np.isnan(reshaped), axis=1 )
+        data[:,1] = nonan
+        # Binned data
+        subset = ( (nonan >= 0.9 * original_points) & (nonan > 0) )      # only if at least 90% of data points available
+        data[subset,0] = bin_im_function( reshaped[subset,:], method, axis=1)
+        # Standard deviation
+        subset = (nonan > 1)
+        data[subset,2] = np.nanstd(reshaped[subset,:], ddof=1, axis=1)      # standard deviation
+        subset = (nonan == 1)
+        data[subset,2] = 0
+        # Reshape
+        data = data.reshape(( xx.shape[0] , yy.shape[0], 3 ))
+
+        """slow, needed 110s when doing 10x10 binning on 6000x6000 image ; new needs 12s 
+        xx = np.arange(0, ims[0]+binx-1, binx)
+        yy = np.arange(0, ims[1]+biny-1, biny)
+        xx[-1] = ims[0]
+        yy[-1] = ims[1]
         data = np.zeros(( xx.shape[0], yy.shape[0], 3 ))
         data.fill(np.nan)
         for ii in range(xx.shape[0]-1):
@@ -1355,25 +1387,8 @@ def bin_im(im, binxy, method='median'):
                     data[ii,jj,2] = np.nanstd(temdata, ddof=1)                      # standard deviation
                 elif nonan == 1:
                     data[ii,jj,2] = 0
-                
-        """x_range = list(range(int((ims[0]+binx-1)/binx)))
-        y_range = list(range(int((ims[1]+biny-1)/biny)))
-        data = np.zeros(( len(x_range), len(y_range), 3 ))
-        data.fill(np.nan)
-        for ii in x_range:
-            iline = im[ii*binx:min(ims[0],(ii+1)*binx),:]
-            for jj in y_range:
-                temdata = iline[:,jj*biny:min(ims[1],(jj+1)*biny)]
-                if np.sum( ~np.isnan(temdata) ) >= 0.9 * np.prod(temdata.shape):    # only of at least 10% of data points available
-                    data[ii,jj,0] = bin_im_function(temdata, method, axis=None)     # binning
-                data[ii,jj,1] = np.sum( ~np.isnan(temdata) )                        # number of the elements not nan
-                if data[ii,jj,1] > 1:
-                    data[ii,jj,2] = np.nanstd(temdata, ddof=1)                      # standard deviation
-                elif data[ii,jj,1] == 1:
-                    data[ii,jj,2] = 0
-                 
-                #nline.append(sum(percentile_list(list((im[i*binx:(i+1)*binx,j*biny:(j+1)*biny]).flat),.2)))   #sum after 80% clipping -> more flux -> more lines find with gauss of height 50
-        """
+        """      
+        
         nim = data[:,:,0]
         gim = data[:,:,1].astype(int)
         sim = data[:,:,2]
@@ -1391,6 +1406,7 @@ def bin_im(im, binxy, method='median'):
             sim.append(np.nanstd(temdata, ddof=min(1,temdata.shape[1]-1), axis=1))      # standard deviation
         nim = np.transpose(np.array(nim))
     #logger('Info: image binned')
+    
     return np.array(nim), np.array(gim), np.array(sim)
 
 def scale_image_plot(im, scale_type):
@@ -2051,14 +2067,47 @@ def fit_poly_center(imslice, x=[], border_pctl=75):
                 
     return cen_poly, poly, left, right
 
-def measure_noise(spectra, p_order=16, semi_window=10):
+def create_shifted_array(input_list, shifts, keep_length=True, end_to_beginning=False):
+    """
+    Creates a array with all the shifted values. If input_list=[2,3,5,6,7] and shifts=[-1,0,2] and keep_length=True, end_to_beginning=True, then the result array will be:
+        3,5,6,7,2
+        2,3,5,6,7
+        6,7,2,3,5
+    :param input_list: 1d array or list
+    :param shifts: list of integers, by what indexes should the input_list be shifted
+    :return results: 2d array with first axis the same length as input_list and second axis as shifts
+    """
+    dp = len(input_list)
+    result = np.zeros(( len(shifts), dp ))*np.nan
+            
+    for index, shift in enumerate(shifts):
+        result[index,:] = np.roll(input_list, shift)
+        if not end_to_beginning and keep_length:
+            if shift < 0:
+                result[index,shift:] = np.nan
+            elif shift > 0:
+                result[index,:shift] = np.nan
+    if not keep_length:
+        begin = max(shifts)
+        end = min(shifts)
+        if min(shifts) > 0:
+            end = dp
+        if max(shifts) < 0:
+            begin = 0
+        result = result[:, begin:end]
+    
+    return result
+
+def measure_noise(spectra, p_order=16, semi_window=10, high_noise=None, minimum_SNR=None):
     """
     Measures the noise in a spectrum by fitting a high order polynomial against the data and deriving the residuals
-    !!! Possible improvement: Take into account the wavelength solution -> use a semi_window that only few lines are covered
+    !!! Possible improvement: Take into account the wavelength solution -> use a semi_window so that only few lines are covered
     :param spectra: 2d array of floats, spectrum
     :param p_order: integer, order of the polynomial
     :param semi_window: integer, the noise is calculated using a sample of +/- semi_window pixels around the current value; tests were done with semi_window=10
+    :param high_noise: float, mark areas where the noise is high_noise above the median noise (e.g. at order boundaries due to low flux in spectrum)
     :return noise: 2d array of floats, same dimension as spectra
+    :return high_noise_array: 2d array of bools, same dimension as spectra, noise above high_noise is marked True
     """
     while 2*semi_window+1 - p_order < 6:           # make sure that the values make sense
         if semi_window < 10:
@@ -2066,14 +2115,27 @@ def measure_noise(spectra, p_order=16, semi_window=10):
         else:
             p_order -= 1
     specs = spectra.shape
-    noise = []
+    low_SNR = np.zeros(specs[1], dtype=bool)
+    xarr = np.arange(specs[1])
+    noise = np.zeros(specs)*np.NaN
+    high_noise_array = np.zeros(specs, dtype=bool)
     for order in range(specs[0]):
-        xarr = np.arange(specs[1])
         spec = spectra[order]
         nonnan = ~np.isnan(spec)
+        if np.sum(nonnan) == 0:
+            continue
         spec_fit = scipy.signal.savgol_filter(spec[nonnan], 2*semi_window+1, p_order)            # Fit the flux
         res = spec[nonnan] - spec_fit
-        noise_order = np.repeat([np.NaN], specs[1])
+        shift_res = create_shifted_array(res, range(-semi_window, semi_window+1))        # one line for each shifted spectrum
+        # Remove min and max values
+        shift_res = np.sort(shift_res, axis=0)[1:,:]        # Remove the lowest numbers, nan will be highest
+        shift_res[np.isnan(shift_res)] = -np.inf 
+        shift_res = np.sort(shift_res, axis=0)[:-1,:]       # Remove the highest numbers
+        shift_res[np.isinf(shift_res)] = np.nan
+        
+        noise[order,nonnan] = np.nanstd(shift_res, ddof=1, axis=0)
+        
+        """ Slow solution with a for loop
         for index, index_f in enumerate(xarr[nonnan]):
             x_s = xarr[ max(0,index_f-semi_window):min(specs[1],index_f+semi_window) + 1 ]        # range on full list
             nonnan_s = ~np.isnan(spec[x_s])
@@ -2081,15 +2143,55 @@ def measure_noise(spectra, p_order=16, semi_window=10):
             left = np.where(x_s == index_f)[0][0]
             res_sub = res[ max(0,index-left):min(len(res),index+(len(x_s)-left)) + 1 ]
             res_sub = percentile_list(res_sub, 1./len(res))         # remove the highest and lowest outlier
-            noise_order[index_f] = np.std(res_sub, ddof=1)        # ddof=1 and not ddof=p_order+1, as the latter one doesn't take into account that there are real physical features (absorption lines)
-        # !!! Maybe remove the outliers, as a cosmics affect the fit and then the noise in this area is much higher
-        noise_order = scipy.signal.medfilt(noise_order, 2*semi_window+1)
-        noise.append(noise_order)
+            noise[order,index_f] = np.std(res_sub, ddof=1)        # ddof=1 and not ddof=p_order+1, as the latter one doesn't take into account that there are real physical features (absorption lines)
+        # !!! Maybe remove the outliers, as a cosmics affect the fit and then the noise in this area is much higher"""
+        noise[order,:] = scipy.signal.medfilt(noise[order,:], 2*semi_window+1)
+        nonnan = ~np.isnan(noise[order,:])
+        if minimum_SNR is not None:
+            SNR = spectra[order,:] / noise[order,:]
+            low_SNR = (SNR < minimum_SNR)
+            high_noise_array[order,nonnan] = low_SNR[nonnan]
+        if high_noise is not None:
+            for dummy in range(2):
+                med_noise = np.median(noise[ order, (nonnan & ~high_noise_array[order]) ])
+                high_noise_array[order,nonnan] = ( (noise[order,nonnan] > med_noise*high_noise) | (low_SNR[nonnan]) )
+        for dummy in range(2):          # Smooth out: remove high noise where it's only an island of a few pixel
+            """get_timing('x1 ')
+            shift_xarr = create_shifted_array(xarr, range(-semi_window, semi_window+1))        # one line for each shifted spectrum
+            print(xarr.shape, spec.shape, nonnan.shape, shift_xarr.shape, np.min(shift_xarr), np.max(shift_xarr), np.min(shift_xarr.astype(int)), np.max(shift_xarr.astype(int)))
+            shift_xarr = shift_xarr[:,nonnan].astype(int)
+            sub_high_noise_array = high_noise_array[order,:][shift_xarr]                    # 1d_array will be extendet to shape of shift_xarr
+            sub_nonnan = nonnan[shift_xarr]
+            sum_high_noise_array = np.sum(sub_high_noise_array, axis=0)
+            sum_nonnan = np.sum(sub_nonnan, axis=0)
+            to_1 = np.zeros((specs[1], shift_xarr.shape[1]))
+            to_0 = np.zeros((specs[1], shift_xarr.shape[1]))
+            to_1[:,sum_high_noise_array >= sum_nonnan] += 1
+            to_0[:,sum_high_noise_array <  sum_nonnan] += 1
+            to_1 = np.sum(to_1, axis=0)
+            to_0 = np.sum(to_0, axis=0)
+            print(xarr.shape, spec.shape, nonnan.shape, shift_xarr.shape, sub_high_noise_array.shape, sub_nonnan.shape, sum_high_noise_array.shape, sum_nonnan.shape, to_1.shape )
+            exit(100)"""
+                
+            
+            to_1 = np.zeros(specs[1])
+            to_0 = np.zeros(specs[1])
+            for index_f in xarr[nonnan]:
+                x_s = xarr[max(0,index_f-semi_window):min(specs[1],index_f+semi_window) + 1 ]
+                sub = high_noise_array[order, x_s]
+                if np.sum(sub) >= np.sum(nonnan[x_s]):      # not sub.shape[0], as this includes nan values at the borders
+                    to_1[x_s] += 1
+                else:
+                    to_0[x_s] += 1
+                #if order==16 and (index_f < 200 or index_f > 5800):
+                #    print(dummy, index_f, min(x_s), max(x_s), np.sum(sub), sub.shape[0], to_1[index_f], to_0[index_f], high_noise_array[order, index_f], to_1[x_s], to_0[x_s])
+            high_noise_array[order, ( (to_0 > 0) )] = False
+            high_noise_array[order, ( (to_1 > 0) & (to_1 >= to_0) )] = True
+        get_timing('x7 ')
         #print len(spec_fit), sum(nonnan), specs, len(xarr)
         #if order>45:
-        #    plot_img_spec.plot_points([xarr, xarr[nonnan], xarr[nonnan], xarr, xarr],[spec, spec_fit, res, noise_nofilt, noise_order],['data','fit', 'res', 'noise', 'noisefiltered'],'path',show=True, x_title='Pixel', y_title='Flux', title='' )
-        
-    return np.array(noise)
+        #    plot_img_spec.plot_points([xarr, xarr[nonnan], xarr[nonnan], xarr, xarr],[spec, spec_fit, res, noise_nofilt, noise[order,:]],['data','fit', 'res', 'noise', 'noisefiltered'],'path',show=True, x_title='Pixel', y_title='Flux', title='' )
+    return noise, high_noise_array
     
     
     """# Old, before August 2019 - fits the whole order and then uses part of the fit to calculate stdev
@@ -2383,21 +2485,22 @@ def adjust_trace_order(kwargs):
     cen_px = kwargs['cen_px']
     biny = kwargs['biny']
     imus = kwargs['imus']
-    
+    polymax = (maxFWHM > 2)        # only use polynomial when the with of the features is big enough, otherwise the polyfit will be nan and that will reject the orders
+        
     if True:
         lastadd = trace_pos[0,0]
         positions, widths_o, shifts = [], [], []
         for j,i in enumerate(trace_pos[0,:].astype(int)):           # each pixel, is is the position in the array and i the real position on the CCD
             oldcenter = trace_pos[order+1,j]                        # +1 because first entry are pixels
             if oldcenter > -maxFWHM:                                # center is expected to be in the image
-                cen_gauss, cen_poly, width, leftmin,rightmin = find_center(im[i,:], int(round(oldcenter)), i, maxFWHM, border_pctl=params['width_percentile'], significance=3.0, polymax=True)
+                cen_gauss, cen_poly, width, leftmin,rightmin = find_center(im[i,:], int(round(oldcenter)), i, maxFWHM, border_pctl=params['width_percentile'], significance=3.0, polymax=polymax)
                 #logger('{0} {1} {2} {3}'.format(order,j,cen_gauss,cen_poly), show=False, printarrayformat=[], printarray=[], logfile='gauss_vs_poly.txt')
-                center = cen_poly
+                if polymax:     center = cen_poly
+                else:           center = cen_gauss
             else:
                 center, width, lastadd = 0,0, i
-            #if width == 0 and oldcenter > -maxFWHM:
-            #if width != 0 and abs(center-oldcenter)>=3:
-            #    print center,oldcenter,i, leftmin,rightmin
+            #if not(width != 0 and abs(center-oldcenter)<maxshift):
+            #    print(j, i, width, center, oldcenter, abs(center-oldcenter), maxshift)
             if width != 0 and abs(center-oldcenter)<maxshift:
                 #print 'maxFWHM,order,j,i,leftmin,center, rightmin, width',maxFWHM,order,j,i,leftmin,center, rightmin, width
                 if leftmin < center-width*2.35482*3 or leftmin > center:        # unreasonable small position (3xFWHM)
@@ -2416,7 +2519,6 @@ def adjust_trace_order(kwargs):
             #else:
             #    print center, oldcenter, maxshift, maxFWHM
                 
-        #print len(positions), 
         if widths_o == [] or len(shifts) < ims[0]/4.:                # Not enough data for that order
             #print 'len(positions),len(shifts)', len(positions),len(shifts)
             return [], [], [], [], [], [], []
@@ -2500,7 +2602,7 @@ def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
     centerfit, leftfit, rightfit, xlows, xhighs, widths, avg_shifts = [], [], [], [], [], [], []
     kwargs = dict(trace_pos=trace_pos, maxFWHM=maxFWHM, im=im, params=params, maxshift=maxshift, ims=ims, binx=binx, cen_px=cen_px, biny=biny, imus=imus)
     orders = list(range(trace_pos.shape[0]-1))
-    logger('Step: Adjusting orders')
+    logger('Step: Adjusting orders', show=(params['use_cores']>1))
     if params['use_cores'] > 1:
         orders2 = [[order, kwargs] for order in orders]
         p = multiprocessing.Pool(params['use_cores'])
@@ -2558,17 +2660,26 @@ def adjust_width_orders(center, left, right, w_mult):
     right = center + diff * w_mult[1]
     return left, right
 
-def asign_bad_px_value(input_value, badpx_mask, saturated_mask, data_range):
+def asign_bad_px_value(input_value, badpx_mask, saturated_mask, data_range=() ):
     """
     :param input_value: already asigned value for the bad pixel mask
     :param badpx_mask: n-d array (normally 2d array) of int or float, with 0 to mark the bad pixels
     :param im: n-d array (normally 2d array) of int or float, image from which the extraction will be done
     :param data_range: number, list, or array of integers, to mark the extracted area
     """
-    if np.nanmin(badpx_mask[data_range]) == 0:
-        input_value = 0.2
-    elif np.nanmin(saturated_mask[data_range]) == 0:
-        input_value = 0.1
+    if type(input_value).__name__ == 'ndarray':
+        if len(saturated_mask.shape) == 1:
+            #saturated_mask = saturated_mask.reshape(saturated_mask.shape[0],1)
+            saturated_mask = np.expand_dims(saturated_mask, axis=1)
+        if len(badpx_mask.shape) == 1:
+            badpx_mask = np.expand_dims(badpx_mask, axis=1)
+        input_value[ (np.nanmin(saturated_mask, axis=1) == 0) ] = 0.1
+        input_value[ (np.nanmin(badpx_mask, axis=1) == 0) ] = 0.2
+    else:   # single values
+        if np.nanmin(badpx_mask[data_range]) == 0:
+            input_value = 0.2
+        elif np.nanmin(saturated_mask[data_range]) == 0:
+            input_value = 0.1
     
     return input_value
 
@@ -2579,6 +2690,118 @@ def no_tqdm(input, desc=''):
     return input
 
 def extract_order(kwarg):
+    """
+    Extract the spectra for one order
+    """
+    [pp, kwargs] = kwarg
+    xarr = kwargs['xarr']
+    image = kwargs['image']
+    badpx_mask = kwargs['badpx_mask']
+    saturated_mask = kwargs['saturated_mask']
+    pfits = kwargs['pfits']
+    xlows = kwargs['xlows']
+    xhighs = kwargs['xhighs']
+    w_mult = kwargs['w_mult']
+    offset = kwargs['offset']
+    var = kwargs['var']
+    maxpx = image.shape[1]-1                    # End of the image in cross-dispersion direction
+    #for pp in plot_tqdm(range(pfits.shape[0]), desc='Extract Spectrum'):        # pp is order
+
+    #print('\t Order {0}'.format(pp + 1))
+    # find nearest y pixel
+    yarr = np.polyval(pfits[pp, 0, 1:], xarr-pfits[pp, 0, 0])+offset
+    xarr1 = np.arange(xlows[pp], xhighs[pp])
+    ospecs = np.repeat([np.NaN], image.shape[0])
+    ogood_px_mask = np.repeat([0.0], image.shape[0])            # Array needs to be float in order to save 0.1, 0.2, ... correctly
+    lowers = np.polyval(pfits[pp, 1, 1:], xarr-pfits[pp, 1, 0]) + offset 
+    uppers = np.polyval(pfits[pp, 2, 1:], xarr-pfits[pp, 2, 0]) + offset
+    #print( 2580, pp, np.sum(np.isnan(lowers)), np.sum(np.isnan(uppers)), np.sum(uppers<lowers) )
+    lowers, uppers = adjust_width_orders(yarr, lowers, uppers, [w_mult, w_mult])          # Adjust the width of the orders
+    #print( 2582, pp, np.sum(np.isnan(lowers)), np.sum(np.isnan(uppers)), np.sum(uppers<lowers) )
+    widths_o = uppers - lowers      # can be below 0, but shouldn't be!! e.g. 20201104/con4_50mu_bc
+    #print pp,np.nanmean(uppers-lowers), np.nanmedian(uppers-lowers), np.nansum(uppers-lowers)
+    if w_mult == 0.0:                                                       # only the central full pixel
+        widths_o = widths_o * 0 + 1.
+        order_in_frame = ((yarr[xarr1] <= maxpx) & (yarr[xarr1] >= 0) )     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
+        yarr = np.round(yarr).astype(int)
+        # Fast way
+        real_x = xarr1[order_in_frame]
+        ospecs[real_x] = copy.copy( image[ real_x, yarr[real_x] ] )
+        #if np.sum(order_in_frame) > 0:
+        ogood_px_mask[real_x] = asign_bad_px_value(np.repeat(1,np.sum(order_in_frame)), badpx_mask[real_x, yarr[real_x]], saturated_mask[real_x, yarr[real_x]] )
+        
+    else:           # old solution
+        # +.5/-.5 because if light between pixels 3.5 and 4.5 should be extracted, that would be exactly all light in pixel 4; if light between 3 and 5: 0.5*3 + full px 4 + 0.5*5; between 2.6 and 5.4: 0.9*3 + full px 4 + 0.9*5
+        # Faster way
+        lowersb = (np.floor(lowers+0.5)).astype(int)                        # boundary in full pixel, round down
+        uppersb = (np.ceil (uppers-0.5)).astype(int)                        # boundary in full pixel, round up
+        order_in_frame = ((lowersb[xarr1] <= maxpx) & (uppersb[xarr1] >= 0) & (lowers[xarr1] < uppers[xarr1]))     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
+        real_x = xarr1[order_in_frame]
+        
+        # Only keep useful data
+        minpxo, maxpxo = max(0, np.nanmin(lowersb[real_x])), min(maxpx, np.nanmax(uppersb[real_x]))
+        image_sub = copy.copy( image[ :, minpxo:maxpxo+1 ] )
+        badpx_mask_sub = copy.copy( badpx_mask[ :, minpxo:maxpxo+1 ] )
+        saturated_mask_sub = copy.copy( saturated_mask[ :, minpxo:maxpxo+1 ] )
+        lowersb -= minpxo
+        uppersb -= minpxo
+        for column in range(image_sub.shape[1]):    # Set data outside orders to 0
+            tozero = real_x[ (column < lowersb[real_x]) | (column > uppersb[real_x]) ]
+            image_sub[tozero, column] = 0
+            badpx_mask_sub[tozero, column] = 1
+            saturated_mask_sub[tozero, column] = 1
+        
+        # Replace the pixel on at the boundary with the right value
+        if var == 'linfit':
+            lowersb_0p5_minpxo = lowersb+0.5+minpxo
+            uppersb_0p5_minpxo = uppersb-0.5+minpxo
+            for xrow in xarr1[order_in_frame]:          # A bit faster, but the loop is still there, hence only 30% faster
+                # Get fractions of pixel from a polynom, if they are not outside the frame borders (spline actes weired between points, when there is an outlier)
+                #if w[2]*w_mult < 0.5:             # There will be no full pixel, which messes up everything
+                if uppers[xrow] - lowers[xrow] < 1.0:       # There will be no full pixel, which messes up everything
+                    fracpixparam = [[yarr[xrow],'b'], 2]
+                else:
+                    fracpixparam = [[lowers[xrow], 'l', 1] , [uppers[xrow],'u', 1]]
+                for [borderpos, pos, number_px] in fracpixparam:
+                    x = np.arange(max(0,np.floor(borderpos-number_px)), min(maxpx,np.ceil(borderpos+number_px))+1, dtype=int)
+                    if len(x) <= 1: # keep things as they are
+                        continue
+                    y = image[xrow, x]
+                    weight = 1./(np.abs(x-borderpos)+0.1)**2                   # weight the values so that the data around the fraction of the pixel is used most
+                    p = polyfit_adjust_order(x, y, max(1,len(x)-3), w=weight)
+                    poly = np.poly1d(p)         # poly and p have the same values, poly is just a class
+                    polyint = poly.integ()      # Indefinite integral of the polynom
+                    if pos == 'l':
+                        image_sub[xrow, lowersb[xrow]] = polyint(lowersb_0p5_minpxo[xrow]) - polyint(lowers[xrow])
+                    elif pos == 'u':
+                        image_sub[xrow, uppersb[xrow]] = polyint(uppers[xrow]) - polyint(uppersb_0p5_minpxo[xrow])
+                    elif pos == 'b':
+                        image_sub[xrow,:] = 0           # only use one value
+                        image_sub[xrow,-1] = polyint(uppers[xrow]) - polyint(lowers[xrow])
+                    else:
+                        print('Programming error around line 2800')
+                    """if pp<100:  step=3000
+                    else:       step=300
+                    if xrow%step == 0:
+                        print(xrow, pos, borderpos, minpxo, lowersb[xrow], uppersb[xrow], round(lowers[xrow],2), round(uppers[xrow],2), y, image_sub[xrow,image_sub[xrow,:]!=0] )"""
+        else:
+            pos1 = xarr1[ order_in_frame & (lowersb[xarr1] != uppersb[xarr1]) & (lowers[xarr1]>=-0.5) ]
+            pos2 = xarr1[ order_in_frame & (lowersb[xarr1] != uppersb[xarr1]) & (uppers[xarr1]<=maxpx-0.5) ]
+            #print(min(pos1), max(pos1), min(pos2), max(pos2), lowersb.shape)
+            #print(min(lowersb[pos1]), max(lowersb[pos1]), min(uppersb[pos2]), max(uppersb[pos2]), image_sub.shape)
+            image_sub[pos1, lowersb[pos1]] *= (lowersb[pos1]-(lowers[pos1]-minpxo)+0.5)        # checked in excel
+            image_sub[pos2, uppersb[pos2]] *= ((uppers[pos2]-minpxo)-uppersb[pos2]+0.5)        # checked in excel
+            # if less than full pixel multiply both fraction of the pixel might be the same
+            pos = xarr1[ order_in_frame & (lowersb[xarr1] == uppersb[xarr1]) & (lowers[xarr1]>=-0.5)  & (uppers[xarr1]<=maxpx-0.5) ]
+            image_sub[pos, lowersb[pos]] *= ((lowersb[pos]-lowers[pos])+(uppers[pos]-uppersb[pos]))        # checked in excel
+        
+        ospecs[real_x] = np.sum(image_sub[real_x,:], axis=1)
+        #if np.sum(order_in_frame) > 0:
+        ogood_px_mask[real_x] = asign_bad_px_value(np.repeat(1,np.sum(order_in_frame)), badpx_mask_sub[real_x,:], saturated_mask_sub[real_x,:] )
+    
+    return ospecs, ogood_px_mask, widths_o
+    
+def extract_order_todelete(kwarg):      ### delete later, now just for backup
     """
     Extract the spectra for one order
     """
@@ -2618,12 +2841,17 @@ def extract_order(kwarg):
             widths_o = widths_o * 0 + 1.
             order_in_frame = ((yarr[xarr1] <= maxpx) & (yarr[xarr1] >= 0) )     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
             yarr = np.round(yarr).astype(int)
+            # Fast way
+            real_x = xarr1[order_in_frame]
+            ospecs[real_x] = copy.copy( image[ real_x, yarr[real_x] ] )
+            ogood_px_mask[real_x] = asign_bad_px_value(np.repeat(1,np.sum(order_in_frame)), badpx_mask[real_x, yarr[real_x]], saturated_mask[real_x, yarr[real_x]] )
+            """ Slow way
             for xrow in xarr1[order_in_frame]:
-                ssum = image[xrow, yarr[xrow]]                      # Verified 20190122
-                good_px = asign_bad_px_value(1, badpx_mask, saturated_mask, (xrow, yarr[xrow]) )
-                ospecs[xrow] = ssum
-                ogood_px_mask[xrow] = good_px  
-        elif var == 'linfit':         # new solution, better than the one below, tested with many values in excel
+                ogood_px_mask[xrow] = asign_bad_px_value(1, badpx_mask, saturated_mask, (xrow, yarr[xrow]) )
+                ospecs[xrow] = image[xrow, yarr[xrow]]                      # Verified 20190122
+            """
+            """ slow
+            elif var == 'linfit':         # new solution, better than the one below, tested with many values in excel
             lowersf = (np.ceil(lowers+.5)).astype(int)       #Full lowest pixel of the order
             uppersf = (np.floor(uppers-.5)).astype(int)      #Full highest pixel of the order
             lowers[lowers<-0.5] = -0.5
@@ -2665,8 +2893,88 @@ def extract_order(kwarg):
                     else:
                         print('Programming error around line 2200')
                 ospecs[xrow] = ssum
-                ogood_px_mask[xrow] = good_px
+                ogood_px_mask[xrow] = good_px"""
         else:           # old solution
+            # +.5/-.5 because if light between pixels 3.5 and 4.5 should be extracted, that would be exactly all light in pixel 4; if light between 3 and 5: 0.5*3 + full px 4 + 0.5*5; between 2.6 and 5.4: 0.9*3 + full px 4 + 0.9*5
+            # Faster way
+            lowersb = (np.floor(lowers+0.5)).astype(int)                        # boundary in full pixel, round down
+            uppersb = (np.ceil (uppers-0.5)).astype(int)                        # boundary in full pixel, round up
+            order_in_frame = ((lowersb[xarr1] <= maxpx) & (uppersb[xarr1] >= 0) & (lowers[xarr1] < uppers[xarr1]))     # Due to order shifting the order might be shifted to the ouside of the images, ignore these values
+            real_x = xarr1[order_in_frame]
+            
+            # Only keep useful data
+            minpxo, maxpxo = max(0, np.nanmin(lowersb[real_x])), min(maxpx, np.nanmax(uppersb[real_x]))
+            image_sub = copy.copy( image[ :, minpxo:maxpxo+1 ] )
+            badpx_mask_sub = copy.copy( badpx_mask[ :, minpxo:maxpxo+1 ] )
+            saturated_mask_sub = copy.copy( saturated_mask[ :, minpxo:maxpxo+1 ] )
+            lowersb -= minpxo
+            uppersb -= minpxo
+            for column in range(image_sub.shape[1]):    # Set data outside orders to 0
+                tozero = real_x[ (column < lowersb[real_x]) | (column > uppersb[real_x]) ]
+                image_sub[tozero, column] = 0
+                badpx_mask_sub[tozero, column] = 1
+                saturated_mask_sub[tozero, column] = 1
+            
+            # Replace the pixel on at the boundary with the right value
+            if var == 'linfit':
+                lowersb_0p5_minpxo = lowersb+0.5+minpxo
+                uppersb_0p5_minpxo = uppersb-0.5+minpxo
+                for xrow in xarr1[order_in_frame]:          # A bit faster, but the loop is still there, hence only 30% faster
+                    # Get fractions of pixel from a polynom, if they are not outside the frame borders (spline actes weired between points, when there is an outlier)
+                    #if w[2]*w_mult < 0.5:             # There will be no full pixel, which messes up everything
+                    if uppers[xrow] - lowers[xrow] < 1.0:       # There will be no full pixel, which messes up everything
+                        fracpixparam = [[yarr[xrow],'b'], 2]
+                    else:
+                        fracpixparam = [[lowers[xrow], 'l', 1] , [uppers[xrow],'u', 1]]
+                    for [borderpos, pos, number_px] in fracpixparam:
+                        x = np.arange(max(0,np.floor(borderpos-number_px)), min(maxpx,np.ceil(borderpos+number_px))+1, dtype=int)
+                        if len(x) <= 1: # keep things as they are
+                            continue
+                        y = image[xrow, x]
+                        weight = 1./(np.abs(x-borderpos)+0.1)**2                   # weight the values so that the data around the fraction of the pixel is used most
+                        p = polyfit_adjust_order(x, y, max(1,len(x)-3), w=weight)
+                        poly = np.poly1d(p)         # poly and p have the same values, poly is just a class
+                        polyint = poly.integ()      # Indefinite integral of the polynom
+                        if pos == 'l':
+                            image_sub[xrow, lowersb[xrow]] = polyint(lowersb_0p5_minpxo[xrow]) - polyint(lowers[xrow])
+                        elif pos == 'u':
+                            image_sub[xrow, uppersb[xrow]] = polyint(uppers[xrow]) - polyint(uppersb_0p5_minpxo[xrow])
+                        elif pos == 'b':
+                            image_sub[xrow,:] = 0           # only use one value
+                            image_sub[xrow,-1] = polyint(uppers[xrow]) - polyint(lowers[xrow])
+                        else:
+                            print('Programming error around line 2800')
+                        """if pp<100:  step=3000
+                        else:       step=300
+                        if xrow%step == 0:
+                            print(xrow, pos, borderpos, minpxo, lowersb[xrow], uppersb[xrow], round(lowers[xrow],2), round(uppers[xrow],2), y, image_sub[xrow,image_sub[xrow,:]!=0] )"""
+            else:
+                pos1 = xarr1[ order_in_frame & (lowersb[xarr1] != uppersb[xarr1]) & (lowers[xarr1]>=-0.5) ]
+                pos2 = xarr1[ order_in_frame & (lowersb[xarr1] != uppersb[xarr1]) & (uppers[xarr1]<=maxpx-0.5) ]
+                #print(min(pos1), max(pos1), min(pos2), max(pos2), lowersb.shape)
+                #print(min(lowersb[pos1]), max(lowersb[pos1]), min(uppersb[pos2]), max(uppersb[pos2]), image_sub.shape)
+                image_sub[pos1, lowersb[pos1]] *= (lowersb[pos1]-(lowers[pos1]-minpxo)+0.5)        # checked in excel
+                image_sub[pos2, uppersb[pos2]] *= ((uppers[pos2]-minpxo)-uppersb[pos2]+0.5)        # checked in excel
+                # if less than full pixel multiply both fraction of the pixel might be the same
+                pos = xarr1[ order_in_frame & (lowersb[xarr1] == uppersb[xarr1]) & (lowers[xarr1]>=-0.5)  & (uppers[xarr1]<=maxpx-0.5) ]
+                image_sub[pos, lowersb[pos]] *= ((lowersb[pos]-lowers[pos])+(uppers[pos]-uppersb[pos]))        # checked in excel
+            
+            ospecs[real_x] = np.sum(image_sub[real_x,:], axis=1)
+            ogood_px_mask[real_x] = asign_bad_px_value(np.repeat(1,np.sum(order_in_frame)), badpx_mask_sub[real_x,:], saturated_mask_sub[real_x,:] )
+            """print(np.nansum(ospecs), np.sum(ogood_px_mask))
+            for xrow in real_x:
+                if pp<60:
+                    step=3000
+                else:
+                    step=300
+                if xrow%step == 0:
+                    print( xrow, lowersb[xrow], uppersb[xrow], round(lowers[xrow],3), round(uppers[xrow],3), minpxo, maxpxo, image_sub[xrow,image_sub[xrow,:]!=0], kwargs['image'][xrow,lowersb[xrow]+minpxo:uppersb[xrow]+minpxo+1]  )"""
+            """ospecs = np.repeat([np.NaN], image.shape[0])
+            ogood_px_mask = np.repeat([0.0], image.shape[0])            # Array needs to be float in order to save 0.1, 0.2, ... correctly
+            image = copy.copy(kwargs['image'])
+            badpx_mask = copy.copy(kwargs['badpx_mask'])
+            saturated_mask = copy.copy(kwargs['saturated_mask'])"""
+            """# Slow way
             # +.5/-.5 because if light between pixels 3.5 and 4.5 should be extracted, that would be exactly all light in pixel 4; if light between 3 and 5: 0.5*3 + full px 4 + 0.5*5; between 2.6 and 5.4: 0.9*3 + full px 4 + 0.9*5
             lowersf = (np.ceil (lowers+.5)).astype(int)                         # Full pixels, round up
             uppersf = (np.floor(uppers-.5)).astype(int)                         # Full pixels, round down
@@ -2679,14 +2987,20 @@ def extract_order(kwarg):
             for xrow in xarr1[order_in_frame]:
                 good_px = 1
                 ssum = 0
+                if pp<60:
+                    step=3000
+                else:
+                    step=300
+                if xrow%step == 0:
+                    print(xrow, lowersf[xrow], uppersf[xrow], round(lowers[xrow],3), round(uppers[xrow],3), round(image[xrow, lowersr[xrow]]*( (1.5 - lowers[xrow]%1)%1 ),3), image[xrow, lowersf[xrow]:uppersf[xrow]+1], round(image[xrow, uppersr[xrow]]*( (0.5 + uppers[xrow]%1)%1 ),3), image[xrow, lowersr[xrow]]*( - 1 ), lowersr[xrow] >= 0, uppersr[xrow] <= maxpx, lowersr[xrow] == uppersr[xrow] and lowersr[xrow] >= 0 and uppersr[xrow] <= maxpx )
                 if lowersf[xrow] <= uppersf[xrow]:
                     ssum = np.sum(image[xrow, lowersf[xrow]:uppersf[xrow]+1])
                     good_px = asign_bad_px_value(good_px, badpx_mask, saturated_mask, (xrow, range(lowersf[xrow],uppersf[xrow]+1)) )
                     # Tested on 15/3/19 for individual entries and ranges of entries: image[xrow, lowersf[xrow]:uppersf[xrow]+1] is the same as data_range = (xrow, range(lowersf[xrow],uppersf[xrow]+1)) ; image[data_range]
-                    """if min(badpx_mask[xrow, lowersf[xrow]:uppersf[xrow]+1]) == 0:                       # Bad pixel in extracted data
+                    "#""if min(badpx_mask[xrow, lowersf[xrow]:uppersf[xrow]+1]) == 0:                       # Bad pixel in extracted data
                         good_px = 0.2
                     elif max(image[xrow, lowersf[xrow]:uppersf[xrow]+1]) >= params['max_good_value']:   # Saturated pixel in extracted data
-                        good_px = 0.1"""
+                        good_px = 0.1""#"
                 #print 'xrow, ssum, ...', xrow, ssum, lowers[xrow], uppers[xrow], lowersf[xrow], uppersf[xrow]+1, 
                 # Get fractions of pixel, if they are not outside the frame borders
                 if lowersr[xrow] >= 0:
@@ -2704,6 +3018,7 @@ def extract_order(kwarg):
                 ogood_px_mask[xrow] = good_px
                 #if pp == 57 and xrow == 1350:
                 #    print pp,xrow, image[xrow, lowersf[xrow]:uppersf[xrow]+1], image[xrow, lowersr[xrow]], (0.5-lowers[xrow]%1), image[xrow, uppersr[xrow]], (uppers[xrow]%1-.5), ssum
+            print(np.nansum(ospecs), np.sum(ogood_px_mask) )"""
     
     return ospecs, ogood_px_mask, widths_o
      
@@ -2735,11 +3050,11 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0
     :return widths_m: same format as spec, contains the extracted with for each spectral pixel
 
     """
-    if plot_tqdm:
+    if plot_tqdm and var!='standard' and w_mult!=0.0:
         plot_tqdm = tqdm
     else:
         plot_tqdm = no_tqdm
-    logger('Step: extracting spectra', show=False)
+    logger('Step: extracting spectra', show=(w_mult!=0.0))
     # Prepare bad-pixel map
     badpx_mask_name = 'badpx_mask'
     if badpx_mask_name not in calimages:
@@ -2926,6 +3241,7 @@ def measure_background_noise(im):
     #plot_img_spec.plot_image(bim, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_im')
     #plot_img_spec.plot_image(gim, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_datapoints')
     #plot_img_spec.plot_image(sim, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'bined_std')
+
     mask = ~np.isnan(bim)
     while np.sum(bim[mask] - np.percentile(bim[mask],30) >= 3 * np.nanstd(bim[mask], ddof=1)) > 0:  # Excluded brightest areas (MRES: unidentiefied orders define the noise otherwise
         #plot_img_spec.plot_image(mask, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'mask')
@@ -3549,6 +3865,8 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     :param fib: for which fiber is wavelength solution
     :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     """
+    if not fine:
+        logger('Step: Measure the wavelength shift.')
     sigma = 3.5     # before 20200708
     sigma = 2       # test on 20200708 -> no difference
     sigma = 3.0
@@ -4088,6 +4406,7 @@ def prepare_measure_background_noise(params, im, sci_tr_poly, xlows, xhighs, wid
     bck_px[ bck_px==0 ] = np.nan
     bck_px[bad_values] = np.nan
     bck_noise_std, bck_noise_var = measure_background_noise(im * bck_px)
+    
     return bck_noise_std, bck_noise_var
 
 def combine_photonnoise_readnoise(spectra, bck_noise):
@@ -4449,6 +4768,7 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     Extracts the spectra and stores it in a fits file
     
     """
+    get_timing('start_extraction ')
     [sci_tr_poly, xlows, xhighs, widths] = sci_traces
     [cal_tr_poly, axlows, axhighs, awidths] = cal_traces
     if 'HiFLEx BCKNOISE' not in im_head.keys():        # if not already done because background is in parameters
@@ -4460,6 +4780,7 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     if im_head['HiFLEx BCKNOISE'] <= 0 or np.isnan(im_head['HiFLEx BCKNOISE']):
         logger('Warn: Measured an unphysical background noise in the data: {0}. Set the noise to 1'.format(im_head['HiFLEx BCKNOISE']))
         im_head['HIERARCH HiFLEx BNOISVAR'] = (1., '1, because of unphysical measurement')
+    get_timing('0000 ')
     im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)               # in UTC, mid of the exposure
     
     im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
@@ -4483,17 +4804,27 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     im_head['HIERARCH HiFLEx OBJNAME'] = (obnames[0], 'Used object name')
     # Get the baycentric velocity
     params, bcvel_baryc, mephem, im_head = get_barycent_cor(params, im_head, obnames[0], ra2, dec2, epoch, pmra, pmdec, obsdate_midexp)
-    
+
     shift, im_head = find_shift_images(params, im, im_trace, sci_traces, 0, cal_tr_poly, im_head=im_head)     # w_mult=1 so that the same area is covered as for the find traces, w_mult=0 so that only the central pixel is extracted
+
     spectra, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift, header=im_head, var=params['extraction_precision'], plot_traces=True)
-    orders = range(spectra.shape[0])
+    get_timing('5555 ')
+    measure_noise_poly_orders = 16
+    measure_noise_semiwindow = 10                   # in pixel
+    # Remove the area where SNR is too high
+    spectra_noise, high_noise = measure_noise(spectra, p_order=measure_noise_poly_orders, semi_window=measure_noise_semiwindow, minimum_SNR=params['minimum_SNR'])
+    get_timing('6666 ')
+    spectra[high_noise] = np.nan
+    #orders = range(spectra.shape[0])
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
         aspectra, agood_px_mask = spectra*0, copy.copy(good_px_mask)
     else:
         aspectra, agood_px_mask, aextr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head)
+    get_timing('7777 ')
     wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wave_sol_dict_cal, reference_lines_dict, 
                                                               xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths, wavelength_solution_shift = create_wavelengths_from_solution(params, wavelength_solution_shift, spectra, wave_sols_sci=calimages['wave_sols_sci'], jd_mid=jd_midexp, shift=shift)
+    get_timing('8888 ')
     espectra = combine_photonnoise_readnoise(spectra, im_head['HiFLEx BCKNOISE'] * np.sqrt(np.abs(extr_width)) )     # widths[:,2] is gaussian width
     if params['blazercor_function'].find('poly') == 0:  index = 3
     elif params['blazercor_function'] == 'flux':        index = 2
@@ -4502,11 +4833,12 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     im_head['HIERARCH HiFLEx BLAZECOR INDEX'] = (index, 'Dataset for blaze correction')
     fspectra = spectra/(flat_spec_norm[index]+0.0)        # 1: extracted flat, 2: low flux removed
     # Doing a wavelength shift for the flat_spec_norm is probably not necessay, as it's only few pixel
-    measure_noise_orders = 16
-    measure_noise_semiwindow = 10                   # in pixel
-    efspectra = measure_noise(fspectra, p_order=measure_noise_orders, semi_window=measure_noise_semiwindow)             # Noise will be high at areas wih absorption lines, takes about a minute for 75o6000px
-    cspectra, noise_cont = normalise_continuum(fspectra, wavelengths, nc=6, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders)  # takes about 3 (22) minutes for 75o6000px for Tungsten (for noise)
-
+    get_timing('9999 ')
+    efspectra, high_noise = measure_noise(fspectra, p_order=measure_noise_poly_orders, semi_window=measure_noise_semiwindow, high_noise=5)             # Noise will be high at areas wih absorption lines, takes about a minute for 75o6000px
+    get_timing('aaaa ')
+    fspectra[high_noise] = np.nan
+    efspectra[high_noise] = np.nan
+    cspectra, noise_cont = normalise_continuum(fspectra, wavelengths, nc=6, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_poly_orders)  # takes about 3 (22) minutes for 75o6000px for Tungsten (for noise)
     # normalise_continuum measures the noise different than measure_noise
     if len(params['sigmaclip_spectrum']) == 3:        # sigmaclipping
         removed = 0
@@ -4518,7 +4850,7 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
             removed += np.sum(~good_values)
         logger('Info: Sigmaclipping removed {0} data points for file {1} (normalised spectrum).'.format(removed, im_name))
         im_head['HIERARCH HiFLEx SIGMA_CLEARED']  = (removed, 'points removed from normalised spectrum')
-        
+    get_timing('bbbb ')
     # Correct wavelength by barycentric velocity
     wavelengths_bary = wavelengths * (1 + bcvel_baryc/(Constants.c/1E3) )
 
@@ -4527,15 +4859,14 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
         if im_name.lower().find(no_RV_name) in [0,1,2,3,4,5]:
             do_RV = False
             break
-
+    
     im_head_bluefirst = copy.copy(im_head)
     im_head = add_specinfo_head(spectra, spectra, noise_cont, extr_width, im_head)
     im_head_bluefirst = add_specinfo_head(spectra[::-1,:], spectra[::-1,:], noise_cont[::-1,:], extr_width[::-1,:], im_head_bluefirst)
     wspec = good_px_mask* flat_spec_norm[1]
     doo = dict(spec=True, blaze=True, weight=True, norm=True, blue=True, harps=do_RV)
-
     save_single_files(params, obnames, im_name, im_head, im_head_bluefirst, spectra, fspectra, cspectra, wspec, wavelengths, wavelength_solution_shift, doo)
-
+    get_timing('eeee ')
     if params['wavelength_scale_resolution'] > 0.0 and np.max(wave_sol_dict_cal['wavesol'][:,-1]) > 100:
         # Create a linearised solution for the input spectrum and the continuum corrected spectrum
         #logger('Step: Linearising the spectrum (commented out)')
@@ -4548,10 +4879,11 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
         wavelenghts_lin, spectrum_lin = linearise_wavelength_spec( params, wavearray, cspectra, method='weight', weight=((flat_spec_norm[index]+0.0)/espectra)**2 ) # highest throughput and lowest error should have the highest weight
         save_multispec([wavelenghts_lin,spectrum_lin], params['path_extraction_single']+im_name+'_lin_cont', im_head)
         with open(params['path_extraction_single']+im_name+'_lin_cont.csv', 'w') as file:
+            file.write('wave,flux{0}'.format(os.linesep) )
             for ii in range(wavelenghts_lin.shape[0]):
                 if ~np.isnan(wavelenghts_lin[ii]) and ~np.isnan(spectrum_lin[ii]):
                     file.write('{1},{2}{0}'.format(os.linesep, round(wavelenghts_lin[ii],4), round(spectrum_lin[ii],5) ))
-        
+    get_timing('ffff ')
     # For easier plotting
     add_text_to_file(params['path_extraction']+im_name+'.fits', 'plot_files.lst')
     # Checked that telluric lines (e.g 7600 Angstom) are at the same position when using wavelength solution without barycentric correction and 
@@ -4562,15 +4894,15 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     im_head['Comment'] = ' 1: extracted spectrum'
     im_head['Comment'] = ' 2: measure of error (photon noise, read noise)'
     im_head['Comment'] = ' 3: flat corrected spectrum'
-    im_head['Comment'] = ' 4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_orders)
+    im_head['Comment'] = ' 4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_poly_orders)
     im_head['Comment'] = ' 5: continuum normalised spectrum'
-    im_head['Comment'] = ' 6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_orders)
+    im_head['Comment'] = ' 6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_poly_orders)
     im_head['Comment'] = ' 7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
     im_head['Comment'] = ' 8: spectrum of the emission line lamp'
     im_head['Comment'] = ' 9: wavelength for each order and pixel without barycentric correction'
     save_multispec(ceres_spec, params['path_extraction']+im_name, im_head, bitpix=params['extracted_bitpix'])
     logger('Info: Finished extraction of {0}'.format(im_name))
-
+    get_timing('done ')
     return obnames[0]
 
 def save_single_files(params, obnames, im_name, im_head, im_head_bluefirst, spectra, fspectra, cspectra, wspec, wavelengths, wavelength_solution_shift, doo):    
@@ -7701,6 +8033,7 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
     :return contspec: 2d array of floats, continuum corrected spectrum
     :return sn_cont: 2d array of floats, Noise in the continuum spectrum
     """
+    logger('Step: Normalise the continuum')
     specs = spec.shape
     ccoefs, sn_coefs, cen_waves, offsets = [], [], [], []
     wavelengths = copy.deepcopy(wavelengths)                            # otherwise wavelengths will be replaced globaly by the next line
@@ -7829,7 +8162,7 @@ def normalise_continuum(spec, wavelengths, nc=8, ll=2., lu=4., frac=0.3, semi_wi
             bad_value = ( (fit_sn <= 0) | (fit_flux <= 0) )                                  # Errors smaller than 0, or Flux smaller than 0 (will make absorption lines into emission lines)
         if np.sum(bad_value) > 5:
             logger(('Warn: Normalisation of order {0} had a problem. {1} pixel of the fitted flux are below zero and {2} pixel of the fitted signal-to-noise is below zero. ' +\
-                   'Values below 0 should not hapen, use a polynomial with lower order by adjusting measure_noise_orders').format(order, 
+                   'Values below 0 should not hapen, use a polynomial with lower order by adjusting measure_noise_poly_orders').format(order, 
                                                     np.sum(fit_flux[~np.isnan(fit_flux)] <= 0), np.sum(fit_sn[~np.isnan(fit_sn)] <= 0) ))
             showorder = order
         fit_sn[bad_value] = np.nan
@@ -8674,10 +9007,10 @@ def convert_rv_templates_hilfex_normalise(params, spec, wave, limit_for_flat=10)
         fspec = spec/(calimages['flat_spec_norm'][2]+0.0)        # 1: extracted flat, 2: low flux removed
     else:
         fspec = spec
-    measure_noise_orders = 16
+    measure_noise_poly_orders = 16
     measure_noise_semiwindow = 10                   # in pixel
-    efspec = measure_noise(fspec, p_order=measure_noise_orders, semi_window=measure_noise_semiwindow)             # Noise will be high at areas wih absorption lines
-    cspec, ecspec = normalise_continuum(fspec, wave, nc=6, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_orders) 
+    efspec, high_noise = measure_noise(fspec, p_order=measure_noise_poly_orders, semi_window=measure_noise_semiwindow)             # Noise will be high at areas wih absorption lines
+    cspec, ecspec = normalise_continuum(fspec, wave, nc=6, semi_window=measure_noise_semiwindow, nc_noise=measure_noise_poly_orders) 
     #if np.nanmedian(spec, axis=None) <= limit_for_flat:
     #    cspec = spec
     
@@ -8731,9 +9064,9 @@ def stellar_params_ceres(params, spec, fitsfile, wavelength_solution):
     1: extracted spectrum'
     2: measure of error (photon noise, read noise)'
     3: flat corrected spectrum'
-    4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_orders)
+    4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_poly_orders)
     5: continuum normalised spectrum'
-    6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_orders)
+    6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_poly_orders)
     7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
     8: spectrum of the emission line lamp'
     """
@@ -8835,9 +9168,9 @@ def rv_analysis_ceres(params, spec, fitsfile, obname, reffile, mephem, vsini):
     1: extracted spectrum'
     2: measure of error (photon noise, read noise)'
     3: flat corrected spectrum'
-    4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_orders)
+    4: error of the flat corrected spectrum (residuals to a {0} order polynomial)'.format(measure_noise_poly_orders)
     5: continuum normalised spectrum'
-    6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_orders)
+    6: error in continuum (fit to residuals of {0} order polynomial)'.format(measure_noise_poly_orders)
     7: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
     8: spectrum of the emission line lamp'
     """

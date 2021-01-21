@@ -165,6 +165,8 @@ extraction_precision = standard
   #         extraction_width_multiplier is for the science traces, arcextraction_width_multiplier for the calibration traces
 extraction_width_multiplier = 1
 arcextraction_width_multiplier = 1
+  # Area with a signal-to-noise ratio below minimum_SNR will be ignored. The noise will be measured in the blaze-corrected spectrum
+minimum_SNR = 1
   # Optional sigmaclipping of the normalised spectrum is possible. Empty to disable. Should be disabled for observed objects with emission features.
   #         format: array of one intger and two floats or integers: sigma to clip absorption lines AND sigma to clip emission lines or cosmics
   #         default: [ 10 , 20 , 4 ] : fit a polynom of 10th order, Don't clip absorption lines (20 sigma), clip emission lines that are stronger than 4 sigma
