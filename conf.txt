@@ -131,6 +131,7 @@ resolution_offset_pct = 1
   #   If the files don't exist, a solution is created from scratch: File pixel_to_wavelength.txt needs to be created in order to create the wavelength solution. 
   #                                                                        The wavelength solution created from pixel_to_wavelength.txt will be saved in original_master_wavelensolution_filename.
   #                                                                If no wavelength solution is necessay, it can be set to "pseudo".
+  #                                                                Don't leave empty and don't call it master_wavelength.fits !
 original_master_wavelensolution_filename = /data/ronny/Reduced/20190205/master_wavelength_sci.fits
   # If a new wavelength is created, a file correlating pixels and wavelengths can be given, or it will be created when the user adds lines in a GUI
 px_to_wavelength_file        = pixel_to_wavelength.txt
