@@ -568,10 +568,14 @@ if __name__ == "__main__":
     data_sg = []
     titel_sg = ''
     for fitsfile in fitsfiles:
+        fname = rpath+fitsfile[0]
+        if not os.path.isfile(fname):
+            print('Warn: File {0} does not exist'.format(fname))
+            continue
         if fitsfile[0].find('.npy')>0:
-            im=np.load(rpath+fitsfile[0])
+            im=np.load(fname)
         else:
-            im = np.array(fits.getdata(rpath+fitsfile[0],0))
+            im = np.array(fits.getdata(fname,0))
         ims = im.shape
         #print ims
         if fitsfile[2] == 'i':              # For images
@@ -590,7 +594,7 @@ if __name__ == "__main__":
                 #imx = np.transpose(np.array(imx))
                 #imy = np.transpose(np.array(imy))
             elif len(ims) == 1:
-                ims = Table.read(rpath+fitsfile[0])
+                ims = Table.read(fname)
                 imx = np.array(ims['pixel number'])
                 imy = np.array(ims['counts'])
                 imx = imx[~np.isnan(imy)]

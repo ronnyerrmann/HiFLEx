@@ -883,22 +883,26 @@ If the packages are installed, the radial velocity analysis will be run after th
 All information is relative to the folder given in parameter \verb|path_rv_terra| (standard: terra\_rv). 
 The data of the individual objects are stored in the subfolder \textit{object name + /data/}. If TERRA is installed and \verb|terra_jar_file| is set correctly to the TERRA \textit{PRV.jar}-file, then TERRA will run on each \textit{object name} within the folder. The results of the radial velocity analysis will be stored in \textit{object name + /results/synthetic.rv}.
 
-It is possible to include the information from previous nights of the same object by linking or copying the \textit{.csv}-files into the corresponding \textit{data/}-folders and (1) rerunning \verb|python <path to scripts>/hiflex.py| or (2) alternatively run the commands as stored in the logfile. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
+It is possible to include the information from previous nights of the same object by either one of the listed way. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
+\begin{itemize}
+  \item Link or copy the \textit{.csv}-files into the corresponding \textit{data/}-folders and (1) rerun \verb|python <path to scripts>/hiflex.py| or (2) alternatively run the commands as stored in the logfile.
+  \item Link or copy the files from folder given in parameter \verb|path_extraction| (standard: extracted) into the current one. Afterwards run \verb|python <path to scripts>/hiflex.py| again.
+\end{itemize}
 
-It is also possible to include the information from other nights by linking or copying the files from folder given in parameter \verb|path_extraction| (standard: extracted) into the current one. Afterwards run \verb|python <path to scripts>/hiflex.py| again. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
-
-It is also possible to rerun TERRA with less images (e.g. exclude bad signal to noise files). To do this change into the folder given in parameter \verb|path_rv_terra|. Remove the files you don't need from the subfolder \textit{object name + /data/}. Afterwards run TERRA using the command given in the logfile. Afterwards move back to the folder in which HiFLEx was run and run \verb|python <path to scripts>/measurements_to_output.py|.
+It is also possible to rerun TERRA with less images (e.g. exclude bad signal to noise files). To do this change into the folder given in parameter \verb|path_rv_terra|. Remove the files you don't need from the subfolder \textit{object name + /data/}. Run TERRA using the command given in the logfile. Afterwards move back to the folder in which HiFLEx was run and run \verb|python <path to scripts>/measurements_to_output.py|.
 
 \subsubsection{SERVAL}
 \label{Section:files_folders_rv_for_serval}
 All information is relative to the folder given in parameter \verb|path_rv_serval| (standard: serval\_rv). 
 The data to be used for each Object is stored in the files \textit{filelist\_ + object name + .txt}. If SERVAL is installed and \verb|path_serval| is set correctly, then SERVAL will run on each \textit{object name} within the folder. The results of the radial velocity analysis will be stored in \textit{object name + / + object name + rvc.dat}.
 
-It is possible to include the information from previous nights of the same object by linking or copying the extraced files into the corresponding \textit{data/}-folders and (1) rerunning \verb|python <path to scripts>/hiflex.py| or (2) alternatively run the commands as stored in the logfile. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
+It is possible to include the information from previous nights of the same object by either one of the listed way. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
+\begin{itemize}
+  \item Link or copy the \textit{.csv}-files into the corresponding \textit{data/}-folders and (1) rerun \verb|python <path to scripts>/hiflex.py| or (2) alternatively run the commands as stored in the logfile.
+  \item Link or copy the files from folder given in parameter \verb|path_extraction| (standard: extracted) into the current one. Afterwards run \verb|python <path to scripts>/hiflex.py| again.
+\end{itemize}
 
-It is also possible to include the information from other nights by linking or copying the files from folder given in parameter \verb|path_extraction| (standard: extracted) into the current one. Afterwards run \verb|python <path to scripts>/hiflex.py| again. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
-
-It is also possible to rerun SERVAL with less images (e.g. exclude bad signal to noise files). To do this change into the folder given in parameter \verb|path_rv_serval|. Remove the files you don't need from the file \textit{filelist\_ + object name + .txt}. Afterwards run SERVAL using the command given in the logfile. Afterwards move back to the folder in which HiFLEx was run and run \verb|python <path to scripts>/measurements_to_output.py|.
+It is also possible to rerun SERVAL with less images (e.g. exclude bad signal to noise files). To do this change into the folder given in parameter \verb|path_rv_serval|. Remove the files you don't need from the file \textit{filelist\_ + object name + .txt}. Run SERVAL using the command given in the logfile. Afterwards move back to the folder in which HiFLEx was run and run \verb|python <path to scripts>/measurements_to_output.py|.
 
 \subsubsection{CERES}
 The results are stored in the folder given in parameter path\_rv\_ceres (standard: ceres\_rv).

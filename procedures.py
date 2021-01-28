@@ -2149,7 +2149,8 @@ def measure_noise(spectra, p_order=16, semi_window=10, high_noise=None, minimum_
         nonnan = ~np.isnan(noise[order,:])
         if minimum_SNR is not None:
             SNR = spectra[order,:] / noise[order,:]
-            low_SNR = (SNR < minimum_SNR)
+            SNR[np.isnan(SNR)] = np.inf
+            low_SNR = (SNR < minimum_SNR)       
             high_noise_array[order,nonnan] = low_SNR[nonnan]
         if high_noise is not None:
             for dummy in range(2):
@@ -9405,10 +9406,10 @@ def prepare_for_rv_packages(params):
         if 'path_rv_terra' in params.keys():
             # CSV file for TERRA
             fname = params['path_rv_terra']+obj_name+'/data/'+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
-            save_spec_csv(spec[params['dataset_rv_analysis'][0]], spec[0], spec[7], fname)        # spec[1]: Flux, spec[5]: Continuum corrected
+            save_spec_csv(spec[params['dataset_rv_analysis'][0]], spec[0], spec[7], fname)        # spec[1]: Flux, spec[5]: Continuum corrected     # spec, wavelengths, good_px_mask
         if 'path_rv_serval' in params.keys():
             # Store in a text file for serval
-            numbers_levels = params['path_rv_serval'].count(os.sep, 2)  # start at 2 to not count './'
+            numbers_levels = params['path_rv_serval'].count(os.sep, 2)          # start at 2 to not count './'
             add_text_to_file('../'*numbers_levels+params['path_extraction']+file_RV, 
                          params['path_rv_serval']+'filelist_{0}.txt'.format(obj_name), warn_missing_file=False )
     

@@ -236,6 +236,8 @@ if __name__ == "__main__":
         if params['arcshift_side'] == 0:
             break
         prev = calib[0]
+    # calimages['wave_sol_dict_*'] is a dictonary with the keys: wavesol, wavesol2d, reflines, linestat; e.g. check adjust_wavelength_solution
+    # calimages['wave_sols_*'] is a list containing lists with the entries: wave_sol_dict['wavesol'], wave_sol_dict['reflines'], jd_midexp, name
     if 'wave_sol_dict_sci' in calimages.keys() and 'wave_sol_dict_cal' in calimages.keys():
         params['two_solutions'] = True                  # Needed for create_wavelengths_from_solution, as shift needs to be applied
         # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
@@ -245,8 +247,13 @@ if __name__ == "__main__":
     else:
         params['two_solutions'] = False
     if 'wave_sol_dict_sci' not in calimages.keys():                             # Use the calibration fiber solution for the science solution
-        calimages['wave_sol_dict_sci'] = calimages['wave_sol_dict_cal']
-        calimages['wave_sols_sci'] = calimages['wave_sols_cal']
+        calimages['wave_sol_dict_sci'] = copy.deepcopy(calimages['wave_sol_dict_cal'])
+        calimages['wave_sols_sci'] = copy.deepcopy(calimages['wave_sols_cal'])
+        if len(calimages['wave_sols_sci']) != 1:
+            print("253 hiflex.py: Ronny did not expect len(calimages['wave_sols_sci']) to be {0}".format(len(calimages['wave_sols_sci']) ))
+        calimages['wave_sol_dict_sci']['wavesol'][:,1] += params['pxshift_between_wavesolutions']       # + checked 20210128
+        calimages['wave_sols_sci'][0][0][:,1] += params['pxshift_between_wavesolutions']                # + checked 20210128
+        logger('Info: Applied a shift of {0} px from parameter pxshift_between_wavesolutions to convert calibration fiber wavelength solution to science fiber wavelength solution.'.format(params['pxshift_between_wavesolutions']))
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if calimages['wave_sol_dict_sci']['wavesol'].shape[0] != calimages['sci_trace'][0].shape[0]:
         #print('im_trace1.shape', im_trace1.shape)
