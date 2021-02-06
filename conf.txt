@@ -1,10 +1,10 @@
 ## How to used the Scripts
-# prepare filelist: run prepare_file_list.py
+# prepare filelist: run file_assignment.py
 # every day: run HiFLEx.py   : shift orders, create wavelength solution for the day, create normalised extracted spectrum, extract the spectrum
 
 # Configuration file for:
 #   create_badpx_mask.py
-#   prepare_file_list.py
+#   file_assignment.py
 #   hiflex.py
 #   remove_orders.py
 
@@ -275,13 +275,13 @@ longitude   = -0.2401
 # longitude  = -17.8775
  
   # Define the object coordinates using a file with a list of objects. Needed for barycentric correction and RV calculation. Not necessary if the object information are stored in the header.
-  #    The file is created during running prepare_file_list.py
+  #    The file is created during running file_assignment.py
   # The file can be given as full path, or can be located in the result_path or in raw_data_paths  (the first one has higher priority)
   # The file needs to contain the comma separated values (Object name is case sentive for the optional parameters): 
   # Object name , RA (hh:mm:ss.ss), DEC (+-dd:mm:ss.ss), PM RA ("/year), PM DEC ("year), Epoch of the coordinates (only the number), Enable/Disable flag (1 for enabled), 
   #             [optional: Mask (G2,K5,M2), [optional: Velocity width to broaden the lines of the binary mask]]
   # RA and DEC can be also degrees in float
-object_file = object_list.txt
+object_file = object_list.csv
 
 
   ## Configuration files in which the processing of the raw data fits files is defined
@@ -289,7 +289,7 @@ object_file = object_list.txt
   # raw_data_file_list contains the analysis of the raw data files (fiber1 and fiber2, exposure time, what to extract
 raw_data_file_list      = file_list_raw_data.txt
 
-  # configfile_fitsfiles contains the information of how to processes the raw data and is created by prepare_file_list.py
+  # configfile_fitsfiles contains the information of how to processes the raw data and is created by file_assignment.py
 configfile_fitsfiles    = fits_conf.txt
 
 
@@ -370,10 +370,14 @@ max_cores_used_pct      = 80
   #----------
   # logging_path will be relative to the result_path and all parameters starting with "logging_" will be stored in logging_path.
 logging_path                        = logging
+  # Logging the wavelength shift in pictures for each file can take 2 minutes . By setting it to False the cration of the plots will be skipped. This will stop the creation of:
+  #     logging_em_lines_gauss_width_form, logging_arc_line_identification_residuals_hist, logging_em_lines_bisector, logging_arc_line_identification_residuals
+  #     for the extracted files and the files used for measuring the wavelength solution shift
+log_wavesolshift_details            = True
 logging_trace1_binned               = master_trace1_binned.fits
 logging_traces_binned               = master_traces_sci_searched.fits
 logging_traces_im_binned            = traces_in_master_trace1_binned.png
-    # If "*" in logging_traces_im, then it will save a picture with the traces for each extraction, the * will replaced by the filename. This will require about 11MB per file.
+  # If "*" in logging_traces_im, then it will save a picture with the traces for each extraction, the * will replaced by the filename. This will require about 11MB per file.
 logging_traces_im                   = traces_in_*.png
 logging_traces_im                   = traces_in_master_traces1.png
 logging_traces_bisector             = bisector_traces1.png

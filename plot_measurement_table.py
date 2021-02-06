@@ -1,20 +1,26 @@
+# To use this file, best copy it to your result folder and run it there
+
 from procedures import *
 
 params = dict()
 
 savefile = 'measurement_table.pdf'
-datafile = 'measurement_table.csv'
+datafile = 'measurement_table.csv'      # assumes that the objectnames are somewhat in column one or two
+objectfile = 'objects_reduced.lst'
 x_range = None
 size_inches = [16.2, 10]
-select = []     
-selectd = []    # 'data'/'text', index x, index y, error index, label (empty to use header), color, linestyle, marker, markersize, [x_title, y_title]
+objects = ['*']                     # Create a plot with everything
+objects += read_text_file(objectfile, no_empty_lines=False)
+if len(objects) == 1:
+    # Code defined what objects to use
+    objects = ['*', 'Sun', ['alpOri','alphori','alfori','alphaori'], 'AlphaAri', 'alpcmi', ['gamVirA','gamVir2'], ['gamVirB','gamVir1'], 'TauBoo', 'Tung' ]
+
 if datafile.find(os.sep) == -1:
-    datafile = os.getcwd() + os.sep + datafile
+    datafile = os.getcwd() + os.sep + datafile      # To select settings depending on datafile
 
-objects = ['*', ['alpOri','alphori','alfori','alphaori'], 'AlphaAri', 'alpcmi', ['gamVirA','gamVir2'], ['gamVirB','gamVir1'], 'TauBoo', 'Tung' ]
-objects = ['*', ['Sun']]
-
-if datafile.find('2020020') >= 0 or datafile.find('20201120') or datafile.find('202012') >= 0:
+select = []     
+if True:
+    selectd = []    # 'data'/'text', index x, index y, error index, label (empty to use header), color, linestyle, marker, markersize, [x_title, y_title]
     #selectd.append([ 'y_range', -0.7, 0.7])
     selectd.append([ 'data', 5, 8, None, '', 'g', '', 'o', 2, '', 'Offset [px]' ])
     selectd.append([ 'data', 5, 10, 11, '', 'b', '', 'o', 2, '', 'Offset [px]' ])
@@ -39,8 +45,8 @@ if datafile.find('2020020') >= 0 or datafile.find('20201120') or datafile.find('
     selectd = []
     selectd.append([ 'data', 17, 24, 25, '', 'r', '', 'o', 2, '', 'RV [m/s]' ])
     selectd.append([ 'data', 17, 26, 27, '', 'c', '', 'o', 2, 'JD/BJD [d]', 'RV [m/s]' ])
-     #selectd.append([ 'text', 294, 40, 'Helium 1 l/min', 'k', 90, 'left', 'bottom' ])
-    selectd.append([ 'y_range', -800, 400])
+    #selectd.append([ 'text', 294, 40, 'Helium 1 l/min', 'k', 90, 'left', 'bottom' ])
+    #selectd.append([ 'y_range', -800, 400])
     select.append(selectd)
     #x_range = [-10, 470]
     #size_inches = [10, 6]
@@ -57,9 +63,6 @@ converted = dict()
 with PdfPages(savefile) as pdf:
     for star in objects:        # New page for each opject
         nr_g = len(select)      # How many graphs
-        fig, frame = plt.subplots(nr_g,1, sharex=True)
-        fig.set_size_inches(size_inches[0], size_inches[1])
-        plt.subplots_adjust(left=0.05, right=0.85, top=0.95, bottom=0.14)
         if type(star).__name__ in ['str']:
             star = [star]
         starindata = ( data[1,:] == star[0] )
@@ -70,6 +73,12 @@ with PdfPages(savefile) as pdf:
             starindata_e1 = [ (ii.lower().find(entry.lower()) > -1) for ii in data[0,:] ]
             starindata_e2 = [ (ii.lower().find(entry.lower()) > -1) for ii in data[1,:] ]
             starindata = (starindata + starindata_e1 + starindata_e2) > 0
+        if not np.any(starindata):      # Only plot objects, that are in the data
+            continue
+        fig, frame = plt.subplots(nr_g,1, sharex=True)
+        fig.set_size_inches(size_inches[0], size_inches[1])
+        plt.subplots_adjust(left=0.05, right=0.85, top=0.95, bottom=0.14)
+        
         x_titles, y_titles = [], []
         for ii_g in range(nr_g):
             selectd = select[ii_g]
