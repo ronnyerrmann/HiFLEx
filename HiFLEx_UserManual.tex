@@ -32,9 +32,9 @@
   language=[LaTeX]{TeX},
   moredelim=**[is][\color{red}]{@}{@},
 }
-
-\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.3.1}
-\date{November, 2020}
+% To change: titele; date; https://github.com/ronnyerrmann/HiFLEx/archive
+\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.3.3}
+\date{February, 2021}
 \author{Ronny Errmann, EXOhSPEC team\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -106,6 +106,7 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 \subsection*{v1.3.3}
 \begin{itemize}\setlength\itemsep{0em}
   \item Improvement of blaze correction and noise calculation to avoid massive brightness peaks at boundaries of the orders.
+  \item Improvement in the way the pixel-shift is calculated from the calibration lines.
   \item Improvement of code to speed up data reduction and extraction
   \item Added parameter \verb|minimum_SNR| to allow the user to ignore extracted data below a certain signal-to-noise ratio
   \item Bugfixing
@@ -1327,7 +1328,7 @@ Afterwards, please make sure that \verb|import barycorrpy| works in python.
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/HiFLEx/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.3.2.tar.gz
+wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.3.3.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
 Alternatively, the following command downloads the latest version of the files:

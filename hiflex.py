@@ -375,7 +375,7 @@ if __name__ == "__main__":
                         else:
                             wavecal_multicore([ wavelengthcal, fib, im_name_full, im_name_wc, im_name, False ])      # Try run to get the calibration data
                             all_wavelengthcals.append([ wavelengthcal, fib, im_name_full, im_name_wc, im_name, True ])
-            if params['use_cores'] > 1:
+            if params['use_cores'] > 1  and len(all_wavelengthcals) > 1:
                 logger('Info: Starting to extract wavelength calibrations using multiprocessing on {0} cores, hence output will be for several files in parallel.'.format(params['use_cores']))
                 sort_wavelengthcals = sort_for_multiproc_map(all_wavelengthcals, params['use_cores'])
                 p = multiprocessing.Pool(params['use_cores'])
@@ -441,7 +441,7 @@ if __name__ == "__main__":
                 else:
                     extraction_multicore([extraction, extraction, extraction, False])
                     all_extractions.append([extraction, extraction, extraction, True])
-        if params['use_cores'] > 1:
+        if params['use_cores'] > 1 and len(all_extractions) > 1:
             logger('Info: Starting to extract spectra using multiprocessing on {0} cores, hence output will be for several files in parallel'.format(params['use_cores']))
             p = multiprocessing.Pool(params['use_cores'])
             #sort_extractions = sort_for_multiproc_map(all_extractions, params['use_cores'])
