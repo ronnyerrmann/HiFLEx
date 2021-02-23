@@ -2301,10 +2301,10 @@ def estimate_width(im):
         if len(widths) >= 50:
             break
     if len(widths) < 10:
-        logger('Warn: Width of the traces could not be determinded, only {0} traces found when testing {1} positions. Assuming 1 pixel as Gaussian width.'.format(len(widths), maxtests ))
+        logger('Warn: Width of the traces/emission line features could not be determinded, only {0} traces/lines found when testing {1} positions. Assuming 1 pixel as Gaussian width.'.format(len(widths), maxtests ))
         return 1.
     width = np.median(widths)
-    logger('Info: The median Gaussian width of the orders when testing {0} positions is {1} pixel.'.format( len(widths), round(width,2) ))
+    logger('Info: The median Gaussian width of the orders/emission lines when testing {0} positions is {1} pixel.'.format( len(widths), round(width,2) ))
     return width
 
 def find_trace_orders(params, im, imageshape):
@@ -3982,7 +3982,8 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         # Get some idea about the spacing between lines - if the lines are only 10 px testing 20px will be too much
         px_pos = np.sort(data[range_data,3])
         pos_diff = px_pos[1:] - px_pos[:-1]
-        maxshift = min(np.percentile(pos_diff,5), maxshift)
+        if pos_diff.shape[0] > 0:
+            maxshift = min(np.percentile(pos_diff,5), maxshift)
     maxshift = max(maxshift, 4)
     data[:,3] += in_shift
     data[:,4] = np.round(data[:,3])
