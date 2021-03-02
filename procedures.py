@@ -8697,6 +8697,7 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
     weight_lin = np.zeros((specs[0], lwave_range.shape[0]))        # orders and wavelengths
     if len(weight) > 0:
         weight[nans] = 0           # A nan will cause np.average to result in nan, even if the weight for the nan is 0
+        weight[np.isnan(weight) | np.isinf(weight)] = 0
     #wavelengths[nans] = 0           # A nan will cause np.average to result in nan, even if the weight for the nan is 0; however, nans make the calculation much faster
     
     for order in tqdm(range(specs[0]), desc='Step: Linearise the spectrum'):
@@ -8725,7 +8726,7 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
                 weight_lin[order, inorder] = weight_comb
             else:
                 weight_lin[order, inorder] = ~no_data
-            #print(order, px_range[0],lwave_o, data_lin[order, inorder], weight_lin[order, inorder] )
+            print(order, px_range[0],lwave_o, data_lin[order, inorder], weight_lin[order, inorder] )
     
     # Combine the orders
     nodata = np.all(weight_lin==0, axis=0)            # Wavelengths not covered by at least one point
@@ -9341,6 +9342,7 @@ def rv_results_to_hiflex(params):
     Transforming the TERRA and SERVAL results into spectra compatible with HiFLEx
     """
     obj_names = []
+    # Terra
     for root, dirs, files in os.walk(params.get('path_rv_terra', 'dummypath'), followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
             for file in files:
                 if file == 'template_order_00':                    # TERRA template
@@ -9351,10 +9353,7 @@ def rv_results_to_hiflex(params):
                     [root1, obj_name, dummy] = (os.sep+root).rsplit(os.sep,2)
                     if obj_name not in obj_names:   obj_names.append(obj_name)
                     break
-    #for obname in obj_names:
-    #    convert_terra_master_hiflex(params, obname)
-       
-    #obj_names = []
+    # Serval
     for root, dirs, files in os.walk(params.get('path_rv_serval', 'dummypath'), followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
             for file in files:
                 if file == 'template.fits':                 # SERVAL template
@@ -9768,8 +9767,8 @@ def rv_analysis_ceres(params, spec, fitsfile, obname, reffile, mephem, vsini):
         with np.errstate(invalid='ignore'):
             LL = np.where(spec[5,order,:] > 1 + 10. / scipy.signal.medfilt(spec[8,order,:],21))[0]          # remove emission lines and cosmics
         spec[5,order,LL] = 1.
-        spec[9,order,:][L] = spec[5,order,:][L]# * (dlambda_dx[L] ** 1)         # used for the analysis in XCor (spec_order=9, iv_order=10)
-        spec[10,order,:][L] = spec[2,order,:][L]# / (dlambda_dx[L] ** 2)        # used for the analysis in XCor (spec_order=9, iv_order=10)
+        spec[9,order,:][L] = spec[params['dataset_rv_analysis'][0],order,:][L]# * (dlambda_dx[L] ** 1)         # used for the analysis in XCor (spec_order=9, iv_order=10)
+        spec[10,order,:][L] = spec[params['dataset_rv_analysis'][1],order,:][L]# / (dlambda_dx[L] ** 2)        # used for the analysis in XCor (spec_order=9, iv_order=10)
     #plot_img_spec.plot_spectra_UI(np.array([spec]))
     
     

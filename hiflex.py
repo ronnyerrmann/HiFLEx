@@ -476,7 +476,9 @@ if __name__ == "__main__":
                 cmd += ' fi ; fi ; unset __conda_setup ; '
                 cmd += 'conda activate hiflex_p2 ; '
                 cmd += 'python {0}/hiflex.py {1} started_from_p3=True'.format(os.path.dirname(sys.argv[0]), ' '.join(sys.argv[1:]) )
-                logger('Info: Loading a python 2 environment, as SERVAL and CERES require python 2 and this is a python 3 environment. The progress of the process can be watched in logfile or {0}'.format(log_python2))
+                logger('Info: Loading a python 2 environment, as SERVAL and CERES require python 2 and this is a python 3 environment.'+
+                       ' The progress of the process can be watched in logfile or {0}'.format(log_python2)+
+                       ' Running the following commands to start the other environment:\n{0}'.format(cmd))
                 if os.path.isfile(log_python2):
                     os.system('rm {0}'.format(log_python2))
                 with open(log_python2, 'a') as logf:
