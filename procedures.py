@@ -8726,7 +8726,7 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
                 weight_lin[order, inorder] = weight_comb
             else:
                 weight_lin[order, inorder] = ~no_data
-            print(order, px_range[0],lwave_o, data_lin[order, inorder], weight_lin[order, inorder] )
+            #print(order, px_range[0],lwave_o, data_lin[order, inorder], weight_lin[order, inorder] )
     
     # Combine the orders
     nodata = np.all(weight_lin==0, axis=0)            # Wavelengths not covered by at least one point
