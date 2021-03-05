@@ -7343,9 +7343,9 @@ def compare_wavelength_solution_to_emission_lines(kwargs):
             continue
         arc_lines_order_px = arc_lines_px[arc_lines_px[:,0] == order_arcline,1]     # array with px position of the identified lines for this order
         # Only use lines for which the wavelength solution is defined (assuming that the whole CCD  was used, otherwise needs old xlows and old xhighs)
-        arc_lines_order_px = arc_lines_order_px[ (arc_lines_order_px - pxdiff - pxdifford * (order_arcline+orderdiff) > 0) & \
-                                                 (arc_lines_order_px - pxdiff - pxdifford * (order_arcline+orderdiff) < specs[1]) ]      # order_arcline+orderdiff is correct
-        # Get a normalisierungs parameter
+        arc_lines_order_px = arc_lines_order_px[ (arc_lines_order_px - pxdiff - pxdifford * (order_arcline+orderdiff) > 0.1*specs[1]) & \
+                                                 (arc_lines_order_px - pxdiff - pxdifford * (order_arcline+orderdiff) < 0.9*specs[1]) ]      # order_arcline+orderdiff is correct
+        # Get a normalising parameter
         px_range = [max(0, 0 - pxdiff - pxdifford * (order_arcline+orderdiff)), min(specs[1], specs[1] - pxdiff - pxdifford * (order_arcline+orderdiff))]
         ## Using pixel for data available ignores the different number of lines available in different orders (100 lines @ order 70; 40 @ 0)
         data_available[0] += px_range[1] - px_range[0]    # number of pixel covered
@@ -7359,14 +7359,14 @@ def compare_wavelength_solution_to_emission_lines(kwargs):
         # Get the offset to the closest lines
         for i, arc_line_wave in enumerate(arc_lines_order_wl):
             diff_catalog = reference_catalog[:,0] - arc_line_wave
-            good_values = (abs(diff_catalog) <= max_diffs[order_arcline+orderdiff])
+            good_values = (np.abs(diff_catalog) <= max_diffs[order_arcline+orderdiff])
             diff_catalog = diff_catalog[good_values]
             if index_matching+len(diff_catalog) > matching_lines.shape[0]:                          # increase the array size
                 matching_lines = np.vstack([ matching_lines, np.empty( matching_lines.shape ) ])    # double the array length
             matching_lines[index_matching:index_matching+len(diff_catalog), :] = \
                             np.vstack([ np.repeat([order_arcline],len(diff_catalog)), np.repeat([arc_line_wave],len(diff_catalog)), 
                                         diff_catalog, reference_catalog[good_values,1] ]).T
-            index_matching += len(diff_catalog)
+            index_matching += diff_catalog.shape[0]
             #if order_arcline == 36:
             #    print resdiff, pxdiff, pxdifford, orderdiff, order_arcline, arc_lines_order_px[i], arc_line_wave, reference_catalog[good_values,0], reference_catalog[good_values,1]
             #print order_arcline, arc_line_wave, diff_catalog
@@ -7463,6 +7463,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
             logger('Warn: No matching configuration of the lines in the emission line spectrum with the old wavelength solution found. Additionally the number of orders in the original solution and this setting do not match -> creating a pseudo solution (1 step per px)')
             wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(specs[0])
             return wavelength_solution, wavelength_solution_arclines
+    # 0: orderdiff, 1: pxdiff, 2: pxdifford, 3: resdiff, 4: len(matching_lines), 5: np.std(matching_lines[:,2], ddof=1), 6: np.sum(matching_lines[:,3])], 7: number of pixel covered, 8: covered lines in reference catalogue = available lines, 0: covered flux of the lines in the reference catalogue
     best_matching = np.array(best_matching, dtype=float)
     for i in [7,8,9]:
         best_matching[:,i] /= (np.median(best_matching[:,i])+0.0)                       # normalise
@@ -7473,19 +7474,34 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                                       [best_matching[:,y]/best_matching[:,8],best_matching[:,y]/best_matching[:,9],best_matching[:,y]],
                                       ['norm1','norm2','ori'],'path',show=True, marker=['s','*','<'], x_title=xt, y_title=yt)"""
     
-    best_matching = best_matching[np.argsort(best_matching[:,4]/best_matching[:,8], axis=0),:]     #sort by number of identified arclines (scaled by available lines) -> best at the end
-    #print best_matching[-10:,:]
-    best_matching = best_matching[int(best_matching.shape[0]*8/9):,:]     #only 25% of the best values
-
-    best_matching = best_matching[np.argsort(best_matching[:,6]/best_matching[:,9], axis=0),:]     # sort by the sum of the intensity of the arc lines (scaled by available flux) -> best at end
-    #print best_matching[-10:,:]
-    best_matching = best_matching[int(best_matching.shape[0]*8/9):,:]     #only 25% of the best values
-    #best_matching = best_matching[np.argsort(best_matching[:,5], axis=0),:]     #sort by standard deviation of the shift of the arc lines (don't scale!) -> best at the front =>> !! that isn't a good selection at all
-    #print best_matching[:10]
+    #for entry in best_matching:
+    #    print( entry[:4], entry[4:8], entry[8:] )
+    sort_index1 = np.argsort(best_matching[:,4]/best_matching[:,8], axis=0)     # sort by number of identified arclines (scaled by available lines) -> best at the end
+    sort_index2 = np.argsort(best_matching[:,4], axis=0)                        # sort by number of identified arclines -> best at the end
+    sort_index = np.unique( np.hstack(( sort_index1[int(best_matching.shape[0]*8/9):], sort_index2[int(best_matching.shape[0]*8/9):] )) )     # only 11% of the best values
+    best_matching = best_matching[sort_index,:]
+    #print( best_matching[-10:,:] )
+    #for entry in best_matching:
+    #    print( entry[:4], entry[4:8], entry[8:] )
+    
+    sort_index1 = np.argsort(best_matching[:,6]/best_matching[:,9], axis=0)     # sort by the sum of the intensity of the arc lines (scaled by available flux) -> best at end
+    sort_index2 = np.argsort(best_matching[:,6], axis=0)                        # sort by the sum of the intensity of the arc lines -> best at the end
+    sort_index = np.unique( np.hstack(( sort_index1[int(best_matching.shape[0]*8/9):], sort_index2[int(best_matching.shape[0]*8/9):] )) )     # only 11% of the best values
+    best_matching = best_matching[sort_index,:]
+    #print( best_matching[-10:,:] )
+    #for entry in best_matching:
+    #    print( entry[:4], entry[4:8], entry[8:] )
     
     # Use this solution to identify lines and fit polynomials in each order
     orderdiff, pxdiff, pxdifford, resdiff = int(np.median(best_matching[:,0])), int(np.median(best_matching[:,1])), np.median(best_matching[:,2]), np.median(best_matching[:,3])
-    logger('Info: To match the most lines in the emission line spectrum with the old wavelength solution, a shift of {0} orders, a multiplier to the resolution of {1}, a shift of {2} px, and a shift of {3} px per order needs to be applied. {4} lines were identified. The deviation is {5} Angstrom.'.format(orderdiff, round_sig(resdiff,3), pxdiff, round(pxdifford,2), int(best_matching[0,4]), round(best_matching[0,5],4) ))
+    orderdiffstd, resdiffstd = round(np.std(best_matching[:,0], ddof=1),1), round(np.std(best_matching[:,3], ddof=1),3)
+    pxdiffstd, pxdiffordstd  = round(np.std(best_matching[:,1], ddof=1),1), round(np.std(best_matching[:,2], ddof=1),2)
+    logger(('Info: To match the most lines in the emission line spectrum with the old wavelength solution,'+\
+            ' a shift of {0} orders, a multiplier to the resolution of {1}, a shift of {2} px, and a shift of {3} px per order needs to be applied.'+\
+            ' {4} lines were identified. The deviation is {5} Angstrom. Uncertainties were:'+\
+            ' orders: {6}, resolution: {7}, px: {8}, px/order: {9}. (If these are too large, and the wavelength solution is not right,'+\
+            ' you might want to modify the values for order_offset, px_offset, px_offset_order, or resolution_offset_pct in the configuration file.)').format(orderdiff, 
+                    round_sig(resdiff,3), pxdiff, round(pxdifford,2), int(best_matching[0,4]), round(best_matching[0,5],4), orderdiffstd, resdiffstd, pxdiffstd, pxdiffordstd ))
     ## assign lines in the arcline with lines from the reference catalog
     med_arc_width = np.nanmedian(arc_lines_px[:,2])             # median width of the arc lines
     arc_lines_wavelength = []       #order, central pixel of the arc line, wavelength of the assigned reference line, diff between both solutions, height of the arc line, intensity of the reference line, 1/width of the arc line
@@ -8666,7 +8682,7 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
     specs = spectra.shape
     dwave = params['wavelength_scale_resolution']
     # Fast way2:
-    px_step = int(specs[1]/1000)
+    px_step = max(3,int(specs[1]/1000))
     px_linspace = np.linspace(0, specs[1], px_step, dtype=int)
     px_linspace1 = px_linspace - 10
     px_linspace2 = px_linspace + 10
@@ -8699,7 +8715,7 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
         weight[nans] = 0           # A nan will cause np.average to result in nan, even if the weight for the nan is 0
         weight[np.isnan(weight) | np.isinf(weight)] = 0
     #wavelengths[nans] = 0           # A nan will cause np.average to result in nan, even if the weight for the nan is 0; however, nans make the calculation much faster
-    
+    print('px_ranges',px_ranges, px_linspace.shape[0], specs[1], px_step)
     for order in tqdm(range(specs[0]), desc='Step: Linearise the spectrum'):
         for px_range, px_range_wide in px_ranges:           # splitting things into smaller junks (about 1k pixel instead of 6k pixel, not tested if there is an optimimum) speeds up the process by a factor of 5
             if np.all(nans[order,px_range]):
@@ -8726,7 +8742,7 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
                 weight_lin[order, inorder] = weight_comb
             else:
                 weight_lin[order, inorder] = ~no_data
-            #print(order, px_range[0],lwave_o, data_lin[order, inorder], weight_lin[order, inorder] )
+            print(order, px_range[0],lwave_o, data_lin[order, inorder], weight_lin[order, inorder] )
     
     # Combine the orders
     nodata = np.all(weight_lin==0, axis=0)            # Wavelengths not covered by at least one point
