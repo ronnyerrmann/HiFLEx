@@ -107,9 +107,9 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 \begin{itemize}\setlength\itemsep{0em}
   \item Improvement of blaze correction and noise calculation to avoid massive brightness peaks at boundaries of the orders.
   \item Improvement in the way the pixel-shift is calculated from the calibration lines.
-  \item Improvement of code to speed up data reduction and extraction
-  \item Added parameter \verb|minimum_SNR| to allow the user to ignore extracted data below a certain signal-to-noise ratio
-  \item Bugfixing
+  \item Improvement of code to speed up data reduction and extraction.
+  \item Added parameter \verb|minimum_SNR| to allow the user to ignore extracted data below a certain signal-to-noise ratio.
+  \item Bugfixing.
   \item Added parameter \verb|traces_searchlimit_brightness| to allow user defined search for orders.
   \item Added parameter \verb|log_wavesolshift_details| to allow the skipping of time consuming logging.
 \end{itemize}
@@ -1006,6 +1006,33 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
 %  observations with HARPS: http://www.eso.org/public/archives/releases/sciencepapers/eso1609/eso1609a.pdf
 % HD 10180: G1V star with 7 planets: http://ui.adsabs.harvard.edu/abs/2011A%26A...528A.112L
 Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres, use '2004 07 12' and Program ID '072.C-0488(E)' for calibration data taken by the RV exoplanet search team, or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*.fits.Z) can be extracted with:
+
+\textbf{Extract both chips:}
+\begin{lstlisting}[style=base]
+gunzip *.fits.Z
+cat <<EOT > extract_single_chip.py
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+import os
+from astropy.io import fits
+import numpy as np
+
+os.system('mkdir -p both_chips')
+for entry in os.popen('ls -1 *.fits').readlines():
+    im_r = fits.getdata(entry[:-1],2)
+    im_b = fits.getdata(entry[:-1],1)
+    im_head_r = fits.getheader(entry[:-1],2)
+    im_head_b = fits.getheader(entry[:-1],1)
+    im_head0 = fits.getheader(entry[:-1],0)
+    im = np.hstack(( im_b, im_r ))
+    fits.writeto('both_chips/'+entry[:-1], im, \
+                 im_head0, overwrite=True)
+EOT
+python extract_single_chip.py
+\end{lstlisting}
+
+
+\textbf{Extract the red and blue chip individually:}
 \begin{lstlisting}[style=base]
 gunzip *.fits.Z
 cat <<EOT > extract_single_chip.py
@@ -1035,7 +1062,8 @@ python extract_single_chip.py
 \noindent The following replacements are necessary in the conf.txt file (in addition to setting the \verb|raw_data_paths| parameter):
 \begin{itemize}\small\setlength\itemsep{-0.1cm}
   \small
-  \item \verb|subframe                = [4096,2048,0,50]|
+  \item \verb|subframe                = [4096,2048,0,50]| \textit{individual chips}
+  \item \verb|subframe                = [4096,4196,0,50]| \textit{both chips together}
   \item \verb|rotate_frame            = 180|
   \item \verb|bin_search_apertures    = 20,2|
   %\item \verb|arcshift_range    = [-12, -20]| (red chip),\\ \verb|arcshift_range  = [-12, -20]| (blue chip)

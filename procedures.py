@@ -1341,20 +1341,24 @@ def bin_im(im, binxy, method='median'):
         return im, im*0+1, im*0
     nim, gim, sim = [], [], []
     if binx > 1 and biny > 1:
-        xx = np.arange(0, ims[0]+binx-1, binx)
-        yy = np.arange(0, ims[1]+biny-1, biny)
+        xx = np.arange(0, ims[0]+binx, binx)    # Also contains the end point -> for the binned data it will be one entry less
+        yy = np.arange(0, ims[1]+biny, biny)    # Also contains the end point -> for the binned data it will be one entry less
         xx[-1] = ims[0]
         yy[-1] = ims[1]
-        reshaped = np.zeros((xx.shape[0] * yy.shape[0], binx*biny))
+        if xx[-2] == xx[-1]:    xx = xx[:-1]    # Maybe remove last entry
+        if yy[-2] == yy[-1]:    yy = yy[:-1]    # Maybe remove last entry
+        reshaped = np.zeros(( (xx.shape[0]-1) * (yy.shape[0]-1), binx*biny))
         reshaped.fill(np.nan)
-        original_points = np.zeros(xx.shape[0] * yy.shape[0])
+        original_points = np.zeros( (xx.shape[0]-1) * (yy.shape[0]-1) )
         #original_points.fill(binx*biny)
-        data = np.zeros(( xx.shape[0] * yy.shape[0], 3 ))
+        data = np.zeros(( (xx.shape[0]-1) * (yy.shape[0]-1), 3 ))
         data.fill(np.nan)
         for ii in range(xx.shape[0]-1):     # This loop needs 3s when doing 10x10 binning on 6000x6000 image
-            posii = ii*yy.shape[0]
+            posii = ii*(yy.shape[0]-1)
+            #print(posii, yy.shape[0]-1)
             for jj in range(yy.shape[0]-1):
                 tempdata = im[ xx[ii]:xx[ii+1], yy[jj]:yy[jj+1] ].flatten()
+                #print(tempdata.shape, reshaped.shape, posii+jj, ii, jj, xx[ii], xx[ii+1], yy[jj], yy[jj+1] )
                 reshaped[posii+jj,:tempdata.shape[0]] = tempdata
                 original_points[posii+jj] = tempdata.shape[0]
         # non-nans
@@ -1369,7 +1373,7 @@ def bin_im(im, binxy, method='median'):
         subset = (nonan == 1)
         data[subset,2] = 0
         # Reshape
-        data = data.reshape(( xx.shape[0] , yy.shape[0], 3 ))
+        data = data.reshape(( xx.shape[0]-1 , yy.shape[0]-1, 3 ))
 
         """slow, needed 110s when doing 10x10 binning on 6000x6000 image ; new needs 12s 
         xx = np.arange(0, ims[0]+binx-1, binx)
