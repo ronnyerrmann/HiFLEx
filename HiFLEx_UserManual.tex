@@ -548,6 +548,20 @@ You might also want to read Chapter~\ref{Section:FAQ_wavelength_solution}.
 
 
 
+\subsection{Removing/Adding/Extending/Shortening the automatically found traces}
+
+The automatic process to trace orders can identy too many orders. However, in low light areas it can also be that the traces stop prematurely, while strong emission features are still detectedable in the science images, hence the user might want to extend the orders. In case of imaging the spectra on multiple detectors, orders might fall between the detectors, hence a dummy order needs to be added later, as the wavelength solution requires consecutive orders. All this is possible in a GUI, as seen in Figure~\ref{Fig:GUI_remove_add_modify_orders}. If \verb|GUI=True|, then the GUI will be opened automatically, otherwise it can be openend by running \verb|python <path_hiflex>/remove_add_modify_orders.py|.
+
+\begin{figure} 
+  \begin{center}
+    \includegraphics[width=0.8\textwidth]{./figures/GUI_remove_add_modify_orders}
+  \end{center} 
+  \caption{GUI to remove/add/modify orders. To change the scale modify the values and use \textit{Update}. To remove orders give the indexes of the orders and use \textit{Update}. To add a new order click \textit{Add a new order}. To add or remove points select the index of order, and, only if applicable, the part of the order: c for the center, l for the left extraction boundary, and r for the right extraction boundary. After \textit{Add points to an order} or \textit{Remove points from an order} click in the area of the image. You might want to zoom in beforehand. \textit{Cancel adding/removing points} will revert to the point before clicking \textit{Add points to an order} or \textit{Remove points from an order}, while \textit{Use added/removed points} will refit the trace of the order using the modified points. Once all changes have been applied, click \textit{Accept} to save the changes.
+    \newline
+    In the above example orders 26 and 27 are going to be removed and the points for the center of the trace 74, which was added as new order, are being added.
+    \label{Fig:GUI_remove_add_modify_orders}}
+\end{figure}
+
 % -------------------------------------------------------------------------------------------
 
 
@@ -1007,7 +1021,7 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
 % HD 10180: G1V star with 7 planets: http://ui.adsabs.harvard.edu/abs/2011A%26A...528A.112L
 Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres, use '2004 07 12' and Program ID '072.C-0488(E)' for calibration data taken by the RV exoplanet search team, or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*.fits.Z) can be extracted with:
 
-\textbf{Extract both chips:}
+\textbf{Extract both chips together (after identifting the order, a dummy order has to be added):}
 \begin{lstlisting}[style=base]
 gunzip *.fits.Z
 cat <<EOT > extract_single_chip.py

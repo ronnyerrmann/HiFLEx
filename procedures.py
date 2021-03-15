@@ -1773,8 +1773,8 @@ def sigmaclip(data, x=[], nc=1, sub=[], ll=3., lu=3., repeats=5, exclude_absorpt
             break
         poly = polyfit_adjust_order(x[good_values*good_data*sub]-x_cen, data[good_values*good_data*sub], nc )        # Fit the data
         res = data - np.polyval(poly, x-x_cen)              # Residuals for the whole array, >0 for emission lines
+        res[np.isnan(res)] = -1E6                           # To avoid res >= 0 giving invalid value warning, they are excluded in dev and will give False in good_values
         if exclude_absorption:
-            res[np.isnan(res)] = -1E6                       # To avoid res >= 0 giving invalid value warning, they are excluded in dev and will give False in good_values
             IU = (res >= 0)                                 # Positive residuals, use only non-absorption lines
             subarr = res[good_values*sub*IU]
             dev = np.nanstd((subarr,-subarr), ddof=nc+1)    # (subarr,-subarr) as all negative values are ignored -> stdev will be 2 low. Only correct if scatter is similar to both sides
@@ -2495,8 +2495,11 @@ def find_trace_orders(params, im, imageshape):
         traces.append( [cen_px] + list(pfs) + [min(positions[:,0])*binx, min(imageshape[0],(max(positions[:,0])+1)*binx-1), np.polyval(pfs, cen_px)] )
         logger('Step: order found at central pixel: {0} / {3} (frame/trace). The trace was identified between Pixels {1} and {2}'.format(round(np.polyval(pfs, cen_px),1),
                                                 round(traces[-1][-3]), round(traces[-1][-2]), round(np.polyval(pfs, np.mean(traces[-1][-3:-1]) ),1) ))
-    # sort
     traces = np.array(traces)
+    # sort
+    sort_index = sort_traces_along_detector(traces[:, 0:-3], traces[:,-3], traces[:,-2])
+    traces = traces[sort_index,:]
+    """ old sort:
     cen_px2 = np.mean([ np.max(traces[:,-3]), np.min(traces[:,-2]) ])      # Center of the area covered by all orders
     for order in range(traces.shape[0]):
         pfs = traces[order, 0:-3]
@@ -2508,7 +2511,7 @@ def find_trace_orders(params, im, imageshape):
                 traces[order, -1] = np.polyval(pfs[1:], traces[order, -3] - pfs[0])
             else:
                 traces[order, -1] = np.polyval(pfs[1:], traces[order, -2] - pfs[0])
-    traces = np.array(sorted(traces, key=operator.itemgetter(-1)))
+    traces = np.array(sorted(traces, key=operator.itemgetter(-1)))"""
     #plot_img_spec.plot_image(im+im_traces*np.max(im), ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], 'cleared')
     if traces.shape[0] < 2:
         logger('Error: Only found {0} traces. Please check that the binned image ({1}) looks as expected.'.format(traces.shape[0], params['logging_trace1_binned'])+\
@@ -2517,6 +2520,29 @@ def find_trace_orders(params, im, imageshape):
                '\nrm {0}'.format( params['master_trace1_filename'] ))
     logger('Info: {0} orders found and traced'.format(traces.shape[0]))
     return traces[:,0:-3], traces[:,-3].astype(int), traces[:,-2].astype(int)            # polyfits, xlows, xhighs
+
+def sort_traces_along_detector(pfits, xlows, xhighs):
+    """
+    Sort the orders by position on the detector
+    :return sort_index: Result from argsort to be applied to pfits, xlows, xhighs: e.g. pfits_sorted=pfits[sort_index,:]
+    """
+    cen_pixel = np.zeros(pfits.shape[0])*np.nan
+    cen_px2 = np.mean([ np.max(xlows), np.min(xhighs) ])      # Center of the area covered by all orders
+    for order in range(pfits.shape[0]):
+        pfs = pfits[order, :]
+        if cen_px2 >= xlows[order] and cen_px2 <= xhighs[order]:
+            cen_pixel[order] = np.polyval(pfits[order,1:], cen_px2 - pfits[order,0])     # Position in Cross-dispersion direction
+        else:
+            logger('Warn: Please check that all orders have been identified correctly')
+            if abs(cen_px2 - xlows[order]) < abs(cen_px2 - xhighs[order]):     # Use the closest value for which the trace is still defined
+                cen_pixel[order] = np.polyval(pfits[order,1:], xlows[order] - pfits[order,0])
+            else:
+                cen_pixel[order] = np.polyval(pfits[order,1:], xhighs[order] - pfits[order,0])
+    if np.isnan(cen_pixel).any():
+        print('Problem to check for Ronny as it should not happen: Check that routine sort_traces_along_detector is doing the same as the end of find_trace_orders')
+    sort_index = np.argsort(cen_pixel)
+    
+    return sort_index
 
 def adjust_trace_order(kwargs):
     """
@@ -4830,7 +4856,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
         plot_traces_over_image(im_sflat, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
     if params['GUI']:
         logger('Step: Allowing user to remove orders')
-        fmask, dummy, dummy = remove_adjust_orders_UI( im_sflat, polyfits, xlows, xhighs, userinput=params['GUI'], do_rm=True)
+        fmask, polyfits, dummy, xlows, xhighs = remove_adjust_orders_UI( im_sflat, polyfits, xlows, xhighs, userinput=params['GUI'], do_rm=True, do_add=True)
         polyfits, xlows, xhighs = polyfits[fmask], xlows[fmask], xhighs[fmask]
         plot_traces_over_image(im_sflat, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
     # retrace orders in the original image to finetune the orders
@@ -4840,7 +4866,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
     polyfits, xlows, xhighs, widths = adjust_trace_orders(params, sim_sflat, im_sflat, polyfits, xlows, xhighs)
     if params['GUI']:
         logger('Step: Allowing user to remove orders and to adjust the extraction width')
-        fmask, polyfits, widths = remove_adjust_orders_UI( im_sflat, polyfits, xlows, xhighs, widths, userinput=params['GUI'], do_rm=True, do_adj=True)
+        fmask, polyfits, widths, xlows, xhighs = remove_adjust_orders_UI( im_sflat, polyfits, xlows, xhighs, widths, userinput=params['GUI'], do_rm=True, do_adj=True, do_add=True)
         polyfits, xlows, xhighs, widths = polyfits[fmask], xlows[fmask], xhighs[fmask], widths[fmask]      
 
     return polyfits, xlows, xhighs, widths
@@ -5613,6 +5639,8 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
             if mask[pp] == False:
                 continue
             xarr = np.arange(xlows[pp], xhighs[pp], 1)
+            if xarr.shape[0] == 0:      # No data, e.g. when adding a new order
+                continue
             yarr = np.polyval(pf[1:], xarr-pf[0]) + offset
             if len(leftfit) == 0:                        # old 2d array, use gaussian width (single value) as width
                 yarrl = yarr - widths[pp][2]*w_mult
@@ -5630,7 +5658,8 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
             yarrl[yarrl > ims[1]] = ims[1]
             yarrr[yarrr < 0] = 0
             yarrr[yarrr > ims[1]] = ims[1]
-            mid_pos = int(len(xarr)/2)
+            
+            mid_pos = int(xarr.shape[0]/2)
             ymid = yarr[mid_pos]
             xmid = xarr[mid_pos]
             #if pp == 24:
@@ -6381,6 +6410,7 @@ def plot_wavelength_solution_spectrum(params, spec1, spec2, fname, wavelength_so
             axes.set_ylim(ymin,ymax)
             axes.set_xlim(xmin-0.01*x_range,xmax+0.01*x_range)
             fig.set_size_inches(16.2, 10)
+            #plt.savefig('{0}.png'.format(order), bbox_inches='tight')
             pdf.savefig()  # saves the current figure into a pdf page
             plt.close()
     
@@ -6779,6 +6809,7 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
         px_to_wave_sub = px_to_wave[ ~np.isnan(px_to_wave[:,3]), : ]
 
         wavelength_solution, wavelength_solution_arclines = fit_basic_wavelength_solution(params, px_to_wave_sub, cal_l_spec, 'GUI')
+        # can be [], [], in case there are not enough lines
         
         for order in range(len(wavelength_solution)):
             values_order = px_to_wave[:,0] == order
@@ -6794,7 +6825,8 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
             return
         pkwargs['wavelength_solution_info'] = True
         px_to_wave, wavelength_solution, wavelength_solution_arclines = calculate_wavesolution_calc(px_to_wave, cal_l_spec)
-        
+        if len(wavelength_solution) == 0:
+            return
         pkwargs['px_to_wave']                   = px_to_wave
         pkwargs['wavelength_solution']          = wavelength_solution
         pkwargs['wavelength_solution_arclines'] = wavelength_solution_arclines
@@ -6802,7 +6834,7 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
         """gui3.funkwargs['notclose'] = True
         tkc.TkCanvasGrid.end(gui3)          # will update also the plot"""
         if pkwargs['wavelength_solution_info']:
-            gui3.prompt_info(calimages['wavelength_solution_result_text'], width=500)
+            gui3.prompt_info(calimages['wavelength_solution_result_text'], width=600)
             pkwargs['wavelength_solution_info'] = False
         update_order()                      # To update the wavelengths
         
@@ -6820,6 +6852,8 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
         order = pkwargs['order']
         px_to_wave = pkwargs['px_to_wave']
         px_to_wave_sub = px_to_wave[ px_to_wave[:,0] == order, : ]
+        if px_to_wave_sub.shape[0] > 80:        # Limit to 80 lines
+            px_to_wave_sub = px_to_wave_sub[:80,:]
         wid_sub = dict()
         offset = 4
         ii = 0              # if the order doesn't contain any entries
@@ -6857,6 +6891,8 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
         keep = np.ones(( len(px_to_wave) )).astype(bool)
         # Read the results
         indexes = np.where(px_to_wave[:,0] == oldorder)[0]
+        if indexes.shape[0] > 80:        # Limit to 80 lines
+            indexes = indexes[:80]
         for ii,index in enumerate(indexes):
             #if 'wave_{0}'.format(ii) not in gui3.data.keys():       # can be empty when adding the extra stuff
             #    continue
@@ -6919,7 +6955,7 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
                         entry[i] = ''
                     elif i == 1:
                         entry[i] = int(entry[i])
-                file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t\n'.format( int(entry[0]), entry[1], round(entry[2],2), entry[3], entry[4], entry[5] ))
+                file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t\n'.format( int(entry[0]), entry[1], round(entry[2],2), entry[3], round(entry[4],2), round(entry[5],2) ))
     # define valid_function
     # input is one variable (the string input)
     # return is either:
@@ -6944,8 +6980,9 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
     pkwargs['wavelength_solution_info'] = False
     if np.sum(np.isnan(px_to_wave[:,1])) == 0:
         px_to_wave, wavelength_solution, wavelength_solution_arclines = calculate_wavesolution_calc(px_to_wave, cal_l_spec)
-        pkwargs['wavelength_solution'] = wavelength_solution
-        pkwargs['px_to_wave']          = px_to_wave
+        if len(wavelength_solution) > 0:
+            pkwargs['wavelength_solution'] = wavelength_solution
+            pkwargs['px_to_wave']          = px_to_wave
         pkwargs = calculate_linear_solution(pkwargs)
     # run initial update plot function
     plot(**pkwargs)
@@ -7498,8 +7535,11 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     
     # Use this solution to identify lines and fit polynomials in each order
     orderdiff, pxdiff, pxdifford, resdiff = int(np.median(best_matching[:,0])), int(np.median(best_matching[:,1])), np.median(best_matching[:,2]), np.median(best_matching[:,3])
-    orderdiffstd, resdiffstd = round(np.std(best_matching[:,0], ddof=1),1), round(np.std(best_matching[:,3], ddof=1),3)
-    pxdiffstd, pxdiffordstd  = round(np.std(best_matching[:,1], ddof=1),1), round(np.std(best_matching[:,2], ddof=1),2)
+    if best_matching.shape[0] >= 2:     # In case users gave no range for all parameters
+        orderdiffstd, resdiffstd = round(np.std(best_matching[:,0], ddof=1),1), round(np.std(best_matching[:,3], ddof=1),3)
+        pxdiffstd, pxdiffordstd  = round(np.std(best_matching[:,1], ddof=1),1), round(np.std(best_matching[:,2], ddof=1),2)
+    else:
+        orderdiffstd, resdiffstd, pxdiffstd, pxdiffordstd = np.nan, np.nan, np.nan, np.nan
     logger(('Info: To match the most lines in the emission line spectrum with the old wavelength solution,'+\
             ' a shift of {0} orders, a multiplier to the resolution of {1}, a shift of {2} px, and a shift of {3} px per order needs to be applied.'+\
             ' {4} lines were identified. The deviation is {5} Angstrom. Uncertainties were:'+\
@@ -8085,9 +8125,9 @@ def fit_basic_wavelength_solution(params, arc_lines_wavelength, spec, filename):
             arc_lines_wavelength = np.delete(arc_lines_wavelength, arc_line_res.argmax(), 0)        # Delete the least matching line
             cen_pxs = np.delete(cen_pxs, arc_line_res.argmax())                                     # Apply the same correction
         if arc_lines_wavelength.shape[0] <= polynom_order_trace*polynom_order_intertrace:
-            logger(('Error: The solution seems unphysical, at least {0} lines should be used (degrees of freedom). '+\
+            logger(('Warn: The solution seems unphysical, at least {0} lines should be used (degrees of freedom). '+\
                     'Please add more lines to {1}, or decrease polynom_order_traces or polynom_order_intertraces.').format(polynom_order_trace*polynom_order_intertrace+1, filename))
-        
+            return [], []
         # Find the new order_offset
         order_offset_old = int(order_offset)
         cenwave = polynomial_value_2d(orders*0, 1.0/(orders+order_offset_old), polynom_order_trace, polynom_order_intertrace, poly2d_params)    #old order_offset at cen_px
@@ -8278,7 +8318,7 @@ def remove_orders(pfits, rm_orders):
     return mask: array of bool with the same length as original orders, True for the orders to keep
     """
     mask = np.repeat([True], len(pfits))
-    if type(rm_orders) is not list:
+    if type(rm_orders).__name__ not in ['list', 'ndarray']:
         return mask
     # Remove orders (if rm_orders is populated)
     for r in range(len(pfits)):
@@ -8286,7 +8326,388 @@ def remove_orders(pfits, rm_orders):
             mask[r] = False
     return mask
 
-def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, userinput=True, do_rm=False, do_adj=False, do_shft=False):
+def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, userinput=True, do_rm=False, do_adj=False, do_shft=False, do_add=False):
+    """
+    Removes orders from the pfits array in a GUI, allows to adjust the width of th extracted area
+    :param do_adj: Adjust the width of the traces
+    return fmask: array of bool with the same length as original orders, True for the orders to keep
+    return pfits: same format as pfits, with adjusted parameters for the polynomial for the left and right border
+    return widths: same format as widths, with adjusted left and right stop of the trace
+    """
+    if not userinput or (not do_rm and not do_adj and not do_shft and not do_add):
+        return remove_orders(pfits, []), pfits, widths, xlows, xhighs         # No orders to remove, pfits stays the same, widths stays the same
+
+    # convert to numpy arrays
+    pfits = np.array(pfits)
+    xlows, xhighs = np.array(xlows), np.array(xhighs)
+    # Create a list with all data points to refit the orders
+    data_x = np.linspace(0, im1.shape[0], int(0.1*im1.shape[0]), dtype=int) # about every 10 pixel in dispersion direction
+    data_order_position = []
+    for order in range(pfits.shape[0]):
+        inorder = ( data_x > xlows[order] ) & (data_x < xhighs[order]-1)
+        xarr = np.hstack(( xlows[order], data_x[inorder], xhighs[order]-1 ))           # add the boundaries as points
+        if len(pfits.shape) == 3:
+            yarr = np.polyval(pfits[order,0,1:], xarr-pfits[order,0,0])    
+            yarrl = np.polyval(pfits[order,1,1:], xarr-pfits[order,1,0])
+            yarrr = np.polyval(pfits[order,2,1:], xarr-pfits[order,2,0])
+        else:
+            yarr = np.polyval(pfits[order,1:], xarr-pfits[order,0]) 
+            yarrl = yarr
+            yarrr = yarr
+        data_order_position.append( np.vstack((xarr, yarr, yarrl, yarrr)).T )             # contains the x and y values in one row
+
+    # set up plot
+    fig, frame = plt.subplots(1, 1)
+    gui3 = tkc.TkCanvas(figure=None, ax=None, func=None, title='HiFLEx: Test', kwargs=dict(), widgets=dict(), widgetprops=dict(orientation='v', position=Tk.RIGHT) )      # Only to get the display size
+    dpi=100
+    fig.set_dpi(dpi)
+    fig.set_size_inches( (int(gui3.screen_w_h[0]) - 400)/dpi, (int(gui3.screen_w_h[1])-90)/dpi, forward=True)     # Make the plot as big as possible
+    tkc.TkCanvas.end(gui3)
+    
+    im_log = scale_image_plot(im1,'log10')
+    # get kwargs; add more to pkwargs, as otherwise what is changed in for example settings_modify_end() is lost
+    pkwargs = dict(frame=frame, update_frame=True, im1=im1, pfits=pfits, xlows=xlows, xhighs=xhighs, widths=widths,
+                   w_mult=1.0, rm_orders=[], shift=shift, im_scale_min=round_sig(np.percentile(im_log,10),2),
+                   im_scale_max=round_sig(np.percentile(im_log,90),2), order=np.nan, addpointsorder_lcr=1, 
+                   data_order_position=data_order_position, addpoints=False, removepoints=False)
+
+    # define update plot function
+    def plot(frame, update_frame, im1, pfits, xlows, xhighs, widths, w_mult, rm_orders, shift, im_scale_min, im_scale_max, order, addpointsorder_lcr, data_order_position, **kwargs):
+        #print('addpointsorder_lcr',addpointsorder_lcr)
+        x_range, y_range = copy.copy(frame.get_xlim()), copy.copy(frame.get_ylim())
+        #if update_frame:        # This will speed up plotting, but copying the old frame doesn't work, hence it always adds plots to the frame, and frame.clear() before loading creates an clear frame, more in https://stackoverflow.com/questions/57351212/matplotlib-how-to-copy-a-contour-plot-to-another-figure
+        if True:
+            frame.clear()
+            title = ''
+            if do_adj:
+                title += 'Defining the width of the traces. '
+            if do_shft:
+                title += 'Finding the shift of the traces. '
+            if do_rm:
+                title += 'Removing bad orders. '
+            if do_add:
+                title += 'Adding/modifying orders. '
+            if do_rm or do_add:
+                title += '\n(Largest order number = {0})\n'.format(pfits.shape[0]-1)
+            mask = remove_orders(pfits, rm_orders)
+            pfits_shift = copy.deepcopy(pfits)
+            if len(pfits_shift.shape) == 3:
+                pfits_shift[:,:,-1] += shift        # shift all traces
+            else:
+                pfits_shift[:,-1] += shift          # shift all traces
+            frame = plot_traces_over_image(im1, 'dummy_filename', pfits_shift, xlows, xhighs, widths, w_mult=w_mult, mask=mask, frame=frame, return_frame=True, imscale=[im_scale_min,im_scale_max])
+            frame.set_title(title[:-1])
+        #    pkwargs['backup_frame'] = copy.deepcopy(frame)# This will speed up plotting, but copying the old frame doesn't work, hence it always adds plots to the frame, and frame.clear() before loading creates an clear frame
+        #else:# This will speed up plotting, but copying the old frame doesn't work, hence it always adds plots to the frame, and frame.clear() before loading creates an clear frame
+        #    frame = copy.deepcopy(pkwargs['backup_frame'])# This will speed up plotting, but copying the old frame doesn't work, hence it always adds plots to the frame, and frame.clear() before loading creates an clear frame
+
+        if do_add and not np.isnan(pkwargs['order']):
+            yarr = data_order_position[order][:,addpointsorder_lcr ] + shift
+            xarr = data_order_position[order][:,0]
+            frame.plot(yarr, xarr, color='c', linewidth=1, linestyle='dotted', marker="x", markersize=5)
+        if x_range != (0.0, 1.0) and y_range != (0.0, 1.0):
+            frame.axis([x_range[0], x_range[1], y_range[0], y_range[1]])
+    
+    def settings_modify_order():
+        pkwargs['backup_data_order_position_order'] = copy.copy(pkwargs['data_order_position'][pkwargs['order']])
+        gui3.ws['addpointsorder'].config(state=Tk.DISABLED)
+        if 'addpointsorder_lcr' in gui3.ws.keys():
+            gui3.ws['addpointsorder_lcr'].config(state=Tk.DISABLED)
+        gui3.ws['addpoints'].config(state=Tk.DISABLED)
+        gui3.ws['removepoints'].config(state=Tk.DISABLED)
+        gui3.ws['update'].config(state=Tk.DISABLED)
+        gui3.ws['stoppoints'].config(state="normal")
+        gui3.ws['cancelpoints'].config(state="normal")
+        tkc.TkCanvas.update(gui3)
+        pkwargs['update_frame'] = False     # When clicking only the points are redrawn
+    
+    def settings_modify_end():
+        pkwargs['order'] = np.nan
+        gui3.ws['addpointsorder'].config(state="normal")
+        if 'addpointsorder_lcr' in gui3.ws.keys():
+            gui3.ws['addpointsorder_lcr'].config(state="normal")
+        gui3.ws['addpoints'].config(state="normal")
+        gui3.ws['removepoints'].config(state="normal")
+        gui3.ws['update'].config(state="normal")
+        gui3.ws['stoppoints'].config(state=Tk.DISABLED)
+        gui3.ws['cancelpoints'].config(state=Tk.DISABLED)
+        pkwargs['addpoints'] = False
+        pkwargs['removepoints'] = False
+        pkwargs['update_frame'] = True
+        tkc.TkCanvas.update(gui3)
+    
+    def add_an_order():
+        pkwargs['xlows'] = np.hstack(( pkwargs['xlows'], im1.shape[0] ))
+        pkwargs['xhighs'] = np.hstack(( pkwargs['xhighs'], 0 ))
+        pfits = pkwargs['pfits']
+        if len(pfits.shape) == 3:
+            pfnew = np.zeros((1,pfits.shape[1],pfits.shape[2]))
+            for ii in range(pfits.shape[1]):
+                pfnew[0,ii,0] = np.median(pfits[:,ii,0])        # cen_px
+                pfnew[0,ii,-1] = im1.shape[1]/2.                # put it in the middle
+        else:
+            pfnew = np.zeros((1, pfits.shape[1]))
+            pfnew[0,0] = np.median(pfits[:,0])        # cen_px
+            pfnew[0,-1] = im1.shape[1]/2.             # put it in the middle
+        pkwargs['pfits'] = np.concatenate((pfits,pfnew), axis=0)
+        pkwargs['data_order_position'].append( np.zeros((0,4)) )
+        widths = pkwargs['widths']
+        if len(widths) > 0:
+            widthnew = np.median(widths,axis=0)
+            #print(widths, widthnew)
+            if type(widths).__name__ == 'ndarray':
+                pkwargs['widths'] = np.concatenate( ( widths, widthnew.reshape((1,widths.shape[1])) ), axis=0)
+            elif type(widths).__name__ == 'list':
+                 pkwargs['widths'].append(list(widthnew))
+        gui3.prompt_info('Added order with index {0}. Now you need to add points to it.'.format(pkwargs['pfits'].shape[0]-1), width=300)
+        #print(pfits.shape, pfnew.shape, pkwargs['pfits'].shape, len(pkwargs['widths']), pkwargs['widths']  )
+    
+    def addpoints_action():
+        tkc.TkCanvas.update(gui3, updateplot=False)
+        pkwargs['order'] = gui3.data['addpointsorder']
+        if type(pkwargs['order']).__name__ not in ['int']:
+            return
+        pkwargs['addpoints'] = True
+        settings_modify_order()
+    
+    def removepoints_action():
+        tkc.TkCanvas.update(gui3, updateplot=False)
+        pkwargs['order'] = gui3.data['addpointsorder']
+        if type(pkwargs['order']).__name__ not in ['int']:
+            return
+        pkwargs['removepoints'] = True
+        settings_modify_order()
+    
+    def cancelpoints_action():
+        # Restore the original points
+        pkwargs['data_order_position'][pkwargs['order']] = pkwargs['backup_data_order_position_order']
+        settings_modify_end()
+    
+    def stoppoints_action():
+        order = pkwargs['order']
+        data = pkwargs['data_order_position'][order]
+        addpointsorder_lcr = pkwargs['addpointsorder_lcr']
+        nonnan = ~np.isnan(data[:,addpointsorder_lcr])
+        if len(pkwargs['pfits'].shape) == 3:
+            poly_orders = pkwargs['pfits'].shape[2]-2
+            cen_px = pkwargs['pfits'][order,addpointsorder_lcr-1,0]
+        else:       # addpointsorder_lcr will be always 1
+            poly_orders = pkwargs['pfits'].shape[1]-2
+            cen_px = pkwargs['pfits'][order,0]
+        if np.sum(nonnan) < 2*poly_orders:
+            gui3.prompt_info('Warn: Needs at least {} points to fit the order. Please add more points or cancel.'.format(2*poly_orders), width=300)
+            return
+        pkwargs['xlows'][order] = int(np.min(data[:,0]))
+        pkwargs['xhighs'][order] = int(np.ceil(np.max(data[:,0])+1))
+        # Fit the center
+        pfs = np.polyfit(data[nonnan,0] - cen_px, data[nonnan,addpointsorder_lcr], poly_orders)
+        if len(pkwargs['pfits'].shape) == 3:
+            pkwargs['pfits'][order,addpointsorder_lcr-1,1:] = pfs
+        else:       # addpointsorder_lcr will be always 1
+            pkwargs['pfits'][order,1:] = pfs
+        settings_modify_end()
+    
+    def onclick(event):
+        #print('clicked',event.xdata, event.ydata, event.inaxes, im1.shape)
+        if event.xdata is None or event.ydata is None:
+            return
+        if not pkwargs['addpoints'] and not pkwargs['removepoints']:            # Not set
+            return
+        yy, xx = event.xdata-shift, event.ydata         # event.ydata: dispersion axis, xx in dispersion axis
+        uncertainty = 15
+        data = pkwargs['data_order_position'][pkwargs['order']]     # data[:,0]: dispersion axis
+        addpointsorder_lcr = pkwargs['addpointsorder_lcr']
+        if pkwargs['addpoints']:
+            if xx < 0 or xx > im1.shape[0]-1 or yy < 0 or yy > im1.shape[1]-1:    #im1.shape[0]: disersion axis
+                return                  # click was outside of the image
+            datanew = [xx, np.nan, np.nan, np.nan]
+            datanew[addpointsorder_lcr] = yy
+            data = np.vstack((data, datanew))
+            datasortindex = np.argsort(data[:,0])
+            pkwargs['data_order_position'][pkwargs['order']] = data[datasortindex,:]
+        elif pkwargs['removepoints']:
+            yarr = copy.copy(data[:,addpointsorder_lcr])
+            xarr = copy.copy(data[:,0])
+            badvalues = np.isnan(yarr)
+            xarr[badvalues] = -1E6
+            yarr[badvalues] = -1E6
+            diff = (xarr-xx)**2 + (yarr-yy)**2
+            posmin = np.argmin(diff)
+            #print('smallest distance', np.sqrt(diff[posmin]), data, posmin)
+            if np.sqrt(diff[posmin]) > uncertainty:       # Too many pixel away
+                return
+            data[posmin,addpointsorder_lcr] = np.nan
+            pkwargs['data_order_position'][pkwargs['order']] = data
+        
+        tkc.TkCanvas.update(gui3, updateplot=True)
+        # !!!!!!!!!!!! do it for pressing lrc to work on boundaries of the orders? 
+    
+    # define valid_function
+    # input is one variable (the string input)
+    # return is either:
+    #   True and values
+    # or
+    #   False and error message
+    def vfunc(xs):
+        try:
+            xwhole = xs.replace(',', ' ')
+            new_xs = xwhole.split()
+            xs = []
+            for nxs in new_xs:
+                xs.append(int(nxs))
+            return True, xs
+        except:
+            return False, ('Error, input must consist of integers \n '
+                           'separated by commas or white spaces')
+    def vfunc_int(xs):
+        try:
+            value = int(xs)
+            return True, value
+        except:
+            return False, ('Error, input must be integer\n')
+    def vfunc_float(xs):
+        try:
+            value = float(xs)
+            return True, value
+        except:
+            return False, ('Error, input must be float')
+    def vfunc_lcr(xs):
+        if xs == 'c':
+            return True, 1
+        elif xs == 'l':
+            return True, 2
+        elif xs == 'r':
+            return True, 3
+        else:
+            return False, ('  Error, input must be either l, c, or r  ')
+    
+    # run initial update plot function
+    plot(**pkwargs)
+    
+    # define widgets
+    widgets = dict()
+    widgets['im_scale_min'] = dict(label='Scale the image (black)', comment='The image will be shown in log10 scale',
+                                kind='TextEntry', minval=None, maxval=None,
+                                fmt=str, start=pkwargs['im_scale_min'], valid_function=vfunc_float,
+                                width=10)
+    widgets['im_scale_max'] = dict(label='Scale the image (white)',
+                                kind='TextEntry', minval=None, maxval=None,
+                                fmt=str, start=pkwargs['im_scale_max'], valid_function=vfunc_float,
+                                width=10)
+    if do_rm:
+        widgets['rm_orders'] = dict(label='Select orders to remove',
+                                comment='Enter all order numbers to remove \n'
+                                        'separated by a whitespace or comma \n'
+                                        'to undo just delete the entered '
+                                        'number',
+                                kind='TextEntry', minval=None, maxval=None,
+                                fmt=str, start=" ", valid_function=vfunc,
+                                width=40)
+    if do_adj:
+        widgets['w_mult'] = dict(label='Multiplier for the\nwidth of the traces',
+                            comment='If the results are not as wished,\n'
+                                    'a modification of the parameter "width_percentile"\n'
+                                    'might help. To do this\n'
+                                    'Cancel the script with CTRL+C in the terminal\n'
+                                    'and then restart',
+                            kind='TextEntry', minval=None, maxval=None,
+                            fmt=float, start=pkwargs['w_mult'], valid_function=vfunc_float,
+                            width=10)
+    if do_shft:
+        widgets['shift'] = dict(label='Shift the traces by:',
+                            #comment='',
+                            kind='TextEntry', minval=None, maxval=None,
+                            fmt=float, start=0.0, valid_function=vfunc_float,
+                            width=10)
+    if do_add:
+        widgets['addpointsorder'] = dict(label='Add/remove points from order:',
+                            comment='It might be necessary to zoom before\nadding/removing points will work',
+                            kind='TextEntry', minval=None, maxval=None,
+                            fmt=int, start='', valid_function=vfunc_int,
+                            width=10)
+        if len(pkwargs['pfits'].shape) == 3:
+            widgets['addpointsorder_lcr'] = dict(label='Which part of the order?',
+                            comment='c: center (brightest part),\nl or r: left or right boundary of the order',
+                            kind='TextEntry', minval=None, maxval=None,
+                            fmt=str, start='c', valid_function=vfunc_lcr,
+                            width=10)
+        #widgets['addpoints'] = dict(label='Add or remove points from\nthe order given below',
+        #                        kind='CheckBox', start=False)
+    #widgets['spacer1'] = dict(kind='Spacer', position=Tk.BOTTOM)
+    widgets['accept'] = dict(label='Accept', kind='ExitButton',
+                             position=Tk.BOTTOM)
+    widgets['update'] = dict(label='Update', kind='UpdatePlot',
+                             position=Tk.BOTTOM)
+    if do_add:
+        widgets['addorder'] = dict(label='Add a new Order', kind='CommandButton', command=add_an_order,
+                             position=Tk.BOTTOM, width=20)
+        widgets['stoppoints'] = dict(label='Use added/removed points', kind='CommandButton', command=stoppoints_action,
+                             position=Tk.BOTTOM, state=Tk.DISABLED, width=30)
+        widgets['cancelpoints'] = dict(label='Cancel adding/removing points', kind='CommandButton', command=cancelpoints_action,
+                             position=Tk.BOTTOM, state=Tk.DISABLED, width=30)
+        widgets['removepoints'] = dict(label='Remove points from an Order', kind='CommandButton', command=removepoints_action,
+                             position=Tk.BOTTOM, width=30)
+        widgets['addpoints'] = dict(label='Add points to an Order', kind='CommandButton', command=addpoints_action,
+                             position=Tk.BOTTOM, width=30)
+    wprops = dict(orientation='v', position=Tk.RIGHT)
+    
+    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
+                        title='HiFlEx: Locating orders', widgets=widgets,
+                        widgetprops=wprops)
+    cid = fig.canvas.callbacks.connect('button_press_event', onclick)       # It works with GUI
+    
+    gui3.master.mainloop()
+
+    pfits = pkwargs['pfits']
+    xlows = pkwargs['xlows']
+    xhighs = pkwargs['xhighs']
+    widths = pkwargs['widths']
+    w_mult = pkwargs['w_mult']
+    shift = pkwargs['shift']
+    rm_orders = pkwargs['rm_orders']
+    
+    # Remove bad orders
+    good_data = (xhighs - xlows >= 5)      # enough data added to the order
+    if len(pfits.shape) == 3:
+        pfits = pfits[good_data,:,:]
+    else:
+        pfits = pfits[good_data,:]
+    xlows = xlows[good_data]
+    xhighs = xhighs[good_data]
+    if len(widths) > 0:
+        widths = widths[good_data,:]
+    
+    # Mask removed orders   
+    fmask = remove_orders(pfits, rm_orders)
+    
+    # Rescale the widths
+    if 'w_mult' != 1.0 and len(pfits.shape) == 3 and len(widths) > 0:
+        pfits, widths = update_tr_poly_width_multiplicate(pfits, widths, [w_mult, w_mult], xlows, xhighs)
+        
+    # Shift orders
+    if shift != 0.0:
+        if len(pfits.shape) == 3:
+            pfits[:,:,-1] += shift        # shift all traces
+        else:
+            pfits[:,-1] += shift          # shift all traces
+    
+    # Sort the orders
+    if len(pfits.shape) == 3:
+        sort_index = sort_traces_along_detector(pfits[:,0,:], xlows, xhighs)
+        pfits = pfits[sort_index,:,:]
+    else:
+        sort_index = sort_traces_along_detector(pfits, xlows, xhighs)
+        pfits = pfits[sort_index,:]
+    xlows = xlows[sort_index]
+    xhighs = xhighs[sort_index]
+    if len(widths) > 0:
+        widths = widths[sort_index,:]
+    fmask = fmask[sort_index]
+    
+    plt.close()
+    return fmask, pfits, widths, xlows, xhighs
+
+def remove_adjust_orders_UI_ori(im1, pfits, xlows, xhighs, widths=[], shift=0, userinput=True, do_rm=False, do_adj=False, do_shft=False):
     """
     Removes orders from the pfits array in a GUI, allows to adjust the width of th extracted area
     return fmask: array of bool with the same length as original orders, True for the orders to keep
@@ -8719,7 +9140,7 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
         weight[nans] = 0           # A nan will cause np.average to result in nan, even if the weight for the nan is 0
         weight[np.isnan(weight) | np.isinf(weight)] = 0
     #wavelengths[nans] = 0           # A nan will cause np.average to result in nan, even if the weight for the nan is 0; however, nans make the calculation much faster
-    print('px_ranges',px_ranges, px_linspace.shape[0], specs[1], px_step)
+    #print('px_ranges',px_ranges, px_linspace.shape[0], specs[1], px_step)
     for order in tqdm(range(specs[0]), desc='Step: Linearise the spectrum'):
         for px_range, px_range_wide in px_ranges:           # splitting things into smaller junks (about 1k pixel instead of 6k pixel, not tested if there is an optimimum) speeds up the process by a factor of 5
             if np.all(nans[order,px_range]):
@@ -8746,7 +9167,7 @@ def linearise_wavelength_spec(params, wavelengths, spectra, method='sum', weight
                 weight_lin[order, inorder] = weight_comb
             else:
                 weight_lin[order, inorder] = ~no_data
-            print(order, px_range[0],lwave_o, data_lin[order, inorder], weight_lin[order, inorder] )
+            #print(order, px_range[0],lwave_o, data_lin[order, inorder], weight_lin[order, inorder] )
     
     # Combine the orders
     nodata = np.all(weight_lin==0, axis=0)            # Wavelengths not covered by at least one point

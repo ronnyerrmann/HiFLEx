@@ -64,8 +64,33 @@ def get_curr_screen_geometry():
 
 class TkCanvas:
     def __init__(self, figure=None, ax=None, **kwargs):         # "=None" added by Ronny; to use it just as text field
+        try:
+            screeen_geometry = get_curr_screen_geometry()
+        except:
+            print('Warn: Could not get the Screen Geometry: This terminal needs to be able to acces a graphical display.')
+            screeen_geometry = '1024x768+1+1'
         self.master = Tk.Tk()
+        self.screen_w_h = (str(screeen_geometry).replace('-','+').split('+')[0]).split('x')       # list of width and height
 
+        # Adopted from https://blog.tecladocode.com/tkinter-scrollable-frames/
+        container = ttk.Frame(self.master)
+        canvas = Tk.Canvas( container)
+        scrollbarx = ttk.Scrollbar(container, orient="horizontal", command=canvas.xview)
+        scrollbary = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind("<Configure>",lambda e: canvas.configure( scrollregion=canvas.bbox("all") ) )
+        # canvas.bbox("all") gives a 4-value tuple describing the position of two corners of a rectangle which is the scroll region
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(xscrollcommand=scrollbarx.set, yscrollcommand=scrollbary.set)
+        
+        container.pack(side=Tk.RIGHT)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbarx.pack(side="bottom", fill="x")
+        scrollbary.pack(side="right", fill="y")
+        
+        self.scrollable_frame = scrollable_frame
+        
         # extract keyword arguments
         title = kwargs.get('title', 'Matplotlib window')
         self.master.title(title)
@@ -98,6 +123,14 @@ class TkCanvas:
 
         # populate matplotlib drawing area and buttons
         self.populate()
+        
+        #self.width_GUI  = max(300, min( self.wprops.get('width_GUI' , 1E9), int(self.screen_w_h[0])-50 ) )
+        #self.height_GUI = max(200, min( self.wprops.get('height_GUI', 1E9), int(self.screen_w_h[1])-90 ) )
+        self.width_GUI  = max(300, min( self.wprops.get('width_GUI' , 1E9), int(self.screen_w_h[0])-50, scrollable_frame.winfo_width() ) )
+        self.height_GUI = max(200, min( self.wprops.get('height_GUI', 1E9), int(self.screen_w_h[1])-90, scrollable_frame.winfo_height() ) )
+        canvas.config(width=self.width_GUI, height=self.height_GUI)
+        canvas.update()     # adds the winfo information
+
 
     def populate(self):
 
@@ -108,12 +141,12 @@ class TkCanvas:
         self.add_widgets(parent=self.buttonbar)
 
     def depopulate(self):
-        for widget in self.ws:
-            widget.config(state='disable')
+        for widget in self.ws.keys():
+            self.ws[widget].config(state='disable')
 
     def repopulate(self):
-        for widget in self.ws:
-            widget.config(state="normal")
+        for widget in self.ws.keys():
+            self.ws[widget].config(state="normal")
 
     def matplotlib_window(self):
         self.mwindow = FigureCanvasTkAgg(self.figure, master=self.master)
@@ -143,7 +176,7 @@ class TkCanvas:
 
     def add_widgets(self, parent, orientation='h'):
         widgets = self.widgets
-        self.ws = []
+        self.ws = dict()
         if 'h' in orientation.lower():
             dpos = Tk.TOP
         else:
@@ -151,7 +184,7 @@ class TkCanvas:
 
         for widget in widgets:
             kind = widgets[widget].get('kind', 'TextEntry')
-            pos = widgets[widget].get('position', dpos)
+            position = widgets[widget].get('position', dpos)
             name = widget
             label = widgets[widget].get('label', 'Enter {0}'.format(name))
             start = widgets[widget].get('start', 0)
@@ -163,10 +196,16 @@ class TkCanvas:
             onclick = widgets[widget].get('onclick', None)
             vfunc = widgets[widget].get('valid_function', None)
             width = widgets[widget].get('width', 10)
+            orientation = widgets[widget].get('orientation', None)
+            wraplength = widgets[widget].get('wraplength', None)
+            state = widgets[widget].get('state', None)
+            command = widgets[widget].get('command', None)
+            
+            kwargs = dict(width=width, minval=minval, maxval=maxval, valid_function=vfunc, comment=comment, state=state)
             
             if kind == 'Label':                     #added by ronny
-                w = Tk.Label(parent, text=label)    #added by ronny
-                w.pack(side=pos, anchor=Tk.NW)                    #added by ronny
+                w = Tk.Label(parent, text=label, state=state)    #added by ronny
+                w.pack(side=position, anchor=Tk.NW)                    #added by ronny
             elif kind == 'Spacer':                  #added by ronny
                 tframe = Tk.Frame(parent)
                 tframe.pack(side=Tk.LEFT, anchor=Tk.NW, padx=100)
@@ -176,28 +215,33 @@ class TkCanvas:
                 if name not in self.data:
                     self.data[name] = start
                 w = self.add_TextEntry(parent, name=name, desc=label, fmt=fmt,
-                                       position=pos, minval=minval,
+                                       position=position, minval=minval,
                                        maxval=maxval, comment=comment,
                                        valid_function=vfunc, width=width)
             elif kind == 'CheckBox':                    #added by ronny
                 if name not in self.data:                #added by ronny
                     self.data[name] = start                #added by ronny
                 w = self.add_CheckBox(parent, name=name, desc=label,
-                                      position=pos, comment=comment)                #added by ronny
+                                      position=position, comment=comment)                #added by ronny
             elif kind == 'ExitButton':
                 if result is not None:
                     self.data[name] = result
                     self.onclickvalue[name] = onclick
                 if onclick is None:
-                    w = self.add_button(parent, label, self.end, side=pos)
+                    w = self.add_button(parent, label, self.end, side=position)
                 else:
                     w = self.add_button(parent, label,
                                         command=lambda name=name:
                                                 self.valueend(name),
-                                        side=pos)
+                                        side=position)
             elif kind == 'UpdatePlot':
                 w = self.add_button(parent, label, self.update,
-                                    side=pos)
+                                    side=position)
+                if result is not None:
+                    self.data[name] = result
+                    self.fmts[name] = type(result)
+            elif kind == 'CommandButton':
+                w = self.add_button(parent, label, command, **kwargs)
                 if result is not None:
                     self.data[name] = result
                     self.fmts[name] = type(result)
@@ -205,7 +249,8 @@ class TkCanvas:
                 w = None
             # append to storage
             if w is not None:
-                self.ws.append(w)
+                #self.ws.append(w)
+                self.ws[name] = w
 
     #---------------------------------------------------------------------------
     #define sub widgets
@@ -221,6 +266,7 @@ class TkCanvas:
         maxval = kwargs.get('maxval', None)
         comment = kwargs.get('comment', None)
         vfunc = kwargs.get('valid_function', None)
+        state = kwargs.get('state', None)
 
         # first make a frame to contain all elements
         tframe = Tk.Frame(master)
@@ -250,7 +296,7 @@ class TkCanvas:
         vcmd += self.vcmdargs + [minval, maxval, fmt, name, self.data[name]]
         entry = Tk.Entry(tframe, textvariable=entryv, bg=background,
                          fg=foreground, width=width,
-                         validate="all", validatecommand=tuple(vcmd))
+                         validate="all", validatecommand=tuple(vcmd), state=state)
         entry.pack(side=Tk.BOTTOM, padx=padx, pady=pady)
         entry.focus_set()
         self.validation[name] = True
@@ -264,9 +310,10 @@ class TkCanvas:
         side = kwargs.get('side', None)
         padx = kwargs.get('padx', 5)
         pady = kwargs.get('pady', 2)
+        state = kwargs.get('state', None)
         self.entries[name] = Tk.IntVar()                                # added by ronny
         self.funcs[name] = lambda x: x                                  # added by ronny
-        checkbox = Tk.Checkbutton(master, text=desc, variable=self.entries[name], onvalue=True, offvalue=False)     # added by ronny, variable has to be set before, different to TextEntry
+        checkbox = Tk.Checkbutton(master, text=desc, variable=self.entries[name], onvalue=True, offvalue=False, state=state)     # added by ronny, variable has to be set before, different to TextEntry
         checkbox.pack(in_=master, side=side, padx=padx, pady=pady)
         self.entries[name].set(self.data[name])                         # added by ronny, set the startvalue
         self.validation[name] = True
@@ -274,7 +321,7 @@ class TkCanvas:
         return checkbox     # added by ronny
         
     def add_button(self, master, text, command, **kwargs):
-
+        state = kwargs.get('state', None)
         background = kwargs.get('background', 'white')
         foreground = kwargs.get('foreground', 'black')
         width = kwargs.get('width', 10)
@@ -284,7 +331,7 @@ class TkCanvas:
         
         button = Tk.Button(master=self.master, text=text,
                            command=command, bg=background, fg=foreground,
-                           width=width)
+                           width=width, state=state)
         button.pack(in_=master, side=side, padx=padx, pady=pady)
         return button
     
@@ -347,7 +394,7 @@ class TkCanvas:
         if name in self.onclickvalue:
             if self.onclickvalue is not None:
                 self.data[name] = self.onclickvalue[name]
-        self.update()   # Update everything (first gui3.data, afterwards kwargs (self.update() calls self.update_plot()) before exiting - Added by Ronny
+        self.update(updateplot=False)   # Update everything (first gui3.data, afterwards kwargs (self.update() calls self.update_plot()) before exiting - Added by Ronny
         
         self.master.quit()
         self.master.destroy()
@@ -371,7 +418,7 @@ class TkCanvas:
         else:
             self.funcs[name] = lambda x: x
 
-    def update(self, event=None):
+    def update(self, event=None, updateplot=True):
         for name in self.entries:
             value = self.entries[name].get()
             F = self.funcs[name]
@@ -383,7 +430,7 @@ class TkCanvas:
                     new = F(fmt(value))             # Added by Ronny
                     if new is not None:             # Added by Ronny
                         self.data[name] = new       # Modified by Ronny
-        if self.figure is not None:                      # Added by Ronny
+        if self.figure is not None and updateplot:  # Added by Ronny
             self.update_plot()
 
     def update_plot(self):
@@ -498,6 +545,39 @@ class TkCanvas:
         master.destroy()
         self.repopulate()
         # master.grab_release()
+        
+    def prompt_info(self, message, **kwargs):
+        width = kwargs.get('width', 400)
+        height = kwargs.get('height', 200)
+        top = Tk.Toplevel(master=self.master)
+        # top.grab_set()
+        # Split the message into several lines to comply with width
+        charlen = 8.0       # 6.1 Tested 20201030; 8.0 Tested 20210312
+        message = message.split('\n')
+        for ii,entry in enumerate(message):
+            ltxt = len(entry)
+            index = 0
+            start = int(width/charlen)
+            while ltxt*charlen > width:
+                pos = entry[start:].find(' ')
+                if pos > -1:
+                    entry = entry[:start+pos]+'\n'+entry[start+pos+1:]
+                    ltxt = len(entry) - (start+pos)
+                    start = start+pos + int(width/charlen)
+                else:
+                    ltxt = 0
+            message[ii] = entry
+        message = '\n'.join(message)
+        height = max( height, (len(message.split('\n'))+5)*12 )     # Tested 20201030
+
+        self.center_window_on_root(top, width=width, height=height)
+        top.title('Info')
+        labelv = Tk.StringVar(value=message)
+        label = Tk.Label(top, textvariable=labelv)
+        button = Tk.Button(master=top, text='Close',
+                           command=lambda top=top: top.destroy())
+        label.pack()
+        button.pack()
 
     # -------------------------------------------------------------------------
     # Other
@@ -804,7 +884,7 @@ class TkCanvasGrid:                                             # Completely new
         top = Tk.Toplevel(master=self.master)
         # top.grab_set()
         # Split the message into several lines to comply with width
-        charlen = 6.1       # Tested 20201030
+        charlen = 8.0       # 6.1 Tested 20201030; 8.0 Tested 20210312
         message = message.split('\n')
         for ii,entry in enumerate(message):
             ltxt = len(entry)
@@ -875,7 +955,7 @@ class TkCanvasGrid:                                             # Completely new
         if name in self.onclickvalue:
             if self.onclickvalue is not None:
                 self.data[name] = self.onclickvalue[name]
-        self.update()   # Update everything (first gui3.data, afterwards kwargs (self.update() calls self.update_plot()) before exiting - Added by Ronny
+        self.update(updateplot=False)   # Update everything (first gui3.data, afterwards kwargs (self.update() calls self.update_plot()) before exiting - Added by Ronny
         
         self.master.quit()
         time.sleep(1)
@@ -900,7 +980,7 @@ class TkCanvasGrid:                                             # Completely new
         else:
             self.funcs[name] = lambda x: x
 
-    def update(self, event=None):
+    def update(self, event=None, updateplot=True):
         for name in self.entries:
             value = self.entries[name].get()
             F = self.funcs[name]
@@ -912,7 +992,7 @@ class TkCanvasGrid:                                             # Completely new
                     new = F(fmt(value))             # Added by Ronny
                     if new is not None:             # Added by Ronny
                         self.data[name] = new       # Modified by Ronny
-        if self.figure is not None:        # Added by Ronny
+        if self.figure is not None and updateplot:  # Added by Ronny
             self.update_plot()
 
     def update_plot(self):

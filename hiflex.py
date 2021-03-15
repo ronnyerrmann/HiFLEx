@@ -57,7 +57,7 @@ if __name__ == "__main__":
                 sci_tr_poly, widths = update_tr_poly_width_multiplicate(sci_tr_poly, widths, [widths_new[:,0]/widths[:,0], widths_new[:,1]/widths[:,1]], xlows, xhighs)
                 widths = widths_new
                 logger('Info: widths of the traces have been updated')
-            dummy, sci_tr_poly, widths = remove_adjust_orders_UI( scale_image_plot(im_trace1, 'log10'), sci_tr_poly, xlows, xhighs, widths, userinput=params['GUI'], do_adj=True)
+            dummy, sci_tr_poly, widths, xlows, xhighs = remove_adjust_orders_UI( scale_image_plot(im_trace1, 'log10'), sci_tr_poly, xlows, xhighs, widths, userinput=params['GUI'], do_adj=True)
             printresults = True
         if printresults:
             # save parameters of the polynoms into a fitsfile (from Neil)
@@ -97,7 +97,7 @@ if __name__ == "__main__":
         cal_tr_poly, awidths, axlows, axhighs = np.array(cal_tr_poly), copy.deepcopy(widths), copy.deepcopy(xlows), copy.deepcopy(xhighs)
         
         # check the shift between the original solution and arc using a GUI
-        dummy, cal_tr_poly, awidths = remove_adjust_orders_UI((im_trace2), cal_tr_poly, axlows, axhighs, awidths, shift=0, userinput=params['GUI'], do_adj=True, do_shft=True)
+        dummy, cal_tr_poly, awidths, axlows, axhighs = remove_adjust_orders_UI((im_trace2), cal_tr_poly, axlows, axhighs, awidths, shift=0, userinput=params['GUI'], do_adj=True, do_shft=True)
         
         # save parameters of the polynoms into a fitsfile (from Neil)
         save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_trace_cal_filename'])
