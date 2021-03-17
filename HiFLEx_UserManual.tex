@@ -33,8 +33,8 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 % To change: titele; date; https://github.com/ronnyerrmann/HiFLEx/archive
-\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.3.3}
-\date{February, 2021}
+\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.3.4}
+\date{March, 2021}
 \author{Ronny Errmann, EXOhSPEC team\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -103,6 +103,12 @@ The basic things for Python (and the configuration file) are:
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
 
+\subsection*{v1.3.4}
+\begin{itemize}\setlength\itemsep{0em}
+  \item GUI to add or modify orders.
+  \item Limited the number lines in the GUI for creating a wavelength solution to 80.
+\end{itemize}
+
 \subsection*{v1.3.3}
 \begin{itemize}\setlength\itemsep{0em}
   \item Improvement of blaze correction and noise calculation to avoid massive brightness peaks at boundaries of the orders.
@@ -112,25 +118,6 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
   \item Bugfixing.
   \item Added parameter \verb|traces_searchlimit_brightness| to allow user defined search for orders.
   \item Added parameter \verb|log_wavesolshift_details| to allow the skipping of time consuming logging.
-\end{itemize}
-
-\subsection*{v1.3.2}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Parallelisation of long running steps
-  \item Improvement of linearisation of the wavelength solution
-  \item Logging of the resolution along the detector. Added parameter \verb|logging_resolution_form|
-\end{itemize}
-
-\subsection*{v1.3.1}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Added parameter \verb|logging_crossdispersion_shift|
-  \item Improved measurement of the offset between wavelength solutions between fibers in a bifurcated setting; bugfixed so that wavelength solution in the science fiber is used for science spectrum
-  \item General improvements and bugfixing
-\end{itemize}
-
-\subsection*{v1.3.0}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Cosmic ray removal (deepCR), new parameter \verb|cosmic_ray_settings|
 \end{itemize}
 
 
@@ -371,8 +358,20 @@ After the assignment which files to be used for which calibration the data reduc
 \noindent When Accepting the settings from the GUI, the data will be stored in the files given in parameters \verb|configfile_fitsfiles| and \verb|object_file|. Both files can be edited, and further modification of the object coordinates is described in \ref{Section:create_object_list_file}.
 
 
-\subsection{Removing wrongly identified traces}
-After checking the results (see \ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to its high flexibility. The orders can be removed in a graphical user interface by running \verb|remove_orders.py|. The old files will be moved into a sub-folder and the depending steps of \verb|hiflex.py| will run again.
+\subsection{Removing/Adding/Extending/Shortening the automatically found traces}
+
+After checking the results (see \ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to its high flexibility. Additionally, in low light areas it can also be that the traces stop prematurely, while strong emission features are still detectedable in the science images, hence the user might want to extend the orders. In case of imaging the spectra on multiple detectors, orders might fall between the detectors, hence a dummy order needs to be added later, as the wavelength solution requires consecutive orders (later these orders can be excluded again using \verb|minimum_SNR|). All this is possible in a GUI, as seen in Figure~\ref{Fig:GUI_remove_add_modify_orders}. If \verb|GUI=True|, then the GUI will be opened automatically, otherwise it can be openend by running \verb|python <path_hiflex>/remove_add_modify_orders.py|. Once finished, the old files will be moved into a sub-folder and then the user needs to run \verb|hiflex.py| again.
+
+\begin{figure} 
+  \begin{center}
+    \includegraphics[width=0.8\textwidth]{./figures/GUI_remove_add_modify_orders}
+  \end{center} 
+  \caption{GUI to remove/add/modify orders. To change the scale modify the values and use \textit{Update}. To remove orders give the indexes of the orders and use \textit{Update}. To add a new order click \textit{Add a new order}. To add or remove points select the index of order, and, only if applicable, the part of the order: c for the center, l for the left extraction boundary, and r for the right extraction boundary. After \textit{Add points to an order} or \textit{Remove points from an order} click in the area of the image. You might want to zoom in beforehand. \textit{Cancel adding/removing points} will revert to the point before clicking \textit{Add points to an order} or \textit{Remove points from an order}, while \textit{Use added/removed points} will refit the trace of the order using the modified points. Once all changes have been applied, click \textit{Accept} to save the changes.
+    \newline
+    In the above example orders 26 and 27 are going to be removed and the points for the center of the trace 74, which was added as new order, are being added.
+    \label{Fig:GUI_remove_add_modify_orders}}
+\end{figure}
+
 
 
 \subsection{Creating a new wavelength solution}
@@ -387,7 +386,8 @@ If no previous wavelength solution exist, then wavelengths and pixel need to cor
     In this example the user clicked on the line around pixel 4836, this entry is then selected in the list on the right to add the wavelength. Clicking away from a line will make all wavelengths editable again. \\
     To update the plot or to change the order, the button \textit{Update} can be used. If at least two wavelengths are given for the current order, a linear fit will be performed. The lines from the emission line catalogue (parameter \textit{reference\_catalog}) are shown for this fit in red or blue (wavelength given or not) at the top of the central plot. The marker gives the relative line strength from the catalogue. The example shows that a linear fit can be only a starting point as it does not fit the data well. The wavelengths from the linear fit is also given in the table of the pixel positions at the end of each line. If this number is completely off, then probably a line was misidentified by the user. \\
     Once the wavelength for a few lines in a few orders has been given, the wavelength solution can be calculated. The offset between this order and the real order from the grating equation has to provided (the exact number is not needed). The results from the wavelength solution are used to plot the lines of the emission line catalogue in all three orders shown in the plot in red (lines used for the fit) and green (lines available (only the brightest 30 lines)). For each pixel position the wavelength is calculated and given after the line properties. If only few orders are given, then low polynomial orders should be used. \\
-    If some of the identified lines should be deleted, then the user can mark the box at the front of the list entries and then update the plot. At the bottom of the list is the possibility to give pixel and wavelength for non-identified lines. After each update of the plot up to 3 entries can be added like this. The GUI is saving the data each time the plot is updated and at when accepting the wavelength solution into the file given in parameter \textbf{px\_to\_wavelength\_file}.
+    If some of the identified lines should be deleted, then the user can mark the box at the front of the list entries and then update the plot. At the bottom of the list is the possibility to give pixel and wavelength for non-identified lines. After each update of the plot up to 3 entries can be added like this. The GUI is saving the data each time the plot is updated and at when accepting the wavelength solution into the file given in parameter \textbf{px\_to\_wavelength\_file}. \\
+    %Please note that the list of shown lines is limited to 80 (list on the right), and in the plot only the strongest 30 reference lines, and 
     \label{Fig:UI_create_manual_wavelengh_solution}}
 \end{figure}
 
@@ -399,7 +399,7 @@ To create a new wavelength solution with the GUI the following steps are suggest
   \item Add a few more wavelength using the brightest blue lines (longest marker), which should be close to the position of the brightest emission lines. Please note that the spectrum might deviate from the linear fit. Please also note that for some lamps the gas (Ar) lines are brighter than the metal (Th) lines, however the catalogue might not represent this ratio.
   \item Repeat steps 1 to 4 for a few more orders. If consecutive orders are overlapping in wavelength some of the lines could be easily identified in the neighbouring orders.
   \item Set the \textit{order offset} to a value approximately the expected value. Set both the \textit{polynom-orders} to 2. \textit{Calculate wavelength solution}.
-  \item Scan through the orders and add few more wavelengths when the fitted positions of the catalogue lines (green lines in the centre of the central plot) deviate from the emission lines. \textit{Calculate wavelength solution}.
+  \item Scan through the orders and add few more wavelengths when the fitted positions of the catalogue lines (green lines in the centre of the central plot) deviate from the emission lines. Doing this every 10 orders might be enough. \textit{Calculate wavelength solution}.
   \item Repeat the step 7 until the lowest and highest orders have a good wavelength solution. It might be necessary to increase the \textit{polynom-orders} to create a good fit.
   \item Set the polynom-orders to the final values (e.g. 4 and 4), \textit{Calculate wavelength solution} and \textit{Accept}.
 \end{enumerate}
@@ -546,21 +546,6 @@ You might also want to read Chapter~\ref{Section:FAQ_wavelength_solution}.
   \item The input and output parameters of the individual procedures are explained in the file \verb|procedures.py|.
 \end{itemize}
 
-
-
-\subsection{Removing/Adding/Extending/Shortening the automatically found traces}
-
-The automatic process to trace orders can identy too many orders. However, in low light areas it can also be that the traces stop prematurely, while strong emission features are still detectedable in the science images, hence the user might want to extend the orders. In case of imaging the spectra on multiple detectors, orders might fall between the detectors, hence a dummy order needs to be added later, as the wavelength solution requires consecutive orders. All this is possible in a GUI, as seen in Figure~\ref{Fig:GUI_remove_add_modify_orders}. If \verb|GUI=True|, then the GUI will be opened automatically, otherwise it can be openend by running \verb|python <path_hiflex>/remove_add_modify_orders.py|.
-
-\begin{figure} 
-  \begin{center}
-    \includegraphics[width=0.8\textwidth]{./figures/GUI_remove_add_modify_orders}
-  \end{center} 
-  \caption{GUI to remove/add/modify orders. To change the scale modify the values and use \textit{Update}. To remove orders give the indexes of the orders and use \textit{Update}. To add a new order click \textit{Add a new order}. To add or remove points select the index of order, and, only if applicable, the part of the order: c for the center, l for the left extraction boundary, and r for the right extraction boundary. After \textit{Add points to an order} or \textit{Remove points from an order} click in the area of the image. You might want to zoom in beforehand. \textit{Cancel adding/removing points} will revert to the point before clicking \textit{Add points to an order} or \textit{Remove points from an order}, while \textit{Use added/removed points} will refit the trace of the order using the modified points. Once all changes have been applied, click \textit{Accept} to save the changes.
-    \newline
-    In the above example orders 26 and 27 are going to be removed and the points for the center of the trace 74, which was added as new order, are being added.
-    \label{Fig:GUI_remove_add_modify_orders}}
-\end{figure}
 
 % -------------------------------------------------------------------------------------------
 
@@ -712,58 +697,6 @@ This is done in the procedure \verb|file_assignment.py|. However, the user can a
 Please note that the position of Moon, Jupiter, and Sun are calculated by the pipeline using the mid-exposure time. This requires that the filename contains the (case-insensitive) object name. Therefore the object is not required in the object list.
 
 
-\subsection{Format of the extracted files}
-Different types of extracted files are created. They are described in the following subsections.
-
-\subsubsection{raw-data filename in path\_extraction}
-\label{section:extraction_data_format}
-The final fits file contains the original header and some additional information, for example the calibration steps which were applied and some information about the flux collected in the different apertures. The data in the file is stored in a 3D array in the form: data type, aperture, and pixel. The data types are similar to the ones created by the CERES pipeline and are the following:
-\begin{enumerate}
-  \setcounter{enumi}{-1}
-  \item 2D array with the wavelength for each aperture and pixel in barycentric system.
-  \item Extracted spectrum without any modification.
-  \item Measurement of the error the extracted spectrum (using the scatter of the residuals after fitting a 2d polynomalial to the background areas (noise in the dark/bias))
-  \item Blaze corrected spectrum, calculated by dividing the extracted spectrum and the normalised flat spectrum.
-  \item Error of the flat corrected spectrum (residuals of a polynomial fitted to the blaze corrected spectrum).
-  \item Continuum normalised spectrum. The continuum is derived by fitting a polynomial to the flat corrected spectrum, using only areas of the spectrum where no lines are located. 
-  \item Signal to noise ratio in the continuum, calculated from the residuals between continuum fit and measured continuum and the flux in the continuum.
-  \item Mask with good areas of the spectrum. The following values are used:
-  \begin{itemize}
-    \item[1] good
-    \item[0] no data available
-    \item[0.1] saturated pixel in the extracted spectrum
-    \item[0.2] bad pixel in the extracted spectrum
-  \end{itemize}
-  \item Spectrum of the calibration fiber, e.g. of the emission line lamp.
-  \item Wavelength for each order and pixel without barycentric correction.
-\end{enumerate}
-
-These files can be plotted with the pipeline. Please find instructions in Chapter~\ref{Section:Plotting_extracted_files}.
-
-\subsubsection{path\_harpsformat + Object name}
-This file contains the extracted spectrum without any modification in the same form as the \textit{e2ds} files created by the HARPS pipeline. The wavelength solution is stored in the header.
-
-\subsubsection{raw-data filename + \_lin}
-\label{Section:linearised_spectrum}
-The extracted spectrum is linearised using a wavelength step as given in parameter \verb|wavelength_scale_resolution|. The wavelength spectrum is interpolated by using the weighted mean of the neighbouring data points with the wavelength difference as weights.
-
-\subsubsection{raw-data filename + \_lin\_cont}
-This file contains data in the same form as described in Chapter~\ref{Section:linearised_spectrum}, only that the continuum corrected data was linearised.
-
-\subsubsection{path\_extraction\_single}
-All the files are 2D arrays with the order/aperture as first and number of pixel in second dimension.
-\begin{description}
- \item[raw-data filename + \_extr] Extracted spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
- \item[raw-data filename + \_extr\_bluefirst] Same as the entry before, but starting with the blue orders instead of the red orders.
- \item[raw-data filename + \_blaze] Blaze corrected spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
- \item[raw-data filename + \_blaze\_bluefirst] Same as the entry before, but starting with the blue orders instead of the red orders.
- \item[raw-data filename + \_wave] The wavelength for each aperture and pixel.
- \item[raw-data filename + \_weight] Mask with good areas of the spectrum.
-\end{description}
-
-\subsubsection{path\_rv\_terra + $<$object name$>$ + /data/YYYY-MM-DDHHMMSS.cvs files}
-The data in here is used in order to measure RV with Terra (\url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}). The barycentric corrected wavelength solution and the continuum corrected spectrum (multiplied by the bad-pixel mask) are used. See \ref{Section:files_folders_rv_for_terra} for more information.
-
 \subsection{Results from the pipeline}
 
 \subsubsection{Preparing the data for one night}
@@ -891,6 +824,61 @@ The last lines give the information for all apertures. Columns, for which no use
 
 
 \vspace{0.5em}\noindent \textbf{Step 5:} The normalised white light flat is stored in the file given in parameter \verb|master_flat_spec_norm_filename| (standard: \textit{master\_flat\_spec\_norm.fits}). The extraction and data format is described in Chapter~\ref{section:extraction_data_format}
+
+
+\subsubsection{Format of the extracted files}
+Different types of extracted files are created. They are described in the following subsections.
+
+\paragraph{raw-data filename in path\_extraction}
+\label{section:extraction_data_format}
+The final fits file contains the original header and some additional information, for example the calibration steps which were applied and some information about the flux collected in the different apertures. The data in the file is stored in a 3D array in the form: data type, aperture, and pixel. The data types are similar to the ones created by the CERES pipeline and are the following:
+\begin{enumerate}
+  \setcounter{enumi}{-1}
+  \item 2D array with the wavelength for each aperture and pixel in barycentric system.
+  \item Extracted spectrum without any modification.
+  \item Measurement of the error the extracted spectrum (using the scatter of the residuals after fitting a 2d polynomalial to the background areas (noise in the dark/bias))
+  \item Blaze corrected spectrum, calculated by dividing the extracted spectrum and the normalised flat spectrum.
+  \item Error of the flat corrected spectrum (residuals of a polynomial fitted to the blaze corrected spectrum).
+  \item Continuum normalised spectrum. The continuum is derived by fitting a polynomial to the flat corrected spectrum, using only areas of the spectrum where no lines are located. 
+  \item Signal to noise ratio in the continuum, calculated from the residuals between continuum fit and measured continuum and the flux in the continuum.
+  \item Mask with good areas of the spectrum. The following values are used:
+  \begin{itemize}
+    \item[1] good
+    \item[0] no data available
+    \item[0.1] saturated pixel in the extracted spectrum
+    \item[0.2] bad pixel in the extracted spectrum
+  \end{itemize}
+  \item Spectrum of the calibration fiber, e.g. of the emission line lamp.
+  \item Wavelength for each order and pixel without barycentric correction.
+\end{enumerate}
+
+These files can be plotted with the pipeline. Please find instructions in Chapter~\ref{Section:Plotting_extracted_files}.
+
+\paragraph{path\_harpsformat + Object name}
+This file contains the extracted spectrum without any modification in the same form as the \textit{e2ds} files created by the HARPS pipeline. The wavelength solution is stored in the header.
+
+\paragraph{raw-data filename + \_lin}
+\label{Section:linearised_spectrum}
+The extracted spectrum is linearised using a wavelength step as given in parameter \verb|wavelength_scale_resolution|. The wavelength spectrum is interpolated by using the weighted mean of the neighbouring data points with the wavelength difference as weights.
+
+\paragraph{raw-data filename + \_lin\_cont}
+This file contains data in the same form as described in Chapter~\ref{Section:linearised_spectrum}, only that the continuum corrected data was linearised.
+
+\paragraph{path\_extraction\_single}
+All the files are 2D arrays with the order/aperture as first and number of pixel in second dimension.
+\begin{description}
+ \item[raw-data filename + \_extr] Extracted spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
+ \item[raw-data filename + \_extr\_bluefirst] Same as the entry before, but starting with the blue orders instead of the red orders.
+ \item[raw-data filename + \_blaze] Blaze corrected spectrum with wavelength solution in IRAF format (wavelength solution without barycentric correction).
+ \item[raw-data filename + \_blaze\_bluefirst] Same as the entry before, but starting with the blue orders instead of the red orders.
+ \item[raw-data filename + \_wave] The wavelength for each aperture and pixel.
+ \item[raw-data filename + \_weight] Mask with good areas of the spectrum.
+\end{description}
+
+\paragraph{path\_rv\_terra + $<$object name$>$ + /data/YYYY-MM-DDHHMMSS.cvs files}
+The data in here is used in order to measure RV with Terra (\url{https://drive.google.com/file/d/1xK-lYghFwpwtdXG9b4IbryYRd102q7So/view}). The barycentric corrected wavelength solution and the continuum corrected spectrum (multiplied by the bad-pixel mask) are used. See \ref{Section:files_folders_rv_for_terra} for more information.
+
+
 
 \subsection{Radial velocity analysis}
 If the packages are installed, the radial velocity analysis will be run after the extraction of the science files. The necessary files will created each time the \verb|hiflex.py| is run. It is possible to add files from different nights together
@@ -1252,9 +1240,10 @@ rm extracted/*
   \item \textbf{logging/traces\_in\_master\_trace1.png}: Are the orders identified correctly? If yes, go to next chapter.
   \item If a lot of unexposed area is located on the image borders, adjust parameter \verb|subframe| to the correct image set. Remove everything after \textit{master\_*}.
   \item If the orders are not running from up to down in the image, the adjust paramter \verb|rotate_frame|.  Remove everything after \textit{master\_*}.
-  \item If noise was marked as order, run \verb|remove_orders.py| and remove the wrong orders. All depending calculations will run again.
+  \item If the same order is marked with one trace in the top and a different trace in the bottom of the frame, too high binning might be the problem. 
+  \item If noise was marked as order, run \verb|remove_add_modify_orders.py| and remove the wrong orders. Afterwards, run \verb|hiflex.py| again.Adjust parameter \verb|bin_search_apertures|. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
   \item If orders are missing check \textbf{logging/traces\_in\_master\_trace1\_binned.png}. If the orders are marked there correctly then adjust parameter \verb|bin_adjust_apertures|, so that the echelle orders are well separated and only pixel with similar amount of flux are median combined. Remove everything after \textit{master\_traces\_sci.fits}.
-  \item If orders are missing check \textbf{logging/mstr\_trace1\_binned.fits}. Very likely, too heavy binning was used and the orders are not destinguishable or half of the binning area consists of background pixel. Adjust parameter \verb|bin_search_apertures|. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
+  \item If orders are missing check \textbf{logging/mstr\_trace1\_binned.fits}. Very likely, too heavy binning was used and the orders are not destinguishable. Adjust parameter \verb|bin_search_apertures|. It could also be that \verb|traces_searchlimit_brightness| was set too high. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
 \end{itemize}
 
 
@@ -1370,7 +1359,7 @@ Afterwards, please make sure that \verb|import barycorrpy| works in python.
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/HiFLEx/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.3.3.tar.gz
+wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.3.4.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
 Alternatively, the following command downloads the latest version of the files:
@@ -1576,6 +1565,25 @@ conda activate hiflex
 \section{Changelog (old)}
 \label{Section:Changelog_old}
 Please find the changes of newer versions in Chapter~\ref{Section:Changelog_new}.
+
+\subsection*{v1.3.2}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Parallelisation of long running steps
+  \item Improvement of linearisation of the wavelength solution
+  \item Logging of the resolution along the detector. Added parameter \verb|logging_resolution_form|
+\end{itemize}
+
+\subsection*{v1.3.1}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Added parameter \verb|logging_crossdispersion_shift|
+  \item Improved measurement of the offset between wavelength solutions between fibers in a bifurcated setting; bugfixed so that wavelength solution in the science fiber is used for science spectrum
+  \item General improvements and bugfixing
+\end{itemize}
+
+\subsection*{v1.3.0}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Cosmic ray removal (deepCR), new parameter \verb|cosmic_ray_settings|
+\end{itemize}
 
 \subsection*{v1.2.0}
 \begin{itemize}\setlength\itemsep{0em}

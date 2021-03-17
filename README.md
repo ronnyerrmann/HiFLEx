@@ -15,6 +15,7 @@ If you publish data using the barycentric correction, please cite (https://githu
 * Extra logging information for wavelength solution and drift of the wavelength solution
 * Improved measurement of the offset between emission line spectra and the wavelength solution
 * Bugfixing and improvement of parallelisation; optional excludition of steps to speed up
+* GUI to add/modify the automatically found orders
 
 ## Install instruction
 
@@ -68,7 +69,7 @@ Create a new folder and copy the `conf.txt` file from your HiFLEx installation p
   * Define what files should be used for what calibration.
   * Define what files to extract (and in which RVs will be measured).
   * Please note that you can use already reduced images. In this case the reduction steps as defined in `conf.txt` should be empty for the file type (e.g. dark or real flats) to avoid a second application of the correction.
-- Run the scrip `hiflex.py`
+- Run the script `hiflex.py`
 - Afterwards: check the output in the `logfile`, the images in the logging path, or in results in the extracted files.
 
 More information can be found in the [manual](https://github.com/ronnyerrmann/HiFLEx/blob/master/HiFLEx_UserManual.pdf).

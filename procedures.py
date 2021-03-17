@@ -9395,8 +9395,17 @@ def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True, ig
                         except:
                             logger('Warn: Problem with the declination of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
                             break
-                    PMRA = float(cos[3])    # mas/yr
-                    PMDEC = float(cos[4])   # mas/yr
+                    prob_list = ['', '--']
+                    if cos[3] not in prob_list:
+                        try:
+                            PMRA = float(cos[3])    # mas/yr
+                        except:
+                            logger('Warn: Problem with the proper motion in RA of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
+                    if cos[4] not in prob_list:
+                        try:
+                            PMDEC = float(cos[4])   # mas/yr
+                        except:
+                            logger('Warn: Problem with the proper motion in DEC of entry {1} in the reference coordinates file {0}.'.format(filen,cos))
                     try:
                         epoch = float(cos[8])
                     except:
