@@ -981,6 +981,7 @@ class TkCanvasGrid:                                             # Completely new
             self.funcs[name] = lambda x: x
 
     def update(self, event=None, updateplot=True):
+        # update kwargs with values in self.data
         for name in self.entries:
             value = self.entries[name].get()
             F = self.funcs[name]
@@ -992,11 +993,16 @@ class TkCanvasGrid:                                             # Completely new
                     new = F(fmt(value))             # Added by Ronny
                     if new is not None:             # Added by Ronny
                         self.data[name] = new       # Modified by Ronny
+                        self.funkwargs[name] = new  # Moved this from update_plot to here
+            #print('update', name, value, self.data[name])
+            #if name in self.fmts: print('fmts', self.fmts[name], self.validation[name], self.validate_fmt(value, fmt))
+            #if name in self.fmts and name in self.funkwargs: print('funkawgs', self.funkwargs[name])
+            
         if self.figure is not None and updateplot:  # Added by Ronny
             self.update_plot()
 
     def update_plot(self):
-        # update kwargs with values in self.data
+        """# update kwargs with values in self.data
         for name in self.data:
             value = self.data[name]
             if name in self.fmts:
@@ -1007,23 +1013,25 @@ class TkCanvasGrid:                                             # Completely new
                     continue
                 if self.validate_fmt(value, fmt) and name in self.funkwargs:
                     self.funkwargs[name] = self.data[name]
+            print('update_plot', name, value, self.data[name])
+            if name in self.fmts: print('fmts', self.fmts[name], self.validation[name], self.validate_fmt(value, fmt))
+            if name in self.fmts and name in self.funkwargs: print('funkawgs', self.funkwargs[name])"""
         # apply function
         if self.func is not None:
             self.update_func()
-
-        self.figure.canvas.draw()
+        self.figure.canvas.draw()               # The GUI might hang on this step if another GUI is open/something is messed up? However, only have the widgets have been changed
 
     def update_func(self):
         # set working message
         self.master.config(cursor="watch")
         self.statusmessage.set("Loading...")
-        self.master.update_idletasks()
+        #self.master.update_idletasks()          # The GUI might hang on this step if another GUI is open?
         # run function
         self.func(**self.funkwargs)
         # set working message to blank
         self.master.config(cursor="")
         self.statusmessage.set("Ready")
-        self.master.update_idletasks()
+        #self.master.update_idletasks()
 
     def validate_fmt(self, value, fmt):
         try:

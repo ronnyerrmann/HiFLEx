@@ -105,6 +105,11 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 
 \subsection*{v1.3.4}
 \begin{itemize}\setlength\itemsep{0em}
+  \item Added parameter \verb|convert_rv_package_templates|.
+\end{itemize}
+
+\subsection*{v1.3.4}
+\begin{itemize}\setlength\itemsep{0em}
   \item GUI to add or modify orders.
   \item Limited the number lines in the GUI for creating a wavelength solution to 80.
 \end{itemize}
@@ -386,8 +391,7 @@ If no previous wavelength solution exist, then wavelengths and pixel need to cor
     In this example the user clicked on the line around pixel 4836, this entry is then selected in the list on the right to add the wavelength. Clicking away from a line will make all wavelengths editable again. \\
     To update the plot or to change the order, the button \textit{Update} can be used. If at least two wavelengths are given for the current order, a linear fit will be performed. The lines from the emission line catalogue (parameter \textit{reference\_catalog}) are shown for this fit in red or blue (wavelength given or not) at the top of the central plot. The marker gives the relative line strength from the catalogue. The example shows that a linear fit can be only a starting point as it does not fit the data well. The wavelengths from the linear fit is also given in the table of the pixel positions at the end of each line. If this number is completely off, then probably a line was misidentified by the user. \\
     Once the wavelength for a few lines in a few orders has been given, the wavelength solution can be calculated. The offset between this order and the real order from the grating equation has to provided (the exact number is not needed). The results from the wavelength solution are used to plot the lines of the emission line catalogue in all three orders shown in the plot in red (lines used for the fit) and green (lines available (only the brightest 30 lines)). For each pixel position the wavelength is calculated and given after the line properties. If only few orders are given, then low polynomial orders should be used. \\
-    If some of the identified lines should be deleted, then the user can mark the box at the front of the list entries and then update the plot. At the bottom of the list is the possibility to give pixel and wavelength for non-identified lines. After each update of the plot up to 3 entries can be added like this. The GUI is saving the data each time the plot is updated and at when accepting the wavelength solution into the file given in parameter \textbf{px\_to\_wavelength\_file}. \\
-    %Please note that the list of shown lines is limited to 80 (list on the right), and in the plot only the strongest 30 reference lines, and 
+    If some of the identified lines should be deleted, then the user can mark the box at the front of the list entries and then update the plot. At the bottom of the list is the possibility to give pixel and wavelength for non-identified lines. After each update of the plot up to 3 entries can be added like this. The GUI is saving the data each time the plot is updated and at when accepting the wavelength solution into the file given in parameter \textbf{px\_to\_wavelength\_file}.
     \label{Fig:UI_create_manual_wavelengh_solution}}
 \end{figure}
 
@@ -890,7 +894,7 @@ The data of the individual objects are stored in the subfolder \textit{object na
 
 It is possible to include the information from previous nights of the same object by either one of the listed way. Please note that in order to this, the number of orders and the number of extracted pixel has to be always the same.
 \begin{itemize}
-  \item Link or copy the \textit{.csv}-files into the corresponding \textit{data/}-folders and (1) rerun \verb|python <path to scripts>/hiflex.py| or (2) alternatively run the commands as stored in the logfile.
+  \item Link or copy the \textit{.csv}-files into the corresponding \textit{data/}-folders for the object and (1) rerun \verb|python <path to scripts>/hiflex.py| or (2) alternatively run the commands as stored in the logfile.
   \item Link or copy the files from folder given in parameter \verb|path_extraction| (standard: extracted) into the current one. Afterwards run \verb|python <path to scripts>/hiflex.py| again.
 \end{itemize}
 

@@ -357,6 +357,9 @@ path_rv_ceres                   = ceres_rv
   #       [5,6] : continuum corrected spectrum and noise in continuum; [1,2] : extracted spectrum
 dataset_rv_analysis             = [5, 6]
 
+  # The RV templates created by TERRA and SERVAL will be converted to the HiFLEx format (and linearised, if set in wavelength_scale_resolution).
+  #     This can take a long time, hence can be switched off when setting convert_rv_package_templates to False.
+convert_rv_package_templates = True
 
   ## General Parameters
   #--------------------

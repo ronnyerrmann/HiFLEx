@@ -1,5 +1,6 @@
 # To use this file, best copy it to your result folder and run it there
-
+import sys
+sys.path.append('/home/ronny/Scripts/hiflex/')
 from procedures import *
 
 params = dict()
@@ -113,15 +114,16 @@ with PdfPages(savefile) as pdf:
                                     label = label[:ii] + '\n' + label[ii+1:]
                                     break
                     good_data = ~np.isnan(converted['{0}'.format(indexx)]) & ~np.isnan(converted['{0}'.format(indexy)]) & starindata
-                    xx = converted['{0}'.format(indexx)][good_data]
-                    yy = sign*converted['{0}'.format(indexy)][good_data]
-                    if y_range is not None:
-                        yy[ yy > y_range[1] ] = y_range[1]
-                        yy[ yy < y_range[0] ] = y_range[0]
-                    if indexe is None:
-                        frame_ii_g.plot(xx, yy, label=label, color=color, linestyle=linestyle, marker=marker, markersize=markersize)
-                    else:
-                        frame_ii_g.errorbar(xx, yy, yerr=converted['{0}'.format(indexe)][good_data], label=label, color=color, linestyle=linestyle, marker=marker, markersize=markersize)
+                    if np.sum(good_data) > 0:       # Only plot if data is available
+                        xx = converted['{0}'.format(indexx)][good_data]
+                        yy = sign*converted['{0}'.format(indexy)][good_data]
+                        if y_range is not None:
+                            yy[ yy > y_range[1] ] = y_range[1]
+                            yy[ yy < y_range[0] ] = y_range[0]
+                        if indexe is None:          # No error bars
+                            frame_ii_g.plot(xx, yy, label=label, color=color, linestyle=linestyle, marker=marker, markersize=markersize)
+                        else:                       # error bars
+                            frame_ii_g.errorbar(xx, yy, yerr=converted['{0}'.format(indexe)][good_data], label=label, color=color, linestyle=linestyle, marker=marker, markersize=markersize)
                     if len(selectd[ii_d]) == 11:
                         [x_title, y_title] = selectd[ii_d][9:11]
                 elif selectd[ii_d][0] == 'text':
