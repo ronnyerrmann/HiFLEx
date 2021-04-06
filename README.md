@@ -9,18 +9,16 @@ If you publish data using the barycentric correction, please cite (https://githu
 
 
 ## Recent changes
-* Cosmic ray removal using deepCR available
-* Python 3 (Pipeline will also keep working under Python 2)
-* Blaze correction with a fitted function (polynomial of user defined order)
 * Extra logging information for wavelength solution and drift of the wavelength solution
 * Improved measurement of the offset between emission line spectra and the wavelength solution
 * Bugfixing and improvement of parallelisation; optional excludition of steps to speed up
 * GUI to add/modify the automatically found orders
+* Combination of linearised spectra
 
 ## Install instruction
 
 Requirements:
-- python 3.8 (and 2.7) + numpy, scipy, pyfits, astropy
+- python 3.8 (and 2.7) + numpy, scipy, matplotlib, astropy, pycurl, ephem, rpy2, tqdm, psutil, statsmodels, gatspy, barycorrpy, (deepCR), (PyAstronomy)
 - (only tested under linux)
 
 The easiest way is to download and install [Anaconda](https://www.anaconda.com/distribution/#linux). Afterwards log out and log in again and create two environments (python >= 3.5 required for deepCR, python 2.7 required for SERVAL and CERES):

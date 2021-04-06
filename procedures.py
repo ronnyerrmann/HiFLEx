@@ -1029,6 +1029,9 @@ def load_obj(name ):
         return pickle.load(f)
 
 def read_fits_file(filename, dtype=np.float64, realrun=True):
+    """
+    Read a fits file
+    """
     if os.path.isfile(filename) == False:
         logger('Error: File {0} is missing.'.format(filename))
     hdu = fits.open(filename)
@@ -2340,7 +2343,7 @@ def find_trace_orders(params, im, imageshape):
     #bright10 = np.percentile(im, 5, axis=None)      # background
     #searchnumbers = np.sum(im >= breakvalue+bright10, axis=None)     # At most so many searches
     searchnumbers = np.sum( (im >= breakvalue), axis=None)     # At most so many searches
-    searchnumbers = searchnumbers *0.1 / maxFWHM       # FWHM pixel are bright, 90% along the length of an order is brighter than seachnumbers -> less area to search
+    searchnumbers = searchnumbers *0.12 / maxFWHM       # FWHM pixel are bright, 90% along the length of an order is brighter than seachnumbers -> less area to search; 0.1 was not enough for 20210331
     for dummy in tqdm(range(int(searchnumbers)), desc='Searching for traces'):      # 2600 is necessary for the tight orders using Clark's lens and a low diffraction prism
         pos_max = np.unravel_index(im.argmax(), ims)
         if im_orig[pos_max] <= breakvalue:
@@ -5088,7 +5091,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_traces, cal_trace
     save_wavelength_solution_to_fits( wave_sol_dict_new, params['path_extraction']+im_name.replace('_wavecal', '_wavesol_{0}_cal').replace('_wavesci', '_wavesol_{0}_sci').format(im_head['HiFLEx JD']) )
     
 
-def get_possible_object_names(filename, header, header_keywords, replacements=['_arc','arc', '_thar','thar', '_une','une', 'extract_combine']):
+def get_possible_object_names(filename, header, header_keywords, replacements=['_arc','arc', '_thar','thar', '_une','une', 'extract_combine_', 'extract_', 'extract']):
     """
     Analyses the filename in order to find the possible Name of the Object (for exampled stored in parameter object_file
     The filename is subsequently stripped from the "_" or "-" separated entings
@@ -5133,7 +5136,7 @@ def get_possible_object_names(filename, header, header_keywords, replacements=['
                         obnametemp = obnametemp[len(rplc):]
                     if i == 0 and len(obnametemp) < 5:
                         continue
-                    if obnametemp not in obnames and obnametemp.lower() not in replacements:
+                    if obnametemp not in obnames and obnametemp.lower() not in replacements and obnametemp != '':
                         obnames.append(obnametemp)
                 if i == 4:                            # Use the stripped filename as new filename   
                     obname = obnametemp
@@ -5297,10 +5300,11 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
             break
     if ra2 ==0 and dec2 == 0:
         logger('Warn: Reference coordinates files do not exist or object can not be found within them. Checked: {0}'.format(object_files_full))
-    im_head['HIERARCH HiFLEx OBJNAME'] = (obnames[0], 'Used object name')
+    
     # Get the baycentric velocity
-    params, bcvel_baryc, mephem, im_head = get_barycent_cor(params, im_head, obnames[0], ra2, dec2, epoch, pmra, pmdec, obsdate_midexp)
-
+    params, bcvel_baryc, mephem, im_head, obnames = get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, obsdate_midexp)    # this might add the Sun/Moon to obnames
+    im_head['HIERARCH HiFLEx OBJNAME'] = (obnames[0], 'Used object name')
+    
     shift, im_head = find_shift_images(params, im, im_trace, sci_traces, 0, cal_tr_poly, im_head=im_head)     # w_mult=1 so that the same area is covered as for the find traces, w_mult=0 so that only the central pixel is extracted
 
     spectra, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift, header=im_head, var=params['extraction_precision'], plot_traces=True)
@@ -5369,6 +5373,7 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
         if True:
             wavearray = wavelengths_bary
         else:
+            logger('Warn: not using the barycentric velocities for the linearised spectrum.')
             wavearray = wavelengths
         wavelenghts_lin, spectrum_lin = linearise_wavelength_spec( params, wavearray, cspectra, method='weight', weight=((flat_spec_norm[index]+0.0)/espectra)**2 ) # highest throughput and lowest error should have the highest weight
         save_multispec([wavelenghts_lin,spectrum_lin], params['path_extraction_single']+im_name+'_lin_cont', im_head)
@@ -6620,7 +6625,8 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
     if len(px_to_wave_txt) == 0:
         px_to_wave_txt = read_text_file(params['logging_path']+'tmp_'+params['px_to_wavelength_file'], no_empty_lines=True, warn_missing_file=False)              # list of strings
     px_to_wave = np.array( convert_readfile(px_to_wave_txt, [int, int, float, float], delimiter='\t', replaces=['\n',''], shorten_input=True, replacewithnan=True ))     # order, real order, px, wave
-    px_to_wave = px_to_wave[~np.isnan(px_to_wave[:,0]),:]   # clear the values that don't have order number
+    if px_to_wave.shape[0] > 0:
+        px_to_wave = px_to_wave[~np.isnan(px_to_wave[:,0]),:]   # clear the values that don't have order number
 
     nr_entries = len(px_to_wave)
     if nr_entries > 0:
@@ -9387,6 +9393,7 @@ def getcoords_from_file(obnames, mjd, filen='coords.txt', warn_notfound=True, ig
             if abs(cos[5]) < 0.9:         # disabled
                 continue
         for obname in obnames:
+            #print( obname.lower(), cos[0].lower(), cos[0].lower().replace('_',''), cos[0].lower().replace('-',''), cos[0].lower().replace(' ','') )
             if cos[0].lower() == obname.lower() or cos[0].lower().replace('_','') == obname.lower() or cos[0].lower().replace('-','') == obname.lower() or cos[0].lower().replace(' ','') == obname.lower():
                 if ignore_values:
                     RA0, DEC0, PMRA, PMDEC, epoch = cos[1], cos[2], cos[3], cos[4], cos[8]
@@ -9578,7 +9585,7 @@ def get_object_site_from_header(params, im_head, obnames, obsdate):
                     source_radec = 'The object coordinates are derived from the image header.'
                 if parentr == 'latitude':           # Assume that latitute is coming from the same source
                     source_obs = 'The site coordinates are derived from the image header.'
-    return params, source_radec, source_obs, mephem
+    return params, source_radec, source_obs, mephem, obnames
 
 def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, obsdate, leap_update=False):
     """
@@ -9588,7 +9595,7 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
     Set leap_update to true, once the servers are available again, see https://github.com/shbhuk/barycorrpy/issues/27
     """
     
-    params, source_radec, source_obs, mephem = get_object_site_from_header(params, im_head, obnames, obsdate)
+    params, source_radec, source_obs, mephem, obnames = get_object_site_from_header(params, im_head, obnames, obsdate)
     # mjd,mjd0, mjd_begin = mjd_fromheader(params, im_head)
     mjd = im_head['HIERARCH HiFLEx MJD']
     jd  = im_head['HIERARCH HiFLEx JD']
@@ -9671,9 +9678,9 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
                     'altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}, pmra = {13}, pmdec = {14}. {8} {6} '+\
                     'This leads to a barycentric velocity of {7} km/s and a mid-exposure BJD-TDB of {12}').format(params['altitude'], params['latitude'], params['longitude'], 
                          round(ra,6), round(dec,6), params['epoch'], source_radec, round(bcvel_baryc,4), source_obs, 
-                         params['site'], obnames, mjd, round(bjd,5), params['pmra'], params['pmdec'] ))
+                         params['site'], obnames[0], mjd, round(bjd,5), params['pmra'], params['pmdec'] ))
        
-    return params, bcvel_baryc, mephem, im_head
+    return params, bcvel_baryc, mephem, im_head, obnames
 
 def find_shift_between_wavelength_solutions(params, wave_sol_1, wave_sol_lines_1, wave_sol_2, wave_sol_lines_2, spectra, names=['first','second']):
     """
@@ -10589,7 +10596,7 @@ def run_serval_rvs(params,):
             servalparams[key] = int(servalparams[key])
         except:
             del servalparams[key]
-    servalparams['orders'] = servalparams.get('orders', calimages['wave_sol_dict_sci']['wavesol'].shape[0])
+    servalparams['orders'] = min( servalparams.get('orders', calimages['wave_sol_dict_sci']['wavesol'].shape[0]), calimages['wave_sol_dict_sci']['wavesol'].shape[0] )    # always use the number of orders, in case in an old file all orders were used and now less
     servalparams['data_dataset'] = servalparams.get('data_dataset', params['dataset_rv_analysis'][0])
     servalparams['error_dataset'] = servalparams.get('error_dataset', params['dataset_rv_analysis'][1])
     servalparams['wave_dataset'] = servalparams.get('wave_dataset', 9)

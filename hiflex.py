@@ -320,6 +320,23 @@ if __name__ == "__main__":
         # The file is read later on purpose
     else:
         create_blaze_norm(params, im_trace1, calimages['sci_trace'], calimages['cal_trace'], calimages['wave_sol_dict_sci'], reference_lines_dict)
+    
+    flat_spec_norm = np.array(fits.getdata(params['master_blaze_spec_norm_filename']))              # read it again, as the file is different than the data above
+    # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
+    if flat_spec_norm.shape[1] != calimages['wave_sol_dict_sci']['wavesol'].shape[0]:
+        #print('im_trace1.shape', im_trace1.shape)
+        logger('Error: The number of traces in the blaze of the blaze correction and for the wavelength calibration do not match. Please remove {0} ({1} instead of expected {2}) and re-run the script in order to solve.'\
+                        .format(params['master_blaze_spec_norm_filename'], flat_spec_norm.shape[1], calimages['wave_sol_dict_sci']['wavesol'].shape[0]))
+        
+    # Use only for extraction -> move down to after the wavelenghs solution have been loaded
+    remove_orders, keep_orders = remove_orders_low_flux(params, flat_spec_norm)
+    calimages['flat_spec_norm'] = copy.deepcopy( flat_spec_norm )
+    if len(remove_orders) > 0:
+        calimages = remove_orders_from_calimages(params, calimages, keep_orders)            # remove the bad orders
+    """calimages['flat_spec_norm'] = copy.deepcopy( flat_spec_norm )
+    calimages['wave_sol_dict'] = copy.deepcopy( wave_sol_dict )
+    calimages['wavelength_solution'] = copy.deepcopy( wave_sol_dict['wavesol'] )    # Needed for templates later"""
+    
     if not params['started_from_p3']:       # if started from python3 environment, this won't be necessary
         logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the loging directory {1}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?{0}'.format(os.linesep, params['logging_path']))
         
@@ -333,22 +350,6 @@ if __name__ == "__main__":
                 wavelengthcals_sci.append(entry.replace('_rawfiles',''))
             elif entry.find('waveoffsetcal_') >= 0 and entry.find('_rawfiles') >= 0:         # ThAr in calibration fiber
                 wavelengthcals_cal.append(entry.replace('_rawfiles',''))
-                
-        flat_spec_norm = np.array(fits.getdata(params['master_blaze_spec_norm_filename']))              # read it again, as the file is different than the data above
-        # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
-        if flat_spec_norm.shape[1] != calimages['wave_sol_dict_sci']['wavesol'].shape[0]:
-            #print('im_trace1.shape', im_trace1.shape)
-            logger('Error: The number of traces in the blaze of the blaze correction and for the wavelength calibration do not match. Please remove {0} ({1} instead of expected {2}) and re-run the script in order to solve.'\
-                        .format(params['master_blaze_spec_norm_filename'], flat_spec_norm.shape[1], calimages['wave_sol_dict_sci']['wavesol'].shape[0]))
-        
-        # Use only for extraction -> move down to after the wavelenghs solution have been loaded
-        remove_orders, keep_orders = remove_orders_low_flux(params, flat_spec_norm)
-        calimages['flat_spec_norm'] = copy.deepcopy( flat_spec_norm )
-        if len(remove_orders) > 0:
-            calimages = remove_orders_from_calimages(params, calimages, keep_orders)            # remove the bad orders
-        """calimages['flat_spec_norm'] = copy.deepcopy( flat_spec_norm )
-        calimages['wave_sol_dict'] = copy.deepcopy( wave_sol_dict )
-        calimages['wavelength_solution'] = copy.deepcopy( wave_sol_dict['wavesol'] )    # Needed for templates later"""
         
         if ( params['arcshift_side'] == 0 or params['two_solutions'] or True ) and len(wavelengthcals_cal)+len(wavelengthcals_sci) > 0:         # or True: added 20201016, do it in any case, as there might be ThAr only sometimes in cal fiber
             def wavecal_multicore(parameter):
@@ -382,7 +383,7 @@ if __name__ == "__main__":
                 p.map(wavecal_multicore, sort_wavelengthcals)
                 p.terminate()
                 p.join()
-            else:
+            elif len(all_wavelengthcals) > 0:
                 logger('Info: Starting to extract wavelength calibrations')
                 for all_wavelengthcal in all_wavelengthcals:
                     wavecal_multicore(all_wavelengthcal)
@@ -396,7 +397,7 @@ if __name__ == "__main__":
             jd_midexp = float( wavesol.split('_wavesol_')[-1].replace('_{0}.fits'.format(fib),'') )
             name = wavesol.split('_wavesol_')[0]
             wavelength_solution_shift_dict = read_wavelength_solution_from_fits(params['path_extraction']+wavesol)
-            if wavelength_solution_shift_dict['wavesol'].shape[1] != last_shape and last_shape is None:
+            if wavelength_solution_shift_dict['wavesol'].shape[1] != last_shape and last_shape is not None:
                 logger('Warn: This wavelength solution has a different number of freedoms {0} than the previous solution {1}.'.format(wavelength_solution_shift_dict['wavesol'].shape[1], last_shape))
             last_shape = wavelength_solution_shift_dict['wavesol'].shape[1]
             calimages['wave_sols_'+fib].append( [wavelength_solution_shift_dict['wavesol'], wavelength_solution_shift_dict['reflines'], jd_midexp, name])
@@ -423,24 +424,30 @@ if __name__ == "__main__":
                 return obj_name.lower()
 
         
-        all_extractions = []
+        all_extractions, list_im_name = [], []
         for extraction in extractions:
-            if  extraction.find('extract_combine') == -1:     # Single file extraction
+            if extraction.find('extract_combine') == -1:     # Single file extraction
                 for im_name_full in params[extraction+'_rawfiles']:
                     im_name = im_name_full.rsplit(os.sep)
                     im_name = im_name[-1].rsplit('.',1)         # remove the file ending
                     im_name = im_name[0]
+                    if im_name_full in list_im_name:
+                        continue
                     if os.path.isfile(params['path_extraction']+im_name+'.fits'):
                         logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
                     else:
-                        extraction_multicore([extraction, im_name_full, im_name, False])
-                        all_extractions.append([extraction, im_name_full, im_name, True])
-            else:
+                        extraction_multicore([extraction, im_name_full, im_name, False])        # Dry run to create darks and such
+                        all_extractions.append([extraction, im_name_full, im_name, True])       # Real run
+                    list_im_name.append(im_name_full)
+            else:                                           # Combine the files before extraction
+                if extraction in list_im_name:
+                    continue
                 if os.path.isfile(params['path_extraction']+extraction+'.fits'):
                     logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(extraction, params['path_extraction']))
                 else:
-                    extraction_multicore([extraction, extraction, extraction, False])
-                    all_extractions.append([extraction, extraction, extraction, True])
+                    extraction_multicore([extraction, extraction, extraction, False])           # Dry run to create darks and such
+                    all_extractions.append([extraction, extraction, extraction, True])          # Real run
+                list_im_name.append(extraction)
         if params['use_cores'] > 1 and len(all_extractions) > 1:
             logger('Info: Starting to extract spectra using multiprocessing on {0} cores, hence output will be for several files in parallel'.format(params['use_cores']))
             p = multiprocessing.Pool(params['use_cores'])
@@ -448,13 +455,80 @@ if __name__ == "__main__":
             obj_names += p.map(extraction_multicore, all_extractions)
             p.terminate()
             p.join()
-        else:
+        elif len(all_extractions) > 0:
             logger('Info: Starting to extract spectra')
             for all_extraction in all_extractions:
                 obj_names.append( extraction_multicore(all_extraction) )
                 
         #obj_names = np.unique(obj_names)
         #obj_names = list(obj_names[obj_names != ''])
+        
+        # Combine files after extraction
+        if params['wavelength_scale_resolution'] > 0:
+            dwave = params['wavelength_scale_resolution']
+            for extraction in extractions:
+                if extraction.find('extract_lin_') == 0:
+                    logger('Info: Combining {0}'.format(extraction))
+                    data, info, text_info = [], [], []
+                    for im_name_full in params[extraction+'_rawfiles']:
+                        im_name = im_name_full.rsplit(os.sep)
+                        im_name = im_name[-1].rsplit('.',1)         # remove the file ending
+                        im_name = im_name[0]
+                        im_name_full = params['path_extraction_single']+im_name+'_lin_cont.fits'
+                        if os.path.isfile(im_name_full):
+                            fdata, im_head = read_fits_file(im_name_full)
+                            data.append(fdata)
+                            info.append([ im_head['HIERARCH HiFLEx JD'], im_head['HIERARCH HiFLEx EXPOSURE'], im_head['HIERARCH HiFLEx fsum_all'] ])
+                            text_info.append([ im_name_full, im_name ])
+                            logger('Info: Loaded {0}'.format(im_name_full))
+                        else:
+                            logger('Warn: Can not find {0}'.format(im_name_full))
+                    info = np.array(info)
+                    if info.shape[0] == 0:
+                        logger('Warn: Could not find any file for extraction {0}.'.format(extraction))
+                        continue
+                    waves = np.unique( np.concatenate( list(entry[0] for entry in data) ).flat, axis=None )        # might be an issue due to float uncertainties
+                    waves = np.arange( int(np.nanmin(waves)/dwave) * dwave, np.nanmax(waves)+dwave, dwave )
+                    fluxes = np.zeros(( info.shape[0], waves.shape[0] ))*np.nan
+                    for ii, entry in enumerate(data):
+                        index_s1, index_e1 = np.nanargmin(entry[0,:]), np.nanargmax(entry[0,:])
+                        index_s2 = np.argmin(np.abs(waves-entry[0,index_s1]))    # use the first nonnan in the wavelengths of the linear spectrum
+                        index_e2 = np.argmin(np.abs(waves-entry[0,index_e1]))
+                        if index_e2-index_s2 != index_e1-index_s1:
+                            #print('should not happen', index_s1, index_e1, index_s2, index_e2, entry[index_s1:index_s1+2,0], entry[index_e1-2:index_e1,0], waves[index_s2:index_s2+2,0], waves[index_e2-2:index_e2,0]
+                            logger('Error: file {0} has not the expected number of data points between wavelengths {1} and {2}. Expected {3}, got {4} datapoints. Did you change parameter wavelength_scale_resolution during the extraction process. Please delete all extracted files for {5}.'.format(text_info[ii][0], waves[index_s2,0], waves[index_e2,0], index_e2-index_s2, index_e1-index_s1, text_info[ii][1]))
+                        fluxes[ii, index_s2:index_e2+1] = entry[1,index_s1:index_e1+1]
+                        #print(ii, index_s2,index_e2,index_s1,index_e1,fluxes[ii, index_s2:index_e2+1] )
+                    exptime = np.sum(info[:,1])
+                    nans = np.isnan(fluxes)
+                    notallnans = ~nans.all(axis=0)
+                    flux_comb = np.zeros( waves.shape[0] )*np.nan
+                    if extraction.find('extract_lin_sum') == 0:
+                        flux_comb[notallnans] = np.nansum(fluxes[:,notallnans], axis=0)
+                        jd = np.mean(info[:,0])
+                    elif extraction.find('extract_lin_med') == 0:
+                        flux_comb[notallnans] = np.nanmedian(fluxes[:,notallnans], axis=0)
+                        jd = np.mean(info[:,0])
+                    else:
+                        weights = info[:,2]**2
+                        if np.min(weights) < 0:
+                            weights += np.min(weights)
+                        jd = np.average(info[:,0], weights=weights)
+                        weights = np.tile(weights, (waves.shape[0],1) ).T
+                        fluxes[nans] = 0        # replace nans with 0
+                        weights[nans] = 0       # replace nans with 0
+                        #weights[0,allnans] = 1  # if all weigths are 0 then change one into 1  # not needed anymore due to notallnans
+                        flux_comb[notallnans] = np.average(fluxes[:,notallnans], axis=0, weights=weights[:,notallnans])
+                    
+                    im_head['HIERARCH HiFLEx JD'] = jd
+                    im_head['HIERARCH HiFLEx EXPOSURE'] = exptime
+                    save_multispec([waves,flux_comb], params['path_extraction_single']+extraction+'_lin_cont', im_head)
+                    save_linspec_csv(params['path_extraction_single']+extraction+'_lin_cont.csv', waves, flux_comb)
+                    logger('Info: Saved the result in {0}'.format(params['path_extraction_single']+extraction+'_lin_cont.*'))
+        else:
+            for extraction in extractions:
+                if extraction.find('extract_lin_') == 0:
+                    logger('Warn: found settings to combine the linearised extracted files, however parameter wavelength_scale_resolution was set to 0. Please modify wavelength_scale_resolution and delete the files in {0} that you want to be combined. Then run hiflex.py again.'.format(params['path_extraction']))
         
         logger('')      # To have an empty line
         logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The nineth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))

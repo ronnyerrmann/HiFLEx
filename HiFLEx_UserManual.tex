@@ -33,8 +33,8 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 % To change: titele; date; https://github.com/ronnyerrmann/HiFLEx/archive
-\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.3.4}
-\date{March, 2021}
+\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.3.5}
+\date{April, 2021}
 \author{Ronny Errmann, EXOhSPEC team\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -102,6 +102,13 @@ The basic things for Python (and the configuration file) are:
 \section{Changelog (recently)}
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
+
+\subsection*{v1.3.5}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Extracted and linearised spectra can be combined.
+  \item Fixed the bug that TERRA and SERVAL fail when orders are removed due to low flux in the blaze spectrum
+  \item Few improvements
+\end{itemize}
 
 \subsection*{v1.3.4}
 \begin{itemize}\setlength\itemsep{0em}
@@ -340,8 +347,9 @@ The script \verb|file_assignment.py| reads all files in the folders (and subfold
       \item[Wave shft cal, Wave Sci shft:] Define the files from which a time dependent drift between the wavelength solution is calculated. If ThAr light is used in both fibers, than both calibrations should be ticked. The script will calculate the shift using the pairs closest in time. For single fiber fed spectrographs only "Wave shft cal" is used to derive the shift from the wavelength solution.
       \item[Extract:] Extract these files individually. The processing as given in parameter \verb|extract_calibs_create_g| will be assigned.
       \item[Further entries:] Further ways to extract the science spectra is possible. Several options can be combined using comma:
-      \item[e \textless obj \textgreater :] Extract files individually. The processing as given in parameter \verb|extract<obj>_calibs_create_g| will be assigned. If this parameter doesn't exist, then parameter \verb|extract_calibs_create_g| will be used.
-      \item[ec \textless obj \textgreater :] The same as \textbf{e \textless obj \textgreater}, but instead of extracting each file individually, all files with \textbf{ec \textless obj \textgreater} will be combined into a file called \verb|master_<obj>.fits| and then this file is extracted.
+      \item[e\_\textless obj\textgreater :] Extract files individually. The processing as given in parameter \verb|extract<obj>_calibs_create_g| will be assigned. If this parameter doesn't exist, then parameter \verb|extract_calibs_create_g| will be used.
+      \item[ec\_\textless obj\textgreater :] The same as \textbf{e\_\textless obj\textgreater}, but instead of extracting each file individually, all files with \textbf{ec\_ \textless obj\textgreater} will be combined into a file called \verb|master_<obj>.fits| and then this file is extracted.
+      \item[elw\_\textless obj\textgreater \textit{ or} elm\_\textless obj\textgreater \textit{ or} els\_\textless obj\textgreater :] The same as \textbf{e\_\textless obj\textgreater}, however, after extracting each file individually, all linearised files with \textbf{elw\_\textless obj\textgreater} \textit{ or} \textbf{elm\_\textless obj\textgreater} \textit{or} \textbf{els\_\textless obj\textgreater} will be combined using a \textbf{w}eighted average (based on the total extracted flux) \textit{or} a \textbf{m}edian \textit{or} the \textbf{s}um into a file called \verb|extract_lin_weight<obj>_lin_cont.fits| \textit{or} \verb|extract_lin_med<obj>_lin_cont.fits| \textit{or} \verb|extract_lin_sum<obj>_lin_cont.fits|  (and a csv-file with the same name and content) in folder \verb|<path_extraction_single>|. Requires \verb|wavelength_scale_resolution| to be larger than 0.
     \end{description}
 \end{itemize}
 
@@ -1363,7 +1371,7 @@ Afterwards, please make sure that \verb|import barycorrpy| works in python.
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/HiFLEx/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.3.4.tar.gz
+wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.3.5.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
 Alternatively, the following command downloads the latest version of the files:

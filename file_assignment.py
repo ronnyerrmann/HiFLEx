@@ -321,9 +321,15 @@ def create_configuration_file(params, file_list):
             if extraction.lower().find('e') != 0:        # use find as len(extraction) might be 0
                 # warn.append('Warn: I dont know what to do with the extraction parameter {0} (it doesnt begin with "e") for file {1}. This spectrum will therefore not be extracted. Please check {2} and run the script again, if you perform changes.'.format(extraction, entry[0], params['raw_data_file_list'] ))
                 continue                                # The lines remaining in the for loop are only to be executed when it's about extraction, otherwise something might readded another time
-            if extraction.lower().find('ec') == 0:            # combine data before extraction
+            if extraction.lower().find('ec_') == 0:            # combine data before extraction
                 param = 'extract_combine'+extraction[2:]
-            elif extraction.lower().find('e') == 0:           # just extraction:
+            elif extraction.lower().find('els_') == 0:
+                param = 'extract_lin_sum'+extraction[3:]
+            elif extraction.lower().find('elw_') == 0:
+                param = 'extract_lin_weight'+extraction[3:]
+            elif extraction.lower().find('elm_') == 0:
+                param = 'extract_lin_med'+extraction[3:]
+            elif extraction.lower().find('e') == 0:           # just extraction
                 param = 'extract'+extraction[1:]
             conf_data, warn = create_parameters(conf_data, warn, param, param, [param, 'extract'], exist_bias, exist_rflat, exp_darks, entry)
     for fiber in [2,1]:             # Copy the long exposures into the short exposures, if not available and vice versa
@@ -542,13 +548,20 @@ def get_observed_objects(params, conf_data):
     Simbad.add_votable_fields("pmra")  # Store proper motion in RA
     Simbad.add_votable_fields("pmdec")  # Store proper motion in Dec.
     for entry in sorted(conf_data):
-        if not ( entry.find('extract') != -1 and entry.find('rawfiles') != -1 ):     # Only check for extract*rawfiles
+        if entry.find('extract') != -1 and entry.find('rawfiles') != -1:     # Only check for extract*rawfiles
+            list_to_search = conf_data[entry].split(', ')
+        elif entry.find('master_extract_combine') != -1 and entry.find('filename') != -1:
+            list_to_search = [entry.replace('master_extract_combine_','').replace('master_extract_combine','').replace('_filename','')]
+        else:
             continue
-        for im_name in conf_data[entry].split(', '):
+        for im_name in list_to_search:
             found = False
-            im_head = fits.getheader(im_name)
-            obname = im_name.replace('\n','').split(os.sep)    # get rid of the path
-            obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
+            if os.path.isfile(im_name):
+                im_head = fits.getheader(im_name)
+                obname = im_name.replace('\n','').split(os.sep)    # get rid of the path
+                obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
+            else:           # not a raw file
+                obnames = [im_name]
             # Check if already in the list
             for obname in obnames:
                 for index, obname_found in enumerate(object_information_full):        # Same objectname doesn't need to be done again
@@ -599,7 +612,7 @@ def get_observed_objects(params, conf_data):
             allentries.append([im_name])
             # Get the information from the header
             im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)
-            parms, source_radec, source_obs, mephem = get_object_site_from_header(params, im_head, obnames, obsdate_midexp)
+            parms, source_radec, source_obs, mephem, obnames = get_object_site_from_header(params, im_head, obnames, obsdate_midexp)
             head_info = ['']*5
             if source_radec.find('from the image header') != -1:
                 head_info = [ params['ra'] , params['dec'], params['pmra'], params['pmdec'], params['epoch'] ]
