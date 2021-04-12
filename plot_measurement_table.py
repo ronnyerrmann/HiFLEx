@@ -40,7 +40,7 @@ if True:
     select.append(selectd)
     selectd = []
     #selectd.append([ 'y_range', -20, 70])
-    selectd.append([ 'data', 17, 18, 20, '', 'grey', '', 'o', 2, '', 'RV [km/s]' ])
+    #selectd.append([ 'data', 17, 18, 20, '', 'grey', '', 'o', 2, '', 'RV [km/s]' ])
     selectd.append([ 'data', 17, 19, 20, '', 'k', '', 'o', 2, '', 'RV [km/s]' ])
     select.append(selectd)
     selectd = []
