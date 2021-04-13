@@ -103,33 +103,16 @@ The basic things for Python (and the configuration file) are:
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
 
+\subsection*{v1.3.6}
+\begin{itemize}\setlength\itemsep{0em}
+  \item New parameter \verb|split_wavelength_solutions_at| to create wavelength solution when several chips are combined into one image.
+\end{itemize}
+
 \subsection*{v1.3.5}
 \begin{itemize}\setlength\itemsep{0em}
   \item Extracted and linearised spectra can be combined.
   \item Fixed the bug that TERRA and SERVAL fail when orders are removed due to low flux in the blaze spectrum
   \item Few improvements
-\end{itemize}
-
-\subsection*{v1.3.4}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Added parameter \verb|convert_rv_package_templates|.
-\end{itemize}
-
-\subsection*{v1.3.4}
-\begin{itemize}\setlength\itemsep{0em}
-  \item GUI to add or modify orders.
-  \item Limited the number lines in the GUI for creating a wavelength solution to 80.
-\end{itemize}
-
-\subsection*{v1.3.3}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Improvement of blaze correction and noise calculation to avoid massive brightness peaks at boundaries of the orders.
-  \item Improvement in the way the pixel-shift is calculated from the calibration lines.
-  \item Improvement of code to speed up data reduction and extraction.
-  \item Added parameter \verb|minimum_SNR| to allow the user to ignore extracted data below a certain signal-to-noise ratio.
-  \item Bugfixing.
-  \item Added parameter \verb|traces_searchlimit_brightness| to allow user defined search for orders.
-  \item Added parameter \verb|log_wavesolshift_details| to allow the skipping of time consuming logging.
 \end{itemize}
 
 
@@ -1082,6 +1065,7 @@ python extract_single_chip.py
   \item \verb|bin_search_apertures    = 20,2|
   %\item \verb|arcshift_range    = [-12, -20]| (red chip),\\ \verb|arcshift_range  = [-12, -20]| (blue chip)
   \item \verb|arcshift_side           = left|
+  \item \verb|split_wavelength_solutions_at    = [26]| 	\textit{both chips together}
   \item \verb|original_master_wavelensolution_filename = master_wavelensolution_manual.fits|.
 %  \item \verb|reference_catalog 	  = <path>reference_lines_ThAr-HARPS_Ceres.txt|
   \item \verb|use_catalog_lines 	  = ThI, ArI, ?, NoID, ArII, ThII|
@@ -1096,8 +1080,6 @@ python extract_single_chip.py
   \item \verb|arc_calibs_create_g     = subframe, bias|
   \item \verb|blazecor_calibs_create_g= subframe, bias|
   \item \verb|extract_calibs_create_g = subframe, bias|
-  \item \verb|polynom_order_traces    = [2,3]|
-  \item \verb|polynom_order_intertraces = 2,3|
   \item \verb|extraction_shift        = 0|
 \end{itemize}
 
@@ -1577,6 +1559,28 @@ conda activate hiflex
 \section{Changelog (old)}
 \label{Section:Changelog_old}
 Please find the changes of newer versions in Chapter~\ref{Section:Changelog_new}.
+
+\subsection*{v1.3.4}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Added parameter \verb|convert_rv_package_templates|.
+\end{itemize}
+
+\subsection*{v1.3.4}
+\begin{itemize}\setlength\itemsep{0em}
+  \item GUI to add or modify orders.
+  \item Limited the number lines in the GUI for creating a wavelength solution to 80.
+\end{itemize}
+
+\subsection*{v1.3.3}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Improvement of blaze correction and noise calculation to avoid massive brightness peaks at boundaries of the orders.
+  \item Improvement in the way the pixel-shift is calculated from the calibration lines.
+  \item Improvement of code to speed up data reduction and extraction.
+  \item Added parameter \verb|minimum_SNR| to allow the user to ignore extracted data below a certain signal-to-noise ratio.
+  \item Bugfixing.
+  \item Added parameter \verb|traces_searchlimit_brightness| to allow user defined search for orders.
+  \item Added parameter \verb|log_wavesolshift_details| to allow the skipping of time consuming logging.
+\end{itemize}
 
 \subsection*{v1.3.2}
 \begin{itemize}\setlength\itemsep{0em}

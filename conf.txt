@@ -114,6 +114,9 @@ opt_px_range = [0.9, 1.0]
   # diff_pxs: What is the maximum difference between wavelength solution and reference line in order to assigned the lines together.
   #           A good value is 8px, can be higher as sigma-clipping is performed to get rid of badly assigned lines. The Gaussian width of the emission lines is used in the final asignment
 diff_pxs = 8
+  # If the data of several chips is combined into one image, it is likely that the 2-dimensional wavelength solution can't cross chip boundaries due to misalignments in the sub-micrometres.
+  #         split_wavelength_solutions_at is a list, given the index of the first order on the new chip. Can be empty
+split_wavelength_solutions_at = []
 
   ## The following parameters define the search area when finding the new wavelength solution for the night by using an old solution. 
   ##          The smaller the ranges, the faster the calculation, but the less flexible to changes. However, too big values might lead to the wrong local minimum.
