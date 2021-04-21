@@ -311,7 +311,7 @@ def textfileargs(params, textfile=None):
     # Added 20210323:
     params['convert_rv_package_templates'] = params.get('convert_rv_package_templates', 'True')
     # Added 20210323:
-    params['split_wavelength_solutions_at'] = params.get('split_wavelength_solutions_at', [])
+    params['split_wavelength_solutions_at'] = params.get('split_wavelength_solutions_at', '[]')
     
     
     
@@ -467,6 +467,12 @@ def log_returncode(code, explain=''):
 #    """
 #    global calimages
 #    calimages[key] = copy.deepcopy(value)
+
+def nanminmax(data, axis=None):
+    """
+    returns the minimum and maximum of a list or array
+    """
+    return [np.nanmin(data, axis=axis), np.nanmax(data, axis=axis)]
 
 def round_sig(value, sig=5):
     """
@@ -1599,7 +1605,8 @@ def polynomial_array_2d(xx, yy, xord, yord):
     """
     
     ims = np.insert(xx.shape, 0, (xord+1)*(yord+1)).astype(int)
-    a = np.ones(ims)                                    # first entry is 1 -> constant term
+    a = np.ones(ims)                                   # first entry is 1 -> constant term
+    limsEQ1 = (len(ims) == 1)
     index = 1
     for k in range(1, (xord+1)*(yord+1) ):             # All combinations, starting with the lowest order ones in order
         for j in range(yord+1):
@@ -1608,7 +1615,7 @@ def polynomial_array_2d(xx, yy, xord, yord):
                     data = xx**i * yy**j
                     #if k==3:
                     #    print 'xx**{0} * yy**{1}'.format(i,j), data
-                    if len(ims) == 1:
+                    if limsEQ1:
                         a[index] = data
                     else:
                         a[index,:] = data
@@ -1864,7 +1871,8 @@ def prepare_and_fit_gauss(x, y, center, width, significance=3):
         return np.array([0,0,0,0])
     stdlin = np.std(y, ddof=1)
     stdfit = np.std(oneD_gauss(x,popt)-y, ddof=popt.shape[0])           # if the average is 0, than this gives the stray of the residuals
-    if stdlin/(stdfit+0.0) >= significance or popt[0]/(stdfit+0.0) >= significance:
+    if stdlin/(stdfit+0.0) >= significance:# or ( popt[0]/(stdfit+0.0) >= significance and popt[1] > np.min(x) and popt[1] < np.max(x) ):   # The last bit includes too many non-lines for 20210419/Tung-0022_1p0s
+        #print(round(stdlin), round(stdfit), significance, popt, np.min(x), np.max(x), y)
         return popt
     else:
         #print(round(stdlin), round(stdfit), popt, np.min(x), np.max(x), y)
@@ -3421,9 +3429,9 @@ def find_shift_images_2d(im, im_ref, shift_range):
     
     return popt
 
-def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extract=True, im_head=dict()):
-    """
-    Finds the shift between two images by cross corellating both. The images are substracted and the total flux [sum(abs())] is calculated. At the best position, a minimum will be reached
+def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extract=True, im_head=dict(), max_allowed=[-100,100]):
+    """ new: Finds the shift between two images by extracting the spectra
+    old: Finds the shift between two images by cross corellating both. The images are substracted and the total flux [sum(abs())] is calculated. At the best position, a minimum will be reached
     :param im: 2d array with the image, for which the shift should be calculated
     :param im_ref: 2d array with the reference image
     :return shift: shift of the image (float)
@@ -3504,6 +3512,10 @@ def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extra
                        ' outside of the allowed range (Parameter extraction_shift: {4},'+\
                        ' borders due to next order [{2},{3}]) .').format(round(popt[1],2), round(popt[2],2), 
                                             min(range_shifts), max(range_shifts), params['extraction_shift'] )
+            shift, width = 0.0, 0.0
+        elif popt[2] < max_allowed[0] or popt[2] > max_allowed[1]:
+            comment = (' The calculated values (shift = {0} px, width = {1} px) were outside of the'+\
+                       ' allowed range ({3}).').format(round(popt[1],2), round(popt[2],2), max_allowed )
             shift, width = 0.0, 0.0
         elif not extract:                                                                               # keep everything if not extracting
             shift, width, comment = round(popt[1],3), round(popt[2],3), ''
@@ -3744,7 +3756,7 @@ def identify_emission_lines_single_order(kwargs):
             # Fit a double Gauss 
             #popts = oneD_blended_gauss
             # fit the gauss, pos_real is the expected center
-            if True:       # old way until v1.0.0 (including)
+            if True:       # old way until v1.0.0 (including), re-introduced shortly after, at least with version 3.3.4
                 popt = centroid_order(xarr[range_arr],y_data,pos_real,maxFWHM, significance=2, blended_gauss=False)    #a,x0,sigma,b in a*np.exp(-(x-x0)**2/(2*sigma**2))+b
                 centre, width, height = popt[1], popt[2], popt[0]
             else:           # using polynomial of order 3, that is not better, especially if FWHM is just few pixel
@@ -3983,9 +3995,12 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         return copy.deepcopy(wavelength_solution), 0., im_head
     
     if 'linestat' in wave_sol_dict.keys():
-        FWHM = wave_sol_dict['linestat']            # per order: [median, std]
+        FWHM = wave_sol_dict['linestat']*2.35482            # per order: [median, std]
+        med_FWHM = np.median(FWHM[:,0])
     else:
-        FWHM = np.array([[3.5,0]]*wavelength_solution.shape[0])       # maybe seach for width instead?
+        med_FWHM = max(1, int(round(estimate_width(aspectra)*2.35482)))
+        FWHM = np.array([[med_FWHM,0]]*wavelength_solution.shape[0])       # maybe seach for width instead?
+    FWHM = np.vstack(( FWHM.T, FWHM[:,0]*1.5/2.35482 )).T              # To exclude too wide Gaussian fits later
     ratio_lines_identified = 0.15       # if more than ratio_lines_identified of the checked_arc_lines has been identified, then a sigma_clipping will be applied. If less than this number of lines remain after sigma clipping, then the assumption is, that the calibration fiber wasn't used and therefore no wavelength shift is applied
     in_shift_int = int(round(in_shift))
     #print 'input_shift', in_shift, in_shift_int
@@ -4013,7 +4028,7 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         ref_line_indexes = np.argmin(diff_2darray, axis=1)
         min_diff = np.min(diff_2darray, axis=1)     # Best matching reference line for each identified line
         ref_wave = reference_catalog[ref_line_indexes,0]
-        bad_data = (min_diff > 0.05)
+        bad_data = (min_diff > 0.05)                # Only use lines which are within 0.05 Angstom in the catalogue -> is that is important?
         ref_line_indexes = ref_line_indexes.astype(float)
         ref_line_indexes[bad_data] = np.nan  # check that it is in the reference catalog, allowing for uncertainty; catches also zeros used to fill the array
         ref_wave[bad_data] = np.nan
@@ -4024,7 +4039,7 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         data[range_data,1] = order          # Order
         data[range_data,2] = wavelength_solution_arclines[order,good_lines[order,:]]    # Wavelength from the solution
         for ii in range_data:
-            pos_fine = invert_polyval(wavelength_solution[order,2:], xarr, data[ii,2], poly0=wavelength_solution[order,1]) # position of arcline in xarr
+            pos_fine = invert_polyval(wavelength_solution[order,2:], xarr, data[ii,2], poly0=wavelength_solution[order,1], prec=1E-2) # position of arcline in xarr
             data[ii,3] = pos_fine        # Pixel for the wavelength
         index += number_good_data
         # Get some idea about the spacing between lines - if the lines are only 10 px testing 20px will be too much
@@ -4032,7 +4047,8 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         pos_diff = px_pos[1:] - px_pos[:-1]
         if pos_diff.shape[0] > 0:
             maxshift = min(np.percentile(pos_diff,5), maxshift)
-    maxshift = max(maxshift, 4)
+    maxshift = max(maxshift, 4, np.median(FWHM[:,0])*2)     # Is about 9 for HARPS, this is wider than the fit when the lines are identified -> Gauss fit is less precicse
+    
     data[:,3] += in_shift
     data[:,4] = np.round(data[:,3])
     data[:,6] = 5*maxshift                  # Will become the shift
@@ -4040,14 +4056,25 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     shift_range = np.arange(int(maxshift)+1, -int(maxshift)-2, -1)          # reverse, so px are increasing
     shift_med, shift_std = in_shift, maxshift
     fine, last_round = False, False
-    
+    """ data:
+    0: index
+    1: order
+    2: wavelength from wavelength solution
+    3: pixel of [2]
+    4: round of [3]
+    5: center of fitted gauss - px
+    6: shift: [5] -[3]
+    7: width of fitted gauss - px
+    8: when was it last fitted
+    9: index in reference catalogue
+    10: wavelength from reference catalogue
+    """
     max_number_repeat = int(2*maxshift)
     max_repeats_each_step = 5
     results = np.zeros((max_number_repeat*max_repeats_each_step,8))*np.nan       # results from each step:
     # [0] = number_repeat, [1] = repeat in the step, [2] = fine, [3] = good data points, [4] = shift_med_bin, [5] = shift_std_bin, [6] = shift_med_gauss, [7] = shift_std_gauss
-                
     for number_repeat in range(max_number_repeat):
-        # make a 2d array for each position
+        # make a 2d array for each position        
         shift_xarr = create_shifted_array(xarr, shift_range)        # one line for each shifted spectrum
         shift_xarr_defined = ~np.isnan(shift_xarr) 
         shift_xarr[~shift_xarr_defined] = -1           # nans will otherwise become the smallest/largest int number
@@ -4064,7 +4091,7 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         data[replace_values,8] = number_repeat
         for ii in data[replace_values,0].astype(int):
             order = int(data[ii,1])
-            xpos = int(data[ii,4])
+            xpos = int(data[ii,4])                                  # rounded value of xpos
             xx = shift_xarr[shift_xarr_defined[:,xpos],xpos]          # x-data to fit
             yy = aspectra[order,xx.astype(int)]                                             # spectrum
             notnan = ~np.isnan(yy)
@@ -4075,8 +4102,14 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
             # This takes long, 0.02s, but for 3000 lines that are 60 seconds
             #print(data[ii,[1,3]], xx[0], xx[-1])
             if fine:                    # if xx is int then popt center will be int?
-                popt = prepare_and_fit_gauss(xx[notnan], yy[notnan], [np.percentile(xx[notnan],10), np.percentile(xx[notnan],90)], FWHM[order,0]*3, significance=sigma)
-                if popt[1] == 0 or popt[2] > FWHM[order,0]*1.5:
+                popt = prepare_and_fit_gauss(xx[notnan], yy[notnan], [np.percentile(xx[notnan],10), np.percentile(xx[notnan],90)], FWHM[order,0], significance=sigma)
+                """maxFWHM = int(round(np.median(FWHM[:,0])*1.5))      # better: max(1, int(round(estimate_width(im)*2.35482*1.5)))
+                range_arr = range(max(0,xpos-maxFWHM*2),min(ass[1],xpos+maxFWHM*2+1))
+                popt2 = centroid_order(xarr[range_arr], aspectra[order,range_arr], xpos, maxFWHM, significance=2, blended_gauss=False)     # Creates a smaller scatter
+                #if order == 6 or order == 36:
+                print(order, data[ii,2], data[ii,3], popt, popt2, nanminmax(xx[notnan]), nanminmax(xarr[range_arr]) )
+                """
+                if popt[1] == 0 or popt[2] > FWHM[order,2]:     # Bad fit
                     data[ii,5] = -1E3
                     #print(number_repeat, ii, popt, xx, yy)
                     #if ii > 100: exit(100)
@@ -4084,11 +4117,9 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
                     data[ii,5] = popt[1]
                     data[ii,7] = popt[2]                # Gaussian width
             else:
-                posmax = np.nanargmax(yy) + np.min(xx)
-                if np.isnan(aspectra[order,posmax]):
-                    data[ii,5] = -1E3
-                else:
-                    data[ii,5] = posmax
+                posmax = np.nanargmax(yy[notnan])
+                posmax = xx[notnan][posmax]
+                data[ii,5] = posmax
             #if ii%100 == 0:
             #if ii in [18,55,120,142,184,204,207,229,238]:
             #    print(fine, number_repeat, ii, order, xpos, data[ii,5], xx, yy)
@@ -4161,16 +4192,16 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
             else:
                 logtext += ' Used the mean of the previous values.'
 
-            #print(number_repeat, jj, np.sum(replace_values), data.shape, data_sub.shape, round(min_shift,4), round(max_shift,4), round(np.median(FWHM),4), logtext, hist_y, hist_x2 )      #np.vstack((test_bins, bin_results[:,[0,2,3]].T)).T,
             # Exclude the outliers
-            replace_values = good_values & ( ( data[:,6] > shift_med + sigma*shift_std ) | (data[:,6] < shift_med - sigma*shift_std ) )
+            replace_values = good_values & ( ( data[:,6] > shift_med + max(sigma*shift_std,1E-3) ) | (data[:,6] < shift_med - max(sigma*shift_std,1E-3) ) )     # at least one milli-pixel uncertainty
+            #print(number_repeat, jj, fine, nanminmax(shift_range), med_FWHM, np.sum(good_values), np.sum(replace_values), data.shape, data_sub.shape, round(min_shift,4), round(max_shift,4), np.median(FWHM,axis=0), logtext, hist_y, hist_x2 )      #np.vstack((test_bins, bin_results[:,[0,2,3]].T)).T,
             if not replace_values.any():        # No more changes
                 break
             data[replace_values,6] = 5*maxshift
             data[replace_values,5] = -1E-3
 
         # Recreate shift_range, making sure things only move by one pixel
-        prev_shift_range = np.min(shift_range), np.max(shift_range)
+        prev_shift_range = nanminmax(shift_range)
         smaller, larger = np.sum(shift_range<shift_med), np.sum(shift_range>shift_med)
         if smaller > larger:        # shift_med is positive -> larger values
             start, end = prev_shift_range[0]+2, prev_shift_range[1]+1
@@ -4181,15 +4212,15 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         #shift_range = np.unique( np.arange(end, start-1, -1) )      # remove 2 pixel for next round; "+shift_med" tested on data with shift of -2.5px
         #shift_range[::-1].sort()        # np.unique sorts the values, this reverses them again
         shift_range = np.arange(end, start-1, -1)
-        if (shift_range.shape[0] <= 20*shift_std and shift_std > 0 or shift_range.shape[0] <= 15 or number_repeat+5 > max_number_repeat) and not fine:        # 20*shift_std tested on <0.01 Ang/px camera
+        if ( (shift_range.shape[0] <= 20*shift_std and shift_std > 0 ) or shift_range.shape[0] <= 15 or number_repeat+5 > max_number_repeat or shift_range.shape[0] < med_FWHM*2) and not fine:        # 20*shift_std tested on <0.01 Ang/px camera
             fine = True
             data[:,5] = -1E-3
             data[:,6] = 5*maxshift                  # Will become the shift
             data[:,8] = number_repeat - 5
             #print('Switch to fine')
-        if shift_range.shape[0] <= 8 or data_sub.shape[0] == 0:            # Not enough data points
+        if shift_range.shape[0] <= 6 or data_sub.shape[0] == 0 or (shift_range.shape[0] < med_FWHM*3 and last_round):            # Not enough data points
             break
-        elif shift_range.shape[0] <= 10:
+        elif shift_range.shape[0] <= 8 or shift_range.shape[0] < med_FWHM*2:
             last_round = True
             #print('last round')
         elif last_round:                        # Switch off again to not rerun everything again and again
@@ -4277,8 +4308,8 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     #print 'return_shift', shift_avg
     return wavelength_solution_new, shift_med, im_head
  
-def shift_wavelength_solution_old(params, aspectra, wave_sol_dict, reference_lines_dict, xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=20.0, in_shift=0, fib='cal', fine=False, im_head=dict()):
-    """
+"""def shift_wavelength_solution_old(params, aspectra, wave_sol_dict, reference_lines_dict, xlows, xhighs, obsdate_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, maxshift=20.0, in_shift=0, fib='cal', fine=False, im_head=dict()):
+    "#""
     Determines the pixelshift between the current arc lines and the wavelength solution
     Two ways for a wavelength shift can happen:
         1: The CCD moves -> all ThAr lines are moved by the same pixel distance -> this was implemented from the beginning -> This implemented
@@ -4298,7 +4329,7 @@ def shift_wavelength_solution_old(params, aspectra, wave_sol_dict, reference_lin
     :param in_shift: integer, gives an offset of where to expect the lines (positive -> means line in aspectra is to the right, compared to wavelength solution)
     :param fib: for which fiber is wavelength solution
     :return wavelength_solution: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
-    """
+    "#""
     if fine:
         plot_tqdm = tqdm
     else:       # First coarse measurement
@@ -4392,7 +4423,7 @@ def shift_wavelength_solution_old(params, aspectra, wave_sol_dict, reference_lin
                                 popt[0], popt[2], pos_fine, popt[1]-pos_fine, popt[1], arcline])
             #else:
             #    print( 'b', order_index, popt[1], pos_fine, in_shift, maxshift, range_arr)
-        """for arcline in wavelength_solution_arclines[order_index]:
+        "#""for arcline in wavelength_solution_arclines[order_index]:
             if arcline == 0.0:
                 continue
             ref_line_index = np.argmin(np.abs( reference_catalog[:,0] - arcline ))
@@ -4424,7 +4455,7 @@ def shift_wavelength_solution_old(params, aspectra, wave_sol_dict, reference_lin
                     shifts.append([ order_index, ref_line_index, reference_catalog[ref_line_index,0], popt[1], \
                                     np.polyval(wavelength_solution[order_index,2:], popt[1]-wavelength_solution[order_index,1]), \
                                     popt[0], popt[2], pos_fine, popt[1]-pos_fine, popt[1], arcline])
-        get_timing('x2 ')"""
+        get_timing('x2 ')"#""
     # shifts: order_index, ref_line_index, ref_wavelength, gauss_centre (3), wavelength at gauss_centre, gauss_height, gauss_width, position where catalogue line is located to 1/10000ths of a pixel
     shifts = np.array(shifts)
     
@@ -4489,7 +4520,7 @@ def shift_wavelength_solution_old(params, aspectra, wave_sol_dict, reference_lin
                 #im_head['HIERARCH HiFLEx D_SHIFT_GAUSS'] = (round(shift_med,5), 'Offset from Gauss distribution [px]')
                 #im_head['HIERARCH HiFLEx D_SHIFT_G_ERR'] = (round(shift_std,5), 'Offset from Gauss distribution [px]')
         
-        """ This doesn't make it better, in case of bifurcated fiber the scatter between the fiber increases by factor of 3
+        "#"" This doesn't make it better, in case of bifurcated fiber the scatter between the fiber increases by factor of 3
         if shifts.shape[0] >= 500:      # refitting the wavelength solution if at least 500 lines are available
             arc_lines_wavelength = shifts[:,[0, 9, 10, 0,0,0,0,0,0, 6]]         # order, pixel, wavelength, ..., width for fit_wavelengths_solution_2d and transform_wavelength_solution_2d_to_n1d
             cen_pxs = arc_lines_wavelength[:,1] * np.nan
@@ -4522,7 +4553,7 @@ def shift_wavelength_solution_old(params, aspectra, wave_sol_dict, reference_lin
             im_head['HIERARCH HiFLEx D_SHIFT_CENWAVE'] = (round(shift_med,5), 'Offset from spectrum center [px]')
             ## Revert to better value
             #shift_med = im_head['HIERARCH HiFLEx D_SHIFT_GAUSS']
-        #"""
+        #"#""
         # More plotting    
         if params['log_wavesolshift_details']: 
             y_title='Residual (O-C) [Pixel]'
@@ -4583,7 +4614,7 @@ def shift_wavelength_solution_old(params, aspectra, wave_sol_dict, reference_lin
         shift_avg -= in_shift           # To separate the input shift from the rest
         logger('Info: Corrected for input shift. The shift of the currect spectrum is {0}'.format(round(shift_avg,4) ))
     #print 'return_shift', shift_avg
-    return wavelength_solution_new, shift_med, im_head
+    return wavelength_solution_new, shift_med, im_head"""
  
 def read_textfile_remove_double_entries(fname, dataformats, delimiter='\t', replaces=['\n'], equal_indexes=[0], warn='Warn: no data in file {0}'):
     """
@@ -4825,21 +4856,25 @@ def find_px_from_wave(wavelength, wl_array, px_array):
     
     return px_array[index], diff
 
-def invert_polyval(poly, xx, yy, poly0=0):
+def invert_polyval(poly, xx, yy, poly0=0, prec=0.05):
     """
     :param poly: parameters of a polynomial
     :param xx: 1d array
     :param yy: float, find the x-value to this value
     :param poly0: zeropoint of the polynomial, to subtract from the xx values
+    :param prec: precision of the values in xx, standard: 50 milli-pixel
     """
     yfit = np.polyval(poly, xx-poly0)
     index = np.argmin(np.abs( yy - yfit ))
-    xx_sub = np.linspace(xx[max(0,index-3)], xx[min(xx.shape[0]-1,index+3)], 100)        # just get 100 values
+    xx_sub = np.arange(xx[max(0,index-3)], xx[min(xx.shape[0]-1,index+3)], prec)        # just get values around the best fitting area
     yfit_sub = np.polyval(poly, xx_sub-poly0)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', np.RankWarning)
         poly_inv = np.polyfit(yfit_sub, xx_sub, poly.shape[0]-1)        # fit x(y), might cause rank warning
-    xx_inv = np.polyval(poly_inv, yy)
+    xx_inv = np.polyval(copy.deepcopy(poly_inv), yy)
+    """stack = np.vstack((xx_sub, yfit_sub, np.polyval(poly_inv, yfit_sub) )).T
+    pos = np.argmin(np.abs(stack[:,1] - yy))
+    print( stack[pos-5:pos+6,:], poly_inv, yy, xx_inv, type(xx_sub), type(yfit_sub), type(poly_inv),type(xx_sub[0]), type(yfit_sub[0]), type(poly_inv[0]),  type(yy), type(xx_inv) )"""
 
     return xx_inv
 
@@ -6290,7 +6325,6 @@ def plot_wavelength_solution_width_emmission_lines(fname, specs, data, indexes, 
     :param indexes: list of int, position of the relevant columns: order, wavelength, gauss
     """
     [oo, xx, gg] = indexes
-    
     gauss_ima = np.empty((specs[0], int(specs[1]/step)+1)) * np.nan
     for order in range(specs[0]):
         for i,px in enumerate(range(0, specs[1], step)):
@@ -7399,7 +7433,7 @@ def transform_wavelength_solution_2d_to_n1d(number_orders, number_pixel, polynom
         wavelength_solution[order,2:] = polyfit
         inorder = (arc_lines_wavelength[:,0]==order)
         if np.sum(inorder) > 0:
-            line_width = arc_lines_wavelength[inorder,9]                        # Width of the line
+            line_width = arc_lines_wavelength[inorder,9]                        # Gauss Width of the line
             # Get the real wavelength at the line positions instead of the catalogue lines:
             refline_wavereal = polynomial_value_2d(arc_lines_wavelength[inorder,1]-cen_px[order], 1.0/(order+order_offset), polynom_order_trace, polynom_order_intertrace, poly2d_params)
             #wavelength_solution_arclines[order,:np.sum(inorder)] = arc_lines_wavelength[inorder,2]       # Wavelength in reference catalogue
@@ -7465,7 +7499,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     """
     :param wavelength_solution_ori: 2d array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :param arc_lines_px: 2d array with one line for each identified line, sorted by order and amplitude of the line. For each line the following informaiton is given:
-                    order, pixel, width of the line, and height of the line
+                    order, pixel, width of the line (Gauss), and height of the line
     :param wavelength_solution_arclines_ori: 2d array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
                                         sorted by the brightest to faintest (in spectrum from which the solution is derived) and 0 to make into an array
                                         not used, only to return the correct values when no solution is found
@@ -7498,11 +7532,17 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         #print np.polyval(wls[2:], 0 - wls[1]), np.polyval(wls[2:], specs[1] - wls[1])
     max_diffs = np.array(cen_resolution) * params['px_offset'][2]  # Assign lines only to resolution * step size of px_offset
     orderdiffs = range(min(params['order_offset'][0:2]),max(params['order_offset'][0:2])+1)
-    pxdiffs = list(range(min(params['px_offset'][0:2]),max(params['px_offset'][0:2])+1,params['px_offset'][2]))
-    #if not ( min(params['px_offset'][0:2]) < 0 and min(params['px_offset'][0:2]) > 0 ):                                     # if it's from -x to +y the user wants only the above pxdiffs
-    #    pxdiffs += range(-1*max(params['px_offset'][0:2]),-1*min(params['px_offset'][0:2])+1,params['px_offset'][2])        # if it's from +x to +y, then the user wants the range in +/-
-    pxdiffs = list(set(pxdiffs))            # remove duplicates
-    pxdiffords = np.arange(min(params['px_offset_order'][0:2]),max(params['px_offset_order'][0:2])+params['px_offset_order'][2],params['px_offset_order'][2])
+    if params['px_offset'][2] == 0.0:
+        pxdiffs = [0]
+    else:
+        pxdiffs = list(range(min(params['px_offset'][0:2]),max(params['px_offset'][0:2])+1,params['px_offset'][2]))
+        #if not ( min(params['px_offset'][0:2]) < 0 and min(params['px_offset'][0:2]) > 0 ):                                     # if it's from -x to +y the user wants only the above pxdiffs
+        #    pxdiffs += range(-1*max(params['px_offset'][0:2]),-1*min(params['px_offset'][0:2])+1,params['px_offset'][2])        # if it's from +x to +y, then the user wants the range in +/-
+        pxdiffs = list(set(pxdiffs))            # remove duplicates
+    if params['px_offset_order'][2] == 0.0:
+        pxdiffords = np.zeros(1)
+    else:
+        pxdiffords = np.arange(min(params['px_offset_order'][0:2]),max(params['px_offset_order'][0:2])+params['px_offset_order'][2],params['px_offset_order'][2])
     resolution_offset = params['resolution_offset_pct']/100.
     res_steps = 11
     if resolution_offset == 0:
@@ -7833,7 +7873,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                         6: weight: 1/width of the line (in ThAr spectrum), the lines with width closest to the median are weighted most
                         7: resolution at this place (1/2 of 2-pixel (one pixel))
                         8: index in reference catalogue
-                        9: width of the line (in ThAr spectrum)
+                        9: Gauss width of the line (in ThAr spectrum)
                         """
                         assigned_reflines.append(jj)                                                         # Don't use the line again
                         #if arc_lines_px_step[i,0] == 43:            #testing
@@ -8008,7 +8048,10 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     logger(text.format(polynom_order_trace, polynom_order_intertrace, int(order_offset), round_sig(np.std(diff_real_cent, ddof=len(p_real_cent)),3), order_offset_old, p_cen_px[2], p_cen_px[1], p_cen_px[0] ))
     
     # Create a wavelength solution
-    wavelength_solution2d = np.array( [polynom_order_trace, polynom_order_intertrace, np.mean(cen_px), order_offset] + list(poly2d_params) )
+    wavelength_solution2d = []
+    for entry in poly2d_params:
+        wavelength_solution2d.append( [polynom_order_trace, polynom_order_intertrace, np.mean(cen_px), order_offset] + list(entry) )
+    wavelength_solution2d = np.array( wavelength_solution2d )
     text = 'Info: Wavelenght solution in 2d (for pixel and order at the same time) is [No of orders1, No of orders2, mean central pixel, '+\
                   'offset to real order, parameters of the 2d polynomial(px^0*m^0, px^1*m^0, px^0*m^1, px^2*m^0, px^1*m^1, px^0*m^2, ....)]: \n'+\
                   '{0}'

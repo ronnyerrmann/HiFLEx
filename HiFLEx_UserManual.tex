@@ -106,6 +106,7 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 \subsection*{v1.3.6}
 \begin{itemize}\setlength\itemsep{0em}
   \item New parameter \verb|split_wavelength_solutions_at| to create wavelength solution when several chips are combined into one image.
+  \item Improved finding the shift of the ThAr lines to the wavelength solution.
 \end{itemize}
 
 \subsection*{v1.3.5}
@@ -1004,7 +1005,7 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
 % HD 10180: G1V star with 7 planets: http://ui.adsabs.harvard.edu/abs/2011A%26A...528A.112L
 Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres, use '2004 07 12' and Program ID '072.C-0488(E)' for calibration data taken by the RV exoplanet search team, or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*.fits.Z) can be extracted with:
 
-\textbf{Extract both chips together (after identifting the order, a dummy order has to be added):}
+\textbf{Extract both chips together (after identifting the order, a dummy order has to be added, don't use background correction):}
 \begin{lstlisting}[style=base]
 gunzip *.fits.Z
 cat <<EOT > extract_single_chip.py
@@ -1141,11 +1142,11 @@ The extracted calibration spectrum and the science spectrum are very similar. Em
 Few problems occur when comparing the data of reduced with this pipeline and the data from the ESO Phase 3 pipeline:
 \begin{enumerate}\setlength\itemsep{0em}
   \item The bias correction can't be performed, as usually only one bias frame is available.
-  \item Overscan correction is not implemented in the pipeline.
+  \item Overscan correction is not implemented in HiFLEx.
   \item No cosmic ray removal is applied.
   \item Different flat fielding.
-  \item Traces have a fixed width, therefore the S/N of the extracted data might decrease slightly.
-  \item Only one CCD is processed at a time, which might decrease the precision of the wavelength solution.
+  %\item Traces have a fixed width, therefore the S/N of the extracted data might decrease slightly.
+  %\item Only one CCD is processed at a time, which might decrease the precision of the wavelength solution.
 \end{enumerate}
 
 \subsubsection{Analysing the reduced HARPS data with TERRA}
