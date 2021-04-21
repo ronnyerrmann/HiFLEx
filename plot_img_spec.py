@@ -564,6 +564,7 @@ if __name__ == "__main__":
         for line in files:
             if line[0] != '#':
                 fitsfiles.append([line.replace(' ',''),0,'sg'])
+        print('Found {0} files in {1}.'.format(len(fitsfiles), filename))
     
     data_sg = []
     titel_sg = ''
@@ -599,7 +600,7 @@ if __name__ == "__main__":
                 imy = np.array(ims['counts'])
                 imx = imx[~np.isnan(imy)]
                 imy = imy[~np.isnan(imy)]
-                print(imx.shape,imy.shape,imx, imy)
+                #print(imx.shape,imy.shape,imx, imy)
                 labels = ''
             else:
                 imx = im[0,:]

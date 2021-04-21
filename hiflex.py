@@ -171,7 +171,8 @@ if __name__ == "__main__":
             fname_em_spec = params['path_extraction'] + params.get('master_{0}_l_filename'.format(calib[1]), 'master_emission_{0}_long.fits'.format(calib[1])).rsplit(os.sep,1)[-1]
             if 'shift_{0}_l'.format(calib[2]) not in calimages.keys() and not os.path.isfile(fname_em_spec):
                 calimages['shift_{0}_l'.format(calib[2])], im_arclhead = find_shift_images(params, im_cal_l, im_trace1, calimages['sci_trace'], 0, 
-                                                                                           cal_tr_poly, extract=True, im_head=im_arclhead)        # that needs to be science traces
+                                                                            cal_tr_poly, extract=True, im_head=im_arclhead, max_allowed=[-1,1])        # that needs to be science traces, We don't expect more than +-1 pixel
+                 
             [cal_l_spec, cal_l_gpm] = read_create_spec(params, fname_em_spec, im_cal_l, im_arclhead, calimages['{0}_trace'.format(calib[2])], 
                                                        params['{0}extraction_width_multiplier'.format(calib[3])], calimages.get('shift_{0}_l'.format(calib[2]),0) )
             # gpm: good-pixel-mask: 1 is good, below 1 not so good
@@ -195,7 +196,7 @@ if __name__ == "__main__":
                 
                 arc_lines_px = identify_emission_lines(params, cal_l_spec, cal_s_spec, cal_l_gpm, cal_s_gpm)
                 logger('Info: Identified {0} lines in the emission line spectrum. These lines are stored in file {1}'.format(len(arc_lines_px), fname_arclines ))
-                printarrayformat = ['%1.1i', '%3.2f', '%3.2f', '%3.1f']
+                printarrayformat = ['%1.1i', '%7.5f', '%4.2f', '%3.1f']     # needs to be 7.5f for position ([1]) as before 20210413 the lines are only precise to 10milli-pixel -> wavelengths in reflines are only that precise -> wavelenth shift can't be more precise than that 
                 logger('order\tpixel\twidth\theight of the line', show=False, printarrayformat=printarrayformat, printarray=arc_lines_px, logfile=fname_arclines)
             
             # After the preparation start the creation of the wavelength solution
@@ -358,7 +359,7 @@ if __name__ == "__main__":
                 im, im_head = read_file_calibration(params, im_name_full, realrun=realrun)
                 if realrun:
                     extraction_wavelengthcal(params, im, im_name_wc, im_head, calimages['sci_trace'], calimages['cal_trace'],
-                                                        calimages['wave_sol_dict_'+fib], reference_lines_dict, im_trace1, im_name)
+                                                        calimages['wave_sol_dict_'+fib], reference_lines_dict, im_trace1, im_name_wc)
             params['extract_wavecal'] = True                                                                                # necessary for shift_wavelength_solution so the shift is stored in a file
             all_wavelengthcals = []
             for [wavelengthcals, fib] in [ [wavelengthcals_cal,'cal'], [wavelengthcals_sci,'sci'] ]:
