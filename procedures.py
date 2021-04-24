@@ -312,6 +312,8 @@ def textfileargs(params, textfile=None):
     params['convert_rv_package_templates'] = params.get('convert_rv_package_templates', 'True')
     # Added 20210323:
     params['split_wavelength_solutions_at'] = params.get('split_wavelength_solutions_at', '[]')
+    # Added 20210423:
+    params['logging_em_lines_shift'] = params.get('logging_em_lines_shift', 'wavelength_solution_emmission_lines_shift_on_detector.png')
     
     
     
@@ -3513,9 +3515,9 @@ def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extra
                        ' borders due to next order [{2},{3}]) .').format(round(popt[1],2), round(popt[2],2), 
                                             min(range_shifts), max(range_shifts), params['extraction_shift'] )
             shift, width = 0.0, 0.0
-        elif popt[2] < max_allowed[0] or popt[2] > max_allowed[1]:
+        elif popt[1] < max_allowed[0] or popt[1] > max_allowed[1]:
             comment = (' The calculated values (shift = {0} px, width = {1} px) were outside of the'+\
-                       ' allowed range ({3}).').format(round(popt[1],2), round(popt[2],2), max_allowed )
+                       ' allowed range ({2}).').format(round(popt[1],2), round(popt[2],2), max_allowed )
             shift, width = 0.0, 0.0
         elif not extract:                                                                               # keep everything if not extracting
             shift, width, comment = round(popt[1],3), round(popt[2],3), ''
@@ -4062,9 +4064,9 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     2: wavelength from wavelength solution
     3: pixel of [2]
     4: round of [3]
-    5: center of fitted gauss - px
+    5: center of fitted gauss in px
     6: shift: [5] -[3]
-    7: width of fitted gauss - px
+    7: width of fitted gauss in px
     8: when was it last fitted
     9: index in reference catalogue
     10: wavelength from reference catalogue
@@ -4247,6 +4249,8 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
             objname_txt = objname.rsplit(os.sep,1)[-1]      # If the name contains a / there will be a problem
             fname = '{0}_{1}.{2}'.format(params['logging_em_lines_gauss_width_form'].rsplit('.',1)[0], objname_txt, params['logging_em_lines_gauss_width_form'].rsplit('.',1)[-1])
             plot_wavelength_solution_width_emmission_lines(fname, ass, data_sub, [1,5,7]) # order at 1, pixel at 5, gauss width at 7
+            fname = '{0}_{1}.{2}'.format(params['logging_em_lines_shift'].rsplit('.',1)[0], objname_txt, params['logging_em_lines_shift'].rsplit('.',1)[-1])
+            plot_wavelength_solution_width_emmission_lines(fname, ass, data_sub, [1,5,6], title='Shift') # order at 1, pixel at 5, shift at 6
             fname = '{0}_{1}.{2}'.format(params['logging_arc_line_identification_residuals_hist'].rsplit('.',1)[0], objname_txt, params['logging_arc_line_identification_residuals_hist'].rsplit('.',1)[-1])
             plot_hist_residuals_wavesol(fname, data_sub, [1,5,2,6] )                        # Order, pixel, wavelength, shift
             fname = '{0}_{1}.{2}'.format(params['logging_em_lines_bisector'].rsplit('.',1)[0], objname_txt, params['logging_em_lines_bisector'].rsplit('.',1)[-1])
@@ -4863,6 +4867,7 @@ def invert_polyval(poly, xx, yy, poly0=0, prec=0.05):
     :param yy: float, find the x-value to this value
     :param poly0: zeropoint of the polynomial, to subtract from the xx values
     :param prec: precision of the values in xx, standard: 50 milli-pixel
+    :return xx_inv: 
     """
     yfit = np.polyval(poly, xx-poly0)
     index = np.argmin(np.abs( yy - yfit ))
@@ -5478,7 +5483,6 @@ def save_single_files(params, obnames, im_name, im_head, im_head_bluefirst, spec
         save_multispec(fspectra[::-1,:], params['path_extraction_single']+im_name+'_blaze_bluefirst', im_head_iraf_format_bluefirst, bitpix=params['extracted_bitpix'])
     if doo.get('norm',False) and doo.get('blue',False):
         save_multispec(cspectra[::-1,:], params['path_extraction_single']+im_name+'_norm_bluefirst', im_head_iraf_format_bluefirst, bitpix=params['extracted_bitpix'])
-    
     if doo.get('harps',False):
         # Harps format
         im_head_harps_format = copy.copy(im_head_bluefirst)
@@ -6318,11 +6322,11 @@ def plot_wavelength_solution_form(fname, traces_def, wavelength_solution):
 
 def plot_wavelength_solution_width_emmission_lines(fname, specs, data, indexes, step=20, title='Gaussian width'):
     """
-    Creates a map of the Gaussian width of the emmission lines
+    Creates a map of the Gaussian width of the emmission lines - Adapted so that other information than Gauss width can be plotted
     :param fname: Filename to which the image is saved
     :param specs: 1d list with two integers: shape of the extracted spectrum, first entry gives the number of orders and the second the number of pixel
     :param data: 2d array of floats with the data to plot
-    :param indexes: list of int, position of the relevant columns: order, wavelength, gauss
+    :param indexes: list of int, position of the relevant columns: order, pixel, gauss
     """
     [oo, xx, gg] = indexes
     gauss_ima = np.empty((specs[0], int(specs[1]/step)+1)) * np.nan
@@ -6396,19 +6400,22 @@ def plot_wavelength_solution_spectrum(params, spec1, spec2, fname, wavelength_so
     labels = ['long exp','short exp']
     x_title = 'Wavelength [Angstroms]'
     y_title = 'extracted flux [ADU]'
-    titel_f = 'Order {0}, real Order {1}\nmarked (proportional to line strength) are the identified reference lines (red, {2} lines) and\na subset of the omitted reference lines (green, showing the brightes {3} out of {4} lines)'
+    titel_f = ('Order {0}, real Order {1}\nmarked (proportional to line strength) are' +\
+               ' the identified reference lines (red, {2} lines) and\n' +\
+               'a subset of the omitted reference lines (green, showing the brightes {3} out of {4} lines)')
     
     if plot_log:
         y_title = 'log10 ( {0} )'.format(y_title)
         spec1 = adjust_data_log(spec1)
         spec2 = adjust_data_log(spec2)
     reference_catalog = np.array(sorted(reference_catalog, key=operator.itemgetter(1), reverse=True ))          # Sort by intensity in reverse order
+    xarr = np.arange(spec1.shape[1])
     wavelengths, dummy = create_wavelengths_from_solution(params, wavelength_solution, spec1)
     # multiple pdf pages from https://matplotlib.org/examples/pylab_examples/multipage_pdf.html
     with PdfPages(fname) as pdf:
         for order in range(wavelength_solution.shape[0]):
             x_range = wavelengths[ order, ~np.isnan(spec1[order,:]) ]
-            if len(x_range) < 10:                                       # the reference trace cod fall completely out of the CCD
+            if x_range.shape[0] < 10:                                       # the reference trace cod fall completely out of the CCD
                 continue
             good_values = np.where((reference_catalog[:,0] >= np.min(x_range)) & (reference_catalog[:,0] <= np.max(x_range)) )[0]     # lines in the right wavelength range
             reference_lines = reference_catalog[good_values,:]                                                                  # possible reference lines in the order
@@ -6465,6 +6472,22 @@ def plot_wavelength_solution_spectrum(params, spec1, spec2, fname, wavelength_so
                     
             axes.set_ylim(ymin,ymax)
             axes.set_xlim(xmin-0.01*x_range,xmax+0.01*x_range)
+            
+            # Add top x-axis
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', np.RankWarning)
+                poly_inv = np.polyfit(wavelengths[order,:], xarr, wavelength_solution.shape[1]-2-1)        # fit x(y), might cause rank warning, 
+            def wave_to_px(wave):
+                """Convert wavelength to pixel"""
+                px = np.polyval(poly_inv, wave)
+                return px
+            def px_to_wave(px):
+                """Conver pixel to wavelength"""
+                wave = np.polyval(wavelength_solution[order, 2:], px - wavelength_solution[order,1])
+                return wave
+            secax_x = frame.secondary_xaxis('top', functions=(wave_to_px, px_to_wave))
+            #secax_x.set_xlabel('x [px]')
+
             fig.set_size_inches(16.2, 10)
             #plt.savefig('{0}.png'.format(order), bbox_inches='tight')
             pdf.savefig()  # saves the current figure into a pdf page
