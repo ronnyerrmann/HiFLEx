@@ -159,6 +159,10 @@ def add_new_rawfiles_file_list(params, file_list=[]):
     return file_list
 
 def check_raw_files_infos(params, file_list):
+    """
+    Reads the available information from the light in fiber1 and fiber2 to determine what calibration is possible with the data
+    :param file_list: list of lists, with each entry containing: filename, fiber1, fiber2, exposure time, middle of observation time, string of extractions
+    """
     # Check what data is available
     cal2_l_exp, cal2_s_exp, cal1_l_exp, cal1_s_exp = 0, 1E10, 0, 1E10
     arc_fib1 = ''
@@ -207,6 +211,47 @@ def check_raw_files_infos(params, file_list):
     
     return params
     
+def check_assigned_infos(params, file_list):
+    """
+    Same as check_raw_files_infos, but instead of reading what is in fiber1, fiber2 use the assigned extraction flags
+    """
+    cal2_l_exp, cal2_s_exp, cal1_l_exp, cal1_s_exp = 0, 1E10, 0, 1E10
+    exist_bias, exist_rflat, exp_darks = False, False, []
+    
+    for entry in file_list:
+        flags = entry[5].lower().replace(' ','').split(',')
+        if 'w2' in flags:
+            cal2_l_exp = max(entry[3], cal2_l_exp)
+            cal2_s_exp = min(entry[3], cal2_s_exp)
+        if 'w2l' in flags:
+            cal2_l_exp = min(entry[3], cal2_l_exp)
+        if 'w2s' in flags:
+            cal2_s_exp = min(entry[3], cal2_s_exp)
+        if 'w1' in flags:
+            cal1_l_exp = max(entry[3], cal1_l_exp)
+            cal1_s_exp = min(entry[3], cal1_s_exp)
+        if 'w1l' in flags:
+            cal1_l_exp = min(entry[3], cal1_l_exp)
+        if 'w1s' in flags:
+            cal1_s_exp = min(entry[3], cal1_s_exp)
+        if 'b' in flags:
+            exist_bias = True
+        if 'a' in flags:
+            exist_rflat = True
+        if 'd' in flags:
+            if entry[3] not in exp_darks:
+                exp_darks.append(entry[3])
+
+    params['cal2_l_exp'] = cal2_l_exp
+    params['cal2_s_exp'] = cal2_s_exp
+    params['cal1_l_exp'] = cal1_l_exp
+    params['cal1_s_exp'] = cal1_s_exp
+    params['exist_bias'] = exist_bias
+    params['exist_rflat'] = exist_rflat
+    params['exp_darks'] = exp_darks
+    
+    return params
+
 def add_extraction_parameters_file_list(params, file_list, start_index):
     warn = []
     easy_assignments = []
@@ -224,16 +269,16 @@ def add_extraction_parameters_file_list(params, file_list, start_index):
             if entry[1] == easy_assignment[0] and entry[2] == easy_assignment[1]:                 # Fiber1 and Fiber2
                 extract += easy_assignment[2]+', '
         if (entry[1] == 'none' or entry[1] == 'dark' or entry[1] == 'wave' or entry[1] == params['arc_fib1']) and entry[2] == 'wave':               # Fiber1 and Fiber2
-            if params['cal2_l_exp']*0.9 <= entry[3] <= params['cal2_l_exp']*1.1:
+            if params['cal2_l_exp']*0.7 <= entry[3] <= params['cal2_l_exp']*1.3:
                 extract += 'w2l, '
                 extract += 't2, '
-            elif params['cal2_s_exp']*0.9 <= entry[3] <= params['cal2_s_exp']*1.1:                             # In case only one exposure time -> cal2_l is copied in cal2_s
+            elif params['cal2_s_exp']*0.7 <= entry[3] <= params['cal2_s_exp']*1.3:                             # In case only one exposure time -> cal2_l is copied in cal2_s automatically
                 extract += 'w2s, '
         if (entry[2] == 'none' or entry[2] == 'dark' or entry[2] == 'wave') and entry[1] == 'wave' and params['cal1_l_exp'] >= params['cal1_s_exp']:               # wave in science fiber
             parcal = 'arc'
-            if params['cal1_l_exp']*0.9 <= entry[3] <= params['cal1_l_exp']*1.1:
+            if params['cal1_l_exp']*0.7 <= entry[3] <= params['cal1_l_exp']*1.3:
                 extract += 'w1l, '
-            elif params['cal1_s_exp']*0.9 <= entry[3] <= params['cal1_s_exp']*1.1:                             # In case only one exposure time -> cal1_l is copied in cal1_s
+            elif params['cal1_s_exp']*0.7 <= entry[3] <= params['cal1_s_exp']*1.3:                             # In case only one exposure time -> cal1_l is copied in cal1_s
                 extract += 'w1s, '
         if entry[1] == 'science':
                 extract += 'e, '
@@ -244,10 +289,13 @@ def add_extraction_parameters_file_list(params, file_list, start_index):
     return file_list
 
 def create_configuration_file(params, file_list):
-    #cal2_l_exp   = params['cal2_l_exp']
-    #cal2_s_exp   = params['cal2_s_exp']
-    #cal1_l_exp   = params['cal1_l_exp']
-    #cal1_s_exp   = params['cal1_s_exp']
+    """
+    Translates the file_list into fits_conf
+    """
+    cal2_l_exp   = params['cal2_l_exp']
+    cal2_s_exp   = params['cal2_s_exp']
+    cal1_l_exp   = params['cal1_l_exp']
+    cal1_s_exp   = params['cal1_s_exp']
     #arc_fib1     = params['arc_fib1']
     #sflat_fib2   = params['sflat_fib2']
     #blazecor_fib2 = params['blazecor_fib2']
@@ -289,8 +337,8 @@ def create_configuration_file(params, file_list):
     easy_assignments.append(['t2'  , 'trace2'  , 'trace2' ])       # trace of the calibration fiber
     easy_assignments.append(['w1s' , 'cal1_s'  , 'arc'    ])       # Wavelength calibration (in science fiber)
     easy_assignments.append(['w1l' , 'cal1_l'  , 'arc'    ])       # Wavelength calibration (in science fiber)
-    easy_assignments.append(['w2s' , 'cal2_s'  , 'arc'    ])       # Wavelength calibration (standard)
-    easy_assignments.append(['w2l' , 'cal2_l'  , 'arc'    ])       # Wavelength calibration (standard)
+    easy_assignments.append(['w2s' , 'cal2_s'  , 'arc'    ])       # Wavelength calibration (in calibration fiber)
+    easy_assignments.append(['w2l' , 'cal2_l'  , 'arc'    ])       # Wavelength calibration (in calibration fiber)
     for entry in file_list:                                         # Extraction is set up below
         #if entry[0].find('#') != -1:        # comment # found
         #    continue
@@ -300,6 +348,16 @@ def create_configuration_file(params, file_list):
         for easy_assignment in easy_assignments:
             if easy_assignment[0] in extract:
                 conf_data, warn = create_parameters(conf_data, warn, easy_assignment[1], easy_assignment[1], [easy_assignment[2]], exist_bias, exist_rflat, exp_darks, entry)
+        if 'w1' in extract:
+            if params['cal1_l_exp']*0.7 <= entry[3] <= params['cal1_l_exp']*1.3:
+                conf_data, warn = create_parameters(conf_data, warn, 'cal1_l', 'cal1_l', ['arc'], exist_bias, exist_rflat, exp_darks, entry)
+            elif params['cal1_s_exp']*0.7 <= entry[3] <= params['cal1_s_exp']*1.3:                             # In case only one exposure time -> cal1_l is copied in cal1_s
+                conf_data, warn = create_parameters(conf_data, warn, 'cal1_s', 'cal1_s', ['arc'], exist_bias, exist_rflat, exp_darks, entry)
+        if 'w2' in extract:
+            if params['cal2_l_exp']*0.7 <= entry[3] <= params['cal2_l_exp']*1.3:
+                conf_data, warn = create_parameters(conf_data, warn, 'cal2_l', 'cal2_l', ['arc'], exist_bias, exist_rflat, exp_darks, entry)
+            elif params['cal2_s_exp']*0.7 <= entry[3] <= params['cal2_s_exp']*1.3:                             # In case only one exposure time -> cal1_l is copied in cal1_s
+                conf_data, warn = create_parameters(conf_data, warn, 'cal2_s', 'cal2_s', ['arc'], exist_bias, exist_rflat, exp_darks, entry)
         if 'd' in extract:               # Fiber1 and Fiber2
             param = 'dark{0}'.format(entry[3])                      # Exposure time
             textparam = param.replace('.','p')+'s'
@@ -408,10 +466,12 @@ def file_list_UI(file_list):
     widgets['t1']      = dict(label='Sci.\ntra-\nce', kind='Label', row=0, column=9)
     widgets['t2']      = dict(label='Cal.\ntra-\nce', kind='Label', row=0, column=10)
     widgets['z']       = dict(label='Blaze', kind='Label', row=0, column=11)
-    widgets['w1l']     = dict(label='Wave\nSci.\nlong', kind='Label', row=0, column=12)
-    widgets['w1s']     = dict(label='Wave\nSci.\nshort', kind='Label', row=0, column=13)
-    widgets['w2l']     = dict(label='Wave\nCal.\nlong', kind='Label', row=0, column=14)
-    widgets['w2s']     = dict(label='Wave\nCal.\nshort', kind='Label', row=0, column=15)
+    widgets['w1']      = dict(label='Wave\nSci.', kind='Label', row=0, column=12)
+    #widgets['w1l']     = dict(label='Wave\nSci.\nlong', kind='Label', row=0, column=12)
+    #widgets['w1s']     = dict(label='Wave\nSci.\nshort', kind='Label', row=0, column=13)
+    widgets['w2']     = dict(label='Wave\nCal.', kind='Label', row=0, column=14)
+    #widgets['w2l']     = dict(label='Wave\nCal.\nlong', kind='Label', row=0, column=14)
+    #widgets['w2s']     = dict(label='Wave\nCal.\nshort', kind='Label', row=0, column=15)
     widgets['ws']      = dict(label='Wave\nshft\nSci', kind='Label', row=0, column=16)
     widgets['wc']      = dict(label='Wave\nshft\nCal', kind='Label', row=0, column=17)
     widgets['e']       = dict(label='Ex-\ntract', kind='Label', row=0, column=18)
@@ -449,14 +509,18 @@ def file_list_UI(file_list):
         widgets['t2_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['t2_{0}'.format(ii)], row=ii+1, column=10)
         pkwargs['z_{0}'.format(ii)] = ( 'z' in flags )
         widgets['z_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['z_{0}'.format(ii)], row=ii+1, column=11)
-        pkwargs['w1l_{0}'.format(ii)] = ( 'w1l' in flags )
-        widgets['w1l_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1l_{0}'.format(ii)], row=ii+1, column=12)
-        pkwargs['w1s_{0}'.format(ii)] = ( 'w1s' in flags )
-        widgets['w1s_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1s_{0}'.format(ii)], row=ii+1, column=13)
-        pkwargs['w2l_{0}'.format(ii)] = ( 'w2l' in flags )
-        widgets['w2l_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2l_{0}'.format(ii)], row=ii+1, column=14)
-        pkwargs['w2s_{0}'.format(ii)] = ( 'w2s' in flags )
-        widgets['w2s_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2s_{0}'.format(ii)], row=ii+1, column=15)
+        pkwargs['w1_{0}'.format(ii)] = ( ('w1' in flags) | ('w1l' in flags) | ('w1s' in flags) )
+        widgets['w1_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1_{0}'.format(ii)], row=ii+1, column=12)
+        #pkwargs['w1l_{0}'.format(ii)] = ( 'w1l' in flags )
+        #widgets['w1l_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1l_{0}'.format(ii)], row=ii+1, column=12)
+        #pkwargs['w1s_{0}'.format(ii)] = ( 'w1s' in flags )
+        #widgets['w1s_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w1s_{0}'.format(ii)], row=ii+1, column=13)
+        pkwargs['w2_{0}'.format(ii)] = ( ('w2' in flags) | ('w2l' in flags) | ('w2s' in flags) )
+        widgets['w2_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2_{0}'.format(ii)], row=ii+1, column=14)
+        #pkwargs['w2l_{0}'.format(ii)] = ( 'w2l' in flags )
+        #widgets['w2l_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2l_{0}'.format(ii)], row=ii+1, column=14)
+        #pkwargs['w2s_{0}'.format(ii)] = ( 'w2s' in flags )
+        #widgets['w2s_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['w2s_{0}'.format(ii)], row=ii+1, column=15)
         pkwargs['ws_{0}'.format(ii)] = ( 'ws' in flags )
         widgets['ws_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['ws_{0}'.format(ii)], row=ii+1, column=16)
         pkwargs['wc_{0}'.format(ii)] = ( 'wc' in flags )
@@ -465,7 +529,7 @@ def file_list_UI(file_list):
         widgets['e_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['e_{0}'.format(ii)], row=ii+1, column=18)
         extra = ''
         for flag in flags:          # Add extra flags, if necessary
-            if flag not in ['b', 'd', 'a', 't1', 't2', 'z', 'w2l', 'w2s', 'w1l', 'w1s', 'ws', 'wc', 'e']:
+            if flag not in ['b', 'd', 'a', 't1', 't2', 'z', 'w2l', 'w2s', 'w2', 'w1l', 'w1s', 'w1', 'ws', 'wc', 'e']:
                 extra += ','+flag
         if len(extra) > 0:
             extra = extra[1:]
@@ -486,7 +550,7 @@ def file_list_UI(file_list):
               '-- Wavelength offset Science fiber (**) to correct for\n   wavelength drit\n'+\
               '-- Wavelength offset between the Science fiber and\n   Calibration fiber (*)\n'+\
               '-- Extract: Extract these files on an individual basis\n'+\
-              '-- Further settings (manual): e.g. to combine files\n   before extraction\n'+\
+              '-- Further settings (manual): e.g. to combine files\n   before or after extraction\n'+\
               '(*) not for single fiber spectrographs\n'+\
               '(**) important for unstabilised (single) fiber\n     spectrographs\n\n'+\
               'The automatic assignment is based on the parameters\n raw_data_* in {0} (and in procedure\n add_new_rawfiles_file_list). '.format(CONFIGFILE)
@@ -517,10 +581,8 @@ def file_list_UI(file_list):
                  {True:'t1',False:''}[gui3.data['t1_{0}'.format(ii)]] +','+
                  {True:'t2',False:''}[gui3.data['t2_{0}'.format(ii)]] +','+
                  {True:'z',False:''}[gui3.data['z_{0}'.format(ii)]] +','+
-                 {True:'w2l',False:''}[gui3.data['w2l_{0}'.format(ii)]] +','+
-                 {True:'w2s',False:''}[gui3.data['w2s_{0}'.format(ii)]] +','+
-                 {True:'w1l',False:''}[gui3.data['w1l_{0}'.format(ii)]] +','+
-                 {True:'w1s',False:''}[gui3.data['w1s_{0}'.format(ii)]] +','+
+                 {True:'w2',False:''}[gui3.data['w2_{0}'.format(ii)]] +','+
+                 {True:'w1',False:''}[gui3.data['w1_{0}'.format(ii)]] +','+
                  {True:'ws',False:''}[gui3.data['ws_{0}'.format(ii)]] +','+
                  {True:'wc',False:''}[gui3.data['wc_{0}'.format(ii)]] +','+
                  {True:'e',False:''}[gui3.data['e_{0}'.format(ii)]] +','+
@@ -837,10 +899,10 @@ if __name__ == "__main__":
     file_list = sorted(file_list, key=operator.itemgetter(4,0))           #itemgetter(1,2,3,4,0)
     
     # Show the results in a GUI
-    if not ('nogui' in sys.argv or '-nogui' in sys.argv or '--nogui' in sys.argv):
-        file_list, file_list_commented = file_list_UI(file_list)
-    else:
+    if 'nogui' in sys.argv or '-nogui' in sys.argv or '--nogui' in sys.argv:
         file_list_commented = file_list
+    else:
+        file_list, file_list_commented = file_list_UI(file_list)
     
     # Save the list, show to user, so the user can disable files, read the list
     with open(params['raw_data_file_list'], 'w') as file:
@@ -858,8 +920,10 @@ if __name__ == "__main__":
         file.write('###        "z", Spectrum for the blaze correction, e.g. of a continuum source.\n')
         file.write('###        "t1", Spectrum to find the trace [of the science fiber], e.g. a continuum source.\n')
         file.write('###        "t2", Spectrum to find the trace of the calibration fiber.\n')
-        file.write('###        "w1l, w1s", Spectruum to find the wavelength solution of the science fiber (long and short exposure time).\n')
-        file.write('###        "w2l, w2s", Spectruum to find the wavelength solution of the calibration fiber.\n')
+        #file.write('###        "w1l, w1s", Spectruum to find the wavelength solution of the science fiber (long and short exposure time).\n')
+        #file.write('###        "w2l, w2s", Spectruum to find the wavelength solution of the calibration fiber.\n')
+        file.write('###        "w1", Spectruum to find the wavelength solution of the science fiber (long and short exposure time).\n')
+        file.write('###        "w2", Spectruum to find the wavelength solution of the calibration fiber.\n')
         file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n')
         file.write('###             Combination of images before the extraction is possible, please refer to the manual for more information\n')
         file.write('###        "ws" or "wc", if the spectrum contains wavelength information to calculate the offset to the wavelength solution and the offset between both fibers of a bifurcated fiber).\n')
@@ -892,6 +956,9 @@ if __name__ == "__main__":
     del params['exist_rflat']
     del params['exp_darks']
     params = check_raw_files_infos(params, file_list)
+    
+    # Connect wavelength solutions to the correct exposure time
+    
     
     # Create the data for fits_conf.txt
     conf_data = create_configuration_file(params, file_list)

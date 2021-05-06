@@ -67,9 +67,12 @@ if os.path.isfile(sensorsfile):
         times2 = [ get_julian_datetime( datetime.datetime.strptime(dat, '%Y%m%d-%H%M%S') ) for dat in data[:,-1]]
         sensordata = np.vstack((times1, data[:,1:-1].astype(float).T, times2)).T
 else:
-    sensordata = np.array([])
+    sensordata = np.zeros((10,100))*np.nan
 
 data = read_text_file(datafile, no_empty_lines=False)
+if len(data) == 0:
+    print('Error: no datapoints found')
+    exit()
 len_entries = len( data[0].split('\t') )
 data = convert_readfile(data, [str]*len_entries, delimiter='\t', replaces=['\n'])
 data = np.array(data).T

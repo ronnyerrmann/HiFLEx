@@ -339,7 +339,7 @@ if __name__ == "__main__":
     calimages['wavelength_solution'] = copy.deepcopy( wave_sol_dict['wavesol'] )    # Needed for templates later"""
     
     if not params['started_from_p3']:       # if started from python3 environment, this won't be necessary
-        logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the loging directory {1}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?{0}'.format(os.linesep, params['logging_path']))
+        logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the logging directory {1}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?{0}'.format(os.linesep, params['logging_path']))
         
         obj_names = []
         extractions = []
@@ -497,7 +497,7 @@ if __name__ == "__main__":
                         index_e2 = np.argmin(np.abs(waves-entry[0,index_e1]))
                         if index_e2-index_s2 != index_e1-index_s1:
                             #print('should not happen', index_s1, index_e1, index_s2, index_e2, entry[index_s1:index_s1+2,0], entry[index_e1-2:index_e1,0], waves[index_s2:index_s2+2,0], waves[index_e2-2:index_e2,0]
-                            logger('Error: file {0} has not the expected number of data points between wavelengths {1} and {2}. Expected {3}, got {4} datapoints. Did you change parameter wavelength_scale_resolution during the extraction process. Please delete all extracted files for {5}.'.format(text_info[ii][0], waves[index_s2,0], waves[index_e2,0], index_e2-index_s2, index_e1-index_s1, text_info[ii][1]))
+                            logger('Error: file {0} has not the expected number of data points between wavelengths {1} and {2}. Expected {3}, got {4} data points. Did you change parameter wavelength_scale_resolution during the extraction process. Please delete all extracted files for {5}.'.format(text_info[ii][0], waves[index_s2,0], waves[index_e2,0], index_e2-index_s2, index_e1-index_s1, text_info[ii][1]))
                         fluxes[ii, index_s2:index_e2+1] = entry[1,index_s1:index_e1+1]
                         #print(ii, index_s2,index_e2,index_s1,index_e1,fluxes[ii, index_s2:index_e2+1] )
                     exptime = np.sum(info[:,1])
@@ -532,7 +532,7 @@ if __name__ == "__main__":
                     logger('Warn: found settings to combine the linearised extracted files, however parameter wavelength_scale_resolution was set to 0. Please modify wavelength_scale_resolution and delete the files in {0} that you want to be combined. Then run hiflex.py again.'.format(params['path_extraction']))
         
         logger('')      # To have an empty line
-        logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fith are the flat corrected spectra and its error. Sixth and sevens are the the continium normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The nineth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))
+        logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fifth are the flat corrected spectra and its error. Sixth and sevens are the the continuum normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The ninth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))
         logger('Info: Will try to do the RV analysis in a moment') 
         header_results_to_texfile(params)           # Save the results from the header in a logfile
         #time.sleep(2)  

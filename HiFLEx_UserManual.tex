@@ -33,8 +33,8 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 % To change: titele; date; https://github.com/ronnyerrmann/HiFLEx/archive
-\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.3.5}
-\date{April, 2021}
+\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.3.6}
+\date{May, 2021}
 \author{Ronny Errmann, EXOhSPEC team\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -107,7 +107,7 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
 \begin{itemize}\setlength\itemsep{0em}
   \item New parameter \verb|split_wavelength_solutions_at| to create wavelength solution when several chips are combined into one image.
   \item Improved finding the shift of the ThAr lines to the wavelength solution.
-  \item New parameter \verb|logging_em_lines_shift| to plot the line shift on the dector.
+  \item New parameter \verb|logging_em_lines_shift| to plot the line shift on the detector.
 \end{itemize}
 
 \subsection*{v1.3.5}
@@ -243,7 +243,7 @@ After all the calibration steps have been performed for a given instrument (see\
   \item[dark] : Apply a master dark. A dark with the same exposure time as read from the fits header will be applied. %The necessary parameters are created automatically by the script \verb|file_assignment.py|.
   \item[rflat] : Apply a master true flat. %The necessary parameters are created automatically by the script \verb|file_assignment.py|.
   \item[cosmic\_ray] : Do the cosmic ray correction using deepCR (best only on science spectra, otherwise rely on median combination). See more in Chapter~\ref{Section:train_deepCR}.
-  \item[background] : For Scattered light removal. Applies background correction by fitting a 2d polynomial against the current reduced image, excluding the area of the science and calibration traces. The fitted 2d-image is then subtracted from the current image.
+  \item[background] : For Scattered light removal. Applies background correction by fitting a 2D polynomial against the current reduced image, excluding the area of the science and calibration traces. The fitted 2D-image is then subtracted from the current image.
 \end{description}
 
 \noindent The following parameters change the way, several CCD images are combined. In the pipeline the individual frames are corrected before frames are combined.
@@ -297,11 +297,11 @@ The script \verb|file_assignment.py| reads all files in the folders (and subfold
  filename contains \verb|dark|										& dark	& dark \\
  filename contains \verb|flat| but not \verb|sflat| 				& flat	& flat \\
  \verb|raw_data_imtyp_keyword| equals \verb|raw_data_imtyp_flat| 	&       & \\
- \hspace{1cm} and filename dosn't contain \verb|sflat| 				& flat  & flat \\
+ \hspace{1cm} and filename doesn't contain \verb|sflat| 				& flat  & flat \\
  filename contains \verb|arc|						   				& -- 	& wave \\
  \verb|raw_data_imtyp_keyword| equals \verb|raw_data_imtyp_bias| 	& bias	& bias \\
  \verb|raw_data_imtyp_keyword| equals \verb|raw_data_imtyp_dark| 	& dark	& dark \\
- none of the above and the filname doesn't start with \verb|arc|  & science & --   \\
+ none of the above and the filename doesn't start with \verb|arc|  & science & --   \\
  \end{tabular}
 \end{table}
 
@@ -309,7 +309,8 @@ The script \verb|file_assignment.py| reads all files in the folders (and subfold
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/UI_prepare_filelist}
   \end{center} 
-  \caption{User interface to select which files should be used for which calibration step. In this selection the Dark-files will be used for dark correction, the Flat-files (Tungsten lamp) will be used to find the science traces and to find the blaze function, the long-exposed ThAr will be used to find the traces of the calibration fiber and for creating the wavelength solution for the calibration fiber, the short-exposed ThAr will also be used for creating the wavelength solution (for lines saturated in the long exposure). The spectra of the stars will only used to be extracted, together with the long-exposed ThAr individually and the combined ThAr with the long exposures (\textit{ecThAr\_long}). The first two ThAr files will not be used. Please note, in this data set no data to create a wavelength solution in the science fiber is available.
+  \caption{User interface to select which files should be used for which calibration step. In this selection the Dark-files will be used for dark correction (ignoring the Darks with 1\,s exposure time), the Flat-files (Tungsten lamp) will be used to find the science traces and to find the blaze function, and the long-exposed ThAr in the calibration fiber will be used to find the traces of the calibration fiber. ThAr of short and long exposure, taken around the Tungsten spectra, are used to create the wavelength solution in the science and calibration fiber. (Short exposure to identify lines that are saturated in the long exposure.) All long exposed ThAr-spectra are used to determine the drift both in the science and calibration wavelength solution, and the relative drift between solutions by assigning them to \textit{Wave shft sci} and \textit{Wave shft sci}. \\
+  Once the preparation of the above steps are done, spectra will be extracted. The spectra of the sun will be extracted individually, either with the standard setting, or, in case of some of the ``spot''-data with modified settings, called \textit{test1} and \textit{test2}, which are assigned in the next GUI. Furthermore, the linearised spectra of the ``nospot''-data will be combined using a weighted average. The long exposed ThAr-images, that are used to create the wavelength solution, will also be extracted, after combining the files into \textit{ThAr\_scilong} or \textit{ThAr\_callong}.
     \label{Fig:UI_prepare_filelist}}
 \end{figure}
 
@@ -327,8 +328,8 @@ The script \verb|file_assignment.py| reads all files in the folders (and subfold
       \item[Real flat:] For master full flat (detector evenly illuminated).
       \item[Sci. trace, Cal. trace:] To find the traces of the science and calibration fiber (for bifurcated fiber input).
       \item[Blaze:] Use the file to create a master file from which the blaze function is extracted.
-      \item[Wave long, Wave short:] Files from which the wavelength solution for the calibration fiber will be created. The files will first combined into a master file and then extracted. In case of single fiber fed spectrographs, these settings should be used.
-      \item[Wave Sci. long, short:] For bifucated fiber fed spectrographs to create the wavelength solution for the science fiber.
+      \item[Wave Sci.:] Files from which the wavelength solution for the calibration fiber will be created. The files will first combined into a master file and then extracted. In case of single fiber fed spectrographs, these settings should be used.
+      \item[Wave Cal.:] For bifurcated fiber fed spectrographs to create the wavelength solution for the calibration fiber.
       \item[Wave shft cal, Wave Sci shft:] Define the files from which a time dependent drift between the wavelength solution is calculated. If ThAr light is used in both fibers, than both calibrations should be ticked. The script will calculate the shift using the pairs closest in time. For single fiber fed spectrographs only "Wave shft cal" is used to derive the shift from the wavelength solution.
       \item[Extract:] Extract these files individually. The processing as given in parameter \verb|extract_calibs_create_g| will be assigned.
       \item[Further entries:] Further ways to extract the science spectra is possible. Several options can be combined using comma:
@@ -349,7 +350,7 @@ The script \verb|file_assignment.py| reads all files in the folders (and subfold
     \label{Fig:UI_prepare_fitsconf_objectlist}}
 \end{figure}
 
-After the assignment which files to be used for which calibration the data reduction steps for each of these calibrations are shown in a GUI (see Figure~\ref{Fig:UI_prepare_fitsconf_objectlist}). Thereby the information are read from the configuration file from section \verb|*_calibs_create_g|. The describtion of the parameters can be found in \ref{Section:parameters_CCD_proc}.
+After the assignment which files to be used for which calibration the data reduction steps for each of these calibrations are shown in a GUI (see Figure~\ref{Fig:UI_prepare_fitsconf_objectlist}). Thereby the information are read from the configuration file from section \verb|*_calibs_create_g|. The description of the parameters can be found in \ref{Section:parameters_CCD_proc}.
 
 \noindent The header information about the coordinates of the object are shown, if available. Furthermore, the information stored in the file given in parameter \verb|object_file| are read, and if the file does not exist or the file does not contain the object, the object name is looked up on Simbad. Please note that the position of Moon, Jupiter, and Sun are calculated by the pipeline using the mid-exposure time if the object name can be derived from the header or the filename. Therefore the object is not required in the object list.
 
@@ -358,7 +359,7 @@ After the assignment which files to be used for which calibration the data reduc
 
 \subsection{Removing/Adding/Extending/Shortening the automatically found traces}
 
-After checking the results (see \ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to its high flexibility. Additionally, in low light areas it can also be that the traces stop prematurely, while strong emission features are still detectedable in the science images, hence the user might want to extend the orders. In case of imaging the spectra on multiple detectors, orders might fall between the detectors, hence a dummy order needs to be added later, as the wavelength solution requires consecutive orders (later these orders can be excluded again using \verb|minimum_SNR|). All this is possible in a GUI, as seen in Figure~\ref{Fig:GUI_remove_add_modify_orders}. If \verb|GUI=True|, then the GUI will be opened automatically, otherwise it can be openend by running \verb|python <path_hiflex>/remove_add_modify_orders.py|. Once finished, the old files will be moved into a sub-folder and then the user needs to run \verb|hiflex.py| again.
+After checking the results (see \ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to its high flexibility. Additionally, in low light areas it can also be that the traces stop prematurely, while strong emission features are still detectable in the science images, hence the user might want to extend the orders. In case of imaging the spectra on multiple detectors, orders might fall between the detectors, hence a dummy order needs to be added later, as the wavelength solution requires consecutive orders (later these orders can be excluded again using \verb|minimum_SNR|). All this is possible in a GUI, as seen in Figure~\ref{Fig:GUI_remove_add_modify_orders}. If \verb|GUI=True|, then the GUI will be opened automatically, otherwise it can be opened by running \verb|python <path_hiflex>/remove_add_modify_orders.py|. Once finished, the old files will be moved into a sub-folder and then the user needs to run \verb|hiflex.py| again.
 
 \begin{figure} 
   \begin{center}
@@ -613,7 +614,7 @@ The following steps give an overview about additional parameters which are not c
   \begin{center}
     \includegraphics[width=0.8\textwidth]{./figures/traces_description}
   \end{center} 
-  \caption{A cross section through one order in a frame to determine the traces of the orders (solid black). The centre of the order is determinded from the highest flux in a polynomial fit (red dotted vertical lines and red dashed line). The extraction boundarys (black dotted-dashed vertical lines) are set to where the flux reaches 5\% of the flux range (\textbf{width\_percentile = 5}), using the minimum flux as zero point.
+  \caption{A cross section through one order in a frame to determine the traces of the orders (solid black). The centre of the order is determined from the highest flux in a polynomial fit (red dotted vertical lines and red dashed line). The extraction boundaries (black dotted-dashed vertical lines) are set to where the flux reaches 5\% of the flux range (\textbf{width\_percentile = 5}), using the minimum flux as zero point.
     \label{Fig:traces_description}}
 \end{figure}
 
@@ -626,16 +627,16 @@ To get the best results, the following data (or more files) should be taken. Ple
   \item Tungsten (11x, white light source through the science fiber), with the filename containing \textbf{flat}, \textbf{tung}, or \textbf{whli}. The calibration fiber should be dark for this data.
   \item Wavelength calibration data for the science fiber (5x, calibration lamp through the science fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc}, \textbf{ThAr}, \textbf{Th\_Ar}, or \textbf{UNe}.
   \item Wavelength calibration data for the calibration fiber (5x, calibration lamp through the calibration fiber, alternating a short (e.g. 5\,s) and a long (e.g. 120\,s) exposure time). The filename should start with \textbf{arc2}, \textbf{ThAr2}, \textbf{Th\_Ar2}, or \textbf{UNe2}. Can be taken with the wavelength calibration in the science fiber, in this case both names should be in the filename, e.g.  \textbf{thar\_thar2}.
-  \item (\textit{Only necessary for unstabilised spectrographs, where the the offset in dispersion direction between the fibers of a bifurcated fiber might vary over time}): wavelength calibration in science (and calibration fiber). Occationally a long (e.g. 60\,s) exposure time between science frames. Same filename as before.
+  \item (\textit{Only necessary for unstabilised spectrographs, where the the offset in dispersion direction between the fibers of a bifurcated fiber might vary over time}): wavelength calibration in science (and calibration fiber). Occasionally a long (e.g. 60\,s) exposure time between science frames. Same filename as before.
 %  \item Blazecor (11x, white light source and calibration lamp), the filename should be \textbf{blazecor}, \textbf{sflatThAr}, \textbf{whli-UNe}, or similar.
-  \item (optinal) Bias (11x) and/or Darks (11x, for the exposure time of the true Flat, Tungsten, and Science images)% and Blazecor)
+  \item (optional) Bias (11x) and/or Darks (11x, for the exposure time of the true Flat, Tungsten, and Science images)% and Blazecor)
   \item Science images: It is best to start the filename with the object name (as in reference file given by parameter \verb|object_file|, see \ref{Section:create_object_list_file}). However, in order to try to match the object name with entries in the \verb|object_file| the parts of the filename containing ``\_'' and ``-'' are stripped away one by one from the end of the filename.
 \end{itemize}
 The suggestions are for bifurcated fiber input to the spectrograph. If a spectrograph with a single fiber is used, then the same data should be taken using the same fiber (setting parameter \verb|arcshift_side = center| will process the data correctly).
 
 
 \subsection{Measuring the drift of the wavelength solution}
-The wavelength solution is only created once, assuming that the user provides a high quality set of spectra for this step. To calibrate the spectrum during the observation the drift can be measured using emission lamp spectra. For each line that was used to create the wavelength solution a Gaussian fit is applied to the expected area in the emssion line spectrum and the pixel-offset measured. The distribution of the offsets is then binned with few different binning widths and a Gaussian fitted. The centre of the Gaussian and the width are used for the corrections.
+The wavelength solution is only created once, assuming that the user provides a high quality set of spectra for this step. To calibrate the spectrum during the observation the drift can be measured using emission lamp spectra. For each line that was used to create the wavelength solution a Gaussian fit is applied to the expected area in the emission line spectrum and the pixel-offset measured. The distribution of the offsets is then binned with few different binning widths and a Gaussian fitted. The centre of the Gaussian and the width are used for the corrections.
 
 Depending on the spectrograph and available data, they can be used to
 \begin{itemize}
@@ -658,7 +659,7 @@ In order to calculate the barycentric correction the time of the observation (or
  \end{enumerate}
  \item The pointing of the telescope (RA and DEC) will be derived from the following sources (using the first available source in the following list:
  \begin{enumerate}\setlength\itemsep{0em}
-  \item Reading the object coordinates from a list of objects (see Chaper~\ref{Section:create_object_list_file}).
+  \item Reading the object coordinates from a list of objects (see Chapter~\ref{Section:create_object_list_file}).
   \item Reading the object coordinates and epoch from the image header, using the header keys defined in the beginning of procedure \textit{get\_barycent\_cor}: ra\_keys, dec\_keys, epoch\_keys (the first available entry of each list will be used, if necessary these lists can be extended).
   \item If the object name contains sun, moon, or jupiter then the coordinates of the solar system are calculated for the mid of the observing time.
  \end{enumerate}
@@ -749,15 +750,15 @@ During the step to find the wavelength solution, the pipeline logs data similar 
 \begin{lstlisting}[style=base, basicstyle=\tiny]
 Info: To match the most lines in the emission line spectrum with the old wavelength solution, a shift of 8 orders,
  a multiplier to the resolution of 0.994, a shift of -300 px, and a shift of 0.0 px per order needs to be applied.
- 7628 lines were identified. The deviation is 0.1074 Angstrom.
+ 7628 lines were identified. The deviation is 0.1074 Angstroms.
 Info: used 3413 lines. The standard deviation (using 8 degrees of freedom) of the residuals between the lines and
- the fit is 0.00334 Angstrom. The FWHM of the emission lines results in an R = 156231 +- 45280. The 2-pixel
+ the fit is 0.00334 Angstroms. The FWHM of the emission lines results in an R = 156231 +- 45280. The 2-pixel
  resolution (around the identified lines) is R = 312437 +- 12940. The deviation to the line fit converts into a
- resolution R = 1635506. The average of the abs of the residuals is 0.00252 Angstrom. 
-Info: A 2d polynom fit with 4 orders in dispersion direction (along the traces) and 4 orders in cross-dispersion
+ resolution R = 1635506. The average of the abs of the residuals is 0.00252 Angstroms. 
+Info: A 2D polynom fit with 4 orders in dispersion direction (along the traces) and 4 orders in cross-dispersion
  direction was used. With this solution, the offset between aperture and real orders is 84. To fulfil the grating
  equation the central pixel of the individual orders needs to be 3067.0 + -0.0*order + 0.0*order**2.With this values
- the standard deviation of the residuals between the central wavelengths and the grating equation is 0.159 Angstrom.
+ the standard deviation of the residuals between the central wavelengths and the grating equation is 0.159 Angstroms.
  Using the original solution gives an offset of 84.
 
 ap cenwav minwav maxwav range Ang/  name numb gausswi gausswi min_   max_   range_reflin
@@ -806,7 +807,7 @@ The last lines give the information for all apertures. Columns, for which no use
   \begin{center}
     \includegraphics[width=\textwidth]{./figures/arc_line_identification_residuals}
   \end{center} 
-  \caption{Residuals between the identified catalogue lines and the wavelength solution. Colorcoded are the different apertures.
+  \caption{Residuals between the identified catalogue lines and the wavelength solution. Colour-coded are the different apertures.
     \label{figure_arc_line_identification_residuals}}
 \end{figure}
 
@@ -833,7 +834,7 @@ The final fits file contains the original header and some additional information
   \setcounter{enumi}{-1}
   \item 2D array with the wavelength for each aperture and pixel in barycentric system.
   \item Extracted spectrum without any modification.
-  \item Measurement of the error the extracted spectrum (using the scatter of the residuals after fitting a 2d polynomalial to the background areas (noise in the dark/bias))
+  \item Measurement of the error the extracted spectrum (using the scatter of the residuals after fitting a 2D polynomial to the background areas (noise in the dark/bias))
   \item Blaze corrected spectrum, calculated by dividing the extracted spectrum and the normalised flat spectrum.
   \item Error of the flat corrected spectrum (residuals of a polynomial fitted to the blaze corrected spectrum).
   \item Continuum normalised spectrum. The continuum is derived by fitting a polynomial to the flat corrected spectrum, using only areas of the spectrum where no lines are located. 
@@ -934,7 +935,7 @@ This step is only done, if the CERES pipeline is installed and \verb|path_ceres|
 So far deepCR comes only with the training set for HST WFC\footnote{\url{https://github.com/profjsb/deepCR\#quick-start}}. Testing this approach has identified (science-) traces as cosmic rays (settings: \verb|cosmic_ray_settings = [deepCR, ACS-WFC-F606W-2-32, 0.999]| and \verb|path_reduced| set to a valid path to check cosmic ray removal results).
 
 It is possible to train the model on the users camera. The steps are described in 
-\url{https://github.com/profjsb/deepCR/blob/master/docs/tutorial_train.rst}~. A good dataset is probably to use as many science frames as possible and search for cosmic rays (inlcuding along the traces).
+\url{https://github.com/profjsb/deepCR/blob/master/docs/tutorial_train.rst}~. A good dataset is probably to use as many science frames as possible and search for cosmic rays (including along the traces).
 % started cooding train_cosmic_ray_deep_learning.py
 
 
@@ -972,25 +973,17 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
 
 
 \begin{table}[htb]
- \caption{Options for the data on the x-axis for plotting.\vspace{-0.9\baselineskip} }
+ \caption{Options for the data on the x-axis for plotting. The tick for wavelength can be set, then it will use the wavelength instead of pixel as basis\vspace{-0.9\baselineskip} }
  \label{Tab:plotting_options}
  \begin{tabularx}{\textwidth}{c X}
   (empty)    & The flux is plotted against the pixel along the CCD in dispersion direction.   \\
-  \textbf{w} & The flux is plotted against the wavelength (stored in data type 0).   \\
+  %\textbf{w} & The flux is plotted against the wavelength (stored in data type 0).   \\
   \textbf{f} & The Fourier transformation is plotted against the period (in pixel).    \\
   \textbf{l} & The Lomb-Scargle-Periodogram is plotted against the period (in pixel).   \\
-  \textbf{wl} & The Lomb-Scargle-Periodogram is plotted against the period (in wavelength). If you look for periodic signals in the spectrum, this is what you very probably should use.    \\
-  \textbf{w9} & (w followed by number): The plot is done against the wavelength (stored in data type 9/number).   \\
+  %\textbf{wl} & The Lomb-Scargle-Periodogram is plotted against the period (in wavelength). If you look for periodic signals in the spectrum, this is what you very probably should use.    \\
+  \textbf{w9} & (w followed by number): The plot is done against the wavelength (stored in data type 9 (or any other number)).   \\
  \end{tabularx}
 \end{table}
-
-%\subsection{Finding the radial velocity }
-
-%\noindent The radial velocity measurement is based on the \textit{CERES} pipeline. Thereby a template is cross correlated with the scientific spectrum. For the analysis the following steps need to be run:
-%\begin{lstlisting}[style=base]
-%ls extracted/*.fits > analysis_files.lst
-%python <path to script>/find_rv.py
-%\end{lstlisting}
 
 
 % -------------------------------------------------------------------------------------------
@@ -1006,7 +999,7 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
 % HD 10180: G1V star with 7 planets: http://ui.adsabs.harvard.edu/abs/2011A%26A...528A.112L
 Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres, use '2004 07 12' and Program ID '072.C-0488(E)' for calibration data taken by the RV exoplanet search team, or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*.fits.Z) can be extracted with:
 
-\textbf{Extract both chips together (after identifting the order, a dummy order has to be added, don't use background correction):}
+\textbf{Extract both chips together (after identifying the order, a dummy order has to be added, don't use background correction):}
 \begin{lstlisting}[style=base]
 gunzip *.fits.Z
 cat <<EOT > extract_single_chip.py
@@ -1107,7 +1100,7 @@ Please note that the CERES pipeline uses both the red and the blue HARPS chip in
 
 \subsubsection{HARPS data reduced by the ESO Phase 3 pipeline}
 % wrong: http://archive.eso.org/wdb/wdb/eso/repro/form
-The reduced data can be found at: \url{http://archive.eso.org/wdb/wdb/adp/phase3_spectral/form}. Select 'ESO-3.6' and 'HARPS'. For example data use Date Obs '2015-07-30..2015-08-01' or the Run/Program ID from the results of the query for the raw data (make sure to use the ID of the science, not the calibration data). The download the data. The reduced data (*.tar) can be extracted using
+The reduced data can be found at: \url{http://archive.eso.org/wdb/wdb/adp/phase3_spectral/form}. Select 'ESO-3.6' and 'HARPS'. For example data use ``Date Obs'' '2015-07-30..2015-08-01' or the Run/Program ID from the results of the query for the raw data (make sure to use the ID of the science, not the calibration data). The download the data. The reduced data (*.tar) can be extracted using
 \begin{lstlisting}[style=base]
 cat *.tar | tar -xvf - -i
 \end{lstlisting}
@@ -1235,11 +1228,11 @@ rm extracted/*
 \begin{itemize}
   \item \textbf{logging/traces\_in\_master\_trace1.png}: Are the orders identified correctly? If yes, go to next chapter.
   \item If a lot of unexposed area is located on the image borders, adjust parameter \verb|subframe| to the correct image set. Remove everything after \textit{master\_*}.
-  \item If the orders are not running from up to down in the image, the adjust paramter \verb|rotate_frame|.  Remove everything after \textit{master\_*}.
+  \item If the orders are not running from up to down in the image, the adjust parameter \verb|rotate_frame|.  Remove everything after \textit{master\_*}.
   \item If the same order is marked with one trace in the top and a different trace in the bottom of the frame, too high binning might be the problem. 
   \item If noise was marked as order, run \verb|remove_add_modify_orders.py| and remove the wrong orders. Afterwards, run \verb|hiflex.py| again.Adjust parameter \verb|bin_search_apertures|. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
   \item If orders are missing check \textbf{logging/traces\_in\_master\_trace1\_binned.png}. If the orders are marked there correctly then adjust parameter \verb|bin_adjust_apertures|, so that the echelle orders are well separated and only pixel with similar amount of flux are median combined. Remove everything after \textit{master\_traces\_sci.fits}.
-  \item If orders are missing check \textbf{logging/mstr\_trace1\_binned.fits}. Very likely, too heavy binning was used and the orders are not destinguishable. Adjust parameter \verb|bin_search_apertures|. It could also be that \verb|traces_searchlimit_brightness| was set too high. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
+  \item If orders are missing check \textbf{logging/mstr\_trace1\_binned.fits}. Very likely, too heavy binning was used and the orders are not distinguishable. Adjust parameter \verb|bin_search_apertures|. It could also be that \verb|traces_searchlimit_brightness| was set too high. Remove everything after \textit{logging/sci\_trace1\_binned.fits}.
 \end{itemize}
 
 
@@ -1260,7 +1253,7 @@ rm extracted/*
  standard deviation of the residuals between the lines and the fit
   \end{lstlisting}
   A high number of lines should have been identified to a reasonable precision (compare to a previous night). If all is the case, go to next chapter.
-  \item \textbf{logging/arc\_line\_identification\_spectrum.pdf}: The emision lines in the extracted spectrum should match with the brightest lines from the catalogue (wavelengths in red colour, marker lengths is an indication for the catalogue brightness). If yes, go to next chapter.
+  \item \textbf{logging/arc\_line\_identification\_spectrum.pdf}: The emission lines in the extracted spectrum should match with the brightest lines from the catalogue (wavelengths in red colour, marker lengths is an indication for the catalogue brightness). If yes, go to next chapter.
   \item The lines in the above spectrum are not matching at the borders. Decrease or increase parameter \verb|polynom_order_traces|. Decrease or increase the values in \verb|opt_px_range|. Remove everything after \textit{ master\_wavelength*.fits}.
   \item The lines are completely off. Compare \textbf{logging/arctraces\_in\_master\_trace2.png} in the current directory and in the directory from where the the original wavelength solution are taken (\verb|original_master_wavelensolution_filename|). Check, that the parameters \verb|order_offset|, \verb|px_offset_order|, and \verb|px_offset_order| are large enough to cover the change between the two nights. Be sure the values are not too big. Remove everything after \textit{master\_wavelength*.fits}.
 \end{itemize}
@@ -1299,7 +1292,7 @@ If you observe strange behaviour, please contact Ronny\footnote{r.errmann@herts.
 \begin{lstlisting}[style=base]
 sh Downloads/Anaconda3-2020.07-Linux-x86_64.sh
 \end{lstlisting}
-(no superuser permissions are needed, the version might need to be changed). Anaconda will ask if \textit{Do you wish the installer to initialize Anaconda3 by running conda init?}, which is recomended to answer with yes, otherwise you might need to follow the steps below
+(no superuser permissions are needed, the version might need to be changed). Anaconda will ask if \textit{Do you wish the installer to initialize Anaconda3 by running conda init?}, which is recommended to answer with yes, otherwise you might need to follow the steps below
 
 After the installation and opening a new terminal, python should point to the one in the Anaconda installation. It can be checked by running \verb|which python|~. %
 If the result doesn't point to your Anaconda installation, but somewhere else (e.g. \verb|/usr/bin/python|), an extra entry into \verb|.bashrc| or \verb|.tcshrc| needs to be added. Check with \verb|echo $0| what environment you are using.
@@ -1403,7 +1396,7 @@ java --version
 \label{Section:serval_package}
 If you make use of the Radial Velocity analysis from the SERVAL , please cite Zechmeister et al. 2018\footnote{\url{http://ui.adsabs.harvard.edu/abs/2018A&A...609A..12Z}}.
 
-To install SERVAL please follow the instructions as given at\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. Serval only works with python~2.7, hence for testing you might want to load the Python~2 environment.
+To install SERVAL please follow the instructions as given at\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. SERVAL only works with python~2.7, hence for testing you might want to load the Python~2 environment.
 
 SERVAL can be controlled with an instrument file. This has to be provided in the serval \verb|src| folder. Below is a way to create a soft link it when following the installing instructions.
 \begin{lstlisting}[style=base]
@@ -1420,7 +1413,7 @@ If the SERVAL RV analysis fails, try to run it with a subset of orders for the \
 \label{Section:Explanation_CERES_pipeline}
 If you make use of the Radial Velocity analysis from the CERES , please cite Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B}}.
 
-The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres}. To make it work, please follow the Installation Chapter in the README.md. CERES requires python 2.7. Please note that the compilers in the CERES install process ignore any anconda settings and go straight to the system packages (e.g. for SSEPhem), hence you might want to install it when anaconda is not loaded. The following lines worked in Mai 2020:
+The Package can be downloaded from\\ \url{https://github.com/rabrahm/ceres}. To make it work, please follow the Installation Chapter in the README.md. CERES requires python 2.7. Please note that the compilers in the CERES install process ignore any anaconda settings and go straight to the system packages (e.g. for SSEPhem), hence you might want to install it when anaconda is not loaded. The following lines worked in May 2020:
 \begin{lstlisting}[style=base]
 pip install scipy numpy
 git clone https://github.com/rabrahm/ceres.git
@@ -1448,7 +1441,7 @@ sudo python -m pip install pip
 
 To solve \verb|jplephem.cc:2:10: fatal error: arrayobject.h: No such file or directory| rename in \verb|utils/SSEphem/jplephem.cc| line 2 from \verb|#include "arrayobject.h"| to \verb|#include "numpy/arrayobject.h"|~.
 
-\paragraph{Problemfixing CERES\\}
+\paragraph{Troubleshooting CERES\\}
 
 If the script crashes with:
 \begin{lstlisting}[style=base]
@@ -1579,7 +1572,7 @@ Please find the changes of newer versions in Chapter~\ref{Section:Changelog_new}
   \item Improvement in the way the pixel-shift is calculated from the calibration lines.
   \item Improvement of code to speed up data reduction and extraction.
   \item Added parameter \verb|minimum_SNR| to allow the user to ignore extracted data below a certain signal-to-noise ratio.
-  \item Bugfixing.
+  \item Bug-fixing.
   \item Added parameter \verb|traces_searchlimit_brightness| to allow user defined search for orders.
   \item Added parameter \verb|log_wavesolshift_details| to allow the skipping of time consuming logging.
 \end{itemize}
@@ -1594,8 +1587,8 @@ Please find the changes of newer versions in Chapter~\ref{Section:Changelog_new}
 \subsection*{v1.3.1}
 \begin{itemize}\setlength\itemsep{0em}
   \item Added parameter \verb|logging_crossdispersion_shift|
-  \item Improved measurement of the offset between wavelength solutions between fibers in a bifurcated setting; bugfixed so that wavelength solution in the science fiber is used for science spectrum
-  \item General improvements and bugfixing
+  \item Improved measurement of the offset between wavelength solutions between fibers in a bifurcated setting; bug-fixed so that wavelength solution in the science fiber is used for science spectrum
+  \item General improvements and bug-fixing
 \end{itemize}
 
 \subsection*{v1.3.0}
@@ -1628,7 +1621,7 @@ Please find the changes of newer versions in Chapter~\ref{Section:Changelog_new}
   \item Added SERVAL radial velocity analysis
   \item Bugfixing CERES RVs
   \item Format of the object list was changed to keep compatibility with CERES. To convert run \\ \verb|transform_coordinate_file_before_v1.0.0_202004.py| before running any other Script. % When installing this version at Narit Change also GLOBALutils there
-  \item Improved code, general bugfixes, aditional features
+  \item Improved code, general bugfixes, additional features
 \end{itemize}
 
 \subsection*{v0.4.3}
