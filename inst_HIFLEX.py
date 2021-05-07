@@ -83,7 +83,6 @@ def scan(self, s, pfits=True):
 def data(self, orders=None, pfits=True):
    if 1:  # read order data
       if hasattr(self, 'hdu'):   # read directly
-         print 1111
          data = self.hdu.getdata()
       else:
          if not hasattr(self, 'hdulist'):

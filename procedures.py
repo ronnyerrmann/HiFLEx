@@ -6956,7 +6956,7 @@ def create_pseudo_wavelength_solution(number_orders):
         wavelength_solution_arclines.append([0])     #The wavelength of the reference lines
     return dict(wavesol=np.array(wavelength_solution), reflines=np.array(wavelength_solution_arclines) )
 
-def fit_wavelengths_solution_2D(arc_lines_wavelength, cen_pxs, order_offset, polynom_order_trace, polynom_order_intertrace):
+def fit_wavelengths_solution_2d(arc_lines_wavelength, cen_pxs, order_offset, polynom_order_trace, polynom_order_intertrace):
         x = arc_lines_wavelength[:,1]-cen_pxs
         y = 1.0/(arc_lines_wavelength[:,0]+order_offset)
         
@@ -10126,7 +10126,8 @@ def rv_analysis_ceres(params, spec, fitsfile, obname, reffile, mephem, vsini):
 def prepare_for_rv_packages(params):
     """
     Prepare files for TERRA and SERVAL and CERES
-    
+    return files_RV: list of filenames
+    return headers: dictionary, key is the entry in files_RV, entry is the header
     """
     global calimages
     if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) <= 100:
@@ -10153,6 +10154,8 @@ def prepare_for_rv_packages(params):
             continue
         obj_name = im_head['HiFLEx OBJNAME'].lower()
         obsdate_midexp = datetime.datetime.strptime(im_head['HiFLEx DATE-MID'],"%Y-%m-%dT%H:%M:%S.%f")
+        if params['started_from_p3']:   # If started from another hiflex session, then don't create the files again
+            continue
         if 'path_rv_terra' in params.keys():
             # CSV file for TERRA
             fname = params['path_rv_terra']+obj_name+'/data/'+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
@@ -10261,9 +10264,9 @@ def run_serval_rvs(params,):
     if not( os.path.exists(params['path_serval']+'serval') and os.path.exists(params['path_serval']+'python') and os.path.exists(params['path_rv_serval']) ):
         logger('Warn: SERVAL is not installed or path_serval is wrong (currently: {0}), or the folder for the "filelist_* are missing in {1}'.format(params['path_serval'], params['path_rv_serval']))
         return
-    if sys.version_info[0] > 2:
-        logger('Warn: This is a python3 environment, however, SERVAL requires a python2 environment')
-        return
+    #if sys.version_info[0] > 2:
+    #    logger('Warn: This is a python3 environment, however, SERVAL requires a python2 environment')      # Not true after April 2021
+    #    return
     global calimages
     obj_names = []
     logger('Info: Preparing for the SERVAL analysis.')
@@ -10333,7 +10336,7 @@ def run_serval_rvs(params,):
           ' The results are stored in {0}<object name>/<object name>.rvc.dat.'+\
           ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially orders with low SN).'+\
           ' You can also modify the parameters in {0}conf_hiflex_serval.txt , e.g. to select a different dataset or a different order to measure the SNR.'+\
-          ' The command history can be found in {0}cmdhistory.txt. Before running serval: cd {0}').format(params['path_rv_serval']))
+          ' The command history can be found in {0}cmdhistory.txt. Before running serval set variable: bash: export PYTHONPATH={0} ; csh: setenv PYTHONPATH {0} ; and cd {1}\n').format(pypath, params['path_rv_serval']))
 
 def run_ceres_multicore(kwargs):
     [file_RV, params, headers, force_rvs, stellar_par] = kwargs

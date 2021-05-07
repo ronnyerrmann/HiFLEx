@@ -533,51 +533,55 @@ if __name__ == "__main__":
         
         logger('')      # To have an empty line
         logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fifth are the flat corrected spectra and its error. Sixth and sevens are the the continuum normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The ninth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))
-        logger('Info: Will try to do the RV analysis in a moment') 
         header_results_to_texfile(params)           # Save the results from the header in a logfile
+        logger('Info: Will try to do the RV analysis in a moment') 
         #time.sleep(2)  
-    if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) > 100:
-        run_here = True
-        if sys.version_info[0] > 2:             # Try to load a python 2 environment
-            anaconda = sys.executable.split('bin{0}python'.format(os.sep))[0]
-            if anaconda.lower().find('conda') != -1:
-                log_python2 = 'logfile_python2'
-                if anaconda.lower().find('conda') < anaconda.find('{0}envs{0}'.format(os.sep)):
-                    anaconda = anaconda.split('envs{0}'.format(os.sep))[0]
-                cmd  = '__conda_setup="$('
-                cmd += "'{1}bin{0}conda' 'shell.bash' 'hook' 2> /dev/null)".format(os.sep, anaconda)
-                cmd += '" ; if [ $? -eq 0 ]; then eval "$__conda_setup" ; else '
-                cmd += 'if [ -f "{1}etc{0}profile.d{0}conda.sh" ]; then . "{1}etc{0}profile.d{0}conda.sh" ; else export PATH="{1}bin{2}$PATH" ;'.format(os.sep, anaconda, os.pathsep)
-                cmd += ' fi ; fi ; unset __conda_setup ; '
-                cmd += 'conda activate hiflex_p2 ; '
-                cmd += 'python {0}/hiflex.py {1} started_from_p3=True'.format(os.path.dirname(sys.argv[0]), ' '.join(sys.argv[1:]) )
-                logger('Info: Loading a python 2 environment, as SERVAL and CERES require python 2 and this is a python 3 environment.'+
-                       ' The progress of the process can be watched in logfile or {0}'.format(log_python2)+
-                       ' Running the following commands to start the other environment:\n{0}'.format(cmd))
-                if os.path.isfile(log_python2):
-                    os.system('rm {0}'.format(log_python2))
-                with open(log_python2, 'a') as logf:
-                    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True, executable='/bin/bash', stdout=logf, stderr=subprocess.STDOUT)    # shell=True is necessary
-                    p.communicate(input=os.linesep.encode())                                       # This waits until the process needs the enter
-                    code = log_returncode(p.returncode, 'Please check {0} for the error message. You might want to run the pipeline again in the Python 2 environment.'.format(log_python2))
-                if code == 0:    # It run through:
-                    run_here = False
-                else:
-                    logger('Warn: Loading a python 2 environment has failed or something crashed within the python 2 environment, this will prevent SERVAL and CERES from running. '+\
-                           'Please check {1} and that the following line works in a clear terminal (e.g. after running "env -i bash --norc --noprofile"):\n\n{0}\n'.format(cmd, log_python2))
-            else:
-                logger('Warn: SERVAL and CERES might not work. This is a python3 environment, however, it was not started by conda and the script does not know how to get to a python2 environment')
-        if run_here:    
+        if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) > 100:
+            # Run RV analysis that can be run
             files_RV, headers = prepare_for_rv_packages(params)
-        
             run_terra_rvs(params)
             run_serval_rvs(params)
-            run_ceres_rvs(params, files_RV, headers)
+            # Prepare RV analysis for CERES
+            if sys.version_info[0] > 2:             # Try to load a python 2 environment
+                anaconda = sys.executable.split('bin{0}python'.format(os.sep))[0]
+                if anaconda.lower().find('conda') != -1:
+                    log_python2 = 'logfile_python2'
+                    if anaconda.lower().find('conda') < anaconda.find('{0}envs{0}'.format(os.sep)):
+                        anaconda = anaconda.split('envs{0}'.format(os.sep))[0]
+                    cmd  = '__conda_setup="$('
+                    cmd += "'{1}bin{0}conda' 'shell.bash' 'hook' 2> /dev/null)".format(os.sep, anaconda)
+                    cmd += '" ; if [ $? -eq 0 ]; then eval "$__conda_setup" ; else '
+                    cmd += 'if [ -f "{1}etc{0}profile.d{0}conda.sh" ]; then . "{1}etc{0}profile.d{0}conda.sh" ; else export PATH="{1}bin{2}$PATH" ;'.format(os.sep, anaconda, os.pathsep)
+                    cmd += ' fi ; fi ; unset __conda_setup ; '
+                    cmd += 'conda activate hiflex_p2 ; '
+                    cmd += 'python {0}/hiflex.py {1} started_from_p3=True'.format(os.path.dirname(sys.argv[0]), ' '.join(sys.argv[1:]) )
+                    logger('Info: Loading a python 2 environment, as CERES requires python 2 and this is a python 3 environment.'+
+                           ' The progress of the process can be watched in logfile or {0}'.format(log_python2)+
+                           ' Running the following commands to start the other environment:\n{0}'.format(cmd))
+                    if os.path.isfile(log_python2):
+                        os.system('rm {0}'.format(log_python2))
+                    with open(log_python2, 'a') as logf:
+                        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True, executable='/bin/bash', stdout=logf, stderr=subprocess.STDOUT)    # shell=True is necessary
+                        p.communicate(input=os.linesep.encode())                                       # This waits until the process needs the enter
+                        code = log_returncode(p.returncode, 'Please check {0} for the error message. You might want to run the pipeline again in the Python 2 environment.'.format(log_python2))
+                    if code > 0:    # It didn't run through:
+                        logger('Warn: Loading a python 2 environment has failed or something crashed within the python 2 environment, this will prevent CERES from running. '+\
+                               'Please check {1} and that the following line works in a clear terminal (e.g. after running "env -i bash --norc --noprofile"):\n\n{0}\n'.format(cmd, log_python2))
+                else:
+                    logger('Warn: CERES might not work. This is a python3 environment, however, it was not started by conda and the script does not know how to get to a python2 environment')
+            else:
+                # Run CERES, or if it's a python 2 environment
+                run_ceres_rvs(params, files_RV, headers)
+            
+            # Collect all RV results
             rv_results_to_hiflex(params)
      
             header_results_to_texfile(params)           # Save the results from the header in a logfile
-    else:
-        logger('Info: Using a pseudo wavelength solution -> no RV analysis')   
+        else:
+            logger('Info: Using a pseudo wavelength solution -> no RV analysis')   
+    else:       # Started from p3
+        files_RV, headers = prepare_for_rv_packages(params)     # Won't recreate the folders for TERRA/SERVAL if started_from_p3=True
+        run_ceres_rvs(params, files_RV, headers)
         
     logger('Finished')
     log_params(params)
