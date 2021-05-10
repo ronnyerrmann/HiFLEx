@@ -2142,11 +2142,13 @@ def create_shifted_array(input_list, shifts, keep_length=True, end_to_beginning=
             
     for index, shift in enumerate(shifts):
         result[index,:] = np.roll(input_list, shift)
+        #print('a',shift,result[index,:])
         if not end_to_beginning and keep_length:
             if shift < 0:
                 result[index,shift:] = replace_undefined
             elif shift > 0:
                 result[index,:shift] = replace_undefined
+        #print('b',shift,result[index,:])
     if not keep_length:
         begin = np.max(shifts)
         end = np.min(shifts)
@@ -4045,9 +4047,10 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
         index += number_good_data
         # Get some idea about the spacing between lines - if the lines are only 10 px testing 20px will be too much
         px_pos = np.sort(data[range_data,3])
+        # Doesn't make it better in case of big shifts: 
         pos_diff = px_pos[1:] - px_pos[:-1]
         if pos_diff.shape[0] > 0:
-            maxshift = min(np.percentile(pos_diff,5), maxshift)
+            maxshift = min(np.percentile(pos_diff,20), maxshift)        # 20 shouldn't affect 20px
     maxshift = max(maxshift, 4, np.median(FWHM[:,0])*2)     # Is about 9 for HARPS, this is wider than the fit when the lines are identified -> Gauss fit is less precicse
     
     data[:,3] += in_shift
@@ -4076,7 +4079,8 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     # [0] = number_repeat, [1] = repeat in the step, [2] = fine, [3] = good data points, [4] = shift_med_bin, [5] = shift_std_bin, [6] = shift_med_gauss, [7] = shift_std_gauss
     for number_repeat in range(max_number_repeat):
         # make a 2D array for each position        
-        shift_xarr = create_shifted_array(xarr, shift_range)        # one line for each shifted spectrum
+        shift_xarr = create_shifted_array(xarr, -1*shift_range[::-1])        # one line for each shifted spectrum; -1*shift_range after seeing a bug when shift was -18px on 20210507; [::-1] to reorder the values again to previous 
+        #print('shift array', shift_xarr, shift_range, xarr)
         shift_xarr_defined = ~np.isnan(shift_xarr) 
         shift_xarr[~shift_xarr_defined] = -1           # nans will otherwise become the smallest/largest int number
         shift_xarr = shift_xarr.astype(int)            
@@ -4104,6 +4108,8 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
             #print(data[ii,[1,3]], xx[0], xx[-1])
             if fine:                    # if xx is int then popt center will be int?
                 popt = prepare_and_fit_gauss(xx[notnan], yy[notnan], [np.percentile(xx[notnan],10), np.percentile(xx[notnan],90)], FWHM[order,0], significance=sigma)
+                #if order==18:
+                #    print(popt, order, data[ii,2], data[ii,3], xx[notnan], np.round(yy[notnan]), [np.percentile(xx[notnan],10), np.percentile(xx[notnan],90)], FWHM[order,0] )
                 """maxFWHM = int(round(np.median(FWHM[:,0])*1.5))      # better: max(1, int(round(estimate_width(im)*2.35482*1.5)))
                 range_arr = range(max(0,xpos-maxFWHM*2),min(ass[1],xpos+maxFWHM*2+1))
                 popt2 = centroid_order(xarr[range_arr], aspectra[order,range_arr], xpos, maxFWHM, significance=2, blended_gauss=False)     # Creates a smaller scatter
