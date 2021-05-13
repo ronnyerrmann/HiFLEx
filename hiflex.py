@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+#import cpython
+
 from procedures import *
 
 # =============================================================================
@@ -217,7 +219,7 @@ if __name__ == "__main__":
                     params['order_offset'] = [0,0]
                     params['px_offset'] = [-10,10,2]
                     params['px_offset_order'] = [-0.2,0.2,0.1]
-               wave_sol_ori_dict = read_wavelength_solution_from_fits(params['original_master_wavelensolution_filename'])
+                wave_sol_ori_dict = read_wavelength_solution_from_fits(params['original_master_wavelensolution_filename'])
                  # Find the new wavelength solution
                 wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_ori_dict['wavesol'], 
                                                            wave_sol_ori_dict['reflines'], reference_lines_dict, calimages['{0}_trace'.format(calib[2])], show_res=params['GUI'], search_order_offset=True)
