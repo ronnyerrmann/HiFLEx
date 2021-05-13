@@ -35,8 +35,17 @@ if True:
     selectd.append([ 'data', 5, 12, None, '', 'k', '', 'o', 2, '', 'Number' ])
     select.append(selectd)
     selectd = []
-    selectd.append([ 'sensordata', 0, 1, None, 'Room - Wall', 'b', '', 'o', 2, '', '' ])
-    selectd.append([ 'sensordata', 0, 2, None, 'Room - front right', 'r', '', 'o', 2, 'JD [d]', 'Temperature' ])
+    selectd.append([ 'sensordata', 0, 1, None, 'Room - Wall', 'tab:blue', '', 'o', 2, '', '' ])
+    #selectd.append([ 'sensordata', 0, 2, None, 'Room - front right', 'tab:orange', '', 'o', 2, '', '' ])
+    #selectd.append([ 'sensordata', 0, 3, None, 'Room - back left', 'tab:green', '', 'o', 2, '', '' ])
+    selectd.append([ 'sensordata', 0, 5, None, 'Spectrograph - low between fiber and AO', 'tab:red', '', 'o', 2, '', '' ])
+    #selectd.append([ 'sensordata', 0, 6, None, 'Spectrograph - above fiber', 'tab:purple', '', 'o', 2, '', '' ])
+    #selectd.append([ 'sensordata', 0, 7, None, 'Spectrograph - front of grating', 'tab:brown', '', 'o', 2, '', '' ])
+    #selectd.append([ 'sensordata', 0, 9, None, 'On Breadboard - behind camera', 'tab:pink', '', 'o', 2, '', '' ])
+    selectd.append([ 'sensordata', 0, 10, None, 'Breadboard - under fiber/camera', 'tab:gray', '', 'o', 2, '', '' ])
+    selectd.append([ 'sensordata', 0, 11, None, 'Breadboard - next to grating holder', 'tab:olive', '', 'o', 2, 'JD [d]', 'Temperature' ])
+    selectd.append([ 'text', 2459342.011, 23, 'Helium off', 'k', 90, 'left', 'bottom' ])
+    selectd.append([ 'grid' ])
     #selectd.append([ 'text', 294, 40, 'Helium 1 l/min', 'k', 90, 'left', 'bottom' ])
     select.append(selectd)
     selectd = []
@@ -161,6 +170,8 @@ with PdfPages(savefile) as pdf:
                     frame_ii_g.text( posx, posy, text, horizontalalignment=hpos, verticalalignment=vpos, rotation=rotation, color=color, zorder=5 )
                 elif selectd[ii_d][0] == 'y_range':
                     y_range = selectd[ii_d][1:3]
+                elif selectd[ii_d][0] == 'grid':
+                    frame_ii_g.grid(which='both', axis='both')
             frame_ii_g.legend(loc='upper left', bbox_to_anchor=(    1.0,1.01), fontsize=11, handletextpad=0.2)
             frame_ii_g.set_xlabel(x_title, fontsize=11)
             frame_ii_g.set_ylabel(y_title, fontsize=11)

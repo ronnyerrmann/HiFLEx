@@ -17,7 +17,7 @@ if __name__ == "__main__":
     logger('Info: Starting routines for a new night of data, including: finding or shifting orders, find calibration orders, create wavelength solution, and create normalised blaze function')
     params['path_run'] = os.getcwd()
     params['extract_wavecal'] = False
-    params['no_RV_names'] = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar']
+    params['no_RV_names'] = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar', 'laser']
     log_params(params)
     
     # create the median combined files
@@ -201,6 +201,7 @@ if __name__ == "__main__":
             
             # After the preparation start the creation of the wavelength solution
             if calib[1] == 'cal1' or ( calib[1] == 'cal2' and not done_sci) :          # for the science fiber, runs first
+                limit_search_space = False
                 if os.path.isfile(params['original_master_wavelensolution_filename']) == False:                                             # Create a new solution
                     params['px_to_wavelength_file'] = params.get('px_to_wavelength_file', 'pixel_to_wavelength.txt')                            # Backwards compatible
                     wave_sol_dict = create_new_wavelength_UI(params, cal_l_spec, cal_s_spec, arc_lines_px, reference_lines_dict)
@@ -209,18 +210,22 @@ if __name__ == "__main__":
                     plot_wavelength_solution_spectrum(params, cal_l_spec, cal_s_spec,params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf',
                                                       wave_sol_dict['wavesol'], wave_sol_dict['reflines'],
                                                       reference_lines_dict['reference_catalog'][0], reference_lines_dict['reference_names'][0], plot_log=True)
+                    limit_search_space = True
+                elif 0 < params['original_master_wavelensolution_filename'].find('master_wavelength_manual') < 5:
+                    limit_search_space = True
+                if limit_search_space:      # Limit the search space if solution from GUI or manual solution as indicated by filename
                     params['order_offset'] = [0,0]
                     params['px_offset'] = [-10,10,2]
-                    params['px_offset_order'] = [-1,1,1]
-                wave_sol_ori_dict = read_wavelength_solution_from_fits(params['original_master_wavelensolution_filename'])
-                # Find the new wavelength solution
+                    params['px_offset_order'] = [-0.2,0.2,0.1]
+               wave_sol_ori_dict = read_wavelength_solution_from_fits(params['original_master_wavelensolution_filename'])
+                 # Find the new wavelength solution
                 wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_ori_dict['wavesol'], 
                                                            wave_sol_ori_dict['reflines'], reference_lines_dict, calimages['{0}_trace'.format(calib[2])], show_res=params['GUI'], search_order_offset=True)
                 done_sci = True
             else:                           # Calibration fiber, runs second
                 params['order_offset'] = [0,0]
                 params['px_offset'] = [-60,60,10]
-                params['px_offset_order'] = [-0.4,0.4,0.2]
+                params['px_offset_order'] = [-0.2,0.2,0.1]
                 wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_dict['wavesol'], 
                                                            wave_sol_dict['reflines'], reference_lines_dict, calimages['{0}_trace'.format(calib[2])], show_res=params['GUI'], search_order_offset=False)
             save_wavelength_solution_to_fits(wave_sol_dict, params['master_wavelensolution'+calib[0]+'_filename'])

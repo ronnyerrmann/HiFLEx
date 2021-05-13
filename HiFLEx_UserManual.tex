@@ -369,6 +369,7 @@ After the assignment which files to be used for which calibration the data reduc
 
 
 \subsection{Removing/Adding/Extending/Shortening the automatically found traces}
+\label{Sec:remove_add_modify_orders}
 
 After checking the results (see \ref{section:results_pipeline}), one might want to remove wrongly identified apertures. If a trace is located close to the borders this can lead to wrongly traced orders, which can't be handled by the code automatically due to its high flexibility. Additionally, in low light areas it can also be that the traces stop prematurely, while strong emission features are still detectable in the science images, hence the user might want to extend the orders. In case of imaging the spectra on multiple detectors, orders might fall between the detectors, hence a dummy order needs to be added later, as the wavelength solution requires consecutive orders (later these orders can be excluded again using \verb|minimum_SNR|). All this is possible in a GUI, as seen in Figure~\ref{Fig:GUI_remove_add_modify_orders}. If \verb|GUI=True|, then the GUI will be opened automatically, otherwise it can be opened by running \verb|python <path_hiflex>/remove_add_modify_orders.py|. Once finished, the old files will be moved into a sub-folder and then the user needs to run \verb|hiflex.py| again.
 
@@ -1010,7 +1011,7 @@ Further limitations of the plotted data can be done using the GUI. For a plot in
 % HD 10180: G1V star with 7 planets: http://ui.adsabs.harvard.edu/abs/2011A%26A...528A.112L
 Search and download the data from \url{http://archive.eso.org/eso/eso_archive_main.html}. Check only 'HARPS/LaSilla'. For example data select night '2015 07 30' to find data of the asteroid Ceres, use '2004 07 12' and Program ID '072.C-0488(E)' for calibration data taken by the RV exoplanet search team, or use 2010 10 23/25 for HD\,10180 observation. Then download the data (save the download request script, cd to the folder, and run \verb|sh  downloadRequest<Number>script.sh|). The raw data (*.fits.Z) can be extracted with:
 
-\textbf{Extract both chips together (after identifying the order, a dummy order has to be added, don't use background correction):}
+\textbf{Extract both chips together:} Please note, after identifying the order, a dummy order has to be added (for the order which fell between both HARPS detectors, use \verb|python <path_hiflex>/remove_add_modify_orders.py|, Chapter~\ref{Sec:remove_add_modify_orders}, to add an order in the area between the two chips after the orders were identified and precisely traced, only few points for `c' have to be set). You also shouldn't use background correction in this setting.
 \begin{lstlisting}[style=base]
 gunzip *.fits.Z
 cat <<EOT > extract_single_chip.py

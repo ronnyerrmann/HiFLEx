@@ -334,7 +334,7 @@ def textfileargs(params, textfile=None):
                 'configfile_fitsfiles', 'raw_data_file_list', 'terra_jar_file']   # deal with full filenames -> nothing to do
     texts = ['editor', 'extracted_bitpix', 'site', 'object_file', 'raw_data_imtyp_keyword', 
              'raw_data_imtyp_bias', 'raw_data_imtyp_dark', 'raw_data_imtyp_flat', 'raw_data_imtyp_trace1', 'raw_data_imtyp_blaze', 'raw_data_imtyp_trace2',
-             'raw_data_exptim_keyword', 'raw_data_dateobs_keyword', 'raw_data_timezone_cor', 'blazercor_function']      # -> nothing to do
+             'raw_data_exptim_keyword', 'raw_data_dateobs_keyword', 'raw_data_timezone_cor', 'blazercor_function', 'px_to_wavelength_file']      # -> nothing to do
     paths, loggings = [], []
     #list_raw = []              # not necessary anymore
     for entry in params.keys():                         # make the live easier by adding entries automatically to the lists above
@@ -7867,7 +7867,7 @@ def fit_basic_wavelength_solution(params, arc_lines_wavelength, spec, filename):
             if np.min(np.abs( (orders+order_offset) )) < 10:             # (orders+order_offset) should never be 0
                 text1 = 'The new order offset seems unphysical and will not be used.'
             logger('Warn: The real orders are different from the ones given in {0} (column 2). The old order offset was {2}, the new order offset is {1}. {3}'\
-                    .format(filename, order_offset, order_offset_old, text1))
+                    .format(filename, int(order_offset), order_offset_old, text1))
             if np.min(np.abs( (orders+order_offset) )) < 10:             # (orders+order_offset) should never be 0
                 order_offset = order_offset_old
         else:
