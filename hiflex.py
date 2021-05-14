@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#import cpython
+#import cython
 
 from procedures import *
 
