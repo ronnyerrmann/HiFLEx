@@ -91,6 +91,13 @@ if not success:
 import glob
 import pickle
 
+""" This was thought to be a way to improve calculation speed when calculating gaussians. However, even with declearing all variables it didn't speed up calculations
+try:
+    import cy_oneD_gauss        # Compiled code to calculate the Gaussian
+except:
+    cy_oneD_gauss = None
+"""
+
 """ only needed for BJD calculation using jplephem and BVC calculation from CERES pipeline
 import jplephem                     # jplehem from the pip install jplehem
 import de423
@@ -148,7 +155,7 @@ def time_usage(func):
         return retval
     return wrapper
     
-def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logfile'):
+def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logfile', params=None):
     """
     Saves the status information to a logfile
     :param message: Text to log
@@ -174,8 +181,9 @@ def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logf
                     print(text)
     if message.find('Error') == 0:
         print('\t-> exiting')
-        if 'params' in locals() or 'params' in globals(): 
-            log_params(params) 
+        #if 'params' in locals() or 'params' in globals():      # this line can't compile, try except doesn't work either
+        if params is not None:
+            log_params(params)          
         exit(1)
 
 def log_params(params):
@@ -192,8 +200,8 @@ def log_params(params):
         text += os.linesep+'    {1}  {2}  {3} {4}  {0}'.format( fname, 
                         datetime.datetime.utcfromtimestamp(os.path.getmtime(fname)).strftime('%Y-%m-%dT%H:%M:%S'),
                         '%10.1i'%os.stat(fname).st_size, '%6.1i'%len(filedata1), '%6.1i'%len(filedata2) )
-    logger('python files with unix timestamp of modification, size in bytes, number of lines, and number of non-empty lines: '+text, show=False, logfile='logfile_params')
-    logger('Info: Using procedures file {0}'.format( os.path.realpath(__file__) ), show=False)
+    logger('python files with unix timestamp of modification, size in bytes, number of lines, and number of non-empty lines: '+text, show=False, logfile='logfile_params', params=params)
+    logger('Info: Using procedures file {0}'.format( os.path.realpath(__file__) ), show=False, params=params)
     # Log the versions of the packages
     # maybe later
     # Logging the parameters
@@ -203,7 +211,7 @@ def log_params(params):
             paramstxt[key] = str(params[key])
         else:
             paramstxt[key] = params[key]
-    logger('params: '+json.dumps(paramstxt, sort_keys = False, indent = 4), show=False, logfile='logfile_params')
+    logger('params: '+json.dumps(paramstxt, sort_keys = False, indent = 4), show=False, logfile='logfile_params', params=params)
     # Old way as real json, but not very compact
     # logger('params: '+json.dumps(params, sort_keys = False, indent = 4), show=False, logfile='logfile_params')
 
@@ -388,30 +396,30 @@ def textfileargs(params, textfile=None):
                     try:
                         params[entry][i] = funct(params[entry][i])
                     except:
-                        logger(emsg + 'Parameter "{0}" (value of "{1}") must be a list of {2}. Error occured with index {3}.'.format(entry, params[entry], functxt, i))
+                        logger(emsg + 'Parameter "{0}" (value of "{1}") must be a list of {2}. Error occured with index {3}.'.format(entry, params[entry], functxt, i), params=params)
         for [ints_floats, funct, functxt] in [ [ints, int, 'intergers'], [floats, float, 'floats'] ]:
             if entry in ints_floats:    # deal with integers or floats
                 try:
                     params[entry] = funct(params[entry])
                 except:
-                    logger(emsg + 'Parameter "{0}" (value of "{1}") must be a {2}'.format(entry, params[entry], functxt))
+                    logger(emsg + 'Parameter "{0}" (value of "{1}") must be a {2}'.format(entry, params[entry], functxt), params=params)
         if entry in bools:
             if params[entry].lower() in trues:      params[entry] = True
             elif params[entry].lower() in falses:   params[entry] = False
             else:
-                logger(emsg + 'Parameter "{0}" (value of "{1}") must be any of the following: {2}'.format(entry, params[entry], trues+falses))
+                logger(emsg + 'Parameter "{0}" (value of "{1}") must be any of the following: {2}'.format(entry, params[entry], trues+falses), params=params)
         if entry in text_selection:
             if entry == 'arcshift_side':
                 if params[entry].lower() in lefts:          params[entry] = -1
                 elif params[entry].lower() in rights:       params[entry] = 1
                 elif params[entry].lower() in centers:      params[entry] = 0
                 else:
-                    logger(emsg + 'Parameter "{0}" (value of "{1}") must be one of the following: {2}'.format(entr, params[entry], lefts+rights+centers))
+                    logger(emsg + 'Parameter "{0}" (value of "{1}") must be one of the following: {2}'.format(entry, params[entry], lefts+rights+centers), params=params)
             if entry == 'extraction_precision':
                 if params[entry].lower() in standards:   params[entry] = standards[0]
                 elif params[entry].lower() in linfits:   params[entry] = linfits[0]
                 else:
-                    logger(emsg + 'Parameter "{0}" (value of "{1}") must be one of the following: {2}'.format(entr, params[entry], standards+linfits))
+                    logger(emsg + 'Parameter "{0}" (value of "{1}") must be one of the following: {2}'.format(entry, params[entry], standards+linfits), params=params)
         if entry in paths:                                              # Create folders
             if type(params[entry]).__name__ in ['list']:    
                 for ii in range(len(params[entry])):
@@ -432,9 +440,9 @@ def textfileargs(params, textfile=None):
         if entry not in params.keys():
             overdeclared_params += '{0}, '.format(entry)
     if len(overdeclared_params) > 0:
-        logger('Warn: The following parameters are expected, but do not appear in the configuration files. : {1}{0}\t!!! The missing parameters might cause crashes later !!!'.format(os.linesep, overdeclared_params[:-2]))
+        logger('Warn: The following parameters are expected, but do not appear in the configuration files. : {1}{0}\t!!! The missing parameters might cause crashes later !!!'.format(os.linesep, overdeclared_params[:-2]), params=params)
     if len(undeclared_params) > 0:
-        logger('Warn: The following parameters appear in the configuration files, but the programm did not expect them: {0}'.format(undeclared_params[:-2]))
+        logger('Warn: The following parameters appear in the configuration files, but the programm did not expect them: {0}'.format(undeclared_params[:-2]), params=params)
      
     # Use standard parameters, if not given iin configuration; more at the beginning, e.g. when modification of paths is necessary
     params['use_cores'] = int(multiprocessing.cpu_count()*params.get('max_cores_used_pct',80)/100.)     # Use 80% of the CPU cores
@@ -498,7 +506,7 @@ def sort_for_multiproc_map(inputlist, number_cores):
     :param number_cores: integer
     :return outlist: same length as inputlist, only resorted (e.g. number_cores=3: inputlist=[1,'a',3,4,5,6,7,8] -> outlist=[1,4,7,'a',5,8,3,6]
     """
-    return inputlist
+    return inputlist        # Do nothing
     # !!! Doesn't work as expected
     outlist = []
     for ii in range(number_cores): 
@@ -658,7 +666,7 @@ def read_badpx_mask(params, imageshape):
         badpx_mask = np.array(fits.getdata(filename), dtype=np.float64)
         badpx_mask = rotate_flip_frame(badpx_mask, params )
         if badpx_mask.shape != imageshape:
-            if subframe in params.keys():
+            if 'subframe' in params.keys():
                 subframe = params['subframe']
                 if len(subframe) >= 4:
                     badpx_mask = badpx_mask[subframe[2]: subframe[0]+subframe[2], subframe[3]: subframe[1]+subframe[3]]
@@ -728,7 +736,7 @@ def read_file_calibration(params, filename, level=0, realrun=True):
                 im = im[:,:,0]
             else:
                 logger(('Error: The file is stored in a multi-demensional array, which I do not know how to handle. The size of the image is {0}. '+\
-                        '\tThis requires a small adjustment to the code in procedure read_file_calibration.').format(ims))
+                        '\tThis requires a small adjustment to the code in procedure read_file_calibration.').format(ims), params=params)
             ims = im.shape
     if params['raw_data_exptim_keyword'] in im_head.keys():
         exptime = im_head[params['raw_data_exptim_keyword']]        #saved as float
@@ -907,7 +915,7 @@ def create_image_general(params, imtype, level=0, realrun=True):
     if loaded == False:
         if '{0}_calibs_create'.format(imtype) not in params.keys():
             if 'standard_calibs_create' not in params.keys() and realrun:
-                logger('Error: Missing entry in the configuration file. Neigther "{0}_calibs_create" nor "standard_calibs_create" is given. Please update the configuration file(s).'.format(imtype))
+                logger('Error: Missing entry in the configuration file. Neigther "{0}_calibs_create" nor "standard_calibs_create" is given. Please update the configuration file(s).'.format(imtype), params=params)
             params['{0}_calibs_create'.format(imtype)] = params['standard_calibs_create']
         for i in range(len(params['{0}_calibs_create'.format(imtype)])):                                                                    # make it safe from different user input
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].lower()
@@ -915,9 +923,9 @@ def create_image_general(params, imtype, level=0, realrun=True):
             params['{0}_calibs_create'.format(imtype)][i] = params['{0}_calibs_create'.format(imtype)][i].replace('normalisation', 'normalise')
         im, med_fluxes, std_fluxes = None, [], []
         if '{0}_rawfiles'.format(imtype) not in params.keys() and realrun:
-            logger('Error: The list of raw files for image type {0} is not defined in the configuration. Please check the configuration files.'.format(imtype))
+            logger('Error: The list of raw files for image type {0} is not defined in the configuration. Please check the configuration files.'.format(imtype), params=params)
         if len(params['{0}_rawfiles'.format(imtype)]) == 0 and realrun:
-            logger('Error: The list of raw files for image type {0} is empty. Please check the configuration files.'.format(imtype))
+            logger('Error: The list of raw files for image type {0} is empty. Please check the configuration files.'.format(imtype), params=params)
         num_imgs = len(params['{0}_rawfiles'.format(imtype)])                # how many images are expected
         header_updates = np.zeros((num_imgs,2))
         for im_index, imf in enumerate(params['{0}_rawfiles'.format(imtype)]):                   # Only works for maximum 40 images on neils machine
@@ -1072,7 +1080,7 @@ def save_im_fits(params, im, im_head, filename):
     if len(filename.rsplit(os.sep,1)) == 1:     # no path is in the filename
         logger('Warn: no folder to save {0} was given, using the current folder ({1}).'.format( filename, os.getcwd() ))
     elif not os.path.exists(filename.rsplit(os.sep,1)[0]):
-        logger('Error: Folder to save {0} does not exists.'.format(filename))
+        logger('Error: Folder to save {0} does not exists.'.format(filename), params=params)
     if type(im).__name__ == 'list':
         for ii in range(len(im)):
             im[ii] = rotate_flip_frame(im[ii], params, invert=True)
@@ -1311,8 +1319,8 @@ def save_multispec(data, fname, im_head, bitpix='-32'):
     elif bitpix in ['-64', -64]:
         hdu = fits.PrimaryHDU(np.array(data).astype(np.float64), header=im_head)
     else:
-        logger('Warn: The bitpix parameter ({0}) is unknown, using the data suggested one ({1})'.format(bitpix,hdu.header['BITPIX']))
         hdu = fits.PrimaryHDU(np.array(data), header=im_head)
+        logger('Warn: The bitpix parameter ({0}) is unknown, using the data suggested one ({1})'.format(bitpix,hdu.header['BITPIX']))
     for index in range(hdu.header['NAXIS']):                # NAXISj doesn't has a Comment and Serval fails without it
         hdu.header['NAXIS{0}'.format(index+1)] = ( hdu.header['NAXIS{0}'.format(index+1)], 'length of data axis {0}'.format(index+1) )
     with warnings.catch_warnings():
@@ -1863,9 +1871,11 @@ def prepare_and_fit_gauss(x, y, center, width, significance=3):
     bounds=((0.1*rangey, np.min(center), 0.1*width, miny-0.2*rangey), (5.*rangey, np.max(center), 2.*width, miny+0.2*rangey))
     try:
         #get_timing('00 ')
-        popt,pcov = curve_fit(oneD_gauss, x, y, p0=p0, bounds=bounds)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+        #popt,pcov = curve_fit(oneD_gauss, x, y, p0=p0, bounds=bounds)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
         #print(popt, p0,bounds,x,y)
-        #get_timing('11 ')
+        #get_timing('11 {0} '.format(popt))
+        #popt1,pcov1 = curve_fit(cy_oneD_gauss.cy_oneD_gauss, x, y, p0=p0, bounds=bounds)            #This is not faster
+        popt,pcov = curve_fit(oneD_gauss, x, y, p0=p0, bounds=bounds, xtol=1E-6, ftol=1E-6)     # about 10-20% faster; xtol=1E-2 or ftol=1E-2 is too imprecise; xtol=1E-4 or ftol=1E-4 is alright (5 milli-pixel)
     except:
         #print('failed', p0, bounds)
         #popt,pcov = curve_fit(oneD_gauss, x, y, p0=p0, bounds=bounds)
@@ -1920,7 +1930,7 @@ def centroid_order(x, y, center, width, significance=3, bordersub_fine=True, ble
             #get_timing('{0} '.format(border_sub))
             try:
                 #get_timing('00 ')
-                popt,pcov = curve_fit(oneD_gauss,x[range_data],y[range_data],p0=p0, bounds=bounds)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+                popt,pcov = curve_fit(oneD_gauss,x[range_data],y[range_data],p0=p0, bounds=bounds, xtol=1E-6, ftol=1E-6)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
                 #get_timing('11 ')
             except:
                 # print 'curve fit failed'
@@ -1941,7 +1951,7 @@ def centroid_order(x, y, center, width, significance=3, bordersub_fine=True, ble
                                            'No significant fit, stdlin={0}, stdGauss={1}, height={2}, needed significance={3}'.format(stdlin,stdfit,popt[0],significance))
         else:       # !!! still in progress
             try:
-                popts,pcov = curve_fit(oneD_blended_gauss,x[range_data],y[range_data],p0=p0, bounds=bounds)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+                popts,pcov = curve_fit(oneD_blended_gauss,x[range_data],y[range_data],p0=p0, bounds=bounds, xtol=1E-6, ftol=1E-6)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
             except:
                 # print 'curve fit failed'
                 continue
@@ -2541,7 +2551,7 @@ def find_trace_orders(params, im, imageshape):
         logger('Error: Only found {0} traces. Please check that the binned image ({1}) looks as expected.'.format(traces.shape[0], params['logging_trace1_binned'])+\
                'Please check that the right image was used to search for the traces (e.g. {0}) '.format(params['logging_traces_im_binned'])+\
                'After you selected different file(s) for parameter "trace1_rawfiles", please run the following command before restarting the pipeline'+\
-               '\nrm {0}'.format( params['master_trace1_filename'] ))
+               '\nrm {0}'.format( params['master_trace1_filename'] ), params=params)
     logger('Info: {0} orders found and traced'.format(traces.shape[0]))
     return traces[:,0:-3], traces[:,-3].astype(int), traces[:,-2].astype(int)            # polyfits, xlows, xhighs
 
@@ -2738,7 +2748,7 @@ def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
                'Please check the binned image {0}: Is the orientation and the binning right? Are the orders covering at least half of the CCD (in dispersion correction)'.format(params['logging_trace1_binned'])+\
                'Please check that the right image was used to search for the traces (e.g. {0}) '.format(params['logging_traces_im_binned'])+\
                'After you selected different file(s) for parameter "trace1_rawfiles", please run the following command before restarting the pipeline'+\
-               '\nrm {0} {1}'.format( params['logging_traces_binned'], params['master_trace1_filename'] ))
+               '\nrm {0} {1}'.format( params['logging_traces_binned'], params['master_trace1_filename'] ), params=params)
     logger( ('Info: traces of the {0} apertures adjusted. The average shift of the individual apertures was between '+\
              '{1} and {2} pixel between the searching of the traces and this solution. '+\
              'The maximum allowed shift was {3} pixel.').format(len(centerfit), np.round(np.min(avg_shifts),1), np.round(np.max(avg_shifts),1), np.round(maxshift,1) ))
@@ -3173,7 +3183,7 @@ def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0
     if plot_traces and params['logging_traces_im'].find('*') != -1 :
         fname_short = header.get('HIERARCH HiFLEx orid', header.get('HiFLEx orid', '')).replace('.fits','').replace('.fit','')
         fname = params['logging_traces_im'].replace('*', fname_short)
-        plot_traces_over_image(image, fname, pfits, xlows, xhighs, widths, offset=offset, w_mult=w_mult)
+        plot_traces_over_image(scale_image_plot(image,'log10'), fname, pfits, xlows, xhighs, widths, offset=offset, w_mult=w_mult)
     if '{0}_saturated'.format(filename) in calimages.keys():
         saturated_mask = saturated_mask*0 + 1
         x, y = calimages['{0}_saturated'.format(filename)]
@@ -3428,7 +3438,7 @@ def find_shift_images_2d(im, im_ref, shift_range):
     pos_max = data[:,4].argmax()
     initial_guess = [np.max(data[:,4])-np.min(data[:,4]), data[pos_max,0], data[pos_max,1], 2, 2, 0, np.min(data[:,4])] # amplitude, xo, yo, sigma_x, sigma_y, theta, offset
     x, y = np.meshgrid(shiftxs, shiftys)
-    popt, pcov = curve_fit(twoD_Gaussian, (x,y), data[:,4], p0=initial_guess)
+    popt, pcov = curve_fit(twoD_Gaussian, (x,y), data[:,4], p0=initial_guess, xtol=1E-6, ftol=1E-6)
     
     return popt
 
@@ -3842,7 +3852,7 @@ def read_reference_catalog(params, filenames=None, wavelength_muliplier=None, ar
         reference_catalog, reference_names = [], []
         refernce_files, refernce_files_full = find_file_in_allfolders(filename, [params['result_path']] + params['raw_data_paths'] + [os.path.realpath(__file__).rsplit(os.sep,1)[0]+os.sep])
         if len(refernce_files) == 0:
-            logger('Error: file for the reference coordinates does not exist. Checked: {0}'.format(refernce_files_full) )
+            logger('Error: file for the reference coordinates does not exist. Checked: {0}'.format(refernce_files_full), params=params )
         for refernce_file in refernce_files:
             with open(refernce_file, 'r') as file:
                 for line in file:
@@ -3878,7 +3888,7 @@ def read_reference_catalog(params, filenames=None, wavelength_muliplier=None, ar
             if len(reference_catalog) > 0:
                 break
         if len(reference_catalog) == 0:
-            logger('Error: no reference lines found in {0} for the requested lines {1}'.format(refernce_files, arc_lines))
+            logger('Error: no reference lines found in {0} for the requested lines {1}'.format(refernce_files, arc_lines), params=params)
         reference_catalog = np.array(reference_catalog)
         arcs = reference_catalog.shape
         # Remove the faintest lines, if too many lines are in the catalogue
@@ -3921,7 +3931,7 @@ def remove_orders_from_calimages(params, calimages, keep_orders):
             else:
                 logger(('Error: Something went wrong with the numbers of orders: highest order to keep: '+\
                         '{0}, wave_sol[{1}] has shape {2}. This should not have happened. '+\
-                        'Please consult Ronny').format(np.max(keep_orders), entry, arr.shape))
+                        'Please consult Ronny').format(np.max(keep_orders), entry, arr.shape), params=params)
         else:
             logger('Not yet ndarry type: {1} has {0}'.format(type(calimages[entry]).__name__, entry))
         return arr
@@ -4593,6 +4603,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
                     Each line contains the giving the width to the left, to the right, and the Gaussian width
     """
     logger('Step: Tracing the orders')
+    im_sflat_log10 = scale_image_plot(im_sflat,'log10')
     # Find the traces in a binned file
     if os.path.isfile(params['logging_traces_binned']) == True:
         logger('Info: Using existing order file: {0}'.format(params['logging_traces_binned']))
@@ -4608,12 +4619,12 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
         polyfits, xlows, xhighs = find_trace_orders(params, sim_sflat, im_sflat.shape)
         # save parameters of the polynoms into a fitsfile (from Neil)
         save_fits_width(polyfits, xlows, xhighs, [], params['logging_traces_binned'])
-        plot_traces_over_image(im_sflat, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
+        plot_traces_over_image(im_sflat_log10, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
     if params['GUI']:
         logger('Step: Allowing user to remove orders')
-        fmask, polyfits, dummy, xlows, xhighs = remove_adjust_orders_UI( im_sflat, polyfits, xlows, xhighs, userinput=params['GUI'], do_rm=True, do_add=True)
+        fmask, polyfits, dummy, xlows, xhighs = remove_adjust_orders_UI( im_sflat_log10, polyfits, xlows, xhighs, userinput=params['GUI'], do_rm=True, do_add=True)
         polyfits, xlows, xhighs = polyfits[fmask], xlows[fmask], xhighs[fmask]
-        plot_traces_over_image(im_sflat, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
+        plot_traces_over_image(im_sflat_log10, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
     # retrace orders in the original image to finetune the orders
     params['bin_adjust_apertures'] = adjust_binning_UI(im_sflat, params['bin_adjust_apertures'], userinput=params['GUI'])
     params['binx'], params['biny'] = params['bin_adjust_apertures']
@@ -4621,7 +4632,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
     polyfits, xlows, xhighs, widths = adjust_trace_orders(params, sim_sflat, im_sflat, polyfits, xlows, xhighs)
     if params['GUI']:
         logger('Step: Allowing user to remove orders and to adjust the extraction width')
-        fmask, polyfits, widths, xlows, xhighs = remove_adjust_orders_UI( im_sflat, polyfits, xlows, xhighs, widths, userinput=params['GUI'], do_rm=True, do_adj=True, do_add=True)
+        fmask, polyfits, widths, xlows, xhighs = remove_adjust_orders_UI( im_sflat_log10, polyfits, xlows, xhighs, widths, userinput=params['GUI'], do_rm=True, do_adj=True, do_add=True)
         polyfits, xlows, xhighs, widths = polyfits[fmask], xlows[fmask], xhighs[fmask], widths[fmask]      
 
     return polyfits, xlows, xhighs, widths
@@ -4816,7 +4827,7 @@ def extraction_wavelengthcal(params, im, im_name, im_head, sci_traces, cal_trace
         aspectra, agood_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head, plot_traces=True)
         fib = 'sci'
     else:
-        logger('Error: The filename does not end as expected: {0} . It should end with _wavecal or _wavesci. This is probably a programming error.'.format(im_name))
+        logger('Error: The filename does not end as expected: {0} . It should end with _wavecal or _wavesci. This is probably a programming error.'.format(im_name), params=params)
     wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_dict, 
                                                               xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, objname, fib=fib, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
     wavelengths, dummy = create_wavelengths_from_solution(params, wavelength_solution_shift, aspectra)
@@ -5021,7 +5032,6 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
         im_head['HIERARCH HiFLEx BNOISVAR'] = (1., '1, because of unphysical measurement')
 
     im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)               # in UTC, mid of the exposure
-    
     im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
     # not anymore: Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
     obname = im_name.replace('\n','').split(os.sep)    # get rid of the path
@@ -5379,7 +5389,7 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
     if mask == []:
         mask = np.repeat([True], len(pfits), axis=0)
     ims = im.shape
-    im = scale_image_plot(im,'log10')
+    #im = scale_image_plot(im,'log10')  # Don't do it here
     colorbar = False
     if frame == None:
         fig, frame = plt.subplots(1, 1)
@@ -5460,7 +5470,7 @@ def scale_data(y, x=[], mode='gauss'):
         bounds=((0.2*rangey, x[int(y.shape[0]/4)], 0.01*width, np.min(-y)-0.2*rangey), (5.*rangey, x[int(y.shape[0]*3/4)], 0.5*width, np.min(-y)+0.2*rangey))
         #print x,y,p0,bounds
         try:
-            popt,pcov = curve_fit(oneD_gauss,x,-y,p0=p0, bounds=bounds)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
+            popt,pcov = curve_fit(oneD_gauss,x,-y,p0=p0, bounds=bounds, xtol=1E-6, ftol=1E-6)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
             #maxy = -popt[3]        # use not in case the line is not in the form of a Gauss
             #print miny, maxy,rangey, popt
             diff = np.abs( ( oneD_gauss( x, popt ) - y ) / y )
@@ -5897,7 +5907,7 @@ def get_subframe(frame_list, nr_h, nr_v, ih, iv):
             fx = frame_list[int(nr_h/2)]
             fy = frame_list[0]
         elif nr_h == 1:
-            subframe = frame_list[ivh]
+            subframe = frame_list[iv]
             fy = frame_list[-1]
             fy = frame_list[int(nr_v/2)]
     else:
@@ -6327,7 +6337,7 @@ def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=T
         except:
             w_mult = w_mult
         title = ('Determine area for the background, width_multiplier = {0})'.format(w_mult))
-        im_bck_px = bck_px(im_orig, pfits, xlows, xhighs, widths, w_mult)
+        im_bck_px = find_bck_px(im_orig, pfits, xlows, xhighs, widths, w_mult)
         plot_img_spec.plot_image(im_orig*im_bck_px, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], title, return_frame=True, frame=frame, colorbar=False)
         #frame.set_title(title)
     # get kwargs
@@ -6368,7 +6378,7 @@ def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=T
     
     params['width_multiplier'] = float(gui3.data['width_multiplier'])
 
-    im_bck_px = bck_px(im_orig, pfits, xlows, xhighs, widths, params['width_multiplier'])
+    im_bck_px = find_bck_px(im_orig, pfits, xlows, xhighs, widths, params['width_multiplier'])
     #gui3.destroy 
     plt.close()
     return im_bck_px, params
@@ -6822,7 +6832,7 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
     if np.sum(np.isnan(px_to_wave[:,1])) == 0:
         px_to_wave, wavelength_solution, wavelength_solution_arclines = calculate_wavesolution_calc(px_to_wave, cal_l_spec)
     else:
-        logger('Error: Not able to find a wavelength solution with the information provided by the user. Please rerun the program.')
+        logger('Error: Not able to find a wavelength solution with the information provided by the user. Please rerun the program.', params=params)
     
     return dict(wavesol=wavelength_solution, reflines=wavelength_solution_arclines)
 
@@ -7462,7 +7472,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                     logger('Error: Something went wrong, only {0} lines have been identified. '.format(arc_lines_wavelength.shape[0])+\
                             'Please compare the positon of orders in the current folder with the folder from which the previous wavelength solution was used. '+\
                             'If necessary adjust the parameters order_offset, px_offset, px_offset_order, and/or resolution_offset_pct. '+\
-                            'Decreasing the number of orders in the polynomial fit (parameters polynom_order_traces and polynom_order_intertraces) might also help to fix the issue.')
+                            'Decreasing the number of orders in the polynomial fit (parameters polynom_order_traces and polynom_order_intertraces) might also help to fix the issue.', params=params)
                 goodvalues, p = sigmaclip(arc_lines_wavelength[:,3], nc=0, ll=sigma, lu=sigma, repeats=20)    # poly_order=0 to sigma clip around the average
                 arc_lines_wavelength = arc_lines_wavelength[goodvalues,:]
                 cen_px, p_cen_px = find_real_center_wavelength_solution(order_offset, orders, [], cen_px, polynom_order_trace, polynom_order_intertrace, poly2d_params)
@@ -7531,7 +7541,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     for index_u, order_use in enumerate(orders_use):
         inorder = (arc_lines_wavelength[:,0] >= order_use[0]) & (arc_lines_wavelength[:,0] <= order_use[-1])
         if np.sum(inorder) <= polynom_order_trace+polynom_order_intertrace:
-            logger('Error: Not enough lines are remaining for the fit. Please check the parameters "order_offset", "px_offset", and "px_offset_order". Data set with the orders {0} was affected'.format(order_use))
+            logger('Error: Not enough lines are remaining for the fit. Please check the parameters "order_offset", "px_offset", and "px_offset_order". Data set with the orders {0} was affected'.format(order_use), params=params)
         poly2d_params, new_waves = fit_wavelengths_solution_2d(arc_lines_wavelength[inorder,:], cen_pxs[inorder], order_offset, polynom_order_trace, polynom_order_intertrace)
         arc_lines_wavelength[inorder,3] = arc_lines_wavelength[inorder,2] - new_waves               # new differences
 
@@ -7685,7 +7695,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         logger(('Error: The wavelength solution seems wrong. Please check the parameters "order_offset", "px_offset", and "px_offset_order".' + \
                '\n\t\tIt might be useful to compare the file with the emission lines ({0}) and ' + \
                'the folder with the previous wavelength solution (see parameter "original_master_wavelensolution_filename")' +\
-               '\n\t\tThe results of the identification can be seen in {1}.').format(text, params['logging_arc_line_identification_spectrum']))
+               '\n\t\tThe results of the identification can be seen in {1}.').format(text, params['logging_arc_line_identification_spectrum']), params=params)
     
     # See the results
     if show_res:
@@ -7812,7 +7822,7 @@ def find_real_center_wavelength_solution(order_offset, orders, cenwave, cen_px, 
                     print( 'Problems to convert to int/float:', line )
     if len(arc_lines_wavelength) == 0:
         logger(('Error: No useful information was found in {0}. Please make sure the entries in the file contain of the tab-separated '+\
-                '(exactly one tab between each column) values: order (starting at 0), real order, pixel, wavelength').format(filename))
+                '(exactly one tab between each column) values: order (starting at 0), real order, pixel, wavelength').format(filename), params=params)
     arc_lines_wavelength = np.array(arc_lines_wavelength)
     
     wavelength_solution, wavelength_solution_arclines = fit_basic_wavelength_solution(params, arc_lines_wavelength, spec, filename)
@@ -7822,14 +7832,14 @@ def find_real_center_wavelength_solution(order_offset, orders, cenwave, cen_px, 
 def fit_basic_wavelength_solution(params, arc_lines_wavelength, spec, filename):
     if 0.0 in arc_lines_wavelength[:,1]:
         logger('Error: The second coloumn (real order) in {0} was not set correctly as it contains a zero. '+\
-               'Please use the (estimated) real order (from grating equation).'.format(filename))
+               'Please use the (estimated) real order (from grating equation).'.format(filename), params=params)
     orig_lines = arc_lines_wavelength.shape[0]
     
     order_offset = arc_lines_wavelength[:,1] - arc_lines_wavelength[:,0]
     orders = np.arange(spec.shape[0], dtype=int)
     if np.std(order_offset, ddof=1) != 0:
         logger('Error: There is an inconsistency between coloumn 1 (order/aperture) and coloumn 2 (real/physical order) in {0}. '+\
-               'Please check that the difference between these two columns is always the same.'.format(filename))
+               'Please check that the difference between these two columns is always the same.'.format(filename), params=params)
     order_offset = order_offset[0]
     
     polynom_order_trace = max(2, max(params.get('tmp_polynom_order_traces', params['polynom_order_traces'])) )                  # Try to read the tmp values and if they don't exist, use the standard values
@@ -8094,11 +8104,11 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
     fig.set_size_inches( (int(gui3.screen_w_h[0]) - 400)/dpi, (int(gui3.screen_w_h[1])-90)/dpi, forward=True)     # Make the plot as big as possible
     tkc.TkCanvas.end(gui3)
     
-    im_log = scale_image_plot(im1,'log10')
+    # im_log = scale_image_plot(im1,'log10')   # Don't do it here
     # get kwargs; add more to pkwargs, as otherwise what is changed in for example settings_modify_end() is lost
     pkwargs = dict(frame=frame, update_frame=True, im1=im1, pfits=pfits, xlows=xlows, xhighs=xhighs, widths=widths,
-                   w_mult=1.0, rm_orders=[], shift=shift, im_scale_min=round_sig(np.percentile(im_log,10),2),
-                   im_scale_max=round_sig(np.percentile(im_log,90),2), order=np.nan, addpointsorder_lcr=1, 
+                   w_mult=1.0, rm_orders=[], shift=shift, im_scale_min=round_sig(np.percentile(im1,10),2),
+                   im_scale_max=round_sig(np.percentile(im1,90),2), order=np.nan, addpointsorder_lcr=1, 
                    data_order_position=data_order_position, addpoints=False, removepoints=False)
 
     # define update plot function
@@ -8125,7 +8135,7 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
                 pfits_shift[:,:,-1] += shift        # shift all traces
             else:
                 pfits_shift[:,-1] += shift          # shift all traces
-            frame = plot_traces_over_image(im1, 'dummy_filename', pfits_shift, xlows, xhighs, widths, w_mult=w_mult, mask=mask, frame=frame, return_frame=True, imscale=[im_scale_min,im_scale_max])
+            frame = plot_traces_over_image(scale_image_plot(im1,'log10'), 'dummy_filename', pfits_shift, xlows, xhighs, widths, w_mult=w_mult, mask=mask, frame=frame, return_frame=True, imscale=[im_scale_min,im_scale_max])
             frame.set_title(title[:-1])
         #    pkwargs['backup_frame'] = copy.deepcopy(frame)# This will speed up plotting, but copying the old frame doesn't work, hence it always adds plots to the frame, and frame.clear() before loading creates an clear frame
         #else:# This will speed up plotting, but copying the old frame doesn't work, hence it always adds plots to the frame, and frame.clear() before loading creates an clear frame
@@ -8476,7 +8486,7 @@ def remove_adjust_orders_UI_ori(im1, pfits, xlows, xhighs, widths=[], shift=0, u
             pfits_shift[:,:,-1] += shift        # shift all traces
         else:
             pfits_shift[:,-1] += shift          # shift all traces
-        frame = plot_traces_over_image(im1, 'dummy_filename', pfits_shift, xlows, xhighs, widths, w_mult=w_mult, mask=mask, frame=frame, return_frame=True)
+        frame = plot_traces_over_image(scale_image_plot(im1,'log10'), 'dummy_filename', pfits_shift, xlows, xhighs, widths, w_mult=w_mult, mask=mask, frame=frame, return_frame=True)
         frame.set_title(title[:-1])
 
     # run initial update plot function
@@ -9349,7 +9359,7 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
                     logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
 
         if not success:
-            logger('Error: Barycentric velocities could not be calculated.')
+            logger('Error: Barycentric velocities could not be calculated.', params=params)
         bcvel_baryc_range = bcvel_baryc_range[0] / 1E3       # in km/s
         bcvel_baryc = bcvel_baryc_range[0]
         

@@ -61,7 +61,7 @@ if __name__ == "__main__":
     # Save the new file and restart the reduction
     logger('Info: New file with the traces was created. All data depending on this will be moved to the folder {0}, the traces will be written.'.format(params['folder_original_traces']))
     save_fits_width(polyfits, xlows, xhighs, widths, params['master_trace_sci_filename'])
-    plot_traces_over_image(im_flat, params['logging_traces_im'].replace('*', 'master_trace1'), polyfits, xlows, xhighs, widths)
+    plot_traces_over_image(scale_image_plot(im_flat, 'log10'), params['logging_traces_im'].replace('*', 'master_trace1'), polyfits, xlows, xhighs, widths)
     
     cmd = 'python {0}/hiflex.py {1}'.format(os.path.dirname(sys.argv[0]), ' '.join(sys.argv[1:]) )
     logger('Info: Finished modifying traces. Now, please run the pipeline again:\n{0}'.format(cmd))

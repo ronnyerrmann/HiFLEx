@@ -89,6 +89,7 @@ header = data[:,0:3]
 data = data[:,3:]
 data[data==''] = 'nan'
 converted = dict()
+x_range_data = [1E10, -1E10]
 
 with PdfPages(savefile) as pdf:
     for star in objects:        # New page for each opject
@@ -157,6 +158,8 @@ with PdfPages(savefile) as pdf:
                         if y_range is not None:
                             yy[ yy > y_range[1] ] = y_range[1]
                             yy[ yy < y_range[0] ] = y_range[0]
+                        if dset == 'data':
+                            x_range_data = [ min(np.min(xx), x_range_data[0]), max(np.max(xx), x_range_data[1]) ]
                         if indexe is None:          # No error bars
                             frame_ii_g.plot(xx, yy, label=label, color=color, linestyle=linestyle, marker=marker, markersize=markersize)
                         else:                       # error bars
@@ -179,7 +182,9 @@ with PdfPages(savefile) as pdf:
                 frame_ii_g.set_ylim(y_range[0],y_range[1])
         if x_range is not None:
             frame_ii_g.set_xlim(x_range[0],x_range[1])
-        
+        elif x_range_data[0] < 1E9 and x_range_data[1] > -1E9:
+            b = 0.01 * (x_range_data[1] - x_range_data[0])
+            frame_ii_g.set_xlim(x_range_data[0]-b,x_range_data[1]+b)
         pdf.savefig()  # saves the current figure into a pdf page
         plt.close()
 

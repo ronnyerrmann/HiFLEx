@@ -1,7 +1,15 @@
 #!/usr/bin/env python
 
-#import cython
-
+""" This was thought to be a way to easily improve calculation speed. However, only 2s in 5min are saved. It seems that using numpy for all big calculations is enough
+try:
+    #import cython
+    import pyximport
+    pyximport.install()
+    from cy_procedures import *
+except:
+    #print('cython not available')
+    from procedures import *
+"""
 from procedures import *
 
 # =============================================================================
@@ -16,7 +24,7 @@ CONFIGFILE = 'conf.txt'
 # deal with arguments from a text file
 params = textfileargs(params, CONFIGFILE)
 if __name__ == "__main__":
-    logger('Info: Starting routines for a new night of data, including: finding or shifting orders, find calibration orders, create wavelength solution, and create normalised blaze function')
+    logger('Info: Starting routines for a new night of data, including: finding or shifting orders, find calibration orders, create wavelength solution, and create normalised blaze function', params=params)
     params['path_run'] = os.getcwd()
     params['extract_wavecal'] = False
     params['no_RV_names'] = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar', 'laser']
@@ -35,7 +43,7 @@ if __name__ == "__main__":
     
     # Create or read the file with the orders for this night
     if os.path.isfile(params['master_trace_sci_filename']) :
-        logger('Info: Using exiting trace solution: {0}'.format(params['master_trace_sci_filename']))
+        logger('Info: Using exiting trace solution: {0}'.format(params['master_trace_sci_filename']), params=params)
         sci_tr_poly, xlows, xhighs, widths = read_fits_width(params['master_trace_sci_filename'])
     else:
         printresults = False
@@ -50,7 +58,7 @@ if __name__ == "__main__":
         else:
             shift_error = -1
         if shift_error > 1 or shift_error == -1 or abs(shift) > params['maxshift_orders']:
-            logger('Warn: The deviation of the shift of the orders seems too big or no previous solution was available, therefore searching for the position of the orders from scratch:')
+            logger('Warn: The deviation of the shift of the orders seems too big or no previous solution was available, therefore searching for the position of the orders from scratch:', params=params)
             sci_tr_poly, xlows, xhighs, widths = find_adjust_trace_orders(params, im_trace1, im_trace1_head)
             printresults = True
         else:
@@ -65,7 +73,7 @@ if __name__ == "__main__":
             # save parameters of the polynoms into a fitsfile (from Neil)
             save_fits_width(sci_tr_poly, xlows, xhighs, widths, params['master_trace_sci_filename'])
             # Produce some useful statistics
-            plot_traces_over_image(im_trace1, params['logging_traces_im'].replace('*', 'master_trace1'), sci_tr_poly, xlows, xhighs, widths)
+            plot_traces_over_image(scale_image_plot(im_trace1, 'log10'), params['logging_traces_im'].replace('*', 'master_trace1'), sci_tr_poly, xlows, xhighs, widths)
             data = np.insert(widths, 0, list(range(len(sci_tr_poly))), axis=1)       # order, left, right, gausswidth
             positio, pctlwidth = [], []
             for order in range(sci_tr_poly.shape[0]):                      # For the central data
@@ -78,13 +86,13 @@ if __name__ == "__main__":
             data = np.append(data, np.array(xhighs)[:,None],axis=1)
             printarrayformat = ['%1.1i','%3.1f', '%3.1f', '%4.2f\t','%4.2f\t', '%1.1i','%1.1i','%1.1i']
             logger('\t\torder\tleft\tright\tgausswidth\tpctlwidth\tpositio\tmin_tr\tmax_tr\t(positio: position of the trace at the center of the image, pctlwidth: median full width of the trace at {0}% of maximum)'\
-                      .format(params['width_percentile']),printarrayformat=printarrayformat, printarray=data)
+                      .format(params['width_percentile']),printarrayformat=printarrayformat, printarray=data, params=params)
             # Do a bisector analysis: plot position as fuction of flux
             bisector_measurements_orders(im_trace1,  params.get('logging_traces_bisector', params['logging_path']+'bisector_traces1.png'), sci_tr_poly, xlows, xhighs, widths)
                 
     # Create the file for the calibration orders, if it doesn't exist
     if os.path.isfile(params['master_trace_cal_filename']):
-        logger('Info: Trace for calibration orders already exists: {0}'.format(params['master_trace_cal_filename']))
+        logger('Info: Trace for calibration orders already exists: {0}'.format(params['master_trace_cal_filename']), params=params)
         cal_tr_poly, axlows, axhighs, awidths = read_fits_width(params['master_trace_cal_filename'])
     else:
         # use im_trace2 for automatic solution
@@ -99,16 +107,16 @@ if __name__ == "__main__":
         cal_tr_poly, awidths, axlows, axhighs = np.array(cal_tr_poly), copy.deepcopy(widths), copy.deepcopy(xlows), copy.deepcopy(xhighs)
         
         # check the shift between the original solution and arc using a GUI
-        dummy, cal_tr_poly, awidths, axlows, axhighs = remove_adjust_orders_UI((im_trace2), cal_tr_poly, axlows, axhighs, awidths, shift=0, userinput=params['GUI'], do_adj=True, do_shft=True)
+        dummy, cal_tr_poly, awidths, axlows, axhighs = remove_adjust_orders_UI(scale_image_plot(im_trace2, 'log10'), cal_tr_poly, axlows, axhighs, awidths, shift=0, userinput=params['GUI'], do_adj=True, do_shft=True)
         
         # save parameters of the polynoms into a fitsfile (from Neil)
         save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_trace_cal_filename'])
-        plot_traces_over_image(im_trace2, params['logging_arctraces_im'], cal_tr_poly, axlows, axhighs, awidths)
+        plot_traces_over_image(scale_image_plot(im_trace2, 'log10'), params['logging_arctraces_im'], cal_tr_poly, axlows, axhighs, awidths)
     
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if cal_tr_poly.shape[0] != sci_tr_poly.shape[0]:
         logger('Error: The number of traces for the science fiber and for the calibration fiber do not match. '+\
-               'Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_trace_cal_filename'], params['master_trace_sci_filename']))
+               'Please remove eighter {0} or {1} and re-run the script in order to solve.'.format(params['master_trace_cal_filename'], params['master_trace_sci_filename']), params=params)
     
     calimages['sci_trace'] = copy.deepcopy( [sci_tr_poly, xlows, xhighs, widths] )      # Apertures might be shifted before extraction -> this would also affect the localbackground
     calimages['cal_trace'] = copy.deepcopy( [cal_tr_poly, axlows, axhighs, awidths] )
@@ -119,15 +127,15 @@ if __name__ == "__main__":
         calibs = [ calibs[0] ]
     elif 'cal2_l_rawfiles' not in params.keys():    # no wavelength solution for calibration fiber available
         del calibs[1]
-        logger('Warn: No data available to create the wavelength solution in the calibration fiber')
+        logger('Warn: No data available to create the wavelength solution in the calibration fiber', params=params)
     if 'cal1_l_rawfiles' not in params.keys():    # no wavelength solution for science fiber available, also check for single fiber spectrographs
         del calibs[0]
-        logger('Warn: No data available to create the wavelength solution in the science fiber. This means your spectra probably might not be well wavelength defined (if there is an offset between science and calibration fiber).')
+        logger('Warn: No data available to create the wavelength solution in the science fiber. This means your spectra probably might not be well wavelength defined (if there is an offset between science and calibration fiber).', params=params)
     if len(calibs) == 0 and params['original_master_wavelensolution_filename'].lower() != 'pseudo':
         params['original_master_wavelensolution_filename'] = 'pseudo'
-        logger('Warn: No data available to create a wavelength solution, therefore will create a pseudo solution')
+        logger('Warn: No data available to create a wavelength solution, therefore will create a pseudo solution', params=params)
     if params['original_master_wavelensolution_filename'].lower() == 'pseudo':              # Pseudo solution
-        logger('Warning: Using a pseudo solution for the wavelength (1 step per px)')
+        logger('Warning: Using a pseudo solution for the wavelength (1 step per px)', params=params)
         calimages['wave_sol_dict_sci'] = create_pseudo_wavelength_solution(sci_tr_poly.shape[0])
         calimages['wave_sol_dict_cal'] = calimages['wave_sol_dict_sci']
         calimages['wave_sols_sci'] = None
@@ -150,7 +158,7 @@ if __name__ == "__main__":
         # Create files once required, but first try to load them
         im_cal_l, im_arclhead = create_image_general(params, calib[1]+'_l')         # This file is necessary later
         if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']) :
-            logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution'+calib[0]+'_filename']))
+            logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution'+calib[0]+'_filename']), params=params)
             wave_sol_dict = read_wavelength_solution_from_fits(params['master_wavelensolution'+calib[0]+'_filename'])
         else:           # Need to create the wavelength solution
             # Identify the Emission lines
@@ -191,15 +199,15 @@ if __name__ == "__main__":
             
             fname_arclines = params['logging_found_arc_lines'].replace('.txt','')+calib[0]+'.txt'
             if os.path.isfile(fname_arclines):
-                logger('Info: List of the identified emission lines already exists. Using the information from file: {0}'.format(fname_arclines ))
+                logger('Info: List of the identified emission lines already exists. Using the information from file: {0}'.format(fname_arclines ), params=params)
                 arc_lines_px_txt = read_text_file(fname_arclines, no_empty_lines=True)              # list of strings, first entry is header 
                 arc_lines_px = np.array( convert_readfile(arc_lines_px_txt[1:], [int, float, float, float], delimiter='\t', replaces=[os.linesep,' ']) )
             else:       # Need to identify the lines
                 
                 arc_lines_px = identify_emission_lines(params, cal_l_spec, cal_s_spec, cal_l_gpm, cal_s_gpm)
-                logger('Info: Identified {0} lines in the emission line spectrum. These lines are stored in file {1}'.format(len(arc_lines_px), fname_arclines ))
+                logger('Info: Identified {0} lines in the emission line spectrum. These lines are stored in file {1}'.format(len(arc_lines_px), fname_arclines ), params=params)
                 printarrayformat = ['%1.1i', '%7.5f', '%4.2f', '%3.1f']     # needs to be 7.5f for position ([1]) as before 20210413 the lines are only precise to 10milli-pixel -> wavelengths in reflines are only that precise -> wavelenth shift can't be more precise than that 
-                logger('order\tpixel\twidth\theight of the line', show=False, printarrayformat=printarrayformat, printarray=arc_lines_px, logfile=fname_arclines)
+                logger('order\tpixel\twidth\theight of the line', show=False, printarrayformat=printarrayformat, printarray=arc_lines_px, logfile=fname_arclines, params=params)
             
             # After the preparation start the creation of the wavelength solution
             if calib[1] == 'cal1' or ( calib[1] == 'cal2' and not done_sci) :          # for the science fiber, runs first
@@ -251,7 +259,7 @@ if __name__ == "__main__":
         # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
         if calimages['wave_sol_dict_sci']['wavesol'].shape[0] != calimages['wave_sol_dict_cal']['wavesol'].shape[0]:
             logger('Error: The number of traces of the wavelength solutions for science ({0}) and calibration ({1}) fibers do not match. Please remove one of the solutions and re-run the script in order to solve.'\
-                    .format(calimages['wave_sol_dict_sci']['wavesol'].shape[0], calimages['wave_sol_dict_cal']['wavesol'].shape[0]))
+                    .format(calimages['wave_sol_dict_sci']['wavesol'].shape[0], calimages['wave_sol_dict_cal']['wavesol'].shape[0]), params=params)
     else:
         params['two_solutions'] = False
     if 'wave_sol_dict_sci' not in calimages.keys():                             # Use the calibration fiber solution for the science solution
@@ -261,19 +269,19 @@ if __name__ == "__main__":
             print("253 hiflex.py: Ronny did not expect len(calimages['wave_sols_sci']) to be {0}".format(len(calimages['wave_sols_sci']) ))
         calimages['wave_sol_dict_sci']['wavesol'][:,1] += params['pxshift_between_wavesolutions']       # + checked 20210128
         calimages['wave_sols_sci'][0][0][:,1] += params['pxshift_between_wavesolutions']                # + checked 20210128
-        logger('Info: Applied a shift of {0} px from parameter pxshift_between_wavesolutions to convert calibration fiber wavelength solution to science fiber wavelength solution.'.format(params['pxshift_between_wavesolutions']))
+        logger('Info: Applied a shift of {0} px from parameter pxshift_between_wavesolutions to convert calibration fiber wavelength solution to science fiber wavelength solution.'.format(params['pxshift_between_wavesolutions']), params=params)
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
     if calimages['wave_sol_dict_sci']['wavesol'].shape[0] != calimages['sci_trace'][0].shape[0]:
         #print('im_trace1.shape', im_trace1.shape)
         logger('Error: The number of traces for extraction and for the wavelength calibration do not match. Please remove eighter {0} ({2}) or {1} ({3}) and re-run the script in order to solve.'\
-                    .format(params['master_trace_sci_filename'], params['master_wavelensolution_filename'], calimages['sci_trace'][0].shape[0], calimages['wave_sol_dict_sci']['wavesol'].shape[0]))
+                    .format(params['master_trace_sci_filename'], params['master_wavelensolution_filename'], calimages['sci_trace'][0].shape[0], calimages['wave_sol_dict_sci']['wavesol'].shape[0]), params=params)
     
     """# Find the conversion between the two solutions (px-shift = f(wavelength) (but not really as seen on 20200813 229? images)
     if params['two_solutions']:
         params['extract_wavecal'] = True
         if calimages['wave_sol_dict_cal']['wavesol'].shape[0] != calimages['wave_sol_dict_sci']['wavesol'].shape[0]:
             logger('Error: The number of traces for the science ({0}) and calibration ({1}) wavelength solution differ. Please delete the wrong, old file ({2} or {3})'.format(\
-                        calimages['wave_sol_sci'].shape[0], calimages['wave_sol_cal'].shape[0], params['master_wavelensolution_sci_filename'], params['master_wavelensolution_filename'] ))
+                        calimages['wave_sol_sci'].shape[0], calimages['wave_sol_cal'].shape[0], params['master_wavelensolution_sci_filename'], params['master_wavelensolution_filename'] ), params=params)
         shift, shift_err = find_shift_between_wavelength_solutions(params, calimages['wave_sol_dict_cal']['wavesol'], calimages['wave_sol_dict_cal']['reflines'], 
                                                                    calimages['wave_sol_dict_sci']['wavesol'], calimages['wave_sol_dict_sci']['reflines'], 
                                                                    np.zeros((calimages['wave_sol_dict_cal']['wavesol'].shape[0],im_trace1.shape[0])), ['calibration fiber','science fiber'] )
@@ -324,7 +332,7 @@ if __name__ == "__main__":
     
     # Extract the flat spectrum and normalise it
     if os.path.isfile(params['master_blaze_spec_norm_filename']) :
-        logger('Info: Normalised blaze already exists: {0}'.format(params['master_blaze_spec_norm_filename']))
+        logger('Info: Normalised blaze already exists: {0}'.format(params['master_blaze_spec_norm_filename']), params=params)
         # The file is read later on purpose
     else:
         create_blaze_norm(params, im_trace1, calimages['sci_trace'], calimages['cal_trace'], calimages['wave_sol_dict_sci'], reference_lines_dict)
@@ -334,7 +342,7 @@ if __name__ == "__main__":
     if flat_spec_norm.shape[1] != calimages['wave_sol_dict_sci']['wavesol'].shape[0]:
         #print('im_trace1.shape', im_trace1.shape)
         logger('Error: The number of traces in the blaze of the blaze correction and for the wavelength calibration do not match. Please remove {0} ({1} instead of expected {2}) and re-run the script in order to solve.'\
-                        .format(params['master_blaze_spec_norm_filename'], flat_spec_norm.shape[1], calimages['wave_sol_dict_sci']['wavesol'].shape[0]))
+                        .format(params['master_blaze_spec_norm_filename'], flat_spec_norm.shape[1], calimages['wave_sol_dict_sci']['wavesol'].shape[0]), params=params)
         
     # Use only for extraction -> move down to after the wavelenghs solution have been loaded
     remove_orders, keep_orders = remove_orders_low_flux(params, flat_spec_norm)
@@ -346,7 +354,7 @@ if __name__ == "__main__":
     calimages['wavelength_solution'] = copy.deepcopy( wave_sol_dict['wavesol'] )    # Needed for templates later"""
     
     if not params['started_from_p3']:       # if started from python3 environment, this won't be necessary
-        logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the logging directory {1}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?{0}'.format(os.linesep, params['logging_path']))
+        logger('Info: Finished routines for a new night of data. Now science data can be extracted. Please check before the output in the logging directory {1}: Are all orders identified correctly for science and calibration fiber, are the correct emission lines identified for the wavelength solution?{0}'.format(os.linesep, params['logging_path']), params=params)
         
         obj_names = []
         extractions = []
@@ -380,19 +388,19 @@ if __name__ == "__main__":
                         im_name = im_name[0]
                         im_name_wc = im_name+'_wave'+fib
                         if os.path.isfile(params['path_extraction']+im_name_wc+'.fits'):
-                            logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name_wc, params['path_extraction']))
+                            logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name_wc, params['path_extraction']), params=params)
                         else:
                             wavecal_multicore([ wavelengthcal, fib, im_name_full, im_name_wc, im_name, False ])      # Try run to get the calibration data
                             all_wavelengthcals.append([ wavelengthcal, fib, im_name_full, im_name_wc, im_name, True ])
             if params['use_cores'] > 1  and len(all_wavelengthcals) > 1:
-                logger('Info: Starting to extract wavelength calibrations using multiprocessing on {0} cores, hence output will be for several files in parallel.'.format(params['use_cores']))
+                logger('Info: Starting to extract wavelength calibrations using multiprocessing on {0} cores, hence output will be for several files in parallel.'.format(params['use_cores']), params=params)
                 sort_wavelengthcals = sort_for_multiproc_map(all_wavelengthcals, params['use_cores'])
                 p = multiprocessing.Pool(params['use_cores'])
                 p.map(wavecal_multicore, sort_wavelengthcals)
                 p.terminate()
                 p.join()
             elif len(all_wavelengthcals) > 0:
-                logger('Info: Starting to extract wavelength calibrations')
+                logger('Info: Starting to extract wavelength calibrations', params=params)
                 for all_wavelengthcal in all_wavelengthcals:
                     wavecal_multicore(all_wavelengthcal)
         
@@ -406,20 +414,20 @@ if __name__ == "__main__":
             name = wavesol.split('_wavesol_')[0]
             wavelength_solution_shift_dict = read_wavelength_solution_from_fits(params['path_extraction']+wavesol)
             if wavelength_solution_shift_dict['wavesol'].shape[1] != last_shape and last_shape is not None:
-                logger('Warn: This wavelength solution has a different number of freedoms {0} than the previous solution {1}.'.format(wavelength_solution_shift_dict['wavesol'].shape[1], last_shape))
+                logger('Warn: This wavelength solution has a different number of freedoms {0} than the previous solution {1}.'.format(wavelength_solution_shift_dict['wavesol'].shape[1], last_shape), params=params)
             last_shape = wavelength_solution_shift_dict['wavesol'].shape[1]
             calimages['wave_sols_'+fib].append( [wavelength_solution_shift_dict['wavesol'], wavelength_solution_shift_dict['reflines'], jd_midexp, name])
             
         params['extract_wavecal'] = False
         if len(extractions) == 0:                                               # no extractions to do
-            logger('Warn: Nothing to extract. -> Exiting')
+            logger('Warn: Nothing to extract. -> Exiting', params=params)
             header_results_to_texfile(params)           # Save the results from the header in a logfile
             exit(0)
         
         def extraction_multicore(all_extractions):
             [extraction, im_name_full, im_name, realrun] = all_extractions
             if os.path.isfile(params['path_extraction']+im_name+'.fits'):
-                logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
+                logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']), params=params)
                 return ''
             if  extraction.find('extract_combine') == -1:     # Single file extraction
                 params['calibs'] = params[extraction+'_calibs_create']
@@ -442,7 +450,7 @@ if __name__ == "__main__":
                     if im_name_full in list_im_name:
                         continue
                     if os.path.isfile(params['path_extraction']+im_name+'.fits'):
-                        logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']))
+                        logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']), params=params)
                     else:
                         extraction_multicore([extraction, im_name_full, im_name, False])        # Dry run to create darks and such
                         all_extractions.append([extraction, im_name_full, im_name, True])       # Real run
@@ -451,20 +459,20 @@ if __name__ == "__main__":
                 if extraction in list_im_name:
                     continue
                 if os.path.isfile(params['path_extraction']+extraction+'.fits'):
-                    logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(extraction, params['path_extraction']))
+                    logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(extraction, params['path_extraction']), params=params)
                 else:
                     extraction_multicore([extraction, extraction, extraction, False])           # Dry run to create darks and such
                     all_extractions.append([extraction, extraction, extraction, True])          # Real run
                 list_im_name.append(extraction)
         if params['use_cores'] > 1 and len(all_extractions) > 1:
-            logger('Info: Starting to extract spectra using multiprocessing on {0} cores, hence output will be for several files in parallel'.format(params['use_cores']))
+            logger('Info: Starting to extract spectra using multiprocessing on {0} cores, hence output will be for several files in parallel'.format(params['use_cores']), params=params)
             p = multiprocessing.Pool(params['use_cores'])
             #sort_extractions = sort_for_multiproc_map(all_extractions, params['use_cores'])
             obj_names += p.map(extraction_multicore, all_extractions)
             p.terminate()
             p.join()
         elif len(all_extractions) > 0:
-            logger('Info: Starting to extract spectra')
+            logger('Info: Starting to extract spectra', params=params)
             for all_extraction in all_extractions:
                 obj_names.append( extraction_multicore(all_extraction) )
                 
@@ -476,7 +484,7 @@ if __name__ == "__main__":
             dwave = params['wavelength_scale_resolution']
             for extraction in extractions:
                 if extraction.find('extract_lin_') == 0:
-                    logger('Info: Combining {0}'.format(extraction))
+                    logger('Info: Combining {0}'.format(extraction), params=params)
                     data, info, text_info = [], [], []
                     for im_name_full in params[extraction+'_rawfiles']:
                         im_name = im_name_full.rsplit(os.sep)
@@ -488,12 +496,12 @@ if __name__ == "__main__":
                             data.append(fdata)
                             info.append([ im_head['HIERARCH HiFLEx JD'], im_head['HIERARCH HiFLEx EXPOSURE'], im_head['HIERARCH HiFLEx fsum_all'] ])
                             text_info.append([ im_name_full, im_name ])
-                            logger('Info: Loaded {0}'.format(im_name_full))
+                            logger('Info: Loaded {0}'.format(im_name_full), params=params)
                         else:
-                            logger('Warn: Can not find {0}'.format(im_name_full))
+                            logger('Warn: Can not find {0}'.format(im_name_full), params=params)
                     info = np.array(info)
                     if info.shape[0] == 0:
-                        logger('Warn: Could not find any file for extraction {0}.'.format(extraction))
+                        logger('Warn: Could not find any file for extraction {0}.'.format(extraction), params=params)
                         continue
                     waves = np.unique( np.concatenate( list(entry[0] for entry in data) ).flat, axis=None )        # might be an issue due to float uncertainties
                     waves = np.arange( int(np.nanmin(waves)/dwave) * dwave, np.nanmax(waves)+dwave, dwave )
@@ -504,7 +512,7 @@ if __name__ == "__main__":
                         index_e2 = np.argmin(np.abs(waves-entry[0,index_e1]))
                         if index_e2-index_s2 != index_e1-index_s1:
                             #print('should not happen', index_s1, index_e1, index_s2, index_e2, entry[index_s1:index_s1+2,0], entry[index_e1-2:index_e1,0], waves[index_s2:index_s2+2,0], waves[index_e2-2:index_e2,0]
-                            logger('Error: file {0} has not the expected number of data points between wavelengths {1} and {2}. Expected {3}, got {4} data points. Did you change parameter wavelength_scale_resolution during the extraction process. Please delete all extracted files for {5}.'.format(text_info[ii][0], waves[index_s2,0], waves[index_e2,0], index_e2-index_s2, index_e1-index_s1, text_info[ii][1]))
+                            logger('Error: file {0} has not the expected number of data points between wavelengths {1} and {2}. Expected {3}, got {4} data points. Did you change parameter wavelength_scale_resolution during the extraction process. Please delete all extracted files for {5}.'.format(text_info[ii][0], waves[index_s2,0], waves[index_e2,0], index_e2-index_s2, index_e1-index_s1, text_info[ii][1]), params=params)
                         fluxes[ii, index_s2:index_e2+1] = entry[1,index_s1:index_e1+1]
                         #print(ii, index_s2,index_e2,index_s1,index_e1,fluxes[ii, index_s2:index_e2+1] )
                     exptime = np.sum(info[:,1])
@@ -532,16 +540,16 @@ if __name__ == "__main__":
                     im_head['HIERARCH HiFLEx EXPOSURE'] = exptime
                     save_multispec([waves,flux_comb], params['path_extraction_single']+extraction+'_lin_cont', im_head)
                     save_linspec_csv(params['path_extraction_single']+extraction+'_lin_cont.csv', waves, flux_comb)
-                    logger('Info: Saved the result in {0}'.format(params['path_extraction_single']+extraction+'_lin_cont.*'))
+                    logger('Info: Saved the result in {0}'.format(params['path_extraction_single']+extraction+'_lin_cont.*'), params=params)
         else:
             for extraction in extractions:
                 if extraction.find('extract_lin_') == 0:
-                    logger('Warn: found settings to combine the linearised extracted files, however parameter wavelength_scale_resolution was set to 0. Please modify wavelength_scale_resolution and delete the files in {0} that you want to be combined. Then run hiflex.py again.'.format(params['path_extraction']))
+                    logger('Warn: found settings to combine the linearised extracted files, however parameter wavelength_scale_resolution was set to 0. Please modify wavelength_scale_resolution and delete the files in {0} that you want to be combined. Then run hiflex.py again.'.format(params['path_extraction']), params=params)
         
         logger('')      # To have an empty line
-        logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fifth are the flat corrected spectra and its error. Sixth and sevens are the the continuum normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The ninth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']))
+        logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fifth are the flat corrected spectra and its error. Sixth and sevens are the the continuum normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The ninth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']), params=params)
         header_results_to_texfile(params)           # Save the results from the header in a logfile
-        logger('Info: Will try to do the RV analysis in a moment') 
+        logger('Info: Will try to do the RV analysis in a moment', params=params) 
         #time.sleep(2)  
         if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) > 100:
             # Run RV analysis that can be run
@@ -564,7 +572,7 @@ if __name__ == "__main__":
                     cmd += 'python {0}/hiflex.py {1} started_from_p3=True'.format(os.path.dirname(sys.argv[0]), ' '.join(sys.argv[1:]) )
                     logger('Info: Loading a python 2 environment, as CERES requires python 2 and this is a python 3 environment.'+
                            ' The progress of the process can be watched in logfile or {0}'.format(log_python2)+
-                           ' Running the following commands to start the other environment:\n{0}'.format(cmd))
+                           ' Running the following commands to start the other environment:\n{0}'.format(cmd), params=params)
                     if os.path.isfile(log_python2):
                         os.system('rm {0}'.format(log_python2))
                     with open(log_python2, 'a') as logf:
@@ -573,9 +581,9 @@ if __name__ == "__main__":
                         code = log_returncode(p.returncode, 'Please check {0} for the error message. You might want to run the pipeline again in the Python 2 environment.'.format(log_python2))
                     if code > 0:    # It didn't run through:
                         logger('Warn: Loading a python 2 environment has failed or something crashed within the python 2 environment, this will prevent CERES from running. '+\
-                               'Please check {1} and that the following line works in a clear terminal (e.g. after running "env -i bash --norc --noprofile"):\n\n{0}\n'.format(cmd, log_python2))
+                               'Please check {1} and that the following line works in a clear terminal (e.g. after running "env -i bash --norc --noprofile"):\n\n{0}\n'.format(cmd, log_python2), params=params)
                 else:
-                    logger('Warn: CERES might not work. This is a python3 environment, however, it was not started by conda and the script does not know how to get to a python2 environment')
+                    logger('Warn: CERES might not work. This is a python3 environment, however, it was not started by conda and the script does not know how to get to a python2 environment', params=params)
             else:
                 # Run CERES, or if it's a python 2 environment
                 run_ceres_rvs(params, files_RV, headers)
@@ -585,12 +593,12 @@ if __name__ == "__main__":
      
             header_results_to_texfile(params)           # Save the results from the header in a logfile
         else:
-            logger('Info: Using a pseudo wavelength solution -> no RV analysis')   
+            logger('Info: Using a pseudo wavelength solution -> no RV analysis', params=params)   
     else:       # Started from p3
         files_RV, headers = prepare_for_rv_packages(params)     # Won't recreate the folders for TERRA/SERVAL if started_from_p3=True
         run_ceres_rvs(params, files_RV, headers)
         
-    logger('Finished')
+    logger('Finished', params=params)
     log_params(params)
     
 
