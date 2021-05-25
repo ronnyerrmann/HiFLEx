@@ -184,12 +184,12 @@ if __name__ == "__main__":
     for i in range_bias:
         biases.append(params['raw_data_path']+'Bias-{0}.fit'.format('%4.4i'%i))        # Change the name of the Bias files, if necessary
         if 'bias' in show_stats:
-            im, im_head = read_file_calibration(params, biases[-1])
+            calimages, im, im_head = read_file_calibration(params, calimages, biases[-1])
             im_stats.append(im)
     params['bias_rawfiles'] = biases
     params['bias_calibs_create'] = ['subframe', 'badpx_mask']
     params['master_bias_filename'] = 'master_bias.fits'
-    im_bias, im_head_bias = create_image_general(params, 'bias')
+    calimages, im_bias, im_head_bias = create_image_general(params, calimages, 'bias')
     find_stats(im_stats)
 
     if len(get_statistics) > 0:
@@ -198,7 +198,7 @@ if __name__ == "__main__":
         images = []
         for image in get_statistics:
             images.append(params['raw_data_path']+image)
-            im, im_head = read_file_calibration(params, images[-1])
+            calimages, im, im_head = read_file_calibration(params, calimages, images[-1])
             im_stats.append(im)
         find_stats(im_stats)
         
@@ -212,11 +212,11 @@ if __name__ == "__main__":
             darks.append(params['raw_data_path']+'Dark-{0}_{1}s.fit'.format('%4.4i'%i, expname))        # Change the name of the Dark files, if necessary
             if 'dark' in show_stats:
                 params['calibs'] = ['subframe', 'badpx_mask']
-                im, im_head = read_file_calibration(params, darks[-1])
+                calimages, im, im_head = read_file_calibration(params, calimages, darks[-1])
                 im_stats.append(im)
         params['dark{0}_rawfiles'.format(exptime)] = darks
         params['master_dark{0}_filename'.format(exptime)] = 'master_dark_{0}s.fits'.format(expname)        # Change the name of the Flat files, if necessary
-        #im_dark, im_head_dark = create_image_general(params, 'dark{0}'.format(exptime))                # if you need the master dark files
+        #calimages, im_dark, im_head_dark = create_image_general(params, calimages, 'dark{0}'.format(exptime))                # if you need the master dark files
         find_stats(im_stats)
         
         if len(range_flat) == 0:    
@@ -225,12 +225,12 @@ if __name__ == "__main__":
             flats.append(params['raw_data_path']+'Flat-{0}_{1}s.fit'.format('%4.4i'%i, expname))
             if 'flat' in show_stats:
                 params['calibs'] = ['subframe', 'badpx_mask']                                   # is overwritten, if a dark is loaded
-                im, im_head = read_file_calibration(params, flats[-1])                          # disable, if only darks should be checked and flats with this exposure time don't exist
+                calimages, im, im_head = read_file_calibration(params, calimages, flats[-1])                          # disable, if only darks should be checked and flats with this exposure time don't exist
                 im_stats.append(im)
         params['flatexp_rawfiles'] = flats                                                                  # don't use flat_rawfiles, as this will overwrite the standard flat
         params['flatexp_calibs_create'] = ['subframe', 'badpx_mask', 'normalise']
         params['master_flatexp_filename'] = 'master_flat_{0}s.fits'.format(expname)
-        im_flat, im_head_flat = create_image_general(params, 'flatexp')                         # disable this and the following 7 lines, if only darks should be checked and flats with this exposure time don't exist
+        calimages, im_flat, im_head_flat = create_image_general(params, calimages, 'flatexp')                         # disable this and the following 7 lines, if only darks should be checked and flats with this exposure time don't exist
         ims = im_flat.shape
         ims = np.insert(ims, 0, 1)      #Add one dimension, to append the files
         im_flat.shape = ims
@@ -272,8 +272,8 @@ if __name__ == "__main__":
         params['calibs'] = ['subframe', 'badpx_mask']
         #gains, im_head = read_file(params, calimages, params['result_path']+params['gains'])
         #zerop, im_head = read_file(params, calimages, params['result_path']+params['zerop'])
-        gains, im_head = read_file_calibration(params, params['result_path']+params['gains'])
-        zerop, im_head = read_file_calibration(params, params['result_path']+params['zerop'])
+        calimages, gains, im_head = read_file_calibration(params, calimages, params['result_path']+params['gains'])
+        calimages, zerop, im_head = read_file_calibration(params, calimages, params['result_path']+params['zerop'])
     else:
         gains = copy.copy(badpx_mask)*0
         zerop = copy.copy(badpx_mask)*0

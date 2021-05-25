@@ -33,8 +33,8 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 % To change: titele; date; https://github.com/ronnyerrmann/HiFLEx/archive
-\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.4.2}
-\date{May, 2021}
+\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.5.0}
+\date{June, 2021}
 \author{Ronny Errmann, EXOhSPEC team\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -53,13 +53,13 @@
 \section{Introduction}
 \label{intro}
 
-This program is designed to take a fits image file (i.e. a CCD image) and run data reduction steps, extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another), apply the wavelength correction, measure the radial velocity, and perform further calibration steps.
+This program is designed to take a fits image file (i.e. a CCD image) and run data reduction steps, extract out orders from an Echelle spectrograph (regardless of separation and curvature, as long as orders are distinguishable from one-another), apply the wavelength correction, measure the radial velocity, and perform further calibration steps. Single-fiber or bifurcated-fiber inputs are supported. The pipeline works well under Linux and was tested under Windows. It should also work on Mac
 
 If you use this package, please cite Errmann, et al. 2020\footnote{\url{https://ui.adsabs.harvard.edu/abs/2020PASP..132f4504E}} and let me know.
 
-If you use the barycentric corrected radial velocities, the barycentric velocity, or the BJDTDB, please cite Kanodia and Wright 2018\footnote{\url{https://iopscience.iop.org/article/10.3847/2515-5172/aaa4b7}}.
+If you use the barycentric corrected radial velocities, the barycentric velocity, or the BJDTDB, please cite Kanodia and Wright 2018\footnote{\url{https://ui.adsabs.harvard.edu/abs/2018RNAAS...2....4K}}.
 
-If you use the cosmic ray correction using deepCR, please cite Keming Zhang \& Joshua Bloom 2020\footnote{\url{https://ui.adsabs.harvard.edu/abs/2020ApJ...889...24Z}}.
+If you use the cosmic ray correction using deepCR, please cite Zhang \& Bloom 2020\footnote{\url{https://ui.adsabs.harvard.edu/abs/2020ApJ...889...24Z}}.
 
 If you use the radial velocities from TERRA, SERVAL, or CERES please cite the corresponding papers: Anglada-Escud{\'e} et al. 2012\footnote{\url{https://ui.adsabs.harvard.edu/abs/2012ApJS..200...15A}}, Zechmeister et al. 2018\footnote{\url{http://ui.adsabs.harvard.edu/abs/2018A&A...609A..12Z}}, or 
 Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c4002B}}, respectively.
@@ -72,14 +72,14 @@ Brahm et al. 2017\footnote{\url{https://ui.adsabs.harvard.edu/abs/2017PASP..129c
 This Pipeline was intended to be written as a black box for the unskilled user, however a basic understanding of echelle spectroscopy and data reduction of digital astronomical images is necessary in order to use it.
 
 
-\subsection*{Data reduction of CCD or CMOS images (photometry or spectroscopy)}
+\subsubsection*{Data reduction of CCD or CMOS images (photometry or spectroscopy)}
 Please refer to Howell (1976,2006)\footnote{\url{https://www.cambridge.org/core/books/handbook-of-ccd-astronomy/97D3D910788D44D11394B3B57C3FA743}} or check Chapter~\ref{Section:data_reduction_CCD}. A guide for data reduction using python is provided by Craig and Chambers\footnote{\url{https://mwcraig.github.io/ccd-as-book/00-00-Preface.html}}
 
-\subsection*{Echelle spectroscopy}
-Echelle spectrographs image the disperse the light into a 2-dimensional plane by using a high-dispersing grating (optimised for orders > 50) and a low-dispersing prism (or grating). The low-dispersing element is thereby necessary to separate the individual orders produced by the high-dispersing grating. Some of the wavelengths can be covered by several orders. An example for an echelle spectrum of a black body is shown in Figure~\ref{Fig:apertures_in_master_flat} with the individual orders going up to down and order number increasing from left to right.
+\subsubsection*{Echelle spectroscopy}
+Echelle spectrographs image the disperse the light into a 2-dimensional plane by using a high-dispersing grating (optimised for orders $>$ 50) and a low-dispersing prism (or grating). The low-dispersing element is thereby necessary to separate the individual orders produced by the high-dispersing grating. Some of the wavelengths can be covered by several orders. An example for an echelle spectrum of a black body is shown in Figure~\ref{Fig:apertures_in_master_flat} with the individual orders going up to down and order number increasing from left to right.
 
 In order to work with the spectra, the following steps have to be done:
-\begin{itemize}
+\begin{itemize}\setlength\itemsep{0em}
   \item Trace the orders.
   \item Correlate wavelengths to pixel.
   \item Extract the spectra.
@@ -87,9 +87,9 @@ In order to work with the spectra, the following steps have to be done:
 \end{itemize}
 In case of a bifurcated spectrograph, some steps have to applied to the traces of both fibers.
 
-\subsection*{Programming (Python)}
+\subsubsection*{Programming (Python)}
 The basic things for Python (and the configuration file) are:
-\begin{itemize}
+\begin{itemize}\setlength\itemsep{0em}
   \item Lines starting with one or more \# are comments, which will be ignored  by the pipeline.
   \item Any text is case-sensitive (except when mentioned otherwise).
   \item Empty lines and the amount of spaces normally doesn't matter.
@@ -102,6 +102,11 @@ The basic things for Python (and the configuration file) are:
 \section{Changelog (recently)}
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
+
+\subsection*{v1.5.0}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Tested successfully on Windows 10.
+\end{itemize}
 
 \subsection*{v1.4.2}
 \begin{itemize}\setlength\itemsep{0em}
@@ -1334,6 +1339,7 @@ conda activate hiflex
 \paragraph{Creating an environment for Python 2 routines:}
 Some external packages (CERES) only work under Python~2.7. Therefore, if you want to use these packages, it is necessary to create a python~2 environment, called (hiflex\_p2):
 \begin{lstlisting}[style=base]
+conda deactivate
 conda create --name hiflex_p2 python=2.7 numpy scipy matplotlib astropy pycurl \
       ephem rpy2 tqdm psutil statsmodels
 conda activate hiflex_p2
@@ -1341,18 +1347,18 @@ pip install gatspy barycorrpy==0.2.2.1 PyAstronomy
 conda deactivate
 \end{lstlisting}
 
-\subsection{Manual installation of barycorrpy }
+\paragraph{Manual installation of barycorrpy }
 In case \textit{barycorrpy} is not available using \textit{pip}, please install it by using the instruction of the package: \url{https://github.com/shbhuk/barycorrpy/wiki/1.-Installation}
 Afterwards, please make sure that \verb|import barycorrpy| works in python.
 
 % Modify it completely and just create a new anaconda environment
 %\textbf{Next thing to \url{https://sebastianraschka.com/Articles/2014_python_2_3_key_diff.html\#returning-iterable-objects-instead-of-lists}}.
 
-\subsection{Necessary files}
+\subsection{Download HiFLEx}
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/HiFLEx/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.4.2.tar.gz
+wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.5.0.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
 Alternatively, the following command downloads the latest version of the files:
@@ -1367,15 +1373,16 @@ git pull
 
 \noindent The following files should be available now in the program folder:
 \begin{description}
+ \item[conf.txt] Example configuration file with explanations.
  \item[file\_assignment.py] Script to automatically assign the fits files into the corresponding calibration steps.
  \item[hiflex.py] Script which needs to be run on each new set of data. It creates the data, which is necessary in order to extract the scientific spectra. Afterwards it extracts the Echelle spectra of the science images.
  \item[procedures.py] Contains all the procedures for the data analysis.
  \item[tkcanvas.py] Contains the plotting routines to create the user interfaces (UI).
  \item[plot\_img\_spec.py] This script controls plotting of CCD images, graphs, and the extracted spectra.
- \item[remove\_orders.py] If the automatic process identified wrong orders, then this script allows the user to remove them using a GUI.
+ \item[remove\_add\_modify\_orders.py.py] If the automatic process identified wrong orders, then this script allows the user to remove or add or modify them using a GUI.
  \item[create\_badpx\_mask.py] Script to create a bad pixel mask (in testing).
-% \item[SSEphem] Necessary folder to calculate barycentric velocity. \textit{(It might be necessary to install the package to have the correct paths.)} 
-% \item[ssephem\_update.py] Script to update the SSEphem package (See Chapter~\ref{Section:update_ssephem}).
+ \item[measurements\_to\_output.py] Reads the header information of the extracted files and stores the results in a \verb|csv|-file
+ \item[plot\_measurement\_table.py] Reads the \verb|csv|-file and plots the results.
 \end{description}
 
 When running the scripts for the first time, python will create a new file called \verb|<filename>.pyc| for some of the files (compiled script). No harm will be done in removing or keeping the files.
@@ -1396,6 +1403,8 @@ This should produce the entry \textit{*** TERRA v1.8 ***} before failing. If not
 java --version
 \end{lstlisting}
 
+Set \verb|terra_jar_file| in \textit{conf.txt} to the correct path.
+
 \subsubsection{SERVAL}
 \label{Section:serval_package}
 If you make use of the Radial Velocity analysis from the SERVAL , please cite Zechmeister et al. 2018\footnote{\url{http://ui.adsabs.harvard.edu/abs/2018A&A...609A..12Z}}.
@@ -1410,6 +1419,8 @@ Alternatively, the following line can be used:
 \begin{lstlisting}[style=base]
 ln -s <full/path/to/hiflex>/inst_HIFLEX*.py <path/to/mzechmeister>/serval/src/
 \end{lstlisting}
+
+Set \verb|path_serval| in \textit{conf.txt} to the correct path.
 
 If the SERVAL RV analysis fails, try to run it with a subset of orders for the \verb|oset| parameter. The logfile and cmdhistory.txt in the folder given in \verb|path_rv_serval| give the commands that were run automatically by the pipeline.
 
@@ -1434,6 +1445,7 @@ It might be necessary to install further packages, e.g.
 sudo apt-get install libgfortran3 libgsl-dev
 \end{lstlisting}
 
+Set \verb|path_ceres| in \textit{conf.txt} to the correct path.
 
 \paragraph{Problems that might occur when installing CERES\\}
 

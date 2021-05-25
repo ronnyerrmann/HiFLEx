@@ -3,16 +3,14 @@ from procedures import *
 # =============================================================================
 # Define variables
 # =============================================================================
-#global calimages
 params = dict()     # default param dictionary
-#calimages = dict()  # dictionary for all calibration images
+calimages = dict()  # dictionary for all calibration images
 # location of config file
 CONFIGFILE = 'conf.txt'
 
 # Start of code
 # deal with arguments from a text file
 params = textfileargs(params, CONFIGFILE)
-global calimages    # dictionary for all calibration images
 
 for calib in [ ['_cal','cal2','cal'], ['_sci','cal1', 'sci'] ]:
     if 'master_wavelensolution'+calib[0]+'_filename' not in params.keys():

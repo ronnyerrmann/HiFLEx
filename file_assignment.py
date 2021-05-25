@@ -8,9 +8,7 @@ from astroquery.simbad import Simbad
 # =============================================================================
 # Define variables
 # =============================================================================
-#global calimages
 params = dict()     # default param dictionary
-#calimages = dict()  # dictionary for all calibration images
 # location of config file
 CONFIGFILE = 'conf.txt'
 
