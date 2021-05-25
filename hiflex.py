@@ -230,14 +230,16 @@ if __name__ == "__main__":
                 wave_sol_ori_dict = read_wavelength_solution_from_fits(params['original_master_wavelensolution_filename'])
                  # Find the new wavelength solution
                 wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_ori_dict['wavesol'], 
-                                                           wave_sol_ori_dict['reflines'], reference_lines_dict, calimages['{0}_trace'.format(calib[2])], show_res=params['GUI'], search_order_offset=True)
+                                                           wave_sol_ori_dict['reflines'], params['original_master_wavelensolution_filename'],
+                                                           reference_lines_dict, calimages['{0}_trace'.format(calib[2])], show_res=params['GUI'], search_order_offset=True)
                 done_sci = True
             else:                           # Calibration fiber, runs second
                 params['order_offset'] = [0,0]
                 params['px_offset'] = [-60,60,10]
                 params['px_offset_order'] = [-0.2,0.2,0.1]
                 wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_dict['wavesol'], 
-                                                           wave_sol_dict['reflines'], reference_lines_dict, calimages['{0}_trace'.format(calib[2])], show_res=params['GUI'], search_order_offset=False)
+                                                           wave_sol_dict['reflines'], 'Science fiber wavelength solution',
+                                                           reference_lines_dict, calimages['{0}_trace'.format(calib[2])], show_res=params['GUI'], search_order_offset=False)
             save_wavelength_solution_to_fits(wave_sol_dict, params['master_wavelensolution'+calib[0]+'_filename'])
             plot_wavelength_solution_form(params['logging_wavelength_solution_form'], calimages['{0}_trace'.format(calib[2])], wave_sol_dict['wavesol'])
             plot_wavelength_solution_spectrum(params, cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'], wave_sol_dict['wavesol'], wave_sol_dict['reflines'], 
@@ -549,7 +551,8 @@ if __name__ == "__main__":
         logger('')      # To have an empty line
         logger('Info: Finished extraction of the science frames. The extracted {0}*.fits file contains different data in a 3d array in the form: data type, order, and pixel. First data type is the wavelength (barycentric corrected), second is the extracted spectrum, followed by a measure of error. Forth and fifth are the flat corrected spectra and its error. Sixth and sevens are the the continuum normalised spectrum and the S/N in the continuum. Eight is the bad pixel mask, marking data, which is saturated or from bad pixel. The ninth entry is the spectrum of the calibration fiber. The last entry is the wavelength without barycentric correction'.format(params['path_extraction']), params=params)
         header_results_to_texfile(params)           # Save the results from the header in a logfile
-        logger('Info: Will try to do the RV analysis in a moment', params=params) 
+        logger(('Info: Will try to do the RV analysis on all files for which the barycentric velocity could be calculated'+\
+                ' and for which the filename does NOT start with {0} in the first few letters in a moment').format(params['no_RV_names']), params=params) 
         #time.sleep(2)  
         if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) > 100:
             # Run RV analysis that can be run

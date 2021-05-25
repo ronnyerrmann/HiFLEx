@@ -336,6 +336,7 @@ master_wavelengths_shift_filename       = master_wavelengths_shift.txt
   #--------------
   # Using TERRA to create a template spectrum and then use that template to do the relative radial velocity analysis. Need to point to the PRV.jar file.
   #       If terra_jar_file does not exist on the machine, then no radial velocity analysis using this method will be used.
+terra_jar_file                  = Z:\home_UH\software\terra\PRV.jar
 terra_jar_file                  = /home/exohspec/software/terra/PRV.jar
 terra_jar_file                  = /home/ronny/software/terra/PRV.jar
   # csv files for TERRA. path_rv_terra will be relative to the result_path. The csv files will be saved in the <object_name>/data/ folder under path_rv_terra.
@@ -343,6 +344,8 @@ terra_jar_file                  = /home/ronny/software/terra/PRV.jar
 path_rv_terra                   = terra_rv
 
   # Using SERVAL to create a template spectrum and then do relative radial velocity against this. The path in which the python and serval folders are located needs to be given.
+  #       If path_serval does not exist on the machine, then no radial velocity analysis using this method will be used.
+path_serval                     = Z:\home_UH\software\mzechmeister
 path_serval                     = /home/exohspec/software/mzechmeister/
 path_serval                     = /home/ronny/software/mzechmeister/
     # Output of the SERVAL cross-correlation
@@ -350,10 +353,9 @@ path_rv_serval                  = serval_rv
 
   # Using CERES to do a cross-correlation with template spectra (using the normalised spectrum). Needs to point to the base folder of CERES. 
   #       If path_ceres does not exist on the machine, then no radial velocity analysis using this method will be used.
-  # path_rv is used to store the results from the CERES pipeline. path_rv will be relative to the result_path.
 path_ceres                      = /home/exohspec/software/ceres/
 path_ceres                      = /home/ronny/software/ceres/
-  # Output of the CERES cross-correlation
+  # Output of the CERES cross-correlation. path_rv_ceres will be relative to the result_path.
 path_rv_ceres                   = ceres_rv
 
   # What data set from the extracted files should be be used for the RV analysis (TERRA, SERVAL, CERES)? List of two integers.

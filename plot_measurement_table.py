@@ -46,6 +46,7 @@ if True:
     selectd.append([ 'sensordata', 0, 11, None, 'Breadboard - next to grating holder', 'tab:olive', '', 'o', 2, 'JD [d]', 'Temperature' ])
     selectd.append([ 'text', 2459342.011, 23, 'Helium off', 'k', 90, 'left', 'bottom' ])
     selectd.append([ 'grid' ])
+    #selectd.append([ 'y_range', 20, 25])
     #selectd.append([ 'text', 294, 40, 'Helium 1 l/min', 'k', 90, 'left', 'bottom' ])
     select.append(selectd)
     selectd = []
@@ -89,10 +90,10 @@ header = data[:,0:3]
 data = data[:,3:]
 data[data==''] = 'nan'
 converted = dict()
-x_range_data = [1E10, -1E10]
 
 with PdfPages(savefile) as pdf:
     for star in objects:        # New page for each opject
+        x_range_data = [1E10, -1E10]
         nr_g = len(select)      # How many graphs
         if type(star).__name__ in ['str']:
             star = [star]

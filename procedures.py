@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'       # to avoid "OMP: Error #15: Initializing libiomp5md.dll, but found libiomp5md.dll already initialized." when curve_fit is executed in windows
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
@@ -45,13 +46,17 @@ if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
     try:
         from deepCR import deepCR   # Only available for python 3.5
     except:
-        print('Error: deepCR could not be loaded. Did you activate the Anaconda hiflex environment?')
+        print('Warn: deepCR could not be loaded. Did you activate the Anaconda hiflex environment?')
         deepCR = None
 else:
     deepCR = None
 import plot_img_spec
 import psutil
-import ephem
+try:
+    import ephem
+except:
+    print('Error: ephem could not be loaded. Did you activate the Anaconda hiflex environment?')
+    exit(1)   
 import math
 import multiprocessing
 import subprocess
@@ -61,11 +66,13 @@ try:
 except:
     print('Error: astropy could not be loaded. Did you activate the Anaconda hiflex environment?')
     exit(1)
+""" # Stopped working on 24 May 2021
 from astropy.utils.iers import conf as iers_conf 
 #iers_conf.iers_auto_url = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all'         # is too old as of May 2020
 iers_conf.iers_auto_url = 'https://datacenter.iers.org/data/9/finals2000A.all'                          # untested
 iers_conf.iers_auto_url = 'ftp://cddis.gsfc.nasa.gov/pub/products/iers/finals2000A.all'                 # worked on 25 May 2020
-iers_conf.auto_max_age = None 
+iers_conf.auto_max_age = None """
+
 success = False
 for ii in range(5):
     if sys.version_info[0] < 3:     # Python 2
@@ -940,12 +947,15 @@ def create_image_general(params, imtype, level=0, realrun=True):
                 if 'normalise' in params['{0}_calibs_create'.format(imtype)]:
                     img = img/(med_flux+0.0)
                 if im is None:                                                # Initiate the array with correct precission to avoid swapping
-                    if num_imgs * np.prod(img.shape) * 2 > mem[1] * 0.49:
+                    if 2. * num_imgs * np.prod(img.shape) > mem[1] * 0.49:      # had to convert to float as otherwise long_scalar overflow might happen
                         prec = np.float16
-                        logger('Warn: The ammount of pictures will most likely cause swapping, which might cause the system to become unresponsive.')
-                    elif num_imgs * np.prod(img.shape) * 4 > mem[1] * 0.49:
+                        logger(('Warn: The ammount of pictures will most likely cause swapping, which might cause the system to become unresponsive.'+\
+                                ' Available memory: {0} GB, need to process {1} Giga-Pixel ({2}x{3}x{4}),'+\
+                                ' each pixel needs more than 1 byte to store the value.').format(round(mem[1]/1024.**3,2), 
+                                        round(1.*num_imgs*np.prod(img.shape)/1024.**3,2), num_imgs, img.shape[0], img.shape[1]) )
+                    elif 4. * num_imgs * np.prod(img.shape) > mem[1] * 0.49:
                         prec = np.float16  
-                    elif num_imgs * np.prod(img.shape) * 8 > mem[1] * 0.49:
+                    elif 8. * num_imgs * np.prod(img.shape) > mem[1] * 0.49:
                         prec = np.float32  
                     else:
                         prec = np.float64
@@ -1930,6 +1940,7 @@ def centroid_order(x, y, center, width, significance=3, bordersub_fine=True, ble
             #get_timing('{0} '.format(border_sub))
             try:
                 #get_timing('00 ')
+                # In windows: curve_fit will cause: OMP: Error #15: Initializing libiomp5md.dll, but found libiomp5md.dll already initialized.
                 popt,pcov = curve_fit(oneD_gauss,x[range_data],y[range_data],p0=p0, bounds=bounds, xtol=1E-6, ftol=1E-6)            #a, x0, sigma, b: a*np.exp(-(x-x0)**2/(2*sigma**2))+b
                 #get_timing('11 ')
             except:
@@ -2050,6 +2061,7 @@ def find_center(imslice, oldcenter, x, maxFWHM, border_pctl=0, border_pctl_poly=
     oldcenter = min(len(imslice)-1,oldcenter)
     width, center, leftmin, rightmin = width_order(imslice,oldcenter,maxFWHM)
     cen_poly = np.nan
+
     if width > maxFWHM or width == 0:                                        
         width = 0
         centerfit = center
@@ -3284,6 +3296,7 @@ def shift_orders(im, params, sci_tr_poly, xlows, xhighs, oldwidths, in_shift = 0
         data = []
         for kwarg in tqdm(kwargs, desc='Searching for shifts of the orders'):        # pp is order
             data.append( shift_orders_multicore(kwarg) )
+    
     for entry in data:          # width, problem_order, np.array(shifts), shift_map
         shifts += list(entry[2])        # center-oldcenter
         twidths.append(entry[0])
@@ -6192,8 +6205,11 @@ def plot_wavelength_solution_spectrum(params, spec1, spec2, fname, wavelength_so
                 """Conver pixel to wavelength"""
                 wave = np.polyval(wavelength_solution[order, 2:], px - wavelength_solution[order,1])
                 return wave
-            secax_x = frame.secondary_xaxis('top', functions=(wave_to_px, px_to_wave))
-            #secax_x.set_xlabel('x [px]')
+            try:
+                secax_x = frame.secondary_xaxis('top', functions=(wave_to_px, px_to_wave))
+                #secax_x.set_xlabel('x [px]')
+            except:
+                logger('Info: you are using an old matplotlib version ({0}). Consider updating it.'.format(matplotlib.__version__) )
 
             fig.set_size_inches(16.2, 10)
             #plt.savefig('{0}.png'.format(order), bbox_inches='tight')
@@ -7029,13 +7045,27 @@ def transform_wavelength_solution_2d_to_n1d(number_orders, number_pixel, polynom
     return wavelength_solution, wavelength_solution_arclines, line_stats
 
 def compare_wavelength_solution_to_emission_lines(kwargs):
+    """
+    Compares an old wavelength solution to the current emission lines
+    :param kwargs is a list of the following parameters:
+    :param resdiff: float, parameter to rescale the old wavelength solution
+    :param pxdiff: int, parameter to shift the old wavelength solution
+    :param pxdifford: float, parameter to shift the old wavelength solution per order
+    :param orderdiff: int, paramter to shift the orders of the old wavelength solution
+    :param wavelength_solution_2: 2D array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
+    :param arc_lines_px: 2D array of floats with one line for each identified line, each line contains: order, pixel, width of the line (Gauss), and height of the line
+    :param ignoreorders: list of integers, indexes of the orders to ignore
+    :param specs: list of 2 integers: number of orders, number of pixel of the spectra from which arc_lines_px was created
+    :param reference_catalog: 2D array of floats with one entry for each line. Each entry contains the wavelength and the intensity of the line
+    :param max_diffs: float, maximum allowed shift
+    """
     [ resdiff, pxdiff, pxdifford, orderdiff, wavelength_solution_2, arc_lines_px, ignoreorders, specs, reference_catalog, max_diffs ] = kwargs
     matching_lines = np.empty(( len(arc_lines_px)*10, 4 ))
     index_matching = 0
     data_available = [0, 0, 0]
     # Caluculate the wavelength of all arclines with the current settings
     for order_arcline in np.arange(min(arc_lines_px[:,0]), np.max(arc_lines_px[:,0])+1, dtype=int):        # The new orders
-        if order_arcline+orderdiff < 0 or order_arcline+orderdiff > len(wavelength_solution_2)-1 or order_arcline in ignoreorders:    # ignore orders that are not covered by orig solution
+        if order_arcline+orderdiff < 0 or order_arcline+orderdiff > wavelength_solution_2.shape[0]-1 or order_arcline in ignoreorders:    # ignore orders that are not covered by orig solution
             # No solution is available for this shifted order
             continue
         arc_lines_order_px = arc_lines_px[arc_lines_px[:,0] == order_arcline,1]     # array with px position of the identified lines for this order
@@ -7079,16 +7109,18 @@ def compare_wavelength_solution_to_emission_lines(kwargs):
     return [orderdiff, pxdiff, pxdifford, resdiff, len(matching_lines), np.std(matching_lines[:,2], ddof=1), np.sum(matching_lines[:,3])] + data_available
 
 
-def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, reference_lines_dict, traces_def, show_res=False, search_order_offset=False):
+def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, wavelength_solution_ori_name, reference_lines_dict, traces_def, show_res=False, search_order_offset=False):
     """
-    :param wavelength_solution_ori: 2D array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
-    :param arc_lines_px: 2D array with one line for each identified line, sorted by order and amplitude of the line. For each line the following informaiton is given:
+    :param arc_lines_px: 2D array of floats with one line for each identified line, sorted by order and amplitude of the line. For each line the following informaiton is given:
                     order, pixel, width of the line (Gauss), and height of the line
+    :param wavelength_solution_ori: 2D array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :param wavelength_solution_arclines_ori: 2D array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
                                         sorted by the brightest to faintest (in spectrum from which the solution is derived) and 0 to make into an array
                                         not used, only to return the correct values when no solution is found
-    :param reference_catalog: 2D array of floats with one entry for each line. Each entry contains the wavelength and the intensity of the line
-    :param reference_names: list of strings with same length as reference_catalog, name of each line
+    :param wavelength_solution_ori_name: string, name of original wavelength soltion
+    :param reference_lines_dict: dictionary that contains the keys reference_catalog and reference_names
+            reference_catalog: list of catalogues, each entry contains a 2D array of floats with one entry for each line. Each entry contains the wavelength and the intensity of the line
+            reference_names: list of catalogues, each entry contains a list of strings with same length as reference_catalog, name of each line
     :return wavelength_solution: 2D array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :return wavelength_solution_arclines: 2D array of floats with one line for each order. Each order contains the wavelengths of the identified reference lines, 
                                         sorted by the brightest to faintest (in spectrum from which the solution is derived).
@@ -7160,10 +7192,13 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
             del best_matching[ii]
     if len(best_matching) == 0:
         if len(wavelength_solution_ori) == specs[0]:
-            logger('Warn: No matching configuration of the lines in the emission line spectrum with the old wavelength solution found. Therefore the old solution will be used')
+            logger(('Warn: No matching configuration of the lines in the emission line spectrum with the old wavelength solution found.'+\
+                    ' Therefore the old solution ({0}) will be used').format(wavelength_solution_ori_name))
             return np.array(wavelength_solution_ori), wavelength_solution_arclines_ori
         else:
-            logger('Warn: No matching configuration of the lines in the emission line spectrum with the old wavelength solution found. Additionally the number of orders in the original solution and this setting do not match -> creating a pseudo solution (1 step per px)')
+            logger('Warn: No matching configuration of the lines in the emission line spectrum with the old wavelength solution ({0}) found.'+\
+                    ' Additionally the number of orders in the original solution and this setting do not match ->'+\
+                    ' creating a pseudo solution (1 step per px)'.format(wavelength_solution_ori_name))
             wavelength_solution, wavelength_solution_arclines = create_pseudo_wavelength_solution(specs[0])
             return wavelength_solution, wavelength_solution_arclines
     # 0: orderdiff, 1: pxdiff, 2: pxdifford, 3: resdiff, 4: len(matching_lines), 5: np.std(matching_lines[:,2], ddof=1), 6: np.sum(matching_lines[:,3])], 7: number of pixel covered, 8: covered lines in reference catalogue = available lines, 0: covered flux of the lines in the reference catalogue
@@ -7202,12 +7237,12 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         pxdiffstd, pxdiffordstd  = round(np.std(best_matching[:,1], ddof=1),1), round(np.std(best_matching[:,2], ddof=1),2)
     else:
         orderdiffstd, resdiffstd, pxdiffstd, pxdiffordstd = np.nan, np.nan, np.nan, np.nan
-    logger(('Info: To match the most lines in the emission line spectrum with the old wavelength solution,'+\
+    logger(('Info: To match the most lines in the emission line spectrum with the old wavelength solution ({10}),'+\
             ' a shift of {0} orders, a multiplier to the resolution of {1}, a shift of {2} px, and a shift of {3} px per order needs to be applied.'+\
             ' {4} lines were identified. The deviation is {5} Angstroms. Uncertainties were:'+\
             ' orders: {6}, resolution: {7}, px: {8}, px/order: {9}. (If these are too large, and the wavelength solution is not right,'+\
             ' you might want to modify the values for order_offset, px_offset, px_offset_order, or resolution_offset_pct in the configuration file.)').format(orderdiff, 
-                    round_sig(resdiff,3), pxdiff, round(pxdifford,2), int(best_matching[0,4]), round(best_matching[0,5],4), orderdiffstd, resdiffstd, pxdiffstd, pxdiffordstd ))
+                    round_sig(resdiff,3), pxdiff, round(pxdifford,2), int(best_matching[0,4]), round(best_matching[0,5],4), orderdiffstd, resdiffstd, pxdiffstd, pxdiffordstd, wavelength_solution_ori_name ))
     ## assign lines in the arcline with lines from the reference catalog
     med_arc_width = np.nanmedian(arc_lines_px[:,2])             # median width of the arc lines
     arc_lines_wavelength = []       #order, central pixel of the arc line, wavelength of the assigned reference line, diff between both solutions, height of the arc line, intensity of the reference line, 1/width of the arc line
@@ -7238,7 +7273,6 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                 #    print arc_lines_wavelength[-1]          #testing
                 #print arc_lines_wavelength[-1]
     
-    orders_split = [26] # will be params[??], the order where it starts new
     #orders_split = []
     orders_split = [0] + params['split_wavelength_solutions_at'] + [specs[0]]
     orders_use = []
@@ -9335,7 +9369,7 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
         exposure = im_head['HIERARCH HiFLEx EXPOSURE']
         jd_range = [jd] + list(np.arange(jd_start, jd_start+exposure/(3600.*24), 60/(3600.*24))) + [jd_start+exposure/(3600.*24)]   # Every minute
         success = False
-        for ii in range(5):
+        for ii in range(10):
             if sys.version_info[0] < 3:     # Python 2
                 try:
                     bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
@@ -9356,7 +9390,23 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
                     success = True
                     break
                 except (urllib.error.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
-                    logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+                    try:
+                        logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}, Reason: {2}'.format(4-ii, e, e.reason))
+                    except:
+                        logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}'.format(4-ii, e))
+            if ii == 2:
+                logger('Info: Disabled ssl verification as this can cause problems')
+                import ssl
+                ssl._create_default_https_context = ssl._create_unverified_context                          # For Windows
+            if ii == 5:
+                newurl = 'ftp://cddis.gsfc.nasa.gov/pub/products/iers/finals2000A.all'                 # worked on 25 May 2020
+                from astropy.utils.iers import IERS_B_URL
+                logger('Info: Changed the IERS url from {0} to {1}'.format(IERS_B_URL, newurl) )
+                from astropy.utils.iers import conf as iers_conf 
+                iers_conf.iers_auto_url = newurl
+            if ii == 8:
+                logger('Info: Set iers_conf.auto_max_age = None')
+                iers_conf.auto_max_age = None
 
         if not success:
             logger('Error: Barycentric velocities could not be calculated.', params=params)
@@ -9653,7 +9703,7 @@ def get_terra_results(params, obname):
                 prev_offset = found
             else:
                 dataf[ii] = [obname, ii, midexpJD[ii+prev_offset]] + dataf[ii][1:3]
-                logger( "Struggled to assign the MJDs from the TERRA. This is for Ronny to check things: {}, {}, {}, {}, {}",ii, dataf[ii][0], found, diffs, midexpJD[ii:min(ii+diff+1,midexpJD.shape)])
+                logger( "Struggled to assign the MJDs from the TERRA. This is for Ronny to check things: {0}, {1}, {2}, {3}, {4}".format(ii, dataf[ii][0], found, diffs, midexpJD[ii:min(ii+diff+1,midexpJD.shape[0])]))
 
     return dataf
 

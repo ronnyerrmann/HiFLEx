@@ -33,7 +33,7 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 % To change: titele; date; https://github.com/ronnyerrmann/HiFLEx/archive
-\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.4.1}
+\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.4.2}
 \date{May, 2021}
 \author{Ronny Errmann, EXOhSPEC team\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
@@ -102,6 +102,12 @@ The basic things for Python (and the configuration file) are:
 \section{Changelog (recently)}
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
+
+\subsection*{v1.4.2}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Removed the manual IERS addresses which were introduced in May 2020, disabled ssl verification if download of IERS fails.
+  \item Fixed crash when using old matplotlib.
+\end{itemize}
 
 \subsection*{v1.4.1}
 \begin{itemize}\setlength\itemsep{0em}
@@ -1326,7 +1332,7 @@ conda activate hiflex
 \end{lstlisting}
 
 \paragraph{Creating an environment for Python 2 routines:}
-Some external packages (SERVAL and CERES) only work under Python~2.7. Therefore, if you want to use these packages, it is necessary to create a python~2 environment, called (hiflex\_p2):
+Some external packages (CERES) only work under Python~2.7. Therefore, if you want to use these packages, it is necessary to create a python~2 environment, called (hiflex\_p2):
 \begin{lstlisting}[style=base]
 conda create --name hiflex_p2 python=2.7 numpy scipy matplotlib astropy pycurl \
       ephem rpy2 tqdm psutil statsmodels
@@ -1346,7 +1352,7 @@ Afterwards, please make sure that \verb|import barycorrpy| works in python.
 
 \noindent The Necessary python and configuration files can be loaded from github (adjust the version to the latest version by checking \url{https://github.com/ronnyerrmann/HiFLEx/releases}):
 \begin{lstlisting}[style=base]
-wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.4.1.tar.gz
+wget https://github.com/ronnyerrmann/HiFLEx/archive/v1.4.2.tar.gz
 tar -xzvf v*.tar.gz
 \end{lstlisting}
 Alternatively, the following command downloads the latest version of the files:
@@ -1394,7 +1400,7 @@ java --version
 \label{Section:serval_package}
 If you make use of the Radial Velocity analysis from the SERVAL , please cite Zechmeister et al. 2018\footnote{\url{http://ui.adsabs.harvard.edu/abs/2018A&A...609A..12Z}}.
 
-To install SERVAL please follow the instructions as given at\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. SERVAL only works with python~2.7, hence for testing you might want to load the Python~2 environment.
+To install SERVAL please follow the instructions as given at\\ \url{https://github.com/mzechmeister/serval}~. It is worth to check that the software is working by running the package on the provided test data. %SERVAL only works with python~2.7, hence for testing you might want to load the Python~2 environment.
 
 SERVAL can be controlled with an instrument file. This has to be provided in the serval \verb|src| folder. Below is a way to create a soft link it when following the installing instructions.
 \begin{lstlisting}[style=base]

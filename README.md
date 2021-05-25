@@ -21,13 +21,16 @@ Requirements:
 - python 3.8 (and 2.7) + numpy, scipy, matplotlib, astropy, pycurl, ephem, rpy2, tqdm, psutil, statsmodels, gatspy, barycorrpy, (deepCR), (PyAstronomy)
 - (only tested under linux)
 
-The easiest way is to download and install [Anaconda](https://www.anaconda.com/distribution/#linux). Afterwards log out and log in again and create two environments (python >= 3.5 required for deepCR, python 2.7 required for CERES):
+The easiest way is to download and install [Anaconda](https://www.anaconda.com/distribution/#linux). Afterwards log out and log in again and create two environments (python >= 3.5 required for deepCR and SERVAL; python 2.7 required for CERES (not under windows)):
 ```
 conda create --name hiflex_p2 python=2.7 numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels 
 conda activate hiflex_p2
-pip install gatspy barycorrpy==0.2.2.1 PyAstronomy multiprocessing
+pip install gatspy barycorrpy==0.2.2.1 PyAstronomy
 conda deactivate
+```
+On Windows the pip command might fail with [LookupError: unknown encoding: cp65001](https://stackoverflow.com/questions/35176270/python-2-7-lookuperror-unknown-encoding-cp65001). In this case run set `PYTHONIOENCODING=UTF-8` to fix this problem.
 
+```
 conda create --name hiflex python=3 numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels
 conda activate hiflex
 pip install gatspy barycorrpy deepCR PyAstronomy
@@ -85,7 +88,7 @@ java --version
 ```
 
 ### SERVAL (optional RV analysis)
-To install SERVAL please follow the instructions as given on (https://github.com/mzechmeister/serval). It is worth to check that the software is working by running the package on the provided test data. Set the variable **path_serval** in `conf.txt` to the full path of the *mzechmeister* folder, e.g. the path given in *$SERVALHOME*.
+To install SERVAL please follow the instructions as given on https://github.com/mzechmeister/serval (It's worth to compile in the hiflex environment). It is worth to check that the software is working by running the package on the provided test data. Set the variable **path_serval** in `conf.txt` to the full path of the *mzechmeister* folder, e.g. the path given in *$SERVALHOME*.
 
 Serval can be controlled with an instrument file. This has to be provided in the serval **src** folder. Below is a way to create a soft link it when following the installing instructions.
 ```
