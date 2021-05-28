@@ -339,7 +339,6 @@ def create_configuration_file(params, file_list):
         for easy_assignment in easy_assignments:
             if easy_assignment[0] in extract:
                 conf_data, warn = create_parameters(conf_data, warn, easy_assignment[1], easy_assignment[1], [easy_assignment[2]], exist_bias, exist_rflat, exp_darks, entry)
-        print(params['cal1_l_exp'], params['cal2_l_exp'], entry[3], 'w1' in extract, 'w2' in extract, entry )
         if 'w1' in extract:
             if params['cal1_l_exp']*0.7 <= entry[3] <= params['cal1_l_exp']*1.3:
                 conf_data, warn = create_parameters(conf_data, warn, 'cal1_l', 'cal1_l', ['arc'], exist_bias, exist_rflat, exp_darks, entry)
