@@ -58,12 +58,13 @@ except:
     print('Error: ephem could not be loaded. Did you activate the Anaconda hiflex environment?')
     exit(1)   
 import math
-try:
+"""try:
     import multiprocess as multiprocessing      # For Windows   
     print('Info: using multiprocess')
 except:
     import multiprocessing                  # Won't work under windows and Anaconda
-    print('Info: using multiprocessing')
+    print('Info: using multiprocessing')"""
+import multiprocessing                  # Won't work under windows and Anaconda
 import subprocess
 # Necessary because of https://github.com/astropy/astropy/issues/9427       # commented out again on 20/5/2020 after "WARNING: IERSStaleWarning: IERS_Auto predictive values are older than 15.0 days but downloading the latest table did not find newer values [astropy.utils.iers.iers]"
 try:
@@ -129,6 +130,7 @@ ephemeris = 'DEc403'        # To use the JPL DE403 ephemerides, https://en.wikip
 """
 tqdm.monitor_interval = 0   #On the virtual machine at NARIT the code raises an exception otherwise
 
+calimages = dict()  # dictionary for all calibration images used by create_image_general and read_file_calibration
 beg_ts = time.time()
 GLOBALutils, correlation, lowess = None, None, None
 
@@ -479,6 +481,15 @@ def log_returncode(code, explain=''):
         logger('Warn: Subprocess returned with error code {0}. {1}'.format(code, explain))
     return code
 
+#def update_calibration_memory(key, value):         # Not needed anymore with global calimages in hiflex.py and in procedures here
+#    """
+#    Add new information to the global variable calimages, which is not accessable from other python files
+#    :param key: string, key for the dictionary
+#    :param value: string, number, array, or anything: value for the dictionary
+#    """
+#    global calimages
+#    calimages[key] = copy.deepcopy(value)
+
 def nanminmax(data, axis=None):
     """
     returns the minimum and maximum of a list or array
@@ -719,7 +730,7 @@ def warn_images_not_same(ims, names):
                'This is most likely caused by a missing "subframe" in one of the parameters "calib*". Please check.\n {0}'.format(problems[:-1]) )
     return
 
-def read_file_calibration(params, calimages, filename, level=0, realrun=True):
+def read_file_calibration(params, filename, level=0, realrun=True):
     """
     Reads the filename and applies the calibrations as given in params['calibs']
     This works also if the files are stored with the following header: BITPIX = 16, BZERO = 32768
@@ -727,6 +738,7 @@ def read_file_calibration(params, calimages, filename, level=0, realrun=True):
     :param filename: path and name of the file
     :return: 2D numpy array of the file, and the header of the file read
     """
+    global calimages
     im, im_head = read_fits_file(filename, realrun=realrun)
     if realrun:
         ims = im.shape
@@ -779,7 +791,7 @@ def read_file_calibration(params, calimages, filename, level=0, realrun=True):
             im_head['HIERARCH HiFLEx redu{0}a'.format(level)] = 'Subframe: {0}'.format(entry)
         elif entry.lower().find('bias') > -1:
             if entry not in calimages:
-                 calimages, dummy_im, dummy_imhead = create_image_general(params, calimages, entry, level=level+1)
+                 create_image_general(params, entry, level=level+1)
             if realrun:
                 warn_images_not_same([im, calimages[entry]], [filename,entry])
                 if np.percentile(calimages[entry], 90) > 2000 or np.percentile(calimages[entry], 10) < -100:
@@ -790,7 +802,7 @@ def read_file_calibration(params, calimages, filename, level=0, realrun=True):
             if entry == 'dark':             #only add exposure time, if just dark is given
                 entry = entry+str(exptime)
             if entry not in calimages:
-                 calimages, dummy_im, dummy_imhead = create_image_general(params, calimages, entry, level=level+1)
+                 create_image_general(params, entry, level=level+1)
             if realrun:
                 warn_images_not_same([im, calimages[entry]], [filename,entry])
                 if np.percentile(calimages[entry], 90) > 2000 or np.percentile(calimages[entry], 10) < -100:
@@ -799,7 +811,7 @@ def read_file_calibration(params, calimages, filename, level=0, realrun=True):
                 logtxt, headtxt = ['dark correction applied'], ['redu{0}c'.format(level), 'Dark']
         elif entry.lower().find('rflat') > -1:
             if entry not in calimages:
-                 calimages, dummy_im, dummy_imhead = create_image_general(params, calimages, entry, level=level+1)
+                 create_image_general(params, entry, level=level+1)
             if realrun:
                 warn_images_not_same([im, calimages[entry]], [filename,entry])
                 im = im / (calimages[entry] / np.median(calimages[entry]) )
@@ -890,9 +902,9 @@ def read_file_calibration(params, calimages, filename, level=0, realrun=True):
     if os.path.exists(params['path_reduced']) and params['path_reduced'].lower() != 'na'+os.sep and realrun:       # Save the reduced image
         fname = filename.rsplit(os.sep,1)
         save_im_fits(params, im, im_head,  params['path_reduced']+fname[-1])
-    return calimages, im, im_head
+    return im, im_head
 
-def create_image_general(params, calimages, imtype, level=0, realrun=True):
+def create_image_general(params, imtype, level=0, realrun=True):
     """
     Reads or creates the imtype file. If the key and file for master_<imtype>_filename exists the file is read, otherwise the file is created by combining the <imtype>_rawfiles
     :param params: Dictionary with all the parameters
@@ -901,6 +913,7 @@ def create_image_general(params, calimages, imtype, level=0, realrun=True):
     :return im: 2D array of the combined file
     :return im_head: header of the last read file
     """
+    global calimages
     mem = psutil.virtual_memory()                   # svmem(total=33221091328, available=28485840896, percent=14.3, used=4202041344, free=25513508864, active=..., inactive=..., buffers=..., cached=.., shared=...)
     loaded = False
     if 'master_{0}_filename'.format(imtype) in params.keys():
@@ -910,7 +923,7 @@ def create_image_general(params, calimages, imtype, level=0, realrun=True):
             params['calibs'] = params['calibs_read']
             if '{0}_calibs_read'.format(imtype) in params.keys():
                 params['calibs'] = params['{0}_calibs_read'.format(imtype)]
-            calimages, im, im_head = read_file_calibration(params, calimages, params['master_{0}_filename'.format(imtype)], level=level, realrun=realrun)
+            im, im_head = read_file_calibration(params, params['master_{0}_filename'.format(imtype)], level=level, realrun=realrun)
             loaded = True
     if loaded == False:
         if '{0}_calibs_create'.format(imtype) not in params.keys():
@@ -930,7 +943,7 @@ def create_image_general(params, calimages, imtype, level=0, realrun=True):
         header_updates = np.zeros((num_imgs,2))
         for im_index, imf in enumerate(params['{0}_rawfiles'.format(imtype)]):                   # Only works for maximum 40 images on neils machine
             params['calibs'] = params['{0}_calibs_create'.format(imtype)]       # get's overwritten when other files are being read
-            calimages, img, im_head = read_file_calibration(params, calimages, imf, level=level, realrun=realrun)
+            img, im_head = read_file_calibration(params, imf, level=level, realrun=realrun)
             if realrun:
                 im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # unix_timestamp of mid exposure time
                 header_updates[im_index,:] = [im_head['HIERARCH HiFLEx EXPOSURE'], obsdate_mid_float]         # !!! Improve this calculation and write in the header so it can be used later by get_obsdate 
@@ -1002,7 +1015,7 @@ def create_image_general(params, calimages, imtype, level=0, realrun=True):
     if realrun:    
         calimages[imtype] = im
         calimages['{0}_head'.format(imtype)] = im_head
-    return calimages, im, im_head
+    return im, im_head
 
 def get_minimum_data_type(arr, allow_unsigned=True):
     """
@@ -3144,7 +3157,7 @@ def extract_order_todelete(kwarg):      ### delete later, now just for backup
     
     return ospecs, ogood_px_mask, widths_o
      
-def extract_orders(params, calimages, image, pfits, xlows, xhighs, widths, w_mult, offset=0, var='standard', plot_tqdm=True, header=dict(), plot_traces=False ):
+def extract_orders(params, image, pfits, xlows, xhighs, widths, w_mult, offset=0, var='standard', plot_tqdm=True, header=dict(), plot_traces=False ):
     """
     Extract the spectra from each of the orders and return in a numpy array
     :param params: Dictionary with all the parameters. 'maxgood_value' is required
@@ -3214,7 +3227,7 @@ def extract_orders(params, calimages, image, pfits, xlows, xhighs, widths, w_mul
         good_px_mask.append(ogood_px_mask)
         widths_m.append(widths_o)
     
-    return calimages, np.array(spec), np.array(good_px_mask), np.array(widths_m)
+    return np.array(spec), np.array(good_px_mask), np.array(widths_m)
 
 def shift_orders_multicore(kwarg):
         [order, params, im, sci_tr_poly, xlows, xhighs, steps, oldwidths, in_shift] = kwarg
@@ -3448,7 +3461,7 @@ def find_shift_images_2d(im, im_ref, shift_range):
     
     return popt
 
-def find_shift_images(params, calimages, im, im_ref, sci_traces, w_mult, cal_tr_poly, extract=True, im_head=dict(), max_allowed=[-100,100]):
+def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extract=True, im_head=dict(), max_allowed=[-100,100]):
     """ new: Finds the shift between two images by extracting the spectra
     old: Finds the shift between two images by cross corellating both. The images are substracted and the total flux [sum(abs())] is calculated. At the best position, a minimum will be reached
     :param im: 2D array with the image, for which the shift should be calculated
@@ -3503,7 +3516,7 @@ def find_shift_images(params, calimages, im, im_ref, sci_traces, w_mult, cal_tr_
         for shift in range(max(np.abs(range_shifts))+1):
             for pm in [-1, +1]:
                 if extract:         # extract and find the maximum flux
-                    calimages, spec, good_px_mask, extr_width = extract_orders(params, calimages, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, pm*shift, plot_tqdm=False)       
+                    spec, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, pm*shift, plot_tqdm=False)       
                     fluxes = np.nansum(spec, axis=1)
                     fluxes[np.isnan(fluxes)] = np.nanmin(fluxes)          # replace nans with the minimum flux to avoid problems caused at the borders at the image
                 else:               # Use the difference of the 2 images (old way)
@@ -3547,7 +3560,7 @@ def find_shift_images(params, calimages, im, im_ref, sci_traces, w_mult, cal_tr_
                 for fshift in fshifts:
                     if np.min( np.abs( np.array(nshifts) - fshift ) ) < 0.005:                  # Don't do the fit again, if it was done before
                         continue
-                    calimages, spec, good_px_mask, extr_width = extract_orders(params, calimages, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, fshift, plot_tqdm=False)
+                    spec, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly[mask,:,:], xlows[mask], xhighs[mask], widths[mask,:], w_mult, fshift, plot_tqdm=False)
                     fluxes.append( np.median( np.nansum(spec, axis=1) ) )
                     nshifts.append(fshift)
                 sort_arr = np.argsort(fluxes)
@@ -3581,17 +3594,17 @@ def find_shift_images(params, calimages, im, im_ref, sci_traces, w_mult, cal_tr_
     im_head['HIERARCH HiFLEx CD_S_MIN']  = (min_shifts, 'Minimum tested shift in Cross-disp. [px]')        # (value, comment)
     im_head['HIERARCH HiFLEx CD_S_MAX']  = (max_shifts, 'Maximum tested shift in Cross-disp. [px]')        # (value, comment)
     
-    return calimages, shift, im_head
+    return shift, im_head
 
 def arc_shift_multicore(kwargs):
-    [shift, params, calimages, im, pfits, xlows, xhighs, widths, wmult, plot_tqdm] = kwargs
-    calimages, arc_spec, good_px_mask, extr_width = extract_orders(params, calimages, im, pfits, xlows, xhighs, widths, 0, shift, plot_tqdm=False)          # w_mult == 0: only central pixel
+    [shift, params, im, pfits, xlows, xhighs, widths, wmult, plot_tqdm] = kwargs
+    arc_spec, good_px_mask, extr_width = extract_orders(params, im, pfits, xlows, xhighs, widths, 0, shift, plot_tqdm=False)          # w_mult == 0: only central pixel
     flux = np.nansum(arc_spec, axis=1)
     flux[np.isnan(flux)] = np.nanmin(flux)          # replace nans with the minimum flux
     
     return flux
 
-def arc_shift(params, calimages, im, pfits, xlows, xhighs, widths):
+def arc_shift(params, im, pfits, xlows, xhighs, widths):
     """
     Determines the difference between the science orders and arc orders in cross-dispersion direction
     :param params: Dictionary with all the paramerters. arcshift_range (is made positive when reading the configuration), arcshift_side, and arcextraction_width_multiplier will be used
@@ -3639,7 +3652,7 @@ def arc_shift(params, calimages, im, pfits, xlows, xhighs, widths):
     arcshifts = np.arange(min(arcshifts),max(arcshifts)+1, 1)
     kwargs = []
     for shift in arcshifts:
-        kwargs.append([shift, params, calimages, im, pfits, xlows, xhighs, widths, w_mult, False])
+        kwargs.append([shift, params, im, pfits, xlows, xhighs, widths, w_mult, False])
     if params['use_cores'] > 1 and multiprocessing.current_process().name == 'MainProcess':
         logger('Step: Search for the shift of the calibration traces, compared to the science traces (multicore).')
         p = multiprocessing.Pool(params['use_cores'])
@@ -4813,7 +4826,7 @@ def get_obsdate(params, im_head):
     return im_head, obsdate_midexp, obsdate_mid_float, jd_midexp
     #return obsdate_midexp, obsdate_mid_float, exposure_time, obsdate, fraction, jd_midexp
     
-def extraction_wavelengthcal(params, calimages, im, im_name, im_head, sci_traces, cal_traces, wave_sol_dict, reference_lines_dict, im_trace, objname):
+def extraction_wavelengthcal(params, im, im_name, im_head, sci_traces, cal_traces, wave_sol_dict, reference_lines_dict, im_trace, objname):
     """
     Extracts the wavelength calibration
     
@@ -4823,14 +4836,14 @@ def extraction_wavelengthcal(params, calimages, im, im_name, im_head, sci_traces
     [cal_tr_poly, axlows, axhighs, awidths] = cal_traces
     im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)               # in UTC, mid of the exposure
     if params['arcshift_side'] == 0:                       # single fibre spectrograph
-        calimages, shift, im_head = find_shift_images(params, calimages, im, im_trace, sci_traces, 1, cal_tr_poly, im_head=im_head)     # w_mult=1 so that the same area is covered as for the find traces
+        shift, im_head = find_shift_images(params, im, im_trace, sci_traces, 1, cal_tr_poly, im_head=im_head)     # w_mult=1 so that the same area is covered as for the find traces
         #shift = 0
         #logger('Warn: Line 3469: Searching for shift is switched off in the code')
     if im_name.endswith('_wavecal'):
-        calimages, aspectra, agood_px_mask, extr_width = extract_orders(params, calimages, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head, plot_traces=True)
+        aspectra, agood_px_mask, extr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head, plot_traces=True)
         fib = 'cal'
     elif im_name.endswith('_wavesci'):   
-        calimages, aspectra, agood_px_mask, extr_width = extract_orders(params, calimages, im, sci_tr_poly, xlows, xhighs, widths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head, plot_traces=True)
+        aspectra, agood_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head, plot_traces=True)
         fib = 'sci'
     else:
         logger('Error: The filename does not end as expected: {0} . It should end with _wavecal or _wavesci. This is probably a programming error.'.format(im_name), params=params)
@@ -4847,7 +4860,6 @@ def extraction_wavelengthcal(params, calimages, im, im_name, im_head, sci_traces
     wave_sol_dict_new['wavesol'] = wavelength_solution_shift
     save_wavelength_solution_to_fits( wave_sol_dict_new, params['path_extraction']+im_name.replace('_wavecal', '_wavesol_{0}_cal').replace('_wavesci', '_wavesol_{0}_sci').format(im_head['HiFLEx JD']) )
     
-    return calimages
 
 def get_possible_object_names(filename, header, header_keywords, replacements=['_arc','arc', '_thar','thar', '_une','une', 'extract_combine_', 'extract_', 'extract']):
     """
@@ -4920,7 +4932,7 @@ def find_file_in_allfolders(filename, folders=[]):
     
     return pathfiles, pathfiles_full
     
-def create_blaze_norm(params, calimages, im_trace1, sci_traces, cal_traces, wave_sol_dict, reference_lines_dict):
+def create_blaze_norm(params, im_trace1, sci_traces, cal_traces, wave_sol_dict, reference_lines_dict):
     """
     Creates the file for the blaze correction
     """
@@ -4928,13 +4940,13 @@ def create_blaze_norm(params, calimages, im_trace1, sci_traces, cal_traces, wave
     minflux = 0.002          # The blaze below 
     [sci_tr_poly, xlows, xhighs, widths] = sci_traces
     [cal_tr_poly, axlows, axhighs, awidths] = cal_traces
-    calimages, im_blazecor, im_head = create_image_general(params, calimages, 'blazecor')
+    im_blazecor, im_head = create_image_general(params, 'blazecor')
     logger('Step: Create the normalised blaze for the night')
     im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)
-    calimages, shift, im_head = find_shift_images(params, calimages, im_blazecor, im_trace1, sci_traces, 0, cal_tr_poly, extract=True, im_head=im_head)
+    shift, im_head = find_shift_images(params, im_blazecor, im_trace1, sci_traces, 0, cal_tr_poly, extract=True, im_head=im_head)
     #shift = 0  # for test
-    calimages, flat_spec, good_px_mask, extr_width = extract_orders(params, calimages, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='linfit', offset=shift)
-    #calimages, flat_spec, good_px_mask, extr_width = extract_orders(params, calimages, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift) # for test
+    flat_spec, good_px_mask, extr_width = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], var='linfit', offset=shift)
+    #flat_spec, good_px_mask, extr_width = extract_orders(params, im_blazecor, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift) # for test
     med_flux = np.nanmedian(flat_spec)
     flat_spec_norm = flat_spec/med_flux
     flat_spec_norm_cor = correct_blaze(flat_spec_norm, minflux=0.01)         # Ignore all areas where the flux is 0.1% of median flux
@@ -4947,7 +4959,7 @@ def create_blaze_norm(params, calimages, im_trace1, sci_traces, cal_traces, wave
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                   # science and calibration traces are at the same position
         blazecor_spec, agood_px_mask = flat_spec*0, copy.copy(good_px_mask)
     else:
-        calimages, blazecor_spec, agood_px_mask, extr_width = extract_orders(params, calimages, im_blazecor, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
+        blazecor_spec, agood_px_mask, extr_width = extract_orders(params, im_blazecor, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift)
     wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, blazecor_spec, wave_sol_dict, reference_lines_dict,
                                             xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, params['master_blaze_spec_norm_filename'], im_head=im_head)
     wavelengths, dummy = create_wavelengths_from_solution(params, wavelength_solution_shift, blazecor_spec)
@@ -4958,8 +4970,6 @@ def create_blaze_norm(params, calimages, im_trace1, sci_traces, cal_traces, wave
     im_head['Comment'] = ' 3: fit of 1 with a polynomial of order {0}'.format(fit_poly_orders)
     im_head['Comment'] = ' 4: spectrum of the emission line lamp'
     save_multispec([wavelengths, flat_spec_norm, flat_spec_norm_cor, blaze_fit, blazecor_spec], params['master_blaze_spec_norm_filename'], im_head)
-    
-    return calimages
 
 def fit_blazefunction(fname, spec, fit_poly_orders, minflux=0.01):
     """
@@ -5001,7 +5011,7 @@ def fit_blazefunction(fname, spec, fit_poly_orders, minflux=0.01):
     
     return spec_fit
 
-def read_create_spec(params, calimages, fname, im, im_head, trace_def, wmult, offset):
+def read_create_spec(params, fname, im, im_head, trace_def, wmult, offset):
     """
     For the wavelength solution: reads the extracted spectrum or creates it
     """
@@ -5012,16 +5022,16 @@ def read_create_spec(params, calimages, fname, im, im_head, trace_def, wmult, of
         emission_spec = spec[0,:,:]
     else:           # Create the extracted spectrum
         [tr_poly, xlows, xhighs, widths] = trace_def
-        calimages, emission_spec, good_px_mask, extr_width = extract_orders(params, calimages, im, tr_poly, xlows, xhighs, widths, wmult, offset=offset, header=im_head, plot_traces=True)
+        emission_spec, good_px_mask, extr_width = extract_orders(params, im, tr_poly, xlows, xhighs, widths, wmult, offset=offset, header=im_head, plot_traces=True)
         spec = np.array([emission_spec, good_px_mask])
         im_head['Comment'] = 'File contains a 3D array with the following data in the form [data type, order, pixel]:'
         im_head['Comment'] = ' 0: spectrum of the emission line lamp'
         im_head['Comment'] = ' 1: Mask with good areas of the spectrum: 0.1=saturated_px, 0.2=badpx'
         save_multispec(spec, fname, im_head)
     
-    return calimages, emission_spec, good_px_mask
+    return emission_spec, good_px_mask
 
-def extraction_steps(params, calimages, im, im_name, im_head, sci_traces, cal_traces, wave_sol_dict_cal, reference_lines_dict, flat_spec_norm, im_trace):
+def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_sol_dict_cal, reference_lines_dict, flat_spec_norm, im_trace):
     """
     Extracts the spectra and stores it in a fits file
     
@@ -5064,9 +5074,9 @@ def extraction_steps(params, calimages, im, im_name, im_head, sci_traces, cal_tr
     params, bcvel_baryc, mephem, im_head, obnames = get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, obsdate_midexp)    # this might add the Sun/Moon to obnames
     im_head['HIERARCH HiFLEx OBJNAME'] = (obnames[0], 'Used object name')
     
-    calimages, shift, im_head = find_shift_images(params, calimages, im, im_trace, sci_traces, 0, cal_tr_poly, im_head=im_head)     # w_mult=1 so that the same area is covered as for the find traces, w_mult=0 so that only the central pixel is extracted
+    shift, im_head = find_shift_images(params, im, im_trace, sci_traces, 0, cal_tr_poly, im_head=im_head)     # w_mult=1 so that the same area is covered as for the find traces, w_mult=0 so that only the central pixel is extracted
 
-    calimages, spectra, good_px_mask, extr_width = extract_orders(params, calimages, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift, header=im_head, var=params['extraction_precision'], plot_traces=True)
+    spectra, good_px_mask, extr_width = extract_orders(params, im, sci_tr_poly, xlows, xhighs, widths, params['extraction_width_multiplier'], offset=shift, header=im_head, var=params['extraction_precision'], plot_traces=True)
     measure_noise_poly_orders = 16
     measure_noise_semiwindow = 10                   # in pixel
     # Remove the area where SNR is too high, due to smoothing out areas it takes a few seconds
@@ -5076,7 +5086,7 @@ def extraction_steps(params, calimages, im, im_name, im_head, sci_traces, cal_tr
     if np.nansum(np.abs(sci_tr_poly - cal_tr_poly)) == 0.0:                                                 # science and calibration traces are at the same position
         aspectra, agood_px_mask = spectra*0, copy.copy(good_px_mask)
     else:
-        calimages, aspectra, agood_px_mask, aextr_width = extract_orders(params, calimages, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head)
+        aspectra, agood_px_mask, aextr_width = extract_orders(params, im, cal_tr_poly, axlows, axhighs, awidths, params['arcextraction_width_multiplier'], offset=shift, var='standard', plot_tqdm=False, header=im_head)
     # Fitting each line takes time, to robustly fit the Gaussian, about 60s for 3000 lines.
     wavelength_solution_shift, shift, im_head = shift_wavelength_solution(params, aspectra, wave_sol_dict_cal, reference_lines_dict, 
                                                               xlows, xhighs, obsdate_mid_float, jd_midexp, sci_tr_poly, cal_tr_poly, im_name, im_head=im_head)   # This is only for a shift of the pixel, but not for the shift of RV
@@ -5158,7 +5168,7 @@ def extraction_steps(params, calimages, im, im_name, im_head, sci_traces, cal_tr
     save_multispec(ceres_spec, params['path_extraction']+im_name, im_head, bitpix=params['extracted_bitpix'])
     logger('Info: Finished extraction of {0}'.format(im_name))
     #get_timing('done ')
-    return calimages, obnames[0]
+    return obnames[0]
 
 def save_linspec_csv(fname, wave, spec):
     with open(fname, 'w') as file:

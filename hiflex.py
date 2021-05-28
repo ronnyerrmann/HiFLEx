@@ -16,7 +16,7 @@ from procedures import *
 # Define variables
 # =============================================================================
 params = dict()     # default param dictionary
-calimages = dict()    # dictionary for all calibration images
+global calimages    # dictionary for all calibration images
 # location of config file
 CONFIGFILE = 'conf.txt'
 
@@ -28,12 +28,16 @@ if __name__ == "__main__":
     params['path_run'] = os.getcwd()
     params['extract_wavecal'] = False
     params['no_RV_names'] = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar', 'laser']
+    import platform
+    if platform.system() == 'Windows':
+        params['use_cores'] = 1
+        logger('Info: Running on Windows, disabled multicore.')
     log_params(params)
     
     # create the median combined files
-    calimages, im_trace1, im_trace1_head = create_image_general(params, calimages, 'trace1')
+    im_trace1, im_trace1_head = create_image_general(params, 'trace1')
     if params['arcshift_side'] != 0 or 'trace2_rawfiles' in params.keys():      # calibration spectrum at the same time
-        calimages, im_trace2, im_trace2_head = create_image_general(params, calimages, 'trace2')
+        im_trace2, im_trace2_head = create_image_general(params, 'trace2')
     else:                                                                       # no calibration spectrum at the same time
         im_trace2, im_trace2_head = im_trace1, im_trace1_head
     #blazecor, cal2_l, cal2_s: at a later step to know the orders for localbackground -> cont1cal2
@@ -96,7 +100,7 @@ if __name__ == "__main__":
         cal_tr_poly, axlows, axhighs, awidths = read_fits_width(params['master_trace_cal_filename'])
     else:
         # use im_trace2 for automatic solution
-        shifts = arc_shift(params, calimages, im_trace2, sci_tr_poly, xlows, xhighs, widths)
+        shifts = arc_shift(params, im_trace2, sci_tr_poly, xlows, xhighs, widths)
         # update the sci_tr_poly parameters and create the cal_tr_poly
         cal_tr_poly = []
         for order in range(sci_tr_poly.shape[0]):
@@ -156,7 +160,7 @@ if __name__ == "__main__":
             params[txtparam] = params[txtparam].replace(prev+'.txt','')+calib[0]+'.txt'
         
         # Create files once required, but first try to load them
-        calimages, im_cal_l, im_arclhead = create_image_general(params, calimages, calib[1]+'_l')         # This file is necessary later
+        im_cal_l, im_arclhead = create_image_general(params, calib[1]+'_l')         # This file is necessary later
         if os.path.isfile(params['master_wavelensolution'+calib[0]+'_filename']) :
             logger('Info: wavelength solution already exists: {0}'.format(params['master_wavelensolution'+calib[0]+'_filename']), params=params)
             wave_sol_dict = read_wavelength_solution_from_fits(params['master_wavelensolution'+calib[0]+'_filename'])
@@ -168,33 +172,33 @@ if __name__ == "__main__":
                 if os.path.isfile(fname_em_spec) and exptime == 's':      # 'l' file is necessary later  
                     calimages['im_arc_{0}_{1}'.format(calib[2], exptime)], calimages['im_head_arc_{0}_{1}'.format(calib[2], exptime)] = [], []
                 elif os.path.isfile(fname_em_spec) and exptime == 'l':    # 'l' file is necessary later 
-                    calimages, calimages['im_arc_{0}_{1}'.format(calib[2], exptime)], calimages['im_head_arc_{0}_{1}'.format(calib[2], exptime)] = create_image_general(params, calimages, calib[1]+'_'+exptime)
+                    calimages['im_arc_{0}_{1}'.format(calib[2], exptime)], calimages['im_head_arc_{0}_{1}'.format(calib[2], exptime)] = create_image_general(params, calib[1]+'_'+exptime)
                 else:                               # Needs to be extracted again
-                    calimages, calimages['im_arc_{0}_{1}'.format(calib[2], exptime)], calimages['im_head_arc_{0}_{1}'.format(calib[2], exptime)] = create_image_general(params, calimages, calib[1]+'_'+exptime)
+                    calimages['im_arc_{0}_{1}'.format(calib[2], exptime)], calimages['im_head_arc_{0}_{1}'.format(calib[2], exptime)] = create_image_general(params, calib[1]+'_'+exptime)
                     if 'shift_{0}_l'.format(calib[2]) not in calimages.keys():
-                        calimages, calimages['shift_{0}_l'.format(calib[2])], calimages['im_head_arc_{0}_l'.format(calib[2])] = find_shift_images(params, calimages, 
+                        calimages['shift_{0}_l'.format(calib[2])], calimages['im_head_arc_{0}_l'.format(calib[2])] = find_shift_images(params, 
                                                     calimages['im_arc_{0}_{1}'.format(calib[2], exptime)], im_trace1, calimages['sci_trace'], 0, 
                                                     cal_tr_poly, extract=True, im_head=calimages['im_head_arc_{0}_l'.format(calib[2])])  # that needs to be science traces
-                calimages, calimages['em_spec_{0}_{1}'.format(calib[2], exptime)], calimages['em_gpm_{0}_{1}'.format(calib[2], exptime)] = read_create_spec(params, calimages, fname_em_spec, im_cal_s, im_head, calimages['{0}_trace'.format(calib[2])], 
+                [calimages['em_spec_{0}_{1}'.format(calib[2], exptime)], calimages['em_gpm_{0}_{1}'.format(calib[2], exptime)]] = read_create_spec(params, fname_em_spec, im_cal_s, im_head, calimages['{0}_trace'.format(calib[2])], 
                                                            params['{0}extraction_width_multiplier'.format(calib[3])], calimages.get('shift_{0}_l'.format(calib[2]),0))"""
             
             fname_em_spec = params['path_extraction'] + params.get('master_{0}_l_filename'.format(calib[1]), 'master_emission_{0}_long.fits'.format(calib[1])).rsplit(os.sep,1)[-1]
             if 'shift_{0}_l'.format(calib[2]) not in calimages.keys() and not os.path.isfile(fname_em_spec):
-                calimages, calimages['shift_{0}_l'.format(calib[2])], im_arclhead = find_shift_images(params, calimages, im_cal_l, im_trace1, calimages['sci_trace'], 0, 
+                calimages['shift_{0}_l'.format(calib[2])], im_arclhead = find_shift_images(params, im_cal_l, im_trace1, calimages['sci_trace'], 0, 
                                                                             cal_tr_poly, extract=True, im_head=im_arclhead, max_allowed=[-1,1])        # that needs to be science traces, We don't expect more than +-1 pixel
                  
-            calimages, cal_l_spec, cal_l_gpm = read_create_spec(params, calimages, fname_em_spec, im_cal_l, im_arclhead, calimages['{0}_trace'.format(calib[2])], 
+            [cal_l_spec, cal_l_gpm] = read_create_spec(params, fname_em_spec, im_cal_l, im_arclhead, calimages['{0}_trace'.format(calib[2])], 
                                                        params['{0}extraction_width_multiplier'.format(calib[3])], calimages.get('shift_{0}_l'.format(calib[2]),0) )
             # gpm: good-pixel-mask: 1 is good, below 1 not so good
             fname_em_spec = params['path_extraction'] + params.get('master_{0}_s_filename'.format(calib[1]), 'master_emission_{0}_short.fits'.format(calib[1])).rsplit(os.sep,1)[-1]
             if os.path.isfile(fname_em_spec):
                 im_cal_s, im_head = [], []
             else:                               # Needs to be extracted again
-                calimages, im_cal_s, im_head = create_image_general(params, calimages, calib[1]+'_s')
+                im_cal_s, im_head = create_image_general(params, calib[1]+'_s')
                 if 'shift_{0}_l'.format(calib[2]) not in calimages.keys():
-                    calimages, calimages['shift_{0}_l'.format(calib[2])], im_arclhead = find_shift_images(params, calimages, im_cal_l, im_trace1, calimages['sci_trace'], 0,
+                    calimages['shift_{0}_l'.format(calib[2])], im_arclhead = find_shift_images(params, im_cal_l, im_trace1, calimages['sci_trace'], 0,
                                                                                                cal_tr_poly, extract=True, im_head=im_arclhead)  # that needs to be science traces
-            calimages, cal_s_spec, cal_s_gpm = read_create_spec(params, calimages, fname_em_spec, im_cal_s, im_head, calimages['{0}_trace'.format(calib[2])], 
+            [cal_s_spec, cal_s_gpm] = read_create_spec(params, fname_em_spec, im_cal_s, im_head, calimages['{0}_trace'.format(calib[2])], 
                                                        params['{0}extraction_width_multiplier'.format(calib[3])], calimages.get('shift_{0}_l'.format(calib[2]),0))
             
             fname_arclines = params['logging_found_arc_lines'].replace('.txt','')+calib[0]+'.txt'
@@ -337,7 +341,7 @@ if __name__ == "__main__":
         logger('Info: Normalised blaze already exists: {0}'.format(params['master_blaze_spec_norm_filename']), params=params)
         # The file is read later on purpose
     else:
-        calimages = create_blaze_norm(params, calimages, im_trace1, calimages['sci_trace'], calimages['cal_trace'], calimages['wave_sol_dict_sci'], reference_lines_dict)
+        create_blaze_norm(params, im_trace1, calimages['sci_trace'], calimages['cal_trace'], calimages['wave_sol_dict_sci'], reference_lines_dict)
     
     flat_spec_norm = np.array(fits.getdata(params['master_blaze_spec_norm_filename']))              # read it again, as the file is different than the data above
     # Catch the problem, when the script re-runs with different settings and therefore the number of orders changes.
@@ -350,7 +354,7 @@ if __name__ == "__main__":
     remove_orders, keep_orders = remove_orders_low_flux(params, flat_spec_norm)
     calimages['flat_spec_norm'] = copy.deepcopy( flat_spec_norm )
     if len(remove_orders) > 0:
-        calimages = remove_orders_from_calimages(params, calimages, keep_orders)            # remove the bad orders
+        calimages = remove_orders_from_calimages(params, keep_orders)            # remove the bad orders
     """calimages['flat_spec_norm'] = copy.deepcopy( flat_spec_norm )
     calimages['wave_sol_dict'] = copy.deepcopy( wave_sol_dict )
     calimages['wavelength_solution'] = copy.deepcopy( wave_sol_dict['wavesol'] )    # Needed for templates later"""
@@ -371,14 +375,12 @@ if __name__ == "__main__":
         
         if ( params['arcshift_side'] == 0 or params['two_solutions'] or True ) and len(wavelengthcals_cal)+len(wavelengthcals_sci) > 0:         # or True: added 20201016, do it in any case, as there might be ThAr only sometimes in cal fiber
             def wavecal_multicore(parameter):
-                params, calimages, wavelengthcal, fib, im_name_full, im_name_wc, im_name, realrun = parameter
+                wavelengthcal, fib, im_name_full, im_name_wc, im_name, realrun = parameter
                 params['calibs'] = params[wavelengthcal+'_calibs_create']
-                calimages, im, im_head = read_file_calibration(params, calimages, im_name_full, realrun=realrun)
+                im, im_head = read_file_calibration(params, im_name_full, realrun=realrun)
                 if realrun:
-                    calimages = extraction_wavelengthcal(params, calimages, im, im_name_wc, im_head, calimages['sci_trace'], calimages['cal_trace'],
+                    extraction_wavelengthcal(params, im, im_name_wc, im_head, calimages['sci_trace'], calimages['cal_trace'],
                                                         calimages['wave_sol_dict_'+fib], reference_lines_dict, im_trace1, im_name_wc)
-                return calimages
-                
             params['extract_wavecal'] = True                                                                                # necessary for shift_wavelength_solution so the shift is stored in a file
             all_wavelengthcals = []
             for [wavelengthcals, fib] in [ [wavelengthcals_cal,'cal'], [wavelengthcals_sci,'sci'] ]:
@@ -394,8 +396,8 @@ if __name__ == "__main__":
                         if os.path.isfile(params['path_extraction']+im_name_wc+'.fits'):
                             logger('Info: File {0} was already processed for the calibration of the wavelength solution. If you want to extract again, please delete {1}{0}.fits'.format(im_name_wc, params['path_extraction']), params=params)
                         else:
-                            calimages = wavecal_multicore([ params, calimages, wavelengthcal, fib, im_name_full, im_name_wc, im_name, False ])      # Try run to get the calibration data
-                            all_wavelengthcals.append([ params, calimages, wavelengthcal, fib, im_name_full, im_name_wc, im_name, True ])
+                            wavecal_multicore([ wavelengthcal, fib, im_name_full, im_name_wc, im_name, False ])      # Try run to get the calibration data
+                            all_wavelengthcals.append([ wavelengthcal, fib, im_name_full, im_name_wc, im_name, True ])
             if params['use_cores'] > 1  and len(all_wavelengthcals) > 1:
                 logger('Info: Starting to extract wavelength calibrations using multiprocessing on {0} cores, hence output will be for several files in parallel.'.format(params['use_cores']), params=params)
                 sort_wavelengthcals = sort_for_multiproc_map(all_wavelengthcals, params['use_cores'])
@@ -429,21 +431,19 @@ if __name__ == "__main__":
             exit(0)
         
         def extraction_multicore(all_extractions):
-            [params, calimages, extraction, im_name_full, im_name, realrun] = all_extractions
+            [extraction, im_name_full, im_name, realrun] = all_extractions
             if os.path.isfile(params['path_extraction']+im_name+'.fits'):
                 logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']), params=params)
-                return '', calimages
+                return ''
             if  extraction.find('extract_combine') == -1:     # Single file extraction
                 params['calibs'] = params[extraction+'_calibs_create']
-                calimages, im, im_head = read_file_calibration(params, calimages, im_name_full, realrun=realrun)   
+                im, im_head = read_file_calibration(params, im_name_full, realrun=realrun)   
             else:                                       # Combine files before extraction
-                calimages, im, im_head = create_image_general(params, calimages, extraction, realrun=realrun)
+                im, im_head = create_image_general(params, extraction, realrun=realrun)
             if realrun:
-                calimages, obj_name = extraction_steps(params, calimages, im, im_name, im_head, calimages['sci_trace'], calimages['cal_trace'], 
+                obj_name = extraction_steps(params, im, im_name, im_head, calimages['sci_trace'], calimages['cal_trace'], 
                                         calimages.get('wave_sol_dict_cal',calimages['wave_sol_dict_sci']), reference_lines_dict, calimages['flat_spec_norm'], im_trace1)
-                return obj_name.lower(), calimages
-            else:
-                return '', calimages
+                return obj_name.lower()
 
         
         all_extractions, list_im_name = [], []
@@ -458,8 +458,8 @@ if __name__ == "__main__":
                     if os.path.isfile(params['path_extraction']+im_name+'.fits'):
                         logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']), params=params)
                     else:
-                        obj_dummy, calimages = extraction_multicore([params, calimages, extraction, im_name_full, im_name, False])        # Dry run to create darks and such
-                        all_extractions.append([params, calimages, extraction, im_name_full, im_name, True])       # Real run
+                        extraction_multicore([extraction, im_name_full, im_name, False])        # Dry run to create darks and such
+                        all_extractions.append([extraction, im_name_full, im_name, True])       # Real run
                     list_im_name.append(im_name_full)
             else:                                           # Combine the files before extraction
                 if extraction in list_im_name:
@@ -467,20 +467,23 @@ if __name__ == "__main__":
                 if os.path.isfile(params['path_extraction']+extraction+'.fits'):
                     logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(extraction, params['path_extraction']), params=params)
                 else:
-                    obj_dummy, calimages = extraction_multicore([params, calimages, extraction, extraction, extraction, False])           # Dry run to create darks and such
-                    all_extractions.append([params, calimages, extraction, extraction, extraction, True])          # Real run
+                    extraction_multicore([extraction, extraction, extraction, False])           # Dry run to create darks and such
+                    all_extractions.append([extraction, extraction, extraction, True])          # Real run
                 list_im_name.append(extraction)
         if params['use_cores'] > 1 and len(all_extractions) > 1:
             logger('Info: Starting to extract spectra using multiprocessing on {0} cores, hence output will be for several files in parallel'.format(params['use_cores']), params=params)
             p = multiprocessing.Pool(params['use_cores'])
             #sort_extractions = sort_for_multiproc_map(all_extractions, params['use_cores'])
-            p.map(extraction_multicore, all_extractions)
+            obj_names += p.map(extraction_multicore, all_extractions)
             p.terminate()
             p.join()
         elif len(all_extractions) > 0:
             logger('Info: Starting to extract spectra', params=params)
             for all_extraction in all_extractions:
-                extraction_multicore(all_extraction)
+                obj_names.append( extraction_multicore(all_extraction) )
+                
+        #obj_names = np.unique(obj_names)
+        #obj_names = list(obj_names[obj_names != ''])
         
         # Combine files after extraction
         if params['wavelength_scale_resolution'] > 0:

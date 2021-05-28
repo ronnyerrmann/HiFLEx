@@ -1,6 +1,7 @@
 # To use this file, best copy it to your result folder and run it there
 import sys
 sys.path.append('/home/ronny/Scripts/hiflex/')
+sys.path.append('/hiflex/')
 from procedures import *
 import csv
 

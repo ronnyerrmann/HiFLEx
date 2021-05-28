@@ -6,7 +6,6 @@ from procedures import *
 # Define variables
 # =============================================================================
 params = dict()     # default param dictionary
-calimages = dict()  # dictionary for all calibration images
 # location of config file
 CONFIGFILE = 'conf.txt'
 
@@ -27,7 +26,7 @@ if __name__ == "__main__":
             logger('Error: Cant create directory {0}'.format(params['folder_original_traces']))
             exit(1)
     
-    calimages, im_flat, im_head = create_image_general(params, calimages, 'trace1')
+    im_flat, im_head = create_image_general(params, 'trace1')
     
     # Remove traces in the GUI
     

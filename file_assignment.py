@@ -290,13 +290,6 @@ def create_configuration_file(params, file_list):
     """
     Translates the file_list into fits_conf
     """
-    cal2_l_exp   = params['cal2_l_exp']
-    cal2_s_exp   = params['cal2_s_exp']
-    cal1_l_exp   = params['cal1_l_exp']
-    cal1_s_exp   = params['cal1_s_exp']
-    #arc_fib1     = params['arc_fib1']
-    #sflat_fib2   = params['sflat_fib2']
-    #blazecor_fib2 = params['blazecor_fib2']
     exist_bias   = params['exist_bias']
     exist_rflat  = params['exist_rflat']
     exp_darks    = params['exp_darks']
@@ -346,6 +339,7 @@ def create_configuration_file(params, file_list):
         for easy_assignment in easy_assignments:
             if easy_assignment[0] in extract:
                 conf_data, warn = create_parameters(conf_data, warn, easy_assignment[1], easy_assignment[1], [easy_assignment[2]], exist_bias, exist_rflat, exp_darks, entry)
+        print(params['cal1_l_exp'], params['cal2_l_exp'], entry[3], 'w1' in extract, 'w2' in extract, entry )
         if 'w1' in extract:
             if params['cal1_l_exp']*0.7 <= entry[3] <= params['cal1_l_exp']*1.3:
                 conf_data, warn = create_parameters(conf_data, warn, 'cal1_l', 'cal1_l', ['arc'], exist_bias, exist_rflat, exp_darks, entry)
@@ -953,10 +947,10 @@ if __name__ == "__main__":
     del params['exist_bias']
     del params['exist_rflat']
     del params['exp_darks']
-    params = check_raw_files_infos(params, file_list)
+    params = check_assigned_infos(params, file_list)
     
     # Connect wavelength solutions to the correct exposure time
-    
+    # -> done in create_configuration_file
     
     # Create the data for fits_conf.txt
     conf_data = create_configuration_file(params, file_list)
