@@ -52,6 +52,10 @@ if False:       # Change to True to use below list
         header_keywords.append(['HIERARCH HiFLEx BCV',          'Barycentric Velocity',         '[km/s]'])
         header_keywords.append(['HIERARCH HiFLEx CERES BS',     'CERES Bisector',               ''  ])
         header_keywords.append(['HIERARCH HiFLEx CERES BS_ERR', 'CERES Bisector error',         ''  ])
+        header_keywords.append(['HIERARCH HiFLEx CERES Teff',   'CERES Teff',                   '[K]'             ])
+        header_keywords.append(['HIERARCH HiFLEx CERES logg',   'CERES logg',                   '[log10(0.1m/s^2]'])
+        header_keywords.append(['HIERARCH HiFLEx CERES Z',      'CERES Z (metalicity)',         ''                ])
+        header_keywords.append(['HIERARCH HiFLEx CERES vsini',  'CERES vsini',                  '[km/s]'          ])
         
 header_results_to_texfile(params, header_keywords)
 

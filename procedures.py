@@ -103,6 +103,7 @@ if not success:
     print('Error: barrycorrpy could not be loaded. It needs an active internet connection in order to download the IERS_B file. This failure will lead to a crash of the program later!'+os.linesep)
 import glob
 import pickle
+import platform
 
 """ This was thought to be a way to improve calculation speed when calculating gaussians. However, even with declearing all variables it didn't speed up calculations
 try:
@@ -199,24 +200,35 @@ def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logf
             log_params(params)          
         exit(1)
 
-def log_params(params):
+def log_params(params, start=False):
     """
     formats the dictionary to be saved in the logfile
     """
     # Finding the python files
-    text = ''
-    list_of_files = glob.glob('{0}/*.py'.format(os.path.realpath(__file__).rsplit(os.sep,1)[0]))
-    list_of_files = sorted(list_of_files, key=os.path.getmtime, reverse=True)
-    for fname in list_of_files:
-        filedata1 = read_text_file(fname, no_empty_lines=False)
-        filedata2 = read_text_file(fname, no_empty_lines=True)
-        text += os.linesep+'    {1}  {2}  {3} {4}  {0}'.format( fname, 
-                        datetime.datetime.utcfromtimestamp(os.path.getmtime(fname)).strftime('%Y-%m-%dT%H:%M:%S'),
-                        '%10.1i'%os.stat(fname).st_size, '%6.1i'%len(filedata1), '%6.1i'%len(filedata2) )
-    logger('python files with unix timestamp of modification, size in bytes, number of lines, and number of non-empty lines: '+text, show=False, logfile='logfile_params', params=params)
-    logger('Info: Using procedures file {0}'.format( os.path.realpath(__file__) ), show=False, params=params)
-    # Log the versions of the packages
-    # maybe later
+    if start:
+        text = ''
+        list_of_files = glob.glob('{0}/*.py'.format(os.path.realpath(__file__).rsplit(os.sep,1)[0]))
+        list_of_files = sorted(list_of_files, key=os.path.getmtime, reverse=True)
+        for fname in list_of_files:
+            filedata1 = read_text_file(fname, no_empty_lines=False)
+            filedata2 = read_text_file(fname, no_empty_lines=True)
+            text += os.linesep+'    {1}  {2}  {3} {4}  {0}'.format( fname, 
+                            datetime.datetime.utcfromtimestamp(os.path.getmtime(fname)).strftime('%Y-%m-%dT%H:%M:%S'),
+                            '%10.1i'%os.stat(fname).st_size, '%6.1i'%len(filedata1), '%6.1i'%len(filedata2) )
+        logger('python files with unix timestamp of modification, size in bytes, number of lines, and number of non-empty lines: '+text, show=False, logfile='logfile_params', params=params)
+        logger('Info: Using procedures file {0}'.format( os.path.realpath(__file__) ), show=False, params=params)
+        # Log the versions of the packages
+        text = os.linesep+'    {: <20s} {}'.format( platform.system(), platform.release() )
+        text += os.linesep+'    {: <20s} {}'.format('python', sys.version)
+        import types, pkg_resources
+        name, val = '', ''
+        for name, val in globals().items():
+            if isinstance(val, types.ModuleType):
+                try:  
+                    text += os.linesep+'    {: <20s} {}'.format(val.__name__ , pkg_resources.get_distribution(val.__name__).version )
+                except:
+                    text += os.linesep+'    {}'.format(val.__name__)
+        logger('Info: imported packages, and, if available, the version'+text, show=False, logfile='logfile_params')
     # Logging the parameters
     paramstxt = dict()
     for key in params.keys():
@@ -281,7 +293,7 @@ def read_cmdparams():
             #        emsg = [key, str(VARIABLES[key])]
             #        print('Command line input not understood for' +
             #              'argument {0} must be {1}'.format(*emsg))
-        elif arg in ['nocheck', 'prepare'] or 0 <= arg.find('nocheck') <= 2 or 0 <= arg.find('nogui') <= 2:
+        elif arg in ['nocheck', 'prepare'] or 0 <= arg.find('nocheck') <= 2 or 0 <= arg.lower().find('nogui') <= 2 or 0 <= arg.lower().find('norv') <= 2:
             continue        # Do nothing, just prevent the warning below
         else:
             logger('Warn: I dont know how to handle command line argument: {0}'.format(arg))
@@ -724,10 +736,10 @@ def warn_images_not_same(ims, names):
     for i in range(len(ims)-1):
         for j in range(i,len(ims)):
             if ims[i].shape != ims[j].shape:
-                problems += '\tImage: {0} ({2}) and Image {1} ({3})\n'.format(names[i], names[j], ims[i].shape, ims[j].shape)
+                problems += '\tImage: {0} ({2}) and Image {1} ({3}){4}'.format(names[i], names[j], ims[i].shape, ims[j].shape, os.linesep)
     if problems != '':
         logger('Error: The following images have not the same size, but should have. '+\
-               'This is most likely caused by a missing "subframe" in one of the parameters "calib*". Please check.\n {0}'.format(problems[:-1]) )
+               'This is most likely caused by a missing "subframe" in one of the parameters "calib*". Please check.{1} {0}'.format(problems[:-1]), os.linesep )
     return
 
 def read_file_calibration(params, filename, level=0, realrun=True):
@@ -1079,7 +1091,7 @@ def read_fits_file(filename, dtype=np.float64, realrun=True):
             im = np.array(hdu[ii].data, dtype=dtype)
             founddata = True        
     if not founddata and realrun:
-        logger('Error: Found no useful data in file {0} . This probably requires a modification in the code. header.info() gives:\n{1}'.format(filename, hdu.info() ))
+        logger('Error: Found no useful data in file {0} . This probably requires a modification in the code. header.info() gives:{2}{1}'.format(filename, hdu.info(), os.linesep ))
     if not realrun:       # just open the header
         im = np.array([])
         
@@ -2569,7 +2581,7 @@ def find_trace_orders(params, im, imageshape):
         logger('Error: Only found {0} traces. Please check that the binned image ({1}) looks as expected.'.format(traces.shape[0], params['logging_trace1_binned'])+\
                'Please check that the right image was used to search for the traces (e.g. {0}) '.format(params['logging_traces_im_binned'])+\
                'After you selected different file(s) for parameter "trace1_rawfiles", please run the following command before restarting the pipeline'+\
-               '\nrm {0}'.format( params['master_trace1_filename'] ), params=params)
+               '{1}rm {0}'.format( params['master_trace1_filename'], os.linesep ), params=params)
     logger('Info: {0} orders found and traced'.format(traces.shape[0]))
     return traces[:,0:-3], traces[:,-3].astype(int), traces[:,-2].astype(int)            # polyfits, xlows, xhighs
 
@@ -2766,7 +2778,7 @@ def adjust_trace_orders(params, im, im_unbinned, pfits, xlows, xhighs):
                'Please check the binned image {0}: Is the orientation and the binning right? Are the orders covering at least half of the CCD (in dispersion correction)'.format(params['logging_trace1_binned'])+\
                'Please check that the right image was used to search for the traces (e.g. {0}) '.format(params['logging_traces_im_binned'])+\
                'After you selected different file(s) for parameter "trace1_rawfiles", please run the following command before restarting the pipeline'+\
-               '\nrm {0} {1}'.format( params['logging_traces_binned'], params['master_trace1_filename'] ), params=params)
+               '{2}rm {0} {1}'.format( params['logging_traces_binned'], params['master_trace1_filename'], os.linesep ), params=params)
     logger( ('Info: traces of the {0} apertures adjusted. The average shift of the individual apertures was between '+\
              '{1} and {2} pixel between the searching of the traces and this solution. '+\
              'The maximum allowed shift was {3} pixel.').format(len(centerfit), np.round(np.min(avg_shifts),1), np.round(np.max(avg_shifts),1), np.round(maxshift,1) ))
@@ -3474,7 +3486,7 @@ def find_shift_images(params, im, im_ref, sci_traces, w_mult, cal_tr_poly, extra
     shift = None
     fname = im_head.get('HiFLEx orid', im_head.get('HIERARCH HiFLEx orid', '') )
     if len(fname) > 3 and os.path.isfile(params['logging_crossdispersion_shift']):
-        data_str = read_textfile_remove_double_entries(params['logging_crossdispersion_shift'], [float, float, float, float, str], delimiter='\t', replaces=['\n'], equal_indexes=[4], warn='')
+        data_str = read_textfile_remove_double_entries(params['logging_crossdispersion_shift'], [float, float, float, float, str], delimiter='\t', replaces=['\n',os.linesep], equal_indexes=[4], warn='')
         index = ( fname == data_str[:,4] )
         if np.sum(index) == 1:
             [shift, width, min_shifts, max_shifts] = data_str[index][0,0:4].astype(float)
@@ -3718,7 +3730,7 @@ def arc_shift(params, im, pfits, xlows, xhighs, widths):
             gauss.append([np.nan]*11)
         label_datapoins.append('extracted flux in order {0}'.format('%2.2i'%order))
         label_gauss.append('fitted gauss in order {0}'.format('%2.2i'%order))
-        label_poly.append('fitted 3rd order polynomial\n in order {0}'.format('%2.2i'%order))
+        label_poly.append('fitted 3rd order polynomial{1} in order {0}'.format('%2.2i'%order, os.linesep))
         label_centroids.append('final center in order {0}'.format('%2.2i'%order))
     
     gauss = np.array(gauss)
@@ -4346,7 +4358,7 @@ def shift_wavelength_solution(params, aspectra, wave_sol_dict, reference_lines_d
     #print 'return_shift', shift_avg
     return wavelength_solution_new, shift_med, im_head
  
-def read_textfile_remove_double_entries(fname, dataformats, delimiter='\t', replaces=['\n'], equal_indexes=[0], warn='Warn: no data in file {0}'):
+def read_textfile_remove_double_entries(fname, dataformats, delimiter='\t', replaces=['\n',os.linesep], equal_indexes=[0], warn='Warn: no data in file {0}'):
     """
     Reads all the information from params['master_wavelengths_shift_filename'], removes the older entries
     :param fname: string, filename
@@ -4359,7 +4371,7 @@ def read_textfile_remove_double_entries(fname, dataformats, delimiter='\t', repl
     if len(dataformats) < np.max(equal_indexes)+1:
         logger('Error: Coding error when calling read_textfile_remove_double_entries(): equal_indexes ({0}) contains indexes higher than the length of the dataformats ({1})'.format(equal_indexes, dataformats))
     data = read_text_file(fname, no_empty_lines=True)
-    data = convert_readfile(data, dataformats, delimiter=delimiter, replaces=['\n'])       # jd_midexp, shift_avg, shift_std, can contain duplicate jd_midexp (last one is the reliable one)
+    data = convert_readfile(data, dataformats, delimiter=delimiter, replaces=['\n',os.linesep])       # jd_midexp, shift_avg, shift_std, can contain duplicate jd_midexp (last one is the reliable one)
     if len(data) == 0:
         if len(warn) > 3:
             logger(warn.format(fname))
@@ -4865,7 +4877,7 @@ def get_possible_object_names(filename, header, header_keywords, replacements=['
     """
     Analyses the filename in order to find the possible Name of the Object (for exampled stored in parameter object_file
     The filename is subsequently stripped from the "_" or "-" separated entings
-    :param filename: string, filename with removed path, file ending, and \n
+    :param filename: string, filename with removed path, file ending, and \n, and os.linesep
     :param replacements: list of strings with entries to be removed from the filename
     return obnames: list of strings with possible object names
     """
@@ -5053,7 +5065,7 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)               # in UTC, mid of the exposure
     im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
     # not anymore: Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
-    obname = im_name.replace('\n','').split(os.sep)    # get rid of the path
+    obname = im_name.replace(os.linesep,'').split(os.sep)    # get rid of the path
     im_head['HIERARCH HiFLEx NAME'] = (obname[-1], 'original filename')       # To know later what was the original filename
     #not necessary anymore: obname = obname.split('-')  # remove the numbering and exposure time from the filename
     #not necessary anymore: obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
@@ -5280,7 +5292,7 @@ def save_spec_csv(spec, wavelengths, good_px_mask, fname):
     with open(fname, 'w') as file:
         for order in range(specs[0]):
             for px in range(specs[1]):
-                file.write('{0},{1},{2}\n'.format(order, wave[order,px], spec_cor[order,px]) )
+                file.write('{0},{1},{2}{3}'.format(order, wave[order,px], spec_cor[order,px], os.linesep) )
     #print order,px
 
 def wavelength_solution_harps(params, head, wavelengths):
@@ -5324,7 +5336,7 @@ def wavelength_solution_iraf(params, head, wavelengths, wavelength_solution, nor
         y_fit = wavelengths[order,:]        # needs to be changed, if only non-nan flux is used
         avg_dwave = np.nanmean(wavelengths[order,1:] - wavelengths[order,:-1])
         cheb_pol = np.polynomial.chebyshev.chebfit(x_fit, y_fit, norder)
-        cheb_pol_txt = np.str(cheb_pol)[1:-1].replace('\n',' ').replace('  ',' ').replace('  ',' ').replace('  ',' ')
+        cheb_pol_txt = np.str(cheb_pol)[1:-1].replace('\n',' ').replace(os.linesep,' ').replace('  ',' ').replace('  ',' ').replace('  ',' ')
         text += ' spec{0} = "{1} {2} 2 {3} {4} {5} 0. {0}. {0}. 1. 0. 1 {6} {7} {8} {9}"'.format(
                             order+1, order, int(wavelength_solution[order,0]), round_sig(wavelengths[order,0],6), round_sig(avg_dwave,6), ws[1], 
                             len(cheb_pol), float(pmin), float(pmax), cheb_pol_txt)
@@ -6126,8 +6138,8 @@ def plot_wavelength_solution_spectrum(params, spec1, spec2, fname, wavelength_so
     labels = ['long exp','short exp']
     x_title = 'Wavelength [Angstroms]'
     y_title = 'extracted flux [ADU]'
-    titel_f = ('Order {0}, real Order {1}\nmarked (proportional to line strength) are' +\
-               ' the identified reference lines (red, {2} lines) and\n' +\
+    titel_f = ('Order {0}, real Order {1}{5}marked (proportional to line strength) are' +\
+               ' the identified reference lines (red, {2} lines) and{5}' +\
                'a subset of the omitted reference lines (green, showing the brightes {3} out of {4} lines)')
     
     if plot_log:
@@ -6151,7 +6163,7 @@ def plot_wavelength_solution_spectrum(params, spec1, spec2, fname, wavelength_so
             #    wavelength_solution_arclines[order].append(-1E5)
             num_notident = len(reference_lines)
             
-            title = titel_f.format(order, int(wavelength_solution[order,0]), num_ident, min(max_reflines,num_notident-num_ident), num_notident-num_ident)
+            title = titel_f.format(order, int(wavelength_solution[order,0]), num_ident, min(max_reflines,num_notident-num_ident), num_notident-num_ident, os.linesep)
             fig, frame = plt.subplots(1, 1)
             
             # Create a the plotting data
@@ -6336,7 +6348,7 @@ def plot_hist_residuals_wavesol(fname, data, indexes):
             mino, maxo = round(ii*range_orders+min_orders,0), round((ii+1)*range_orders+min_orders,0)
             minx, maxx = jj*range_px+min_px, (jj+1)*range_px+min_px
             good_data = ( (data[:,oo] >= mino) & (data[:,oo] < maxo) & (data[:,xx] >= minx) & (data[:,xx] < maxx) )
-            label.append('Orders {0}-{1}\nPixel {2}-{3}'.format(int(mino), int(maxo), int(round(minx,0)), int(round(maxx,0))))
+            label.append('Orders {0}-{1}{4}Pixel {2}-{3}'.format(int(mino), int(maxo), int(round(minx,0)), int(round(maxx,0)), os.linesep))
             hist_y, hist_x = np.histogram( data[good_data,dd], bins=bins, range=ran_hist )
             data_x.append(hist_x)
             data_y.append(hist_y)
@@ -6345,7 +6357,7 @@ def plot_hist_residuals_wavesol(fname, data, indexes):
             hist_x2_fine = np.linspace(np.min(hist_x), np.max(hist_x), 100)
             data_x.append(hist_x2_fine)
             data_y.append(oneD_gauss(hist_x2_fine,popt))
-            label.append('centre {0}\nwidth {1}'.format(round(popt[1],4), round(popt[2],4)))
+            label.append('centre {0}{2}width {1}'.format(round(popt[1],4), round(popt[2],4), os.linesep))
     text = 'Histogram of the residuals for {0} lines (width of 0.0 means a Gaussian fit was not possible)'.format(data.shape[0])
     plot_img_spec.plot_points(data_x, data_y, label, [fname], show=False, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01], 
                               return_frame=False, title=text, x_title='Difference [px]', y_title='Count per bin', linestyle="-", marker="")       
@@ -6382,7 +6394,7 @@ def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=T
     # define widgets
     widgets = dict()
     widgets['width_multiplier'] = dict(label='Multiplier to the measured width',
-                                comment='The area of the measured width\nof the trace times this value\non either side of the trace\nwill be excluded from the\nbackground map' ,
+                                comment='The area of the measured width{0}of the trace times this value{0}on either side of the trace{0}will be excluded from the{0}background map'.format(os.linesep) ,
                                 kind='TextEntry', minval=0, maxval=None,
                                 fmt=str, start=str(w_mult), valid_function=vfunc,
                                 width=10)
@@ -6413,7 +6425,7 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
     px_to_wave_txt = read_text_file(params['px_to_wavelength_file'], no_empty_lines=True, warn_missing_file=False)              # list of strings
     if len(px_to_wave_txt) == 0:
         px_to_wave_txt = read_text_file(params['logging_path']+'tmp_'+params['px_to_wavelength_file'], no_empty_lines=True, warn_missing_file=False)              # list of strings
-    px_to_wave = np.array( convert_readfile(px_to_wave_txt, [int, int, float, float], delimiter='\t', replaces=['\n',''], shorten_input=True, replacewithnan=True ))     # order, real order, px, wave
+    px_to_wave = np.array( convert_readfile(px_to_wave_txt, [int, int, float, float], delimiter='\t', replaces=[['\n',''],[os.linesep,'']], shorten_input=True, replacewithnan=True ))     # order, real order, px, wave
     if px_to_wave.shape[0] > 0:
         px_to_wave = px_to_wave[~np.isnan(px_to_wave[:,0]),:]   # clear the values that don't have order number
 
@@ -6499,7 +6511,7 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
             y_title = 'log ( Flux [ADU] )'
             if ii == 0:
                 title = 'Plot of the spectrum for previous ({0}), actual ({1}), and next order ({2})'.format(order-1, order, order+1)
-                labels = ['long\nexp', 'short\nexp']
+                labels = ['long'+os.linesep+'exp', 'short'+os.linesep+'exp']
             if ii == 2:
                 x_title = 'Dispersion direction [px]'
             ax[ii] = plot_img_spec.plot_points([x,x], [y1,y2], labels, [], show=False, adjust=[0.05,0.99,0.97,0.05, 0.92,1.2], title='', return_frame=True, frame=ax[ii], x_title=x_title, y_title=y_title, linestyle="-", marker="")
@@ -6633,7 +6645,7 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
         update_order(updateplot=False)                      # To make sure the data is read again
         px_to_wave = pkwargs['px_to_wave']
         if np.sum(np.isnan(px_to_wave[:,1])) > 0:
-            gui3.prompt('The order offset is not yet defined.\n\nPlease insert the correct number.')
+            gui3.prompt('The order offset is not yet defined.{0}{0}Please insert the correct number.'.format(os.linesep))
             return
         pkwargs['wavelength_solution_info'] = True
         px_to_wave, wavelength_solution, wavelength_solution_arclines = calculate_wavesolution_calc(px_to_wave, cal_l_spec)
@@ -6770,7 +6782,7 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
                         entry[i] = ''
                     elif i == 1:
                         entry[i] = int(entry[i])
-                file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t\n'.format( int(entry[0]), entry[1], round(entry[2],2), entry[3], round(entry[4],2), round(entry[5],2) ))
+                file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}'.format( int(entry[0]), entry[1], round(entry[2],2), entry[3], round(entry[4],2), round(entry[5],2), os.linesep ))
     # define valid_function
     # input is one variable (the string input)
     # return is either:
@@ -6782,13 +6794,13 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
             value = int(xs)
             return True, value
         except:
-            return False, ('Error, input must be integer\n')
+            return False, ('Error, input must be integer'+os.linesep)
     def vfunc_float(xs):
         try:
             value = float(xs)
             return True, value
         except:
-            return False, ('Error, input must be float\n')
+            return False, ('Error, input must be float'+os.linesep)
     
     # get kwargs
     pkwargs = dict(ax=ax, cal_l_spec=cal_l_spec, cal_s_spec=cal_s_spec, px_to_wave=px_to_wave, order=order, order_offset=order_offset, max_reflines=30, max_lines_list=80)
@@ -6809,27 +6821,27 @@ def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, refe
     widgets['order'] = dict(kind='TextEntry', fmt=int, start=pkwargs['order'], valid_function=vfunc_int, minval=-1E-9, maxval=len(cal_l_spec)-1+1E-9, width=5, row=0, column=4, columnspan=1)
     widgets['update'] = dict(label='Update', kind='CommandButton', command=update_order, row=0, column=5, columnspan=2, width=9)
     widgets['accept'] = dict(label='Accept', kind='ExitButton', row=0, column=7, width=4)     # Replace by new fuction, as issue will occur if use changed the order but didn't updata
-    widgets['order_offsettext']  = dict(label='Order offset between arbitary\nnumbering (starting at 0)\nand real physical order:', kind='Label', row=1, column=0, rowspan=1, columnspan=4, orientation=Tk.W)
+    widgets['order_offsettext']  = dict(label='Order offset between arbitary{0}numbering (starting at 0){0}and real physical order:'.format(os.linesep), kind='Label', row=1, column=0, rowspan=1, columnspan=4, orientation=Tk.W)
     pkwargs['order_offset'] = {True:pkwargs['order_offset'], False:''}[pkwargs['order_offset'] is not np.nan]
     widgets['order_offset'] = dict(kind='TextEntry', fmt=int, start=pkwargs['order_offset'], valid_function=vfunc_int, minval=-1000, maxval=1000, width=5, row=1, column=4, columnspan=1)
-    widgets['calculate_wavesolution'] = dict(label='Calculate\nWavelength\nsolution', kind='CommandButton', command=calculate_wavesolution, row=1, column=5, columnspan=2, width=9)
-    widgets['disptxt']   = dict(label='Polynom-order for\ndispersion direction:', kind='Label', row=2, column=0, rowspan=1, columnspan=3, orientation=Tk.W)
+    widgets['calculate_wavesolution'] = dict(label='Calculate{0}Wavelength{0}solution'.format(os.linesep), kind='CommandButton', command=calculate_wavesolution, row=1, column=5, columnspan=2, width=9)
+    widgets['disptxt']   = dict(label='Polynom-order for{0}dispersion direction:'.format(os.linesep), kind='Label', row=2, column=0, rowspan=1, columnspan=3, orientation=Tk.W)
     pkwargs['disporder'] = max(params.get('tmp_polynom_order_traces' ,params['polynom_order_traces']))
     widgets['disporder'] = dict(kind='TextEntry', fmt=int, start=pkwargs['disporder'], valid_function=vfunc_int, minval=1-1E-9, maxval=100, width=4, row=2, column=3, columnspan=1)
-    widgets['crossdisptxt']   = dict(label='Polynom-order for cross-\ndispersion direction:', kind='Label', row=2, column=4, rowspan=1, columnspan=3, orientation=Tk.W)
+    widgets['crossdisptxt']   = dict(label='Polynom-order for cross-{0}dispersion direction:'.format(os.linesep), kind='Label', row=2, column=4, rowspan=1, columnspan=3, orientation=Tk.W)
     pkwargs['crossdisporder'] = max(params.get('tmp_polynom_order_intertraces' ,params['polynom_order_intertraces']))
     widgets['crossdisporder'] = dict(kind='TextEntry', fmt=int, start=pkwargs['crossdisporder'], valid_function=vfunc_int, minval=1-1E-9, maxval=100, width=4, row=2, column=7, columnspan=1)
     
     widgets['txtmax_reflines'] = dict(label='Max reflines in plot:', kind='Label', row=3, column=0, rowspan=1, columnspan=3, orientation=Tk.W)
     widgets['max_reflines'] = dict(kind='TextEntry', fmt=int, start=pkwargs['max_reflines'], valid_function=vfunc_int, minval=0, maxval=10000, width=4, row=3, column=3, columnspan=1)
-    widgets['txtmax_lines_list'] = dict(label='Max identified lines in\nlist below/plot', kind='Label', row=3, column=4, rowspan=1, columnspan=3, orientation=Tk.W)
+    widgets['txtmax_lines_list'] = dict(label='Max identified lines in{0}list below/plot'.format(os.linesep), kind='Label', row=3, column=4, rowspan=1, columnspan=3, orientation=Tk.W)
     widgets['max_lines_list'] = dict(kind='TextEntry', fmt=int, start=pkwargs['max_lines_list'], valid_function=vfunc_int, minval=0, maxval=10000, width=4, row=3, column=7, columnspan=1)
     
-    widgets['txtdelete']   = dict(label='Del-\nete', kind='Label', row=4, column=0, rowspan=1, columnspan=1, orientation=Tk.W)
+    widgets['txtdelete']   = dict(label='Del-{0}ete'.format(os.linesep), kind='Label', row=4, column=0, rowspan=1, columnspan=1, orientation=Tk.W)
     widgets['txtpx_pos']   = dict(label='Pixel', kind='Label', row=4, column=1, rowspan=1, columnspan=1, orientation=Tk.W)
     widgets['txtwave']     = dict(label='Wavelength', kind='Label', row=4, column=2, rowspan=1, columnspan=2, orientation=Tk.W)
-    widgets['txtlineprop'] = dict(label='Line width\n+ height', kind='Label', row=4, column=4, rowspan=1, columnspan=2, orientation=Tk.W)   # Can't be float, as otherwise deleting an entry wouldn't work
-    widgets['txtwave_sol'] = dict(label='Wavelength-solution\nglobal - linear', kind='Label', row=4, column=6, rowspan=1, columnspan=2, orientation=Tk.W)   # Can't be float, as otherwise deleting an entry wouldn't work
+    widgets['txtlineprop'] = dict(label='Line width{0}+ height'.format(os.linesep), kind='Label', row=4, column=4, rowspan=1, columnspan=2, orientation=Tk.W)   # Can't be float, as otherwise deleting an entry wouldn't work
+    widgets['txtwave_sol'] = dict(label='Wavelength-solution{0}global - linear'.format(os.linesep), kind='Label', row=4, column=6, rowspan=1, columnspan=2, orientation=Tk.W)   # Can't be float, as otherwise deleting an entry wouldn't work
     pkwargs, wid_sub = add_widgets(pkwargs)
     widgets.update(wid_sub)
     
@@ -6885,9 +6897,9 @@ def correlate_px_wave_result_UI(im, arc_lines_wavelength, reference_catalog, arc
             arc_stretch = arc_stretch"""
         
         #print 'order, arc_setting', order, arc_setting
-        title = ('Order {0}: identified emission lines: blue [px],\n'+\
-                 'catalog lines: red (0.1px precission, name and wavelength at the botom),\n'+\
-                 'corellated lines: green (px, wavelength at top)').format(order)
+        title = ('Order {0}: identified emission lines: blue [px],{1}'+\
+                 'catalog lines: red (0.1px precission, name and wavelength at the botom),{1}'+\
+                 'corellated lines: green (px, wavelength at top)').format(order, os.linesep)
         
         # Plot the extracted arc spectrum
         xarr = np.arange(len(im[order,:]))
@@ -6966,7 +6978,7 @@ def correlate_px_wave_result_UI(im, arc_lines_wavelength, reference_catalog, arc
                                 kind='TextEntry', minval=1, maxval=105,
                                 fmt=float, start=high_limit, valid_function=vfunc_float,
                                 width=10)
-    widgets['arc_stretch'] = dict(label='Scale of\ncatalogue lines',
+    widgets['arc_stretch'] = dict(label='Scale of{0}catalogue lines'.format(os.linesep),
                                 comment='float value' ,
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=float, start=arc_stretch, valid_function=vfunc_float,
@@ -7677,9 +7689,9 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         wavelength_solution2d.append( [polynom_order_trace, polynom_order_intertrace, np.mean(cen_px), order_offset] + list(entry) )
     wavelength_solution2d = np.array( wavelength_solution2d )
     text = 'Info: Wavelength solution in 2D (for pixel and order at the same time) is [No of orders1, No of orders2, mean central pixel, '+\
-                  'offset to real order, parameters of the 2D polynomial(px^0*m^0, px^1*m^0, px^0*m^1, px^2*m^0, px^1*m^1, px^0*m^2, ....)]: \n'+\
+                  'offset to real order, parameters of the 2D polynomial(px^0*m^0, px^1*m^0, px^0*m^1, px^2*m^0, px^1*m^1, px^0*m^2, ....)]:{1}'+\
                   '{0}'
-    logger(text.format(wavelength_solution2d), show=False)
+    logger(text.format(wavelength_solution2d, os.linesep), show=False)
     # Log into text file and make it ready to copy to pixel_to_wavelength
     printarrayformat = ['%1.1i', '%1.1i', '%3.1f', '%9.4f', '%6.4f']
     printarray = copy.deepcopy(arc_lines_wavelength[:,[0,0,1,2,3]])
@@ -7733,9 +7745,9 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         else:
             text = 'files listed in the parameter cal2_l_rawfiles'
         logger(('Error: The wavelength solution seems wrong. Please check the parameters "order_offset", "px_offset", and "px_offset_order".' + \
-               '\n\t\tIt might be useful to compare the file with the emission lines ({0}) and ' + \
+               '{2}\t\tIt might be useful to compare the file with the emission lines ({0}) and ' + \
                'the folder with the previous wavelength solution (see parameter "original_master_wavelensolution_filename")' +\
-               '\n\t\tThe results of the identification can be seen in {1}.').format(text, params['logging_arc_line_identification_spectrum']), params=params)
+               '{2}\t\tThe results of the identification can be seen in {1}.').format(text, params['logging_arc_line_identification_spectrum'], os.linesep), params=params)
     
     # See the results
     if show_res:
@@ -8031,11 +8043,11 @@ def adjust_binning_UI(im1, binxy, userinput=True):
 
     # define widgets
     widgets = dict()
-    widgets['binx'] = dict(label='Binning in\nDispersion axis',
+    widgets['binx'] = dict(label='Binning in{0}Dispersion axis'.format(os.linesep),
                            kind='TextEntry', minval=None, maxval=None,
                            fmt=str, start=binxy[0], valid_function=vfunc_int,
                            width=10)
-    widgets['biny'] = dict(label='Binning in\nCross-dispersion axis',
+    widgets['biny'] = dict(label='Binning in{0}Cross-dispersion axis'.format(os.linesep),
                            kind='TextEntry', minval=None, maxval=None,
                            fmt=str, start=binxy[1], valid_function=vfunc_int,
                            width=10)
@@ -8168,7 +8180,7 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
             if do_add:
                 title += 'Adding/modifying orders. '
             if do_rm or do_add:
-                title += '\n(Largest order number = {0})\n'.format(pfits.shape[0]-1)
+                title += '{1}(Largest order number = {0}){1}'.format(pfits.shape[0]-1, os.linesep)
             mask = remove_orders(pfits, rm_orders)
             pfits_shift = copy.deepcopy(pfits)
             if len(pfits_shift.shape) == 3:
@@ -8337,14 +8349,14 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
                 xs.append(int(nxs))
             return True, xs
         except:
-            return False, ('Error, input must consist of integers \n '
+            return False, ('Error, input must consist of integers'+os.linesep+\
                            'separated by commas or white spaces')
     def vfunc_int(xs):
         try:
             value = int(xs)
             return True, value
         except:
-            return False, ('Error, input must be integer\n')
+            return False, ('Error, input must be integer'+os.linesep)
     def vfunc_float(xs):
         try:
             value = float(xs)
@@ -8376,19 +8388,18 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
                                 width=10)
     if do_rm:
         widgets['rm_orders'] = dict(label='Select orders to remove',
-                                comment='Enter all order numbers to remove \n'
-                                        'separated by a whitespace or comma \n'
-                                        'to undo just delete the entered '
-                                        'number',
+                                comment='Enter all order numbers to remove'+os.linesep+\
+                                        'separated by a whitespace or comma'+os.linesep+\
+                                        'to undo just delete the entered number',
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start=" ", valid_function=vfunc,
                                 width=40)
     if do_adj:
-        widgets['w_mult'] = dict(label='Multiplier for the\nwidth of the traces',
-                            comment='If the results are not as wished,\n'
-                                    'a modification of the parameter "width_percentile"\n'
-                                    'might help. To do this\n'
-                                    'Cancel the script with CTRL+C in the terminal\n'
+        widgets['w_mult'] = dict(label='Multiplier for the'+os.linesep+'width of the traces',
+                            comment='If the results are not as wished,'+os.linesep+\
+                                    'a modification of the parameter "width_percentile"'+os.linesep+\
+                                    'might help. To do this'+os.linesep+\
+                                    'Cancel the script with CTRL+C in the terminal'+os.linesep+\
                                     'and then restart',
                             kind='TextEntry', minval=None, maxval=None,
                             fmt=float, start=pkwargs['w_mult'], valid_function=vfunc_float,
@@ -8401,17 +8412,20 @@ def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, useri
                             width=10)
     if do_add:
         widgets['addpointsorder'] = dict(label='Add/remove points from order:',
-                            comment='It might be necessary to zoom before\nadding/removing points will work',
+                            comment='It might be necessary to zoom before'+os.linesep+\
+                                    'adding/removing points will work',
                             kind='TextEntry', minval=None, maxval=None,
                             fmt=int, start='', valid_function=vfunc_int,
                             width=10)
         if len(pkwargs['pfits'].shape) == 3:
             widgets['addpointsorder_lcr'] = dict(label='Which part of the order?',
-                            comment='c: center (brightest part),\nl or r: left or right boundary of the order',
+                            comment='c: center (brightest part),'+os.linesep+\
+                                    'l or r: left or right boundary of the order',
                             kind='TextEntry', minval=None, maxval=None,
                             fmt=str, start='c', valid_function=vfunc_lcr,
                             width=10)
-        #widgets['addpoints'] = dict(label='Add or remove points from\nthe order given below',
+        #widgets['addpoints'] = dict(label='Add or remove points from'+os.linesep+\
+        #                               'the order given below',
         #                        kind='CheckBox', start=False)
     #widgets['spacer1'] = dict(kind='Spacer', position=Tk.BOTTOM)
     widgets['accept'] = dict(label='Accept', kind='ExitButton',
@@ -8515,11 +8529,11 @@ def remove_adjust_orders_UI_ori(im1, pfits, xlows, xhighs, widths=[], shift=0, u
         frame.clear()
         title = ''
         if do_adj:
-            title += 'Defining the width of the traces.\n'
+            title += 'Defining the width of the traces.'+os.linesep
         if do_shft:
-            title += 'Finding the shift of the traces.\n'
+            title += 'Finding the shift of the traces.'+os.linesep
         if do_rm:
-            title += 'Removing bad orders (Largest order number = {0})\n'.format(len(pfits)-1)
+            title += 'Removing bad orders (Largest order number = {0}){1}'.format(len(pfits)-1, os.linesep)
         mask = remove_orders(pfits, rm_orders)
         pfits_shift = copy.deepcopy(pfits)
         if len(pfits_shift.shape) == 3:
@@ -8547,7 +8561,7 @@ def remove_adjust_orders_UI_ori(im1, pfits, xlows, xhighs, widths=[], shift=0, u
                 xs.append(int(nxs))
             return True, xs
         except:
-            return False, ('Error, input must consist of integers \n '
+            return False, ('Error, input must consist of integers'+os.linesep+\
                            'separated by commas or white spaces')
     def vfunc_float(xs):
         try:
@@ -8559,19 +8573,20 @@ def remove_adjust_orders_UI_ori(im1, pfits, xlows, xhighs, widths=[], shift=0, u
     widgets = dict()
     if do_rm:
         widgets['rm_orders'] = dict(label='Select orders to remove',
-                                comment='Enter all order numbers to remove \n'
-                                        'separated by a whitespace or comma \n'
+                                comment='Enter all order numbers to remove'+os.linesep+\
+                                        'separated by a whitespace or comma'+os.linesep+\
                                         'to undo just delete the entered '
                                         'number',
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start=" ", valid_function=vfunc,
                                 width=40)
     if do_adj:
-        widgets['w_mult'] = dict(label='Multiplier for the\nwidth of the traces',
-                            comment='If the results are not as wished,\n'
-                                    'a modification of the parameter "width_percentile"\n'
-                                    'might help. To do this\n'
-                                    'Cancel the script with CTRL+C in the terminal\n'
+        widgets['w_mult'] = dict(label='Multiplier for the'+os.linesep+\
+                                       'width of the traces',
+                            comment='If the results are not as wished,'+os.linesep+\
+                                    'a modification of the parameter "width_percentile"'+os.linesep+\
+                                    'might help. To do this'+os.linesep+\
+                                    'Cancel the script with CTRL+C in the terminal'+os.linesep+\
                                     'and then restart',
                             kind='TextEntry', minval=None, maxval=None,
                             fmt=float, start=1.0, valid_function=vfunc_float,
@@ -9554,8 +9569,11 @@ def header_results_to_texfile(params, header_keywords=[]):
         header_keywords.append(['HIERARCH HiFLEx TERRA RV',     'TERRA RV relative to template',    'm/s'  ])
         header_keywords.append(['HIERARCH HiFLEx TERRA RV_ERR', 'TERRA RV error',                   'm/s'  ])
         header_keywords.append(['HIERARCH HiFLEx SERVAL RV',    'SERVAL RV relative to template',   'm/s'  ])
-        header_keywords.append(['HIERARCH HiFLEx SERVAL RV_ERR', 'SERVAL RV error',                 'm/s'  ])
-        
+        header_keywords.append(['HIERARCH HiFLEx SERVAL RV_ERR','SERVAL RV error',                  'm/s'  ])
+        header_keywords.append(['HIERARCH HiFLEx CERES Teff',   'CERES Teff',                   '[K]'             ])
+        header_keywords.append(['HIERARCH HiFLEx CERES logg',   'CERES logg',                   '[log10(0.1m/s^2]'])
+        header_keywords.append(['HIERARCH HiFLEx CERES Z',      'CERES Z (metalicity)',         ''                ])
+        header_keywords.append(['HIERARCH HiFLEx CERES vsini',  'CERES vsini',                  '[km/s]'          ])
     results = []
     # Create the table header
     for ii, start in enumerate(['Header keyword:', 'Filename', '']):
@@ -9581,7 +9599,7 @@ def header_results_to_texfile(params, header_keywords=[]):
     if len(results) > 2:
         with open('measurement_table.csv','w') as file:
             for entry in results:
-                file.write("\t".join(entry)+'\n')
+                file.write("\t".join(entry)+os.linesep)
         logger('Info: Created {0}'.format('measurement_table.csv'))
      
 def rv_results_to_hiflex(params):
@@ -9677,14 +9695,14 @@ def get_terra_results(params, obname):
     Reads the result file from TERRA and puts it together with the corrected JD into a list
     :return dataf: list with following entries: obname, index in file, JD, RV, RV error
     """
-    filename = params['path_rv_terra']+obname+'/results/synthetic.rv'
+    filename = params['path_rv_terra']+obname+os.sep+'results'+os.sep+'synthetic.rv'
     if not os.path.isfile(filename):
         logger('Warn: TERRA result file {0} does not exist'.format(filename))
         return []
     dataf = read_text_file(filename, no_empty_lines=True)
     dataf = convert_readfile(dataf, [float, float, float], delimiter=' ', replaces=[['  ',' ']]*20, ignorelines=['NaN'])     # MJD is unfortunatelly not the same as JD-2400000.5 and the offsets varies between nights or within one data set
     midexpJD = []
-    for file in sorted(os.listdir(params['path_rv_terra']+obname+'/data/')):
+    for file in sorted(os.listdir(params['path_rv_terra']+obname+os.sep+'data'+os.sep)):
         if file.endswith(".csv"):
             date = datetime.datetime.strptime(file.replace('.csv',''), '%Y-%m-%d%H%M%S')
             midexpJD.append(get_julian_datetime(date))
@@ -9718,7 +9736,7 @@ def get_serval_results(params, obname):
     Reads the SERVAL results and provides the results in a list
     :return dataf: list with following entries: obname, index in file, BJD, RV, RV error
     """
-    filename = params['path_rv_serval']+obname+'/'+obname+'.rvc.dat'
+    filename = params['path_rv_serval']+obname+os.sep+obname+'.rvc.dat'
     if not os.path.isfile(filename):
         logger('Warn: SERVAL result file {0} does not exist'.format(filename))
         return []
@@ -9735,7 +9753,7 @@ def convert_terra_master_hiflex(params, obname):
     """
     spec = []
     wave = []
-    terra_template = params['path_rv_terra']+obname+'/template/template_order_'
+    terra_template = params['path_rv_terra']+obname+os.sep+'template'+os.sep+'template_order_'
     for ii in range(1000):
         if os.path.isfile(terra_template+'%2.2i'%ii):
             dataf = read_text_file(terra_template+'%2.2i'%ii, no_empty_lines=True)
@@ -9779,7 +9797,7 @@ def convert_serval_master_hiflex(params, obname):
     """
     Reads the SERVAL template and safes it in the HiFLEx format
     """
-    serval_template = params['path_rv_serval']+obname+'/template.fits'
+    serval_template = params['path_rv_serval']+obname+os.sep+'template.fits'
     if not os.path.isfile(serval_template):
         logger('Warn: SERVAL template {0} does not exist'.format(serval_template))
         return
@@ -9846,10 +9864,10 @@ def load_ceres_modules(params):
          
         base = params['path_ceres']
         # Import the routines from CERES:
-        sys.path.append(base+"utils/Correlation")
-        sys.path.append(base+"utils/GLOBALutils")
-        sys.path.append(base+"utils/OptExtract")    # for Marsh, at least
-        sys.path.append(base+"utils/CCF")           # needed by GLOBALutils.py
+        sys.path.append(base+'utils'+os.sep+'Correlation')
+        sys.path.append(base+'utils'+os.sep+'GLOBALutils')
+        sys.path.append(base+'utils'+os.sep+'OptExtract')    # for Marsh, at least
+        sys.path.append(base+'utils'+os.sep+'CCF')           # needed by GLOBALutils.py
         with np.errstate(invalid='ignore'):
             import GLOBALutils
         import correlation
@@ -9874,7 +9892,7 @@ def stellar_params_ceres(params, spec, fitsfile, wavelength_solution):
     
     base = params['path_ceres']
     specs = spec.shape
-    models_path = base + 'data/COELHO_MODELS/R_40000b/'
+    models_path = base + 'data'+os.sep+'COELHO_MODELS'+os.sep+'R_40000b'+os.sep
     fsim = fitsfile
     #RESI = 120000.
     RESI = np.median(wavelength_solution[:,-1]/wavelength_solution[:,-2])     # lambda/d_lambda for the central pixel, for MRES that doesn't seem to make difference
@@ -9924,8 +9942,8 @@ def stellar_params_ceres(params, spec, fitsfile, wavelength_solution):
                 spec2[5,ii,:] = result[1]
             spec2 = spec2[:,good_orders,:]
             
-            T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils/Correlation/')    # uses scipy.integrate.simps which can create negative values which makes math.sqrt(<0) fail (https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve); but don't use try - except, as correlation.CCF is called with Pool and crashes. When it crashes the pool isn't closed/terminated, hence processes are building up, try except doesn't solve this
-            line = "%6d %4.1f %4.1f %8.1f %8.1f\n" % (T_eff,logg, Z, vsini, vel0)
+            T_eff, logg, Z, vsini, vel0, ccf = correlation.CCF(spec2,model_path=models_path,npools=npools, base=base+'utils'+os.sep+'Correlation'+os.sep)    # uses scipy.integrate.simps which can create negative values which makes math.sqrt(<0) fail (https://stackoverflow.com/questions/36803745/python-simpsons-rule-negative-answer-for-positive-area-under-the-curve); but don't use try - except, as correlation.CCF is called with Pool and crashes. When it crashes the pool isn't closed/terminated, hence processes are building up, try except doesn't solve this
+            line = "%6d %4.1f %4.1f %8.1f %8.1f" % (T_eff,logg, Z, vsini, vel0) + os.linesep
             with open(pars_file, 'w') as f:
                 f.write(line)
             text = 'Info: Using the following atmospheric parameters for {0}'.format(fsim)
@@ -9933,10 +9951,15 @@ def stellar_params_ceres(params, spec, fitsfile, wavelength_solution):
             text = 'Warn: could not determine the stelar parameters as the wavelength range below 5150 is not available. Using the hard coded values'
             hardcoded = True
     elif os.path.isfile(pars_file):
-        T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
+        try:
+            T_eff, logg, Z, vsini, vel0 = np.loadtxt(pars_file,unpack=True)
+        except:
+            text = 'Warn: Could not load {0}, used the hardcoded values from the pipeline'.format(pars_file)
+            hardcoded = True
         text = 'Info: Atmospheric parameters loaded from file {0}'.format(pars_file)
     else:
         hardcoded = True
+        text = 'Info: Used the hardcoded values from the pipeline'
     logger('{0}: T_eff, logg, Z, vsini, vel0: {1}, {2}, {3}, {4} {5}.'.format( text, T_eff, logg, Z, vsini, round(vel0,4) ))
     
     return T_eff, logg, Z, vsini, vel0, hardcoded
@@ -10230,12 +10253,12 @@ def prepare_for_rv_packages(params):
             continue
         if 'path_rv_terra' in params.keys():
             # CSV file for TERRA
-            fname = params['path_rv_terra']+obj_name+'/data/'+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
+            fname = params['path_rv_terra']+obj_name+os.sep+'data'+os.sep+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
             save_spec_csv(spec[params['dataset_rv_analysis'][0]], spec[0], spec[7], fname)        # spec[1]: Flux, spec[5]: Continuum corrected     # spec, wavelengths, good_px_mask
         if 'path_rv_serval' in params.keys():
             # Store in a text file for serval
             numbers_levels = params['path_rv_serval'].count(os.sep, 2)          # start at 2 to not count './'
-            add_text_to_file('../'*numbers_levels+params['path_extraction']+file_RV, 
+            add_text_to_file(('..'+os.sep)*numbers_levels+params['path_extraction']+file_RV, 
                          params['path_rv_serval']+'filelist_{0}.txt'.format(obj_name), warn_missing_file=False )
     
     return files_RV, headers
@@ -10249,8 +10272,8 @@ def run_terra_multicore(kwargs):
             break
     if not do_RV:
         return
-    os.system('rm -f {0}{1}/results/synthetic.rv'.format(params['path_rv_terra'],obj_name) )     # Delete the old solution, as won't be created otherwise
-    newfile = 'echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}/" > astrocatalog{0}.example'.format(obj_name)
+    os.system('rm -f {0}{1}{2}results{2}synthetic.rv'.format(params['path_rv_terra'],obj_name, os.sep) )     # Delete the old solution, as won't be created otherwise
+    newfile = 'echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}{1}" > astrocatalog{0}.example'.format(obj_name, os.sep)
     logger('For TERRA: creating a new astrocatalog.example with: '+newfile)
     os.system('rm -f astrocatalog{0}.example; '+newfile)
     cmd = 'java -jar {1} -ASTROCATALOG astrocatalog{2}.example 998 -INSTRUMENT CSV {0}'.format(calimages['wave_sol_dict_sci']['wavesol'].shape[0],params['terra_jar_file'], obj_name )
@@ -10264,7 +10287,7 @@ def run_terra_multicore(kwargs):
             log_returncode(p.returncode, 'Please check the logfiles in {0}. Problem occured for object {1}'.format(os.getcwd(), obj_name))
     else:
         logger('Warn: TERRA commented out')
-    resultfile = '{2} {0}/results/synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'])
+    resultfile = '{2} {0}{3}results{3}synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'], os.sep)
     logger('For TERRA: results can be opened with: '+resultfile)
         
 def run_terra_rvs(params):
@@ -10301,7 +10324,7 @@ def run_terra_rvs(params):
             run_terra_multicore(kwarg)
     os.chdir(params['path_run'])        # Go back to previous folder
     print('')
-    logger('Info: Some errors reported by TERRA are expected (reading DRS ephemeris). The results are stored in {0}<object name>/results/synthetic.rv'.format(params['path_rv_terra']))
+    logger('Info: Some errors reported by TERRA are expected (reading DRS ephemeris). The results are stored in {0}<object name>{1}results{1}synthetic.rv'.format(params['path_rv_terra'], os.sep))
 
 def run_serval_multicore(kwargs):           # create a procedure to run on multicore
     [obj_name, params] = kwargs
@@ -10313,8 +10336,8 @@ def run_serval_multicore(kwargs):           # create a procedure to run on multi
     if not do_RV or not os.path.isfile('filelist_{0}.txt'.format(obj_name)):
         return
         #continue
-    cmd = 'ulimit -n 4096 ; {4}serval/src/serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode 2'.format(params['pmin'], 
-                                    params['pmax'], params['oset'], obj_name, params['path_serval'])
+    cmd = 'ulimit -n 4096 ; {4}serval{5}src{5}serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode 2'.format(params['pmin'], 
+                                    params['pmax'], params['oset'], obj_name, params['path_serval'], os.sep)
     log = 'logSERVAL_{0}'.format(obj_name)
     logger('For SERVAL: running SERVAL: '+cmd)
     logger('Info: SERVAL output and errors can be watched in {0}'.format(log))
@@ -10325,7 +10348,7 @@ def run_serval_multicore(kwargs):           # create a procedure to run on multi
             log_returncode(p.returncode, 'Please check the logfiles in {0}. Problem occured for object {1}'.format(os.getcwd(), obj_name))
     else:
         logger('Warn: SERVAL commented out')
-    resultfile = '{2} {0}/{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'])  
+    resultfile = '{2} {0}{3}{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'], os.sep)  
     logger('For SERVAL: results can be opened with: '+resultfile)
 
 def run_serval_rvs(params,):
@@ -10405,10 +10428,11 @@ def run_serval_rvs(params,):
     os.chdir(params['path_run'])        # Go back to previous folder
     print('')
     logger(('Info: Finished the SERVAL analysis. Some errors reported by SERVAL are expected.'+\
-          ' The results are stored in {0}<object name>/<object name>.rvc.dat.'+\
+          ' The results are stored in {0}<object name>{2}<object name>.rvc.dat.'+\
           ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially orders with low SN).'+\
           ' You can also modify the parameters in {0}conf_hiflex_serval.txt , e.g. to select a different dataset or a different order to measure the SNR.'+\
-          ' The command history can be found in {0}cmdhistory.txt. Before running serval set variable: bash: export PYTHONPATH={0} ; csh: setenv PYTHONPATH {0} ; and cd {1}\n').format(pypath, params['path_rv_serval']))
+          ' The command history can be found in {0}cmdhistory.txt. Before running serval set variable:'+\
+          ' bash: export PYTHONPATH={0} ; csh: setenv PYTHONPATH {0} ; Windows: set PYTHONPATH {0} ; and cd {1}{2}').format(pypath, params['path_rv_serval'], os.sep, os.linesep))
 
 def run_ceres_multicore(kwargs):
     [file_RV, params, headers, force_rvs, stellar_par] = kwargs
@@ -10479,15 +10503,15 @@ def run_ceres_rvs(params, files_RV, headers):
     # Do the CERES RVs
     force_stellar_pars = False
     force_rvs = False
-    if not( os.path.exists(params['path_ceres']+'utils/Correlation') and os.path.exists(params['path_ceres']+'utils/GLOBALutils') \
-            and os.path.exists(params['path_ceres']+'utils/OptExtract') and os.path.exists(params['path_ceres']+'utils/CCF') ):         # if necessary files exist
-        logger('Warn: CERES RV analysis did not run. If this a mistake, please check that it is installed under {0} and includes the folders: utils/Correlation, utils/GLOBALutils, utils/OptExtract, utils/CCF'.format(params['path_ceres']))
+    if not( os.path.exists(params['path_ceres']+'utils'+os.sep+'Correlation') and os.path.exists(params['path_ceres']+'utils'+os.sep+'GLOBALutils') \
+            and os.path.exists(params['path_ceres']+'utils'+os.sep+'OptExtract') and os.path.exists(params['path_ceres']+'utils'+os.sep+'CCF') ):         # if necessary files exist
+        logger('Warn: CERES RV analysis did not run. If this a mistake, please check that it is installed under {0} and includes the folders: utils{1}Correlation, utils{1}GLOBALutils, utils{1}OptExtract, utils{1}CCF'.format(params['path_ceres'], os.sep))
         return
     if sys.version_info[0] > 2:
         logger('Warn: This is a python3 environment, however, CERES requires a python2 environment')
         return    
     base = params['path_ceres']
-    models_path = base + 'data/COELHO_MODELS/R_40000b/'
+    models_path = base + 'data'+os.sep+'COELHO_MODELS'+os.sep+'R_40000b'+os.sep
     load_ceres_modules(params)
     
     stellar_par = dict()

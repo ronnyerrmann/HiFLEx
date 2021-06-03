@@ -28,11 +28,10 @@ if __name__ == "__main__":
     params['path_run'] = os.getcwd()
     params['extract_wavecal'] = False
     params['no_RV_names'] = ['flat', 'tung', 'whili', 'thar', 'th_ar', 'th-ar', 'laser']
-    import platform
     if platform.system() == 'Windows':
         params['use_cores'] = 1
         logger('Info: Running on Windows, disabled multicore.')
-    log_params(params)
+    log_params(params, start=True)
     
     # create the median combined files
     im_trace1, im_trace1_head = create_image_general(params, 'trace1')
@@ -490,6 +489,9 @@ if __name__ == "__main__":
             dwave = params['wavelength_scale_resolution']
             for extraction in extractions:
                 if extraction.find('extract_lin_') == 0:
+                    if os.path.isfile(params['path_extraction_single']+extraction+'_lin_cont.fits'):
+                        logger('Info: File {0} was already created. If you want to extract again, please delete {1}'.format(extraction, params['path_extraction_single']+extraction+'_lin_cont.fits'))
+                        continue
                     logger('Info: Combining {0}'.format(extraction), params=params)
                     data, info, text_info = [], [], []
                     for im_name_full in params[extraction+'_rawfiles']:
@@ -557,8 +559,13 @@ if __name__ == "__main__":
         header_results_to_texfile(params)           # Save the results from the header in a logfile
         logger(('Info: Will try to do the RV analysis on all files for which the barycentric velocity could be calculated'+\
                 ' and for which the filename does NOT start with {0} in the first few letters in a moment').format(params['no_RV_names']), params=params) 
-        #time.sleep(2)  
-        if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) > 100:
+        #time.sleep(2)
+        runRV = True
+        for arg in sys.argv[1:]:
+            if 0 <= arg.lower().find('norv') <= 2:
+                runRV = False
+                break
+        if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) > 100 and runRV:
             # Run RV analysis that can be run
             files_RV, headers = prepare_for_rv_packages(params)
             run_terra_rvs(params)
@@ -579,7 +586,7 @@ if __name__ == "__main__":
                     cmd += 'python {0}/hiflex.py {1} started_from_p3=True'.format(os.path.dirname(sys.argv[0]), ' '.join(sys.argv[1:]) )
                     logger('Info: Loading a python 2 environment, as CERES requires python 2 and this is a python 3 environment.'+
                            ' The progress of the process can be watched in logfile or {0}'.format(log_python2)+
-                           ' Running the following commands to start the other environment:\n{0}'.format(cmd), params=params)
+                           ' Running the following commands to start the other environment:{1}{0}'.format(cmd, os.linesep), params=params)
                     if os.path.isfile(log_python2):
                         os.system('rm {0}'.format(log_python2))
                     with open(log_python2, 'a') as logf:
@@ -588,7 +595,7 @@ if __name__ == "__main__":
                         code = log_returncode(p.returncode, 'Please check {0} for the error message. You might want to run the pipeline again in the Python 2 environment.'.format(log_python2))
                     if code > 0:    # It didn't run through:
                         logger('Warn: Loading a python 2 environment has failed or something crashed within the python 2 environment, this will prevent CERES from running. '+\
-                               'Please check {1} and that the following line works in a clear terminal (e.g. after running "env -i bash --norc --noprofile"):\n\n{0}\n'.format(cmd, log_python2), params=params)
+                               'Please check {1} and that the following line works in a clear terminal (e.g. after running "env -i bash --norc --noprofile"):{2}{2}{0}{2}'.format(cmd, log_python2, os.linesep), params=params)
                 else:
                     logger('Warn: CERES might not work. This is a python3 environment, however, it was not started by conda and the script does not know how to get to a python2 environment', params=params)
             else:

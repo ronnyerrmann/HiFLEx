@@ -53,7 +53,7 @@ def create_parameters(conf_data, warn, param, textparam, parcals, exist_bias, ex
             if (param_entry == 'bias' and exist_bias == False) or (param_entry == 'rflat' and exist_rflat == False) or (param_entry == 'dark' and entry[3] not in exp_darks):          # If the calibration data is not available, then don't do the calibration
                 warn_text = 'Warn: The parameter {0}_calibs_create_g in the configuration file requires {1} correction, but this calibration data is not available.'.format(parcal,param_entry)
                 if param_entry == 'dark':
-                    warn_text = 'Warn: The parameter {0}_calibs_create_g in the configuration file requires {1} correction, but a dark with exposure time of {2}s is not available. \n\t\tPlease change the dark parameter to a fixed exposure time in {3}'.format(parcal, param_entry, entry[3], params['configfile_fitsfiles'] )
+                    warn_text = 'Warn: The parameter {0}_calibs_create_g in the configuration file requires {1} correction, but a dark with exposure time of {2}s is not available. {4}\t\tPlease change the dark parameter to a fixed exposure time in {3}'.format(parcal, param_entry, entry[3], params['configfile_fitsfiles'], os.linesep )
                 if warn_text not in warn:
                     warn.append(warn_text)
                 continue
@@ -426,7 +426,7 @@ def file_list_UI(file_list):
     # Split the common_path to make the GUI shorter (in x), if necessary
     maxlen_files -= len(common_path)
     if len(common_path) == 0:
-        common_path_text = '{0}\n(no common path)'.format(' '*int(maxlen_files*1.5))
+        common_path_text = '{0}{1}(no common path)'.format(' '*int(maxlen_files*1.5), os.linesep)
     else:
         common_path_text = common_path
     if len(common_path) > maxlen_files:
@@ -440,33 +440,33 @@ def file_list_UI(file_list):
                 ii += 1
             else:
                 common_path_text[ii] += entry
-        common_path_text = '\n'.join(common_path_text)
+        common_path_text = os.linesep.join(common_path_text)
     
     # define widgets
     pkwargs = dict()
     widgets = dict()
-    widgets['comment'] = dict(label='Comm-\nented\nout ', kind='Label', row=0, column=0, columnspan=1, orientation=Tk.W)
-    widgets['mid_exp'] = dict(label='   Observation Time    \n(mid exposure)\nUTC', kind='Label', row=0, column=1, orientation=Tk.W)
-    widgets['exp']     = dict(label='Expo-\nsure \n[s]  ', kind='Label', row=0, column=2, orientation=Tk.W)
-    widgets['name']    = dict(label='Path and folder\n{0}'.format(common_path_text), kind='Label', row=0, column=3, orientation=Tk.W)
+    widgets['comment'] = dict(label='Comm-{0}ented{0}out '.format(os.linesep), kind='Label', row=0, column=0, columnspan=1, orientation=Tk.W)
+    widgets['mid_exp'] = dict(label='   Observation Time    {0}(mid exposure){0}UTC'.format(os.linesep), kind='Label', row=0, column=1, orientation=Tk.W)
+    widgets['exp']     = dict(label='Expo-{0}sure {0}[s]  '.format(os.linesep), kind='Label', row=0, column=2, orientation=Tk.W)
+    widgets['name']    = dict(label='Path and folder{1}{0}'.format(common_path_text, os.linesep), kind='Label', row=0, column=3, orientation=Tk.W)
     #widgets['fib1']    = dict(label='Science\nfiber', kind='Label', row=0, column=5)
     #widgets['fib2']    = dict(label='Calibration\nfiber', kind='Label', row=0, column=6)
     widgets['b']       = dict(label='Bias', kind='Label', row=0, column=6)
     widgets['d']       = dict(label='Dark', kind='Label', row=0, column=7)
-    widgets['a']       = dict(label='Real\nFlat', kind='Label', row=0, column=8)
-    widgets['t1']      = dict(label='Sci.\ntra-\nce', kind='Label', row=0, column=9)
-    widgets['t2']      = dict(label='Cal.\ntra-\nce', kind='Label', row=0, column=10)
+    widgets['a']       = dict(label='Real{0}Flat'.format(os.linesep), kind='Label', row=0, column=8)
+    widgets['t1']      = dict(label='Sci.{0}tra-{0}ce'.format(os.linesep), kind='Label', row=0, column=9)
+    widgets['t2']      = dict(label='Cal.{0}tra-{0}ce'.format(os.linesep), kind='Label', row=0, column=10)
     widgets['z']       = dict(label='Blaze', kind='Label', row=0, column=11)
-    widgets['w1']      = dict(label='Wave\nSci.', kind='Label', row=0, column=12)
+    widgets['w1']      = dict(label='Wave{0}Sci.'.format(os.linesep), kind='Label', row=0, column=12)
     #widgets['w1l']     = dict(label='Wave\nSci.\nlong', kind='Label', row=0, column=12)
     #widgets['w1s']     = dict(label='Wave\nSci.\nshort', kind='Label', row=0, column=13)
-    widgets['w2']     = dict(label='Wave\nCal.', kind='Label', row=0, column=14)
+    widgets['w2']     = dict(label='Wave{0}Cal.'.format(os.linesep), kind='Label', row=0, column=14)
     #widgets['w2l']     = dict(label='Wave\nCal.\nlong', kind='Label', row=0, column=14)
     #widgets['w2s']     = dict(label='Wave\nCal.\nshort', kind='Label', row=0, column=15)
-    widgets['ws']      = dict(label='Wave\nshft\nSci', kind='Label', row=0, column=16)
-    widgets['wc']      = dict(label='Wave\nshft\nCal', kind='Label', row=0, column=17)
-    widgets['e']       = dict(label='Ex-\ntract', kind='Label', row=0, column=18)
-    widgets['extra']   = dict(label='Further usage\nof files\n(comma separated)', kind='Label', row=0, column=19)
+    widgets['ws']      = dict(label='Wave{0}shft{0}Sci'.format(os.linesep), kind='Label', row=0, column=16)
+    widgets['wc']      = dict(label='Wave{0}shft{0}Cal'.format(os.linesep), kind='Label', row=0, column=17)
+    widgets['e']       = dict(label='Ex-{0}tract'.format(os.linesep), kind='Label', row=0, column=18)
+    widgets['extra']   = dict(label='Further usage{0}of files{0}(comma separated)'.format(os.linesep), kind='Label', row=0, column=19)
     for ii, entry in enumerate(file_list):
         pkwargs['comment_{0}'.format(ii)] = ( 0 <= entry[0].find('#') < 20 )            # Commented out
         widgets['comment_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['comment_{0}'.format(ii)], row=ii+1, column=0)
@@ -527,26 +527,26 @@ def file_list_UI(file_list):
         pkwargs['extra_{0}'.format(ii)] = extra
         widgets['extra_{0}'.format(ii)] = dict(kind='TextEntry', minval=None, maxval=None, fmt=str, start=pkwargs['extra_{0}'.format(ii)], width=15, row=ii+1, column=19)
     
-    explain = 'Explanation of the columns:\n'+\
-              '- Tick first column to not use some files at all\n'+\
-              '- Mark the files to be used for calibration:\n'+\
-              '-- Bias: These file are combined into a master bias\n'+\
-              '-- Dark: exposure time will be automatically taken\n   into account\n'+\
-              '-- Real Flat: Evenly exposed detector to calibrate\n   pixel-to-pixel sensitivity variation\n'+\
-              '-- Science trace: To trace the science orders\n'+\
-              '-- Calibration trace: To trace the calibration orders\n'+\
-              '-- Blaze: To derive the blaze function\n'+\
-              '-- Wavelength solition for science fiber \n   (long and short expsoure time)\n'+\
-              '-- Wavelength solution for calibration fiber (*)\n'+\
-              '-- Wavelength offset Science fiber (**) to correct for\n   wavelength drit\n'+\
-              '-- Wavelength offset between the Science fiber and\n   Calibration fiber (*)\n'+\
-              '-- Extract: Extract these files on an individual basis\n'+\
-              '-- Further settings (manual): e.g. to combine files\n   before or after extraction\n'+\
-              '(*) not for single fiber spectrographs\n'+\
-              '(**) important for unstabilised (single) fiber\n     spectrographs\n\n'+\
-              'The automatic assignment is based on the parameters\n raw_data_* in {0} (and in procedure\n add_new_rawfiles_file_list). '.format(CONFIGFILE)
+    explain = ('Explanation of the columns:{1}'+\
+               '- Tick first column to not use some files at all{1}'+\
+               '- Mark the files to be used for calibration:{1}'+\
+               '-- Bias: These file are combined into a master bias{1}'+\
+               '-- Dark: exposure time will be automatically taken{1}   into account{1}'+\
+               '-- Real Flat: Evenly exposed detector to calibrate{1}   pixel-to-pixel sensitivity variation{1}'+\
+               '-- Science trace: To trace the science orders{1}'+\
+               '-- Calibration trace: To trace the calibration orders{1}'+\
+               '-- Blaze: To derive the blaze function{1}'+\
+               '-- Wavelength solition for science fiber {1}   (long and short expsoure time){1}'+\
+               '-- Wavelength solution for calibration fiber (*){1}'+\
+               '-- Wavelength offset Science fiber (**) to correct for{1}   wavelength drit{1}'+\
+               '-- Wavelength offset between the Science fiber and{1}   Calibration fiber (*){1}'+\
+               '-- Extract: Extract these files on an individual basis{1}'+\
+               '-- Further settings (manual): e.g. to combine files{1}   before or after extraction{1}'+\
+               '(*) not for single fiber spectrographs{1}'+\
+               '(**) important for unstabilised (single) fiber{1}     spectrographs{1}{1}'+\
+               'The automatic assignment is based on the parameters{1} raw_data_* in {0} (and in procedure{1} add_new_rawfiles_file_list). ').format(CONFIGFILE, os.linesep)
               #'- Type of Science and Calibration\n  fibers are derived from header or\n  filename and can be changed here\n  (optional)\n'+\     # Allows modification of the fiber content
-    for ii, commentii in enumerate(explain.split('\n')):
+    for ii, commentii in enumerate(explain.split(os.linesep)):
         if len(commentii) > 0:
             widgets['explain_{0}'.format(ii)] = dict(label=commentii, kind='Label', row=ii, column=20, rowspan=1, orientation=Tk.W )#, wraplength=100 )      
     widgets['accept'] = dict(label='Accept', kind='ExitButton', row=ii+1, column=20, rowspan=2)
@@ -555,9 +555,9 @@ def file_list_UI(file_list):
     #wprops['width_data'] = 800   # not neccssary, as uses the automatic width
     
     if len(file_list) > 100:
-        logger('Info: A GUI with {0} elements will be created, on some machines that can take up to a few minutes.\n'.format(len(widgets))+\
-               '\tIf you want to use an editor instead of the GUI, please kill the process (kill {0})\n'.format(os.getpid())+\
-               '\tand run the script with parameter "nogui", e.g.\n\t\tpython {0} nogui'.format(sys.argv[0]))
+        logger('Info: A GUI with {0} elements will be created, on some machines that can take up to a few minutes.{1}'.format(len(widgets), os.linesep)+\
+               '\tIf you want to use an editor instead of the GUI, please kill the process (kill {0}){1}'.format(os.getpid(), os.linesep)+\
+               '\tand run the script with parameter "nogui", e.g.{1}\t\tpython {0} nogui'.format(sys.argv[0], os.linesep) )
 
     gui3 = tkc.TkCanvasGrid(title='HiFLEx: Asigning Files to extraction steps (What file contains what data)', 
                             kwargs=pkwargs,widgets=widgets, widgetprops=wprops )
@@ -611,7 +611,7 @@ def get_observed_objects(params, conf_data):
             found = False
             if os.path.isfile(im_name):
                 im_head = fits.getheader(im_name)
-                obname = im_name.replace('\n','').split(os.sep)    # get rid of the path
+                obname = im_name.replace('\n','').replace(os.linesep,'').split(os.sep)    # get rid of the path
                 obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
             else:           # not a raw file
                 obnames = [im_name]
@@ -728,7 +728,7 @@ def calibration_parameters_coordinates_UI(conf_data, object_information_full, ob
     ii += 3
     
     # Add widgets for object_list.txt
-    widgets['name'] = dict(label='Object\nname', kind='Label', row=ii, column=0, rowspan=2, columnspan=1, orientation=Tk.E)
+    widgets['name'] = dict(label='Object{0}name'.format(os.linesep), kind='Label', row=ii, column=0, rowspan=2, columnspan=1, orientation=Tk.E)
     widgets['header_info1'] = dict(label='Header information', kind='Label', row=ii, column=1, columnspan=2, orientation=Tk.E)
     widgets['header_ra'] = dict(label='RA', kind='Label', row=ii+1, column=1)
     widgets['header_dec'] = dict(label='DEC', kind='Label', row=ii+1, column=2)
@@ -736,15 +736,15 @@ def calibration_parameters_coordinates_UI(conf_data, object_information_full, ob
     widgets['header_pmra'] = dict(label='PMRA', kind='Label', row=ii+1, column=3)
     widgets['header_pmdec'] = dict(label='PMRA', kind='Label', row=ii+1, column=4)
     widgets['header_epoch'] = dict(label='Epoch', kind='Label', row=ii+1, column=5)
-    widgets['use_header'] = dict(label='Use\nhead', kind='Label', row=ii, column=6, rowspan=2, columnspan=1)
-    widgets['ra'] = dict(label='RA\n<:>,< >,float', kind='Label', row=ii, column=7, rowspan=2, columnspan=1)
-    widgets['dec'] = dict(label='DEC\n<:>,< >,float', kind='Label', row=ii, column=8, rowspan=2, columnspan=1)
-    widgets['pmra'] = dict(label='PMRA\n[mas/yr]', kind='Label', row=ii, column=9, rowspan=2, columnspan=1)
-    widgets['pmdec'] = dict(label='PMDEC\n[mas/yr]', kind='Label', row=ii, column=10, rowspan=2, columnspan=1)
-    widgets['epoch'] = dict(label='Epoch\n(number)', kind='Label', row=ii, column=11, rowspan=2, columnspan=1)
-    widgets['simbad_name'] = dict(label='Simbad Name\n(check that correct)', kind='Label', row=ii, column=12, rowspan=2, columnspan=1)
-    widgets['mask'] = dict(label='Mask (optional)\nG2,K5,M2', kind='Label', row=ii, column=13, rowspan=2, columnspan=1)
-    widgets['rot'] = dict(label='rotation (optional)\n[km/s]', kind='Label', row=ii, column=14, rowspan=2, columnspan=1)
+    widgets['use_header'] = dict(label='Use{0}head'.format(os.linesep), kind='Label', row=ii, column=6, rowspan=2, columnspan=1)
+    widgets['ra'] = dict(label='RA{0}<:>,< >,float'.format(os.linesep), kind='Label', row=ii, column=7, rowspan=2, columnspan=1)
+    widgets['dec'] = dict(label='DEC{0}<:>,< >,float'.format(os.linesep), kind='Label', row=ii, column=8, rowspan=2, columnspan=1)
+    widgets['pmra'] = dict(label='PMRA{0}[mas/yr]'.format(os.linesep), kind='Label', row=ii, column=9, rowspan=2, columnspan=1)
+    widgets['pmdec'] = dict(label='PMDEC{0}[mas/yr]'.format(os.linesep), kind='Label', row=ii, column=10, rowspan=2, columnspan=1)
+    widgets['epoch'] = dict(label='Epoch{0}(number)'.format(os.linesep), kind='Label', row=ii, column=11, rowspan=2, columnspan=1)
+    widgets['simbad_name'] = dict(label='Simbad Name{0}(check that correct)'.format(os.linesep), kind='Label', row=ii, column=12, rowspan=2, columnspan=1)
+    widgets['mask'] = dict(label='Mask (optional){0}G2,K5,M2'.format(os.linesep), kind='Label', row=ii, column=13, rowspan=2, columnspan=1)
+    widgets['rot'] = dict(label='rotation (optional){0}[km/s]'.format(os.linesep), kind='Label', row=ii, column=14, rowspan=2, columnspan=1)
     ii += 2
     jj = 0                              # if no object to extract, jj will not exist, but is needed later
     for jj, entry in enumerate(object_information_full):
@@ -790,19 +790,19 @@ def calibration_parameters_coordinates_UI(conf_data, object_information_full, ob
     widgets['accept2'] = dict(label='Accept', kind='ExitButton', row=ii, column=6, rowspan=2, columnspan=2)
     ii += 2
     
-    explain = 'Explanation of upper half:\n'+\
-              '  This assigns the calibration that will be applied to files of the different types before creating the master file or before extracting the spectra. The following comma separated options are possible:\n'+\
-              '     subframe, badpx_mask, bias, dark, flat, background, normalise, combine_mean, combine_sum\n'+\
-              '     Please check the manual for more information on these options.\n'+\
-              '  The assigned calibration steps are read from {0} (*_calibs_create_g)\n'.format(CONFIGFILE)+\
-              '  The information from this part of the GUI will be stored in {0}.\n'.format(params['configfile_fitsfiles'])+\
-              '\nExplanation of the lower half:\n'+\
-              '  For each object to be extracted the coordinates are derived/displayed here. If the header information is available then the information is shown and the user can decide if this information should be used.\n'+\
-              '  The editable coordinates are taken from the file {0}, for which is also checked in the result and raw data path. If the object does not exist in the file, then Simbad is searched using the Object name.\n'.format(params['object_file'])+\
-              '  The object name for the results from Simbad is shown and should be the same as the object name derived from header/filename\n'+\
-              '  The user can modify this information, which should be correct to perform correct barycentric correction. The information is then stored in {0}, overwriting the previous information.\n'.format(params['object_file'])+\
+    explain = 'Explanation of upper half:'+os.linesep+\
+              '  This assigns the calibration that will be applied to files of the different types before creating the master file or before extracting the spectra. The following comma separated options are possible:'+os.linesep+\
+              '     subframe, badpx_mask, bias, dark, flat, background, normalise, combine_mean, combine_sum'+os.linesep+\
+              '     Please check the manual for more information on these options.'+os.linesep+\
+              '  The assigned calibration steps are read from {0} (*_calibs_create_g){1}'.format(CONFIGFILE, os.linesep)+\
+              '  The information from this part of the GUI will be stored in {0}.{1}{1}'.format(params['configfile_fitsfiles'], os.linesep)+\
+              '  Explanation of the lower half:'+os.linesep+\
+              '  For each object to be extracted the coordinates are derived/displayed here. If the header information is available then the information is shown and the user can decide if this information should be used.'+os.linesep+\
+              '  The editable coordinates are taken from the file {0}, for which is also checked in the result and raw data path. If the object does not exist in the file, then Simbad is searched using the Object name.{1}'.format(params['object_file'], os.linesep)+\
+              '  The object name for the results from Simbad is shown and should be the same as the object name derived from header/filename'+os.linesep+\
+              '  The user can modify this information, which should be correct to perform correct barycentric correction. The information is then stored in {0}, overwriting the previous information.{1}'.format(params['object_file'], os.linesep)+\
               '     The RA and DEC can be given in hour or degree format. The optional parameters "mask" and "rotation speed" are used if RV analysis with the CERES pipeline is performed.'
-    for jj, commentjj in enumerate(explain.split('\n')):
+    for jj, commentjj in enumerate(explain.split(os.linesep)):
         if len(commentjj) > 0:
             widgets['explain_{0}'.format(jj)] = dict(label=commentjj, kind='Label', row=ii+jj, column=0, columnspan=20, orientation=Tk.W )#, wraplength=100 )      
     
@@ -870,9 +870,9 @@ if __name__ == "__main__":
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
     try:
         #file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])     #new way of storing the data
-        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '])     #new way of storing the data
+        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' ', os.linesep])     #new way of storing the data
     except:
-        file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' ']) # old way of reading the data, To stay backwards compatible, can be removed in a few versions after v0.4.1
+        file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' ', os.linesep]) # old way of reading the data, To stay backwards compatible, can be removed in a few versions after v0.4.1
     file_list = comment_out_nonexisting_rawfiles_file_list(params, file_list)
     number_old_entries = len(file_list)
     
@@ -897,32 +897,34 @@ if __name__ == "__main__":
     
     # Save the list, show to user, so the user can disable files, read the list
     with open(params['raw_data_file_list'], 'w') as file:
-        file.write('### This file contains the information for all the fits files in the raw_data_paths: {0} and its/their subfolders.\n'.format(params['raw_data_paths']))
-        file.write('### Each line contains the following information, separated by one tab:\n')
-        file.write('###   - Fill filename \n')
-        file.write('###   - Type of fiber 1 (science fiber)\n')
-        file.write('###   - Type of fiber 2 (calibration fiber)\n')
-        file.write('###   - Exposure time in seconds (from the header, if the information is not in the header, then from the filename)\n')
-        file.write('###   - Mid-exposure observation time in UTC (from header)\n')
-        file.write('###   - Flags: Mark the files to be used for calibration the data (comma-separated list):\n')
-        file.write('###        "b", Bias.\n')
-        file.write('###        "d", Dark.\n')
-        file.write('###        "a", real Flat of the detector.\n')
-        file.write('###        "z", Spectrum for the blaze correction, e.g. of a continuum source.\n')
-        file.write('###        "t1", Spectrum to find the trace [of the science fiber], e.g. a continuum source.\n')
-        file.write('###        "t2", Spectrum to find the trace of the calibration fiber.\n')
+        file.write('### This file contains the information for all the fits files in the raw_data_paths: {0} and its/their subfolders.{1}'.format(params['raw_data_paths'],os.linesep))
+        file.write('### Each line contains the following information, separated by one tab:'+os.linesep)
+        file.write('###   - Fill filename'+os.linesep)
+        file.write('###   - Type of fiber 1 (science fiber)'+os.linesep)
+        file.write('###   - Type of fiber 2 (calibration fiber)'+os.linesep)
+        file.write('###   - Exposure time in seconds (from the header, if the information is not in the header, then from the filename)'+os.linesep)
+        file.write('###   - Mid-exposure observation time in UTC (from header)'+os.linesep)
+        file.write('###   - Flags: Mark the files to be used for calibration the data (comma-separated list):'+os.linesep)
+        file.write('###        "b", Bias.'+os.linesep)
+        file.write('###        "d", Dark.'+os.linesep)
+        file.write('###        "a", real Flat of the detector.'+os.linesep)
+        file.write('###        "z", Spectrum for the blaze correction, e.g. of a continuum source.'+os.linesep)
+        file.write('###        "t1", Spectrum to find the trace [of the science fiber], e.g. a continuum source.'+os.linesep)
+        file.write('###        "t2", Spectrum to find the trace of the calibration fiber.'+os.linesep)
         #file.write('###        "w1l, w1s", Spectruum to find the wavelength solution of the science fiber (long and short exposure time).\n')
         #file.write('###        "w2l, w2s", Spectruum to find the wavelength solution of the calibration fiber.\n')
-        file.write('###        "w1", Spectruum to find the wavelength solution of the science fiber (long and short exposure time).\n')
-        file.write('###        "w2", Spectruum to find the wavelength solution of the calibration fiber.\n')
-        file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.\n')
-        file.write('###             Combination of images before the extraction is possible, please refer to the manual for more information\n')
-        file.write('###        "ws" or "wc", if the spectrum contains wavelength information to calculate the offset to the wavelength solution and the offset between both fibers of a bifurcated fiber).\n')
-        file.write('###             Used to mark the files with calibration spectrum taken before or after the science observation.\n')
-        file.write('### To exlude the use of some files please comment the line with a "#" or delete the line. \n\n')
-        file.write('### -> When finished with the editing, save the file and close the editor \n\n')
+        file.write('###        "w1", Spectruum to find the wavelength solution of the science fiber (long and short exposure time).'+os.linesep)
+        file.write('###        "w2", Spectruum to find the wavelength solution of the calibration fiber.'+os.linesep)
+        file.write('###        "ws" or "wc", if the spectrum contains wavelength information to calculate the offset to the wavelength solution and the offset between both fibers of a bifurcated fiber).'+os.linesep)
+        file.write('###             Used to mark the files with calibration spectrum taken before or after the science observation.'+os.linesep)
+        file.write('###        "e", if the spectra of this file should be extraced. By standard only the science data is extracted.'+os.linesep)
+        file.write('###        "ec_<obj>", combine files before extration.'+os.linesep)
+        file.write('###        "elw_<obj>" or "elm_<obj>" or "els_<obj>", combine the extracted and linearised spectra using weighted average or median or sum.'+os.linesep)
+        file.write('###             Please refer to the manual for more information.'+os.linesep)
+        file.write('### To exlude the use of some files please comment the line with a "#" or delete the line.'+os.linesep+os.linesep)
+        file.write('### -> When finished with the editing, save the file and close the editor'+os.linesep+os.linesep)
         for entry in file_list_commented:
-            file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5] ))
+            file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}{6}'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5], os.linesep ))
     
     # If necessary show the text file instead of the GUI
     if ('nogui' in sys.argv or '-nogui' in sys.argv or '--nogui' in sys.argv):
@@ -932,7 +934,7 @@ if __name__ == "__main__":
             print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
             raw_input('To continue please press Enter\t\t')
         file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
-        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])
+        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',os.linesep,' '], ignorelines=[['#',20]])
         file_list = sorted(file_list, key=operator.itemgetter(4,0))       # itemgetter(1,2,3,0)
     
     # Reset the list of parameters in case important data was deleted, e.g. all Darks
@@ -967,31 +969,31 @@ if __name__ == "__main__":
     if len(object_information) > 0:
         with open(params['object_file'],'w') as file:
             for entry in object_information:
-                file.write('{0},{1},{2},{3},{4},{6},{7},{8},{5}\n'.format( entry[0], entry[1], entry[2], entry[3], entry[4], entry[5], entry[6], entry[7], entry[8] ))  # Epoch (5) at end to be compatible with CERES
+                file.write('{0},{1},{2},{3},{4},{6},{7},{8},{5}{9}'.format( entry[0], entry[1], entry[2], entry[3], entry[4], entry[5], entry[6], entry[7], entry[8], os.linesep ))  # Epoch (5) at end to be compatible with CERES
                 new_obj_names.append(entry[0])
             for ii in range(len(object_names)):
                 if object_names[ii][0] not in new_obj_names:
-                    file.write(lines_txt[ii]+'\n')
+                    file.write(lines_txt[ii]+os.linesep)
                     new_obj_names.append(object_names[ii][0])
     
     # Save the results in a conf_data.txt file
     #print json.dumps(conf_data,sort_keys = False, indent = 4)
     with open(params['configfile_fitsfiles'], 'w') as file:
-        file.write('# Description of this file:\n#--------------------------\n') 
-        file.write('# This file was created by combining the information in the file {0} and the parameters given in the configuration file {1}\n'.format(params['raw_data_file_list'], CONFIGFILE))
-        file.write('# Changes in here will be overwritten the next time prepare_file_list.py is run, therefore we suggest to make changes in {0} and afterwards run prepare_file_list.py again.\n\n'.format(params['raw_data_file_list']))
-        file.write('# For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create list all corrections that will be applied to the individual files listed in <filetype>_rawfiles. These files will then combined and stored in master_<filetype>_filename (remove/comment the parameter in order to avoid saving.\n') 
-        file.write('#   The following calibrations are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, <background>, normalisation, combine_sum, localbackground\n') 
-        file.write('#   For dark and flat the paramerters can contain the the exposure time in float format (e.g. flat15.0_rawfiles, dark4.0_calibs_create).\n')  
-        file.write('#       If a fixed dark should be used, than the parameter needs to contain "dark" and additional text (e.g. "darkfixed", or if a different exposure time should be used "dark5.0")\n') 
-        file.write('#   For <background> the calibration needs to contain "background" but can contain more information. The key needs to be defined\n') 
-        file.write('#        (e.g. if the "background_image_filename" is used for calibration then the following entry is needed as well here or in the calibration file "background_image_filename = background.fits"\n') 
-        file.write('# \n') 
+        file.write('# Description of this file:'+os.linesep+'#--------------------------'+os.linesep) 
+        file.write('# This file was created by combining the information in the file {0} and the parameters given in the configuration file {1}{2}'.format(params['raw_data_file_list'], CONFIGFILE, os.linesep))
+        file.write('# Changes in here will be overwritten the next time prepare_file_list.py is run, therefore we suggest to make changes in {0} and afterwards run prepare_file_list.py again.{1}{1}'.format(params['raw_data_file_list'], os.linesep))
+        file.write('# For each type of calibration filetype (e.g. bias, darks) a <filetype>_calibs_create list all corrections that will be applied to the individual files listed in <filetype>_rawfiles. These files will then combined and stored in master_<filetype>_filename (remove/comment the parameter in order to avoid saving.'+os.linesep) 
+        file.write('#   The following calibrations are possible (case-insensitive): subframe, badpx_mask, bias, dark, flat, <background>, normalisation, combine_sum, localbackground'+os.linesep) 
+        file.write('#   For dark and flat the paramerters can contain the the exposure time in float format (e.g. flat15.0_rawfiles, dark4.0_calibs_create).'+os.linesep)  
+        file.write('#       If a fixed dark should be used, than the parameter needs to contain "dark" and additional text (e.g. "darkfixed", or if a different exposure time should be used "dark5.0")'+os.linesep) 
+        file.write('#   For <background> the calibration needs to contain "background" but can contain more information. The key needs to be defined'+os.linesep) 
+        file.write('#        (e.g. if the "background_image_filename" is used for calibration then the following entry is needed as well here or in the calibration file "background_image_filename = background.fits"'+os.linesep) 
+        file.write('# '+os.linesep) 
         for paramtype in ['rawfiles', 'calibs_create', 'master']:
-            file.write('\n')
+            file.write(os.linesep)
             for entry in sorted(conf_data.keys()):
                 if entry.find(paramtype) >= 0:
-                    file.write('{0} = {1} \n'.format(entry.ljust(24), conf_data[entry]))
+                    file.write('{0} = {1} {2}'.format(entry.ljust(24), conf_data[entry], os.linesep))
     
     logger('Info: The calibration file for handling the raw data has been created. Please check {0} before starting the data reduction (hiflex.py)'.format(params['configfile_fitsfiles']))
     

@@ -85,7 +85,7 @@ if len(data) == 0:
     print('Error: no datapoints found')
     exit()
 len_entries = len( data[0].split('\t') )
-data = convert_readfile(data, [str]*len_entries, delimiter='\t', replaces=['\n'])
+data = convert_readfile(data, [str]*len_entries, delimiter='\t', replaces=['\n', os.linesep])
 data = np.array(data).T
 header = data[:,0:3]
 data = data[:,3:]
@@ -148,7 +148,7 @@ with PdfPages(savefile) as pdf:
                         if len(label) > 25:
                             for ii in list(range(25, 18, -1)) + list(range(25,min(len(label),35))):
                                 if label[ii] == ' ':
-                                    label = label[:ii] + '\n' + label[ii+1:]
+                                    label = label[:ii] + os.linesep + label[ii+1:]
                                     break
                     if dset == 'data':
                         good_data = ~np.isnan(converted['{0}_{1}'.format(indexx, dset)]) & ~np.isnan(converted['{0}_{1}'.format(indexy, dset)]) & starindata

@@ -80,14 +80,16 @@ def find_stats(im_stats):
         #print len(list_diff)
         stat_single.append([len(stat_single), np.mean(im), np.median(im), np.std(im, ddof=1), np.median(im_diff), np.std(im_diff, ddof=1), np.std(list_diff, ddof=1)])
     printarrayformat = ['%1.1i', '%3.1f', '%3.1f', '%4.2f', '%3.1f', '%4.2f', '%4.2f']
-    logger('The individual files have the following properties (values given in ADU, the first set without a fit of the data, the second is on the residuals of the data, the third is the residuals, cleared by outlier):\n\t\tindex\taverage\tmedian\tstdev\tmedian\tstdev\tstdev',printarrayformat=printarrayformat, printarray=stat_single)
+    logger(('The individual files have the following properties (values given in ADU, the first set without a fit of the data, the second is on the residuals of the data, the third is the residuals, cleared by outlier):'+os.linesep+\
+            '\t\tindex\taverage\tmedian\tstdev\tmedian\tstdev\tstdev'),printarrayformat=printarrayformat, printarray=stat_single)
     stat_diff = []
     for i in range(len(im_stats)-1):
         for j in range(i+1,len(im_stats)):
             im = im_stats[i]-im_stats[j]
             stat_diff.append([i,j, np.mean(im), np.median(im), np.std(im, ddof=1)])
     printarrayformat = ['%1.1i', '%1.1i', '%4.2f', '%4.2f', '%5.3f']
-    logger('The difference between 2 files have the following properties (values given in ADU, stdev defines the readout noise):\n\t\tindex1\tindex2\taverage\tmedian\tstdev',printarrayformat=printarrayformat, printarray=stat_diff)
+    logger(('The difference between 2 files have the following properties (values given in ADU, stdev defines the readout noise):'+os.linesep+\
+            '\t\tindex1\tindex2\taverage\tmedian\tstdev'),printarrayformat=printarrayformat, printarray=stat_diff)
 
 def plot_linearity_UI(exp_times, data, title='', adjust=[0.07,0.90,0.94,0.06, 1.0,1.01]):
     
@@ -153,7 +155,7 @@ def plot_linearity_UI(exp_times, data, title='', adjust=[0.07,0.90,0.94,0.06, 1.
     widgets = dict()
     starta = 5
     startb = 0
-    widgets['number_graphs'] = dict(label='Number of\nGraphs?', comment=None, #'integer',
+    widgets['number_graphs'] = dict(label='Number of{0}Graphs?'.format(os.linesep), comment=None, #'integer',
                                 kind='TextEntry', minval=None, maxval=None,
                                 fmt=str, start=starta, valid_function=vfunc_int,
                                 width=10)
@@ -309,7 +311,7 @@ if __name__ == "__main__":
         print('With {0} Sigma, {1} pixel would be marked as bad'.format(sigm, badpx))
         sigm +=.5
     
-    sigma = float(raw_input('What Sigma to use?\n>> '))
+    sigma = float(raw_input('What Sigma to use?{0}>> '.format(os.linesep)))
     
     badpx_mask[abs(gain_diff - average) > sigma * gain_std] = 0
     
@@ -340,7 +342,7 @@ if __name__ == "__main__":
                 
         file = open(fname,'w')
         for line in text:
-            file.write(line+'\n')
+            file.write(line+os.linesep)
         file.close()
     
     save_im_fits(params, badpx_mask, im_head_bias, params['badpx_mask_filename'].rsplit('/',1)[1])
