@@ -3884,13 +3884,15 @@ def read_reference_catalog(params, filenames=None, wavelength_muliplier=None, ar
         refernce_files, refernce_files_full = find_file_in_allfolders(filename, [params['result_path']] + params['raw_data_paths'] + [os.path.realpath(__file__).rsplit(os.sep,1)[0]+os.sep])
         if len(refernce_files) == 0:
             logger('Error: file for the reference coordinates does not exist. Checked: {0}'.format(refernce_files_full), params=params )
+        #logger('Found the following files for the reference catalogue: {0}'.format(", ".join(refernce_files)))
         for refernce_file in refernce_files:
             with open(refernce_file, 'r') as file:
                 for line in file:
                     line = line[:-1].split('\t')
                     if len(line) < 3:
                         continue
-                    if line[2].replace(' ','') not in arc_lines:        # if Ar IV
+                    if line[2].replace(u'\xa0', u' ').replace(' ','') not in arc_lines:        # if Ar IV
+                        #print(line, arc_lines)
                         continue
                     try:
                         line[0] = float(line[0])*wavelength_muliplier   # wavelength in Angstroms
@@ -3912,16 +3914,20 @@ def read_reference_catalog(params, filenames=None, wavelength_muliplier=None, ar
                         line[1] = 0.1
                     reference_names.append(line[2])
                     line = line[0:2]
-                    if reference_names[-1].find('Ar I') == 0:
+                    if reference_names[-1].find('Ar I') == 0:   # re-scale Argon lines
                         line[1] *= 50
                     line.append(len(reference_catalog))
+                    #if len(reference_catalog)%100 == 0:
+                    #    print(line)
                     reference_catalog.append(line)   # wavelength in Angstroms, relative intensity of the line, index of line in reference_names
             if len(reference_catalog) > 0:
                 break
-        if len(reference_catalog) == 0:
-            logger('Error: no reference lines found in {0} for the requested lines {1}'.format(refernce_files, arc_lines), params=params)
         reference_catalog = np.array(reference_catalog)
         arcs = reference_catalog.shape
+        if arcs[0] == 0:
+            logger('Error: no reference lines found in {0} for the requested lines {1}'.format(refernce_files, arc_lines), params=params)
+        else:
+            logger('Info: Loaded {0} lines between {1} and {2} Angstrom from catalogue {3}'.format(arcs[0], np.min(reference_catalog[:,0]), np.max(reference_catalog[:,0]), refernce_file))
         # Remove the faintest lines, if too many lines are in the catalogue
         """if arcs[0] > 100000:
             breakvalue = np.percentile(reference_catalog[:,1],min(90.,arcs[0]/120.))

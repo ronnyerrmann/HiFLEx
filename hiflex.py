@@ -565,7 +565,11 @@ if __name__ == "__main__":
             if 0 <= arg.lower().find('norv') <= 2:
                 runRV = False
                 break
-        if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) > 100 and runRV:
+        if np.max(calimages['wave_sol_dict_sci']['wavesol'][:,-1]) < 100:
+            logger('Info: Using a pseudo wavelength solution -> no RV analysis', params=params)   
+        elif not runRV:
+            logger('Info: User request to skip RVs')
+        else:
             # Run RV analysis that can be run
             files_RV, headers = prepare_for_rv_packages(params)
             run_terra_rvs(params)
@@ -605,9 +609,7 @@ if __name__ == "__main__":
             # Collect all RV results
             rv_results_to_hiflex(params)
      
-            header_results_to_texfile(params)           # Save the results from the header in a logfile
-        else:
-            logger('Info: Using a pseudo wavelength solution -> no RV analysis', params=params)   
+            header_results_to_texfile(params)           # Save the results from the header in a logfile 
     else:       # Started from p3
         files_RV, headers = prepare_for_rv_packages(params)     # Won't recreate the folders for TERRA/SERVAL if started_from_p3=True
         run_ceres_rvs(params, files_RV, headers)

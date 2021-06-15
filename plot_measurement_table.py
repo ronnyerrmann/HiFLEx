@@ -167,7 +167,8 @@ with PdfPages(savefile) as pdf:
                         else:                       # error bars
                             frame_ii_g.errorbar(xx, yy, yerr=converted['{0}_{1}'.format(indexe, dset)][good_data], label=label, color=color, linestyle=linestyle, marker=marker, markersize=markersize)
                     if len(selectd[ii_d]) == 11:
-                        [x_title, y_title] = selectd[ii_d][9:11]
+                        if len(selectd[ii_d][9]) > 0: x_title = selectd[ii_d][9]
+                        if len(selectd[ii_d][10]) > 0: y_title = selectd[ii_d][10]
                     if dset == 'sensordata':
                         frame_ii_g.set_xlim(x_range_tmp[0],x_range_tmp[1])
                 elif selectd[ii_d][0] == 'text':

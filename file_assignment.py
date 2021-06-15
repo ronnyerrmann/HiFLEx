@@ -868,6 +868,10 @@ if __name__ == "__main__":
     
     # get the available list
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
+    
+    # Only necessary to be backwards compatible
+    #for line in file_list:
+    #    number
     try:
         #file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])     #new way of storing the data
         file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' ', os.linesep])     #new way of storing the data
