@@ -9,7 +9,7 @@ params = dict()
 
 savefile = 'measurement_table.pdf'
 datafile = 'measurement_table.csv'      # assumes that the objectnames are somewhat in column one or two
-sensorsfile = 'TSP01_20210424-1420.csv'      # optional
+sensorsfile = 'TSP01_20210624-1822.csv'      # optional
 objectfile = 'objects_reduced.lst'
 x_range = None
 size_inches = [16.2, 10]
@@ -36,15 +36,15 @@ if True:
     selectd.append([ 'data', 5, 12, None, '', 'k', '', 'o', 2, '', 'Number' ])
     select.append(selectd)
     selectd = []
-    selectd.append([ 'sensordata', 0, 1, None, 'Room - Wall', 'tab:blue', '', 'o', 2, '', '' ])
+    selectd.append([ 'sensordata', 0, 1, None, 'Behind camera (water)', 'tab:blue', '', 'o', 2, '', '' ])
     #selectd.append([ 'sensordata', 0, 2, None, 'Room - front right', 'tab:orange', '', 'o', 2, '', '' ])
-    #selectd.append([ 'sensordata', 0, 3, None, 'Room - back left', 'tab:green', '', 'o', 2, '', '' ])
-    selectd.append([ 'sensordata', 0, 5, None, 'Spectrograph - low between fiber and AO', 'tab:red', '', 'o', 2, '', '' ])
-    #selectd.append([ 'sensordata', 0, 6, None, 'Spectrograph - above fiber', 'tab:purple', '', 'o', 2, '', '' ])
+    selectd.append([ 'sensordata', 0, 3, None, 'Breadboard - next to grating holder', 'tab:green', '', 'o', 2, '', '' ])
+    #selectd.append([ 'sensordata', 0, 5, None, 'Spectrograph - low between fiber and AO', 'tab:red', '', 'o', 2, '', '' ])
+    selectd.append([ 'sensordata', 0, 6, None, 'Spectrograph - above fiber', 'tab:purple', '', 'o', 2, '', '' ])
     #selectd.append([ 'sensordata', 0, 7, None, 'Spectrograph - front of grating', 'tab:brown', '', 'o', 2, '', '' ])
     #selectd.append([ 'sensordata', 0, 9, None, 'On Breadboard - behind camera', 'tab:pink', '', 'o', 2, '', '' ])
-    selectd.append([ 'sensordata', 0, 10, None, 'Breadboard - under fiber/camera', 'tab:gray', '', 'o', 2, '', '' ])
-    selectd.append([ 'sensordata', 0, 11, None, 'Breadboard - next to grating holder', 'tab:olive', '', 'o', 2, 'JD [d]', 'Temperature' ])
+    selectd.append([ 'sensordata', 0, 10, None, 'Room/Water cooling', 'tab:gray', '', 'o', 2, '', '' ])
+    #selectd.append([ 'sensordata', 0, 11, None, 'Breadboard - next to grating holder', 'tab:olive', '', 'o', 2, 'JD [d]', 'Temperature' ])
     selectd.append([ 'text', 2459342.011, 23, 'Helium off', 'k', 90, 'left', 'bottom' ])
     selectd.append([ 'grid' ])
     #selectd.append([ 'y_range', 20, 25])
@@ -181,6 +181,7 @@ with PdfPages(savefile) as pdf:
             frame_ii_g.legend(loc='upper left', bbox_to_anchor=(    1.0,1.01), fontsize=11, handletextpad=0.2)
             frame_ii_g.set_xlabel(x_title, fontsize=11)
             frame_ii_g.set_ylabel(y_title, fontsize=11)
+            frame_ii_g.yaxis.set_ticks_position('both')
             if y_range is not None:
                 frame_ii_g.set_ylim(y_range[0],y_range[1])
         if x_range is not None:

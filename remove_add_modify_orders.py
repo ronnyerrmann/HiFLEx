@@ -15,7 +15,7 @@ params = textfileargs(params, CONFIGFILE)
 params['folder_original_traces'] = 'original_traces'
 
 if __name__ == "__main__":
-    logger('\nInfo: Starting removing traces')
+    logger('\nInfo: Starting modify traces')
     log_params(params)
     
     if os.path.exists(params['folder_original_traces']):

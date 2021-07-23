@@ -33,8 +33,8 @@
   moredelim=**[is][\color{red}]{@}{@},
 }
 % To change: titele; date; https://github.com/ronnyerrmann/HiFLEx/archive
-\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.5.0}
-\date{June, 2021}
+\title{User Manual for Data Reduction using the HiFLEx package\\ version: v1.5.1}
+\date{July, 2021}
 \author{Ronny Errmann, EXOhSPEC team\\ Physics, Astronomy and Maths, University of Hertfordshire}
 
 \begin{document}
@@ -102,6 +102,12 @@ The basic things for Python (and the configuration file) are:
 \section{Changelog (recently)}
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
+
+\subsection*{v1.5.1}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Added parameter \verb|traces_min_separation| to speed up searching of orders.
+  \item Small improvements and bugfixing.
+\end{itemize}
 
 \subsection*{v1.5.0}
 \begin{itemize}\setlength\itemsep{0em}
@@ -629,6 +635,10 @@ The following steps give an overview about additional parameters which are not c
     \label{Fig:traces_description}}
 \end{figure}
 
+\subsection{extra commands}
+\begin{description}
+  \item[norv] Skips running the RV analysis (TERRA, SERVAL, CERES)
+\end{description}
 
 \subsection{Necessary data to process}
 
@@ -1285,6 +1295,15 @@ When the barycentric correction are done, the python package \textit{barycorrpy}
   \item \url{http://maia.usno.navy.mil/ser7/tai-utc.dat}
 \end{itemize}
 
+\subsection{Processing doesn't continue (without crashing)}
+If the total memory is used during processing while multiprocessing is used, some of the processes can get stuck and the pipeline halts there without doing anything. The solution is to kill the current instance of HiFLEx and restart it. Maybe the parameter \verb|max_cores_used_pct| needs to be set to a lower value.
+
+\subsection{Running out of storage}
+The following commands can be used to clear up files, that the user might not need
+
+\begin{lstlisting}[style=base]
+rm */extracted/single/*_lin_cont.csv
+\end{lstlisting}
 
 \subsection{Further help}
 If you observe strange behaviour, please contact Ronny\footnote{r.errmann@herts.ac.uk} with a description of the problem and the error message. Access to the reduction folder would be preferable.

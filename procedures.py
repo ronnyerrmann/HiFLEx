@@ -293,7 +293,7 @@ def read_cmdparams():
             #        emsg = [key, str(VARIABLES[key])]
             #        print('Command line input not understood for' +
             #              'argument {0} must be {1}'.format(*emsg))
-        elif arg in ['nocheck', 'prepare'] or 0 <= arg.find('nocheck') <= 2 or 0 <= arg.lower().find('nogui') <= 2 or 0 <= arg.lower().find('norv') <= 2:
+        elif arg in ['prepare'] or 0 <= arg.lower().find('nogui') <= 2 or 0 <= arg.lower().find('norv') <= 2:
             continue        # Do nothing, just prevent the warning below
         else:
             logger('Warn: I dont know how to handle command line argument: {0}'.format(arg))
@@ -346,7 +346,8 @@ def textfileargs(params, textfile=None):
     params['split_wavelength_solutions_at'] = params.get('split_wavelength_solutions_at', '[]')
     # Added 20210423:
     params['logging_em_lines_shift'] = params.get('logging_em_lines_shift', 'wavelength_solution_emmission_lines_shift_on_detector.png')
-    
+    # Added 20210626:
+    params['traces_min_separation'] = params.get('traces_min_separation', '5')
     
     
     list_txt = ['reference_catalog', 'use_catalog_lines', 'raw_data_file_endings', 'raw_data_mid_exposure_keys', 'raw_data_paths', 'raw_data_object_name_keys', 'cosmic_ray_settings']
@@ -358,7 +359,7 @@ def textfileargs(params, textfile=None):
     floats = ['max_good_value', 'catalog_file_wavelength_muliplier', 'extraction_width_multiplier', 'arcextraction_width_multiplier',
               'resolution_offset_pct', 'diff_pxs', 'maxshift_orders', 'wavelength_scale_resolution', 'width_percentile', 'raw_data_timezone_cor',
               'altitude', 'latitude', 'longitude', 'in_shift', 'extraction_shift', 'extraction_min_ident_part_of_trace_percent',
-              'max_cores_used_pct', 'pxshift_between_wavesolutions', 'minimum_SNR']
+              'max_cores_used_pct', 'pxshift_between_wavesolutions', 'minimum_SNR', 'traces_min_separation']
     bools = ['flip_frame', 'update_width_orders', 'GUI', 'started_from_p3', 'log_wavesolshift_details', 'convert_rv_package_templates']
     text_selection = ['arcshift_side', 'extraction_precision']
     results = ['path_extraction', 'path_extraction_single', 'logging_path', 'path_reduced', 'path_rv_ceres', 'path_rv_terra', 'path_rv_serval',
@@ -808,6 +809,8 @@ def read_file_calibration(params, filename, level=0, realrun=True):
                 warn_images_not_same([im, calimages[entry]], [filename,entry])
                 if np.percentile(calimages[entry], 90) > 2000 or np.percentile(calimages[entry], 10) < -100:
                     logger('Warn: The bias ({0}) has unphysical values: 10%-percentile = {1}, 90%-percentile = {2}'.format(entry, np.percentile(calimages[entry], 10), np.percentile(calimages[entry], 90)))
+                if np.isinf(calimages[entry]).any() or np.isnan(calimages[entry]).any():
+                    logger('Warn: The bias ({0}) has {1} INF and {2} NAN values. Try to recreate the master bias.'.format(entry, np.sum(np.isnan(calimages[entry])), np.sum(np.isnan(calimages[entry])) ))
                 im = im - calimages[entry]
                 logtxt, headtxt = ['bias correction applied'], ['redu{0}b'.format(level), 'Bias']
         elif entry.lower().find('dark') > -1:
@@ -819,6 +822,8 @@ def read_file_calibration(params, filename, level=0, realrun=True):
                 warn_images_not_same([im, calimages[entry]], [filename,entry])
                 if np.percentile(calimages[entry], 90) > 2000 or np.percentile(calimages[entry], 10) < -100:
                     logger('Warn: The dark ({0}) has unphysical values: 10%-percentile = {1}, 90%-percentile = {2}'.format(entry, np.percentile(calimages[entry], 10), np.percentile(calimages[entry], 90)))
+                if np.isinf(calimages[entry]).any() or np.isnan(calimages[entry]).any():
+                    logger('Warn: The dark ({0}) has {1} INF and {2} NAN values. Try to recreate the master dark.'.format(entry, np.sum(np.isnan(calimages[entry])), np.sum(np.isnan(calimages[entry])) ))
                 im = im - calimages[entry]
                 logtxt, headtxt = ['dark correction applied'], ['redu{0}c'.format(level), 'Dark']
         elif entry.lower().find('rflat') > -1:
@@ -907,7 +912,12 @@ def read_file_calibration(params, filename, level=0, realrun=True):
             logger('Warn: do not know what to do with this correction: {0}'.format(entry))
         if len(logtxt) > 0 and len(headtxt) > 0 and realrun:
             #print "np.where(np.isnan(calimages[entry])), calimages[entry].shape", np.where(np.isnan(calimages[entry])), calimages[entry].shape, np.median(calimages[entry]), np.nanmedian(calimages[entry]), np.mean(calimages[entry]), np.nanstd(calimages[entry], ddof=1, axis=None), np.where( np.isinf(calimages[entry]) )
-            im_median, im_std = int(round(np.nanmedian(calimages[entry], axis=None))), int(round(np.nanstd(calimages[entry], ddof=1, axis=None)))
+            #print(entry, np.sum(np.isnan(im)), np.sum(np.isnan(calimages[entry])), np.sum(np.isinf(im)), np.sum(np.isinf(calimages[entry])) )
+            im_median = np.nanmedian(calimages[entry], axis=None)
+            im_std = np.nanstd(calimages[entry], ddof=1, axis=None)
+            im_median = int(round(im_median)) 
+            if np.isnan(im_std):    im_std = -1000
+            im_std = int(round(im_std))
             logger('Info: {4}: {3}: {0} (median={1}, std={2})'.format(entry, im_median, im_std, logtxt[0], level))
             im_head['HIERARCH HiFLEx '+headtxt[0]] = '{3}: {0}, median={1}, std={2}'.format(entry, im_median, im_std, headtxt[1])
     #logger('Info: image loaded and processed: {0}'.format(filename))
@@ -961,7 +971,8 @@ def create_image_general(params, imtype, level=0, realrun=True):
                 header_updates[im_index,:] = [im_head['HIERARCH HiFLEx EXPOSURE'], obsdate_mid_float]         # !!! Improve this calculation and write in the header so it can be used later by get_obsdate 
                 med_flux = np.median(img, axis=None)
                 med_fluxes.append(med_flux)
-                std_fluxes.append(np.std(img, axis=None, ddof=1))
+                mask_inf = ~np.isinf(img)
+                std_fluxes.append(np.nanstd(img[mask_inf], axis=None, ddof=1))
                 if 'normalise' in params['{0}_calibs_create'.format(imtype)]:
                     img = img/(med_flux+0.0)
                 if im is None:                                                # Initiate the array with correct precission to avoid swapping
@@ -2384,7 +2395,7 @@ def find_trace_orders(params, im, imageshape):
     """
     binx = params['binx']
     biny = params['biny']
-    maxFWHM = max(1, int(round(estimate_width(im)*2.35482*1.5)))   # The average Gaussian width, transformed into a FWHM and extendet, as this is the maximum FWHM
+    maxFWHM = max(1, int(round(estimate_width(im)*2.35482*2.5)))   # The average Gaussian width, transformed into a FWHM and extendet, as this is the maximum FWHM; changed from 1.5 to 2.5 for data 20210628 when estimated width is small
     maxshift = max(0.5,0.17*binx)                    # Only 0.15px shift per pixel along one order
     ims = im.shape
     cen_px = int(ims[0]*binx/2)             # central pixel to base the fit on
@@ -2398,7 +2409,7 @@ def find_trace_orders(params, im, imageshape):
     #searchnumbers = np.sum(im >= breakvalue+bright10, axis=None)     # At most so many searches
     searchnumbers = np.sum( (im >= breakvalue), axis=None)     # At most so many searches
     searchnumbers = searchnumbers *0.12 / maxFWHM       # FWHM pixel are bright, 90% along the length of an order is brighter than seachnumbers -> less area to search; 0.1 was not enough for 20210331
-    for dummy in tqdm(range(int(searchnumbers)), desc='Searching for traces'):      # 2600 is necessary for the tight orders using Clark's lens and a low diffraction prism
+    for dummy in tqdm(range(int(searchnumbers)), desc='Searching for traces (will speed up after 2%)'):      # 2600 is necessary for the tight orders using Clark's lens and a low diffraction prism
         pos_max = np.unravel_index(im.argmax(), ims)
         if im_orig[pos_max] <= breakvalue:
             break
@@ -2437,10 +2448,10 @@ def find_trace_orders(params, im, imageshape):
         #print pos_max  # Test !
         for i in range(pos_max[0],-1,-1):               # check positions upwards
             center, cen_poly, width, leftmin,rightmin = find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.5)       # significance=4.0 tested as useful for HARPS, EXOhSPEC
-            #if pos_max[1] >= 2900 and pos_max[1] <= 320:            # bugfixing
+            #if pos_max[1] >= 1540 and pos_max[1] <= 1625:            # bugfixing
             #    #if not ( width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0 and abs(center-oldcenter)<maxshift*2) ) ):
             #    find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.0, bugfix=True)
-            #    #print(pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions))
+            #    print(pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions))
             if width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0 and abs(center-oldcenter)<maxshift*2) ):        #first entry can be further off
                 if im_traces[i,min(ims[1]-1,int(center))] != 0 or im_traces[i,min(ims[1]-1,int(center+1))] != 0:        # this order shouldn't cross another order
                     #print i, "order_overlap"   # Test !
@@ -2482,10 +2493,10 @@ def find_trace_orders(params, im, imageshape):
         last_trustworth_position, no_center = 0, 0
         for i in range(pos_max[0]+1,ims[0]):               # check positions downwards
             center, cen_poly, width, leftmin,rightmin = find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.5)       # significance=4.0 tested as useful for HARPS, EXOhSPEC
-            #if pos_max[1] >= 2900 and pos_max[1] <= 320:            # bugfixing
+            #if pos_max[1] >= 1540 and pos_max[1] <= 1625:            # bugfixing
             #    #if not ( width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0and abs(center-oldcenter)<maxshift*2) ) ):
             #    find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.0, bugfix=True)
-            #    #print(pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions), len(expected_positions), last_trustworth_position)
+            #    print(pos_max, i, center, width, leftmin,rightmin, oldcenter, abs(center-oldcenter), maxshift, len(positions), len(expected_positions), last_trustworth_position)
             if width != 0 and ( abs(center-oldcenter)<maxshift or (positions.shape[0]==0 and abs(center-oldcenter)<maxshift*2) ):
                 if im_traces[i,min(ims[1]-1,int(center))] != 0 or im_traces[i,min(ims[1]-1,int(center+1))] != 0 or order_overlap == True:
                     #print i, "order_overlap"   # Test !
@@ -2550,7 +2561,8 @@ def find_trace_orders(params, im, imageshape):
         trace_pos.append(trace_pos_add)
         yarr = (np.round(yarr)).astype(int)   # if using this, than also change 'np.array(trace_pos[0])' to 'positions[:,0]'
         #y = (np.round(np.polyval(pfs, np.array(trace_pos[0])*binx)/biny+i)).astype(int)
-        for i in range(-int(width[2]*2),int(width[2]*2)+1):         # fills im and im_traces with values in order to avoide searching orders there
+        clearing = int( max(params['traces_min_separation']*0.8/biny, (width[2]*2) ) )
+        for i in range(-clearing,clearing+1):         # fills im and im_traces with values in order to avoide searching orders there
             goodpos = (yarr+i>=0) & (yarr+i<=ims[1]-1)
             im_traces[positions[goodpos,0].astype(int),yarr[goodpos]+i] = 0.2
             im[positions[goodpos,0].astype(int),yarr[goodpos]+i] = breakvalue
@@ -4406,7 +4418,7 @@ def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, 
     :return wavelength_solution: 2D array of floats, same length as number of orders, each line consists of the real order, central pixel, and the polynomial values of the fit
     :return shift_avg: Float, shift from science to calibration fiber
     """
-    warn = 'Warn: No pixel-shift for the wavelength solution is available. Please re-run prepare_file_list.py and asign "w" to the emission line spectra.'
+    warn = 'Warn: No pixel-shift for the wavelength solution is available. Please re-run file_assignment.py and asign "w" to the emission line spectra.'
     all_shifts_str = read_textfile_remove_double_entries(params['master_wavelengths_shift_filename'], [float, float, float, str], equal_indexes=[0,3], warn=warn) # Find only exactly this entry with same jd_midexp and same fiber
     # all_shifts_str = 2D array of type string, with each entry containing JD of the mid exposure, Shift to the wavelength solution, Standard deviation of the shift, fiber type
     if len(all_shifts_str) == 0:
@@ -4514,7 +4526,7 @@ def create_wavelengths_from_solution(params, wavelength_solution, spectra, wave_
         wavelength_solution_lst = [copy.deepcopy(wavelength_solution)]     # copy, otherwise it will be changed in wavesol[:,1] += 
         jd_weight_shift = np.array([[0,1,0]])
     else:
-        warn = 'Warn: No pixel-shift for the wavelength solution is available. Please re-run prepare_file_list.py and asign "w" to the emission line spectra.'
+        warn = 'Warn: No pixel-shift for the wavelength solution is available. Please re-run file_assignment.py and asign "w" to the emission line spectra.'
         all_shifts_str = read_textfile_remove_double_entries(params['master_wavelengths_shift_filename'], [float, float, float, str], equal_indexes=[0,3], warn=warn)
         all_shifts_sci = all_shifts_str[all_shifts_str[:,3]=='sci',0:3].astype(float)       # jd_midexp, shift_avg, shift_std (, fiber)
         # Find the values closest to the opservation (before and after)
@@ -4893,6 +4905,9 @@ def get_possible_object_names(filename, header, header_keywords, replacements=['
             new = header[header_keyword].replace(' ','')
             if new not in obnames and len(new) >= 2:
                 obnames.append(new)
+    filename = filename.replace('GuiderTracking','GuiderTracking_')     # MaximDL doesn't add any _ or -, hence numbers are not split off
+    if filename.endswith('.fit') or filename.endswith('.fits'):   filename = filename.rsplit('.fit',1)[0]
+    if filename.endswith('.FIT') or filename.endswith('.FITS'):   filename = filename.rsplit('.FIT',1)[0]
     first_entry = filename.replace('-','_').split('_')      # most likely object is without any _ and -
     if first_entry[0] not in obnames:
         obnames.append(first_entry[0])
@@ -5049,7 +5064,7 @@ def read_create_spec(params, fname, im, im_head, trace_def, wmult, offset):
     
     return emission_spec, good_px_mask
 
-def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_sol_dict_cal, reference_lines_dict, flat_spec_norm, im_trace):
+def extraction_steps(params, im, im_name, obnames, im_head, sci_traces, cal_traces, wave_sol_dict_cal, reference_lines_dict, flat_spec_norm, im_trace):
     """
     Extracts the spectra and stores it in a fits file
     
@@ -5071,11 +5086,10 @@ def extraction_steps(params, im, im_name, im_head, sci_traces, cal_traces, wave_
     im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)               # in UTC, mid of the exposure
     im_name = im_name.replace('.fits','').replace('.fit','')                # to be sure the file ending was removed
     # not anymore: Object name needs to be split by '_', while numbering or exposure time needs to be split with '-'
-    obname = im_name.replace(os.linesep,'').split(os.sep)    # get rid of the path
-    im_head['HIERARCH HiFLEx NAME'] = (obname[-1], 'original filename')       # To know later what was the original filename
-    #not necessary anymore: obname = obname.split('-')  # remove the numbering and exposure time from the filename
-    #not necessary anymore: obname = obname[0]              # contains only the name, e.g. ArturArc, SunArc
-    obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
+    im_name_only = im_name.replace(os.linesep,'').split(os.sep)    # get rid of the path
+    im_head['HIERARCH HiFLEx NAME'] = (im_name_only[-1], 'original filename')       # To know later what was the original filename
+    if obnames[0] == '':    # Can't get the name from the file_list
+        obnames = get_possible_object_names(im_name_only[-1], im_head, params['raw_data_object_name_keys'])
     
     # Change the path to the object_file to the result_path, if necessary
     object_file = params['object_file']         # needed later
@@ -10254,6 +10268,11 @@ def prepare_for_rv_packages(params):
         if 'HiFLEx BCV' not in im_head.keys():          # BCV can be only calculated if coordinates are available -> only do RV on these stars
             continue
         obj_name = im_head['HiFLEx OBJNAME'].lower()
+        # Add object names from file_assignment
+        file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
+        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str, str], delimiter='\t', replaces=['\n',' ', os.linesep])
+        #### !!!!!!!!!!! more to do
+        
         obsdate_midexp = datetime.datetime.strptime(im_head['HiFLEx DATE-MID'],"%Y-%m-%dT%H:%M:%S.%f")
         if params['started_from_p3']:   # If started from another hiflex session, then don't create the files again
             continue
@@ -10269,8 +10288,8 @@ def prepare_for_rv_packages(params):
     
     return files_RV, headers
                          
-def run_terra_multicore(kwargs):
-    [obj_name, params] = kwargs
+def run_terra_serval_multicore(kwargs):
+    [obj_name, rvpack, params] = kwargs
     do_RV = True
     for no_RV_name in params['no_RV_names']:
         if obj_name.lower().find(no_RV_name) in [0,1,2]:
@@ -10278,23 +10297,48 @@ def run_terra_multicore(kwargs):
             break
     if not do_RV:
         return
-    os.system('rm -f {0}{1}{2}results{2}synthetic.rv'.format(params['path_rv_terra'],obj_name, os.sep) )     # Delete the old solution, as won't be created otherwise
-    newfile = 'echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}{1}" > astrocatalog{0}.example'.format(obj_name, os.sep)
-    logger('For TERRA: creating a new astrocatalog.example with: '+newfile)
-    os.system('rm -f astrocatalog{0}.example; '+newfile)
-    cmd = 'java -jar {1} -ASTROCATALOG astrocatalog{2}.example 998 -INSTRUMENT CSV {0}'.format(calimages['wave_sol_dict_sci']['wavesol'].shape[0],params['terra_jar_file'], obj_name )
-    log = 'logTERRA_{0}'.format(obj_name)
-    logger('For TERRA: running TERRA: '+cmd)
-    logger('Info: TERRA output and errors can be watched in {0}'.format(log))
-    if True:
-        with open(log, 'a') as logf:
-            p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True, stdout=logf, stderr=subprocess.STDOUT)            # This doesn't wait until the procress has been finished
-            p.communicate()                                                     # This makes it wait until it finished running
-            log_returncode(p.returncode, 'Please check the logfiles in {0}. Problem occured for object {1}'.format(os.getcwd(), obj_name))
+    if rvpack == 'TERRA':
+        os.chdir(params['path_rv_terra'])
+        os.system('rm -f {0}{1}{2}results{2}synthetic.rv'.format(params['path_rv_terra'],obj_name, os.sep) )     # Delete the old solution, as won't be created otherwise
+        newfile = 'echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}{1}" > astrocatalog{0}.example'.format(obj_name, os.sep)
+        logger('For TERRA: creating a new astrocatalog.example with: '+newfile)
+        os.system('rm -f astrocatalog{0}.example; '+newfile)
+        cmd = 'java -jar {1} -ASTROCATALOG astrocatalog{2}.example 998 -INSTRUMENT CSV {0}'.format(calimages['wave_sol_dict_sci']['wavesol'].shape[0],params['terra_jar_file'], obj_name )
+        log = 'logTERRA_{0}'.format(obj_name)
+        logger('For TERRA: running TERRA: '+cmd)
+        logger('Info: TERRA output and errors can be watched in {0}'.format(log))
+        if True:
+            with open(log, 'a') as logf:
+                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True, stdout=logf, stderr=subprocess.STDOUT)            # This doesn't wait until the procress has been finished
+                p.communicate()                                                     # This makes it wait until it finished running
+                log_returncode(p.returncode, 'Please check the logfiles in {0}. Problem occured for object {1}'.format(os.getcwd(), obj_name))
+        else:
+            logger('Warn: TERRA commented out')
+        resultfile = '{2} {0}{3}results{3}synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'], os.sep)
+        logger('For TERRA: results can be opened with: '+resultfile)
+        os.chdir(params['path_run'])        # Go back to previous folder
+    elif rvpack == 'SERVAL':
+        os.chdir(params['path_rv_serval'])
+        if not os.path.isfile('filelist_{0}.txt'.format(obj_name)):
+            return
+            #continue
+        cmd = 'ulimit -n 4096 ; {4}serval{5}src{5}serval.py {3} filelist_{3}.txt -inst HIFLEX -targrv 0 -pmin {0} -pmax {1} -oset {2} -safemode 2'.format(params['pmin'], 
+                                        params['pmax'], params['oset'], obj_name, params['path_serval'], os.sep)
+        log = 'logSERVAL_{0}'.format(obj_name)
+        logger('For SERVAL: running SERVAL: '+cmd)
+        logger('Info: SERVAL output and errors can be watched in {0}'.format(log))
+        if True:
+            with open(log, 'a') as logf:
+                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True, stdout=logf, stderr=subprocess.STDOUT)    # shell=True is necessary
+                p.communicate(input=os.linesep.encode())                                       # This waits until the process needs the enter
+                log_returncode(p.returncode, 'Please check the logfiles in {0}. Problem occured for object {1}'.format(os.getcwd(), obj_name))
+        else:
+            logger('Warn: SERVAL commented out')
+        resultfile = '{2} {0}{3}{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'], os.sep)  
+        logger('For SERVAL: results can be opened with: '+resultfile)
+        os.chdir(params['path_run'])        # Go back to previous folder
     else:
-        logger('Warn: TERRA commented out')
-    resultfile = '{2} {0}{3}results{3}synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'], os.sep)
-    logger('For TERRA: results can be opened with: '+resultfile)
+        logger('Warn: Pogramming error in run_terra_serval_multicore, I do not know rvpack {0}'.format(rvpack))
         
 def run_terra_rvs(params):
     # Do the TERRA RVs
@@ -10306,33 +10350,50 @@ def run_terra_rvs(params):
         return
         
     global calimages
-    obj_names = []   
+    obj_names, obj_names_norv = [], []      # Will be filled basd on the folder names 
     logger('Info: Preparing for the TERRA analysis.')
     for root, dirs, files in os.walk(params['path_rv_terra'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
         for file in files:
             if file.endswith('.csv'):                       # has the file the correct ending?
                 filename = os.path.join(root, file).replace(params['path_rv_terra'],'')                # Only relative folder and filename
                 obj_name = filename.split(os.sep)[0]
-                if obj_name not in obj_names:
-                    obj_names.append(obj_name)
+                if obj_name not in obj_names and obj_name not in obj_names_norv:
+                    do_RV = True
+                    for no_RV_name in params['no_RV_names']:
+                        if obj_name.lower().find(no_RV_name) in [0,1,2]:
+                            do_RV = False
+                            break
+                    if do_RV:   obj_names.append(obj_name)
+                    else:       obj_names_norv.append(obj_name)
     logger('For TERRA: changing directory to '+params['path_rv_terra']+' . The steps to run TERRA are given in the logfile in that folder.')
-    os.chdir(params['path_rv_terra'])
-    logger('Info: All data logged in this file is relative to '+params['path_rv_terra'])
     
-    kwargs = [[obj_name, params] for obj_name in obj_names]
+    kwargs = [[obj_name, 'TERRA', params] for obj_name in obj_names]
+    return kwargs
+    
+    #os.chdir(params['path_rv_terra'])
+    #logger('Info: All data logged in this file is relative to '+params['path_rv_terra'])
+    #os.chdir(params['path_run'])        # Go back to previous folder
+ 
+def run_terra_seral_rvs(params, kwargs):
     if params['use_cores'] > 1:
         logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
         p = multiprocessing.Pool(params['use_cores'])
-        p.map(run_terra_multicore, kwargs)
+        p.map(run_terra_serval_multicore, kwargs)
         p.terminate()
     else:
         for kwarg in kwargs:
-            run_terra_multicore(kwarg)
-    os.chdir(params['path_run'])        # Go back to previous folder
+            run_terra_serval_multicore(kwarg)
+    
     print('')
     logger('Info: Some errors reported by TERRA are expected (reading DRS ephemeris). The results are stored in {0}<object name>{1}results{1}synthetic.rv'.format(params['path_rv_terra'], os.sep))
+    logger(('Info: Finished the SERVAL analysis. Some errors reported by SERVAL are expected.'+\
+          ' The results are stored in {0}<object name>{2}<object name>.rvc.dat.'+\
+          ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially orders with low SN).'+\
+          ' You can also modify the parameters in {0}conf_hiflex_serval.txt , e.g. to select a different dataset or a different order to measure the SNR.'+\
+          ' The command history can be found in {0}cmdhistory.txt. Before running serval set variable:'+\
+          ' bash: export PYTHONPATH={0} ; csh: setenv PYTHONPATH {0} ; Windows: set PYTHONPATH {0} ; and cd {1}{2}').format(os.environ["PYTHONPATH"], params['path_rv_serval'], os.sep, os.linesep))
 
-def run_serval_multicore(kwargs):           # create a procedure to run on multicore
+"""def run_serval_multicore(kwargs):           # create a procedure to run on multicore; now part of run_terra_serval_multicore
     [obj_name, params] = kwargs
     do_RV = True
     for no_RV_name in params['no_RV_names']:
@@ -10355,7 +10416,7 @@ def run_serval_multicore(kwargs):           # create a procedure to run on multi
     else:
         logger('Warn: SERVAL commented out')
     resultfile = '{2} {0}{3}{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'], os.sep)  
-    logger('For SERVAL: results can be opened with: '+resultfile)
+    logger('For SERVAL: results can be opened with: '+resultfile)"""
 
 def run_serval_rvs(params,):
     # Do the SERVAL RVs
@@ -10369,14 +10430,20 @@ def run_serval_rvs(params,):
     #    logger('Warn: This is a python3 environment, however, SERVAL requires a python2 environment')      # Not true after April 2021
     #    return
     global calimages
-    obj_names = []
+    obj_names, obj_names_norv = [], []
     logger('Info: Preparing for the SERVAL analysis.')
     for root, dirs, files in os.walk(params['path_rv_serval'], followlinks=True):                       # Find all the objects again, as won't be added to obj_names when re-run
         for file in files:
             if file.endswith('.txt') and file.find('filelist_') == 0:                       # has the filename the correct format?
                 obj_name = file.split('filelist_')[-1].split('.txt')[0]
-                if obj_name not in obj_names:
-                    obj_names.append(obj_name)                   
+                if obj_name not in obj_names and obj_name not in obj_names_norv:
+                    do_RV = True
+                    for no_RV_name in params['no_RV_names']:
+                        if obj_name.lower().find(no_RV_name) in [0,1,2]:
+                            do_RV = False
+                            break
+                    if do_RV:   obj_names.append(obj_name)
+                    else:       obj_names_norv.append(obj_name)
     hiflex_file = params['path_rv_serval']+'conf_hiflex_serval.txt'
     servalparams = dict()
     if os.path.isfile(hiflex_file):
@@ -10418,10 +10485,13 @@ def run_serval_rvs(params,):
     params['pmax'] = int(np.max(xhighs) - 0.1*xran)
     params['oset'] = '{0}:{1}'.format(0,calimages['wave_sol_dict_sci']['wavesol'].shape[0])     # if shape[0] is 5, then oset will lead to 0,1,2,3,4 being used
     logger('For SERVAL: changing directory to '+params['path_rv_serval']+' . The steps to run SERVAL are given in the logfile in that folder.')
-    os.chdir(params['path_rv_serval'])
-    logger('Info: All data logged in this file is relative to '+params['path_rv_serval'])
-    kwargs = [[obj_name, params] for obj_name in obj_names]
-    #with multiprocessing.Pool(params['use_cores']) as p:       # only possible in python3
+    kwargs = [[obj_name, 'SERVAL', params] for obj_name in obj_names]
+    return kwargs
+    
+    #os.chdir(params['path_rv_serval'])
+    #logger('Info: All data logged in this file is relative to '+params['path_rv_serval'])
+    
+    """#with multiprocessing.Pool(params['use_cores']) as p:       # only possible in python3
     #    p.map(run_serval, obj_names)
     if params['use_cores'] > 1:
         logger('Info using multiprocessing on {0} cores'.format(params['use_cores']))
@@ -10438,7 +10508,7 @@ def run_serval_rvs(params,):
           ' If serval failed (the result file is missing), run it again using less orders by setting oset to a smaller range (especially orders with low SN).'+\
           ' You can also modify the parameters in {0}conf_hiflex_serval.txt , e.g. to select a different dataset or a different order to measure the SNR.'+\
           ' The command history can be found in {0}cmdhistory.txt. Before running serval set variable:'+\
-          ' bash: export PYTHONPATH={0} ; csh: setenv PYTHONPATH {0} ; Windows: set PYTHONPATH {0} ; and cd {1}{2}').format(pypath, params['path_rv_serval'], os.sep, os.linesep))
+          ' bash: export PYTHONPATH={0} ; csh: setenv PYTHONPATH {0} ; Windows: set PYTHONPATH {0} ; and cd {1}{2}').format(pypath, params['path_rv_serval'], os.sep, os.linesep))"""
 
 def run_ceres_multicore(kwargs):
     [file_RV, params, headers, force_rvs, stellar_par] = kwargs

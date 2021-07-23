@@ -27,7 +27,7 @@ def create_parameters(conf_data, warn, param, textparam, parcals, exist_bias, ex
     :param exist_bias: bool: Do Biases exist?
     :param exist_rflat: bool: Do rflats exist?
     :param exp_darks: list of floats
-    :param entry: list of [str, str, str, float, float]: entry as in params['raw_data_file_list']
+    :param entry: list of [str, str, str, float, datetime, str, str]: entry as in params['raw_data_file_list']
     """
     calibs = []
     for parcal in parcals:                                  # A list of calib_create can be given in case one wasn't defined by the user
@@ -152,7 +152,9 @@ def add_new_rawfiles_file_list(params, file_list=[]):
                         fiber2 = 'wave'
                 im_head, obsdate_midexp, obsdate_mid_float, jd_midexp = get_obsdate(params, im_head)    # dateobs: unix_timestamp of mid exposure time
                 extract = ''
-                file_list.append([filename, fiber1, fiber2, im_head['HIERARCH HiFLEx EXPOSURE'], obsdate_mid_float, extract])
+                obname = filename.replace('\n','').replace(os.linesep,'').split(os.sep)    # get rid of the path
+                obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
+                file_list.append([filename, fiber1, fiber2, im_head['HIERARCH HiFLEx EXPOSURE'], obsdate_mid_float, obnames[0], extract])
     
     return file_list
 
@@ -217,7 +219,7 @@ def check_assigned_infos(params, file_list):
     exist_bias, exist_rflat, exp_darks = False, False, []
     
     for entry in file_list:
-        flags = entry[5].lower().replace(' ','').split(',')
+        flags = entry[6].lower().replace(' ','').split(',')
         if 'w2' in flags:
             cal2_l_exp = max(entry[3], cal2_l_exp)
             cal2_s_exp = min(entry[3], cal2_s_exp)
@@ -280,9 +282,9 @@ def add_extraction_parameters_file_list(params, file_list, start_index):
                 extract += 'w1s, '
         if entry[1] == 'science':
                 extract += 'e, '
-        if len(extract) >=2:
+        if len(extract) >=2:    # remove the ', ' at the end
             extract = extract[:-2]
-        file_list[index][5] = extract
+        file_list[index][6] = extract
     
     return file_list
 
@@ -335,7 +337,7 @@ def create_configuration_file(params, file_list):
         #    continue
         #print entry, conf_data
         param = ''
-        extract = entry[5].lower().replace(' ','').split(',')
+        extract = entry[6].lower().replace(' ','').split(',')
         for easy_assignment in easy_assignments:
             if easy_assignment[0] in extract:
                 conf_data, warn = create_parameters(conf_data, warn, easy_assignment[1], easy_assignment[1], [easy_assignment[2]], exist_bias, exist_rflat, exp_darks, entry)
@@ -354,9 +356,9 @@ def create_configuration_file(params, file_list):
             textparam = param.replace('.','p')+'s'
             parcal = 'dark'
             conf_data, warn = create_parameters(conf_data, warn, param, textparam, [parcal], exist_bias, exist_rflat, exp_darks, entry)
-        if entry[5].lower().find('e') == -1 and entry[5].lower().find('w') == -1:          # No extraction and no wavelength calibration
+        if entry[6].lower().find('e') == -1 and entry[6].lower().find('w') == -1:          # No extraction and no wavelength calibration
             continue
-        for extraction in entry[5].replace(' ','').split(','):
+        for extraction in entry[6].replace(' ','').split(','):
             if extraction.lower() == 'wc':       # use this file for wavelength calibration between spectra
                 param = 'waveoffsetcal'
                 parcal = 'wavelengthcal'        # !!! Replace this by "waveoffset", but this also needs change in conf.txt: wavelengthcal_calibs_create_g to waveoffset_calibs_create_g
@@ -466,7 +468,8 @@ def file_list_UI(file_list):
     widgets['ws']      = dict(label='Wave{0}shft{0}Sci'.format(os.linesep), kind='Label', row=0, column=16)
     widgets['wc']      = dict(label='Wave{0}shft{0}Cal'.format(os.linesep), kind='Label', row=0, column=17)
     widgets['e']       = dict(label='Ex-{0}tract'.format(os.linesep), kind='Label', row=0, column=18)
-    widgets['extra']   = dict(label='Further usage{0}of files{0}(comma separated)'.format(os.linesep), kind='Label', row=0, column=19)
+    widgets['obname']  = dict(label='Objectname{0}(comma{0}separated)'.format(os.linesep), kind='Label', row=0, column=19)
+    widgets['extra']   = dict(label='Further usage{0}of files{0}(comma sep.)'.format(os.linesep), kind='Label', row=0, column=20)
     for ii, entry in enumerate(file_list):
         pkwargs['comment_{0}'.format(ii)] = ( 0 <= entry[0].find('#') < 20 )            # Commented out
         widgets['comment_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['comment_{0}'.format(ii)], row=ii+1, column=0)
@@ -487,7 +490,7 @@ def file_list_UI(file_list):
         #widgets['fib1_{0}'.format(ii)] = dict(kind='TextEntry', minval=None, maxval=None, fmt=str, start=pkwargs['fib1_{0}'.format(ii)], width=8, row=ii+1, column=5)     # Allows modification of the fiber content
         #pkwargs['fib2_{0}'.format(ii)] = entry[2]     # Allows modification of the fiber content
         #widgets['fib2_{0}'.format(ii)] = dict(kind='TextEntry', minval=None, maxval=None, fmt=str, start=pkwargs['fib2_{0}'.format(ii)], width=8, row=ii+1, column=6)     # Allows modification of the fiber content
-        flags = entry[5].replace(' ','').split(',')
+        flags = entry[6].replace(' ','').split(',')
         pkwargs['b_{0}'.format(ii)] = ( 'b' in flags )
         widgets['b_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['b_{0}'.format(ii)], row=ii+1, column=6)
         pkwargs['d_{0}'.format(ii)] = ( 'd' in flags )
@@ -518,6 +521,8 @@ def file_list_UI(file_list):
         widgets['wc_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['wc_{0}'.format(ii)], row=ii+1, column=17)
         pkwargs['e_{0}'.format(ii)] = ( 'e' in flags )
         widgets['e_{0}'.format(ii)] = dict(label=None,  kind='CheckBox', start=pkwargs['e_{0}'.format(ii)], row=ii+1, column=18)
+        pkwargs['obname_{0}'.format(ii)] = entry[5]
+        widgets['obname_{0}'.format(ii)] = dict(kind='TextEntry', minval=None, maxval=None, fmt=str, start=pkwargs['obname_{0}'.format(ii)], width=15, row=ii+1, column=19)
         extra = ''
         for flag in flags:          # Add extra flags, if necessary
             if flag not in ['b', 'd', 'a', 't1', 't2', 'z', 'w2l', 'w2s', 'w2', 'w1l', 'w1s', 'w1', 'ws', 'wc', 'e']:
@@ -525,7 +530,7 @@ def file_list_UI(file_list):
         if len(extra) > 0:
             extra = extra[1:]
         pkwargs['extra_{0}'.format(ii)] = extra
-        widgets['extra_{0}'.format(ii)] = dict(kind='TextEntry', minval=None, maxval=None, fmt=str, start=pkwargs['extra_{0}'.format(ii)], width=15, row=ii+1, column=19)
+        widgets['extra_{0}'.format(ii)] = dict(kind='TextEntry', minval=None, maxval=None, fmt=str, start=pkwargs['extra_{0}'.format(ii)], width=15, row=ii+1, column=20)
     
     explain = ('Explanation of the columns:{1}'+\
                '- Tick first column to not use some files at all{1}'+\
@@ -540,6 +545,7 @@ def file_list_UI(file_list):
                '-- Wavelength solution for calibration fiber (*){1}'+\
                '-- Wavelength offset Science fiber (**) to correct for{1}   wavelength drit{1}'+\
                '-- Wavelength offset between the Science fiber and{1}   Calibration fiber (*){1}'+\
+               '-- Object name: List of Names for Object{1}'+\
                '-- Extract: Extract these files on an individual basis{1}'+\
                '-- Further settings (manual): e.g. to combine files{1}   before or after extraction{1}'+\
                '(*) not for single fiber spectrographs{1}'+\
@@ -548,8 +554,8 @@ def file_list_UI(file_list):
               #'- Type of Science and Calibration\n  fibers are derived from header or\n  filename and can be changed here\n  (optional)\n'+\     # Allows modification of the fiber content
     for ii, commentii in enumerate(explain.split(os.linesep)):
         if len(commentii) > 0:
-            widgets['explain_{0}'.format(ii)] = dict(label=commentii, kind='Label', row=ii, column=20, rowspan=1, orientation=Tk.W )#, wraplength=100 )      
-    widgets['accept'] = dict(label='Accept', kind='ExitButton', row=ii+1, column=20, rowspan=2)
+            widgets['explain_{0}'.format(ii)] = dict(label=commentii, kind='Label', row=ii, column=21, rowspan=1, orientation=Tk.W )#, wraplength=100 )      
+    widgets['accept'] = dict(label='Accept', kind='ExitButton', row=ii+1, column=21, rowspan=2)
                               
     wprops = dict(fullscreen=False )
     #wprops['width_data'] = 800   # not neccssary, as uses the automatic width
@@ -588,34 +594,52 @@ def file_list_UI(file_list):
         #                       gui3.data['fib1_{0}'.format(ii)] , gui3.data['fib2_{0}'.format(ii)], file_list[ii][3], file_list[ii][4], 
         #                       text ])     # Allows modification of the fiber content
         file_list_full.append([ {True:'#',False:''}[gui3.data['comment_{0}'.format(ii)]] + file_list[ii][0].replace('#','').replace(' ',''),
-                               file_list[ii][1] , file_list[ii][2], file_list[ii][3], file_list[ii][4], text ])
+                               file_list[ii][1] , file_list[ii][2], file_list[ii][3], file_list[ii][4], gui3.data['obname_{0}'.format(ii)], text ])
         if not gui3.data['comment_{0}'.format(ii)]:     # Ignore the commented out lines
             file_list_new.append(file_list_full[-1])
             
     return file_list_new, file_list_full
 
-def get_observed_objects(params, conf_data):
+def get_observed_objects(params, conf_data, file_list):
+    """
+    
+    """
+    file_list =copy.deepcopy(file_list)
     object_information_full = []
     object_information_head = []
     object_files, object_files_full = find_file_in_allfolders(params['object_file'], [params['result_path']] + params['raw_data_paths'])
     Simbad.add_votable_fields("pmra")  # Store proper motion in RA
     Simbad.add_votable_fields("pmdec")  # Store proper motion in Dec.
-    for entry in sorted(conf_data):
-        if entry.find('extract') != -1 and entry.find('rawfiles') != -1:     # Only check for extract*rawfiles
-            list_to_search = conf_data[entry].split(', ')
-        elif entry.find('master_extract_combine') != -1 and entry.find('filename') != -1:
-            list_to_search = [entry.replace('master_extract_combine_','').replace('master_extract_combine','').replace('_filename','')]
+    for entryc in sorted(conf_data):
+        if entryc.find('extract') != -1 and entryc.find('rawfiles') != -1:     # Only check for extract*rawfiles
+            list_to_search = conf_data[entryc].split(', ')
+        elif entryc.find('master_extract_combine') != -1 and entryc.find('filename') != -1:
+            list_to_search = [entryc.replace('master_extract_combine_','').replace('master_extract_combine','').replace('_filename','')]
         else:
             continue
         for im_name in list_to_search:
-            found = False
             if os.path.isfile(im_name):
                 im_head = fits.getheader(im_name)
-                obname = im_name.replace('\n','').replace(os.linesep,'').split(os.sep)    # get rid of the path
-                obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
-            else:           # not a raw file
-                obnames = [im_name]
+            else:
+                im_head = dict()
+            found = False
+            # Look in the other list for the information about the object - this process will take a while
+            for ii, entry in enumerate(file_list):
+                if entry[0] == im_name:
+                    if entry[5] != '':
+                        obnames = entry[5].replace(' ','').split(',')
+                        found = True
+                    del file_list[ii]
+                    break
+            # Get the object name from the filename
+            if not found:
+                if os.path.isfile(im_name):
+                    obname = im_name.replace('\n','').replace(os.linesep,'').split(os.sep)    # get rid of the path
+                    obnames = get_possible_object_names(obname[-1], im_head, params['raw_data_object_name_keys'])
+                else:           # not a raw file
+                    obnames = [im_name]
             # Check if already in the list
+            found = False
             for obname in obnames:
                 for index, obname_found in enumerate(object_information_full):        # Same objectname doesn't need to be done again
                     if obname in [obname_found[0], obname_found[0].replace('_',''), obname_found[0].replace('-',''), obname_found[0].replace('_','').replace('-','')]:
@@ -853,7 +877,7 @@ def comment_out_nonexisting_rawfiles_file_list(params, file_list):
     """
     commented_out = 0
     for ii in range(len(file_list)):
-        if file_list[ii][0].find('#') == -1:
+        if file_list[ii][0].find('#') == -1:                    # Not already commended out
             if not os.path.isfile(file_list[ii][0]):
                 file_list[ii][0] = '#' + file_list[ii][0]       # files doesn't exist -> comment out
                 commented_out += 1
@@ -869,14 +893,15 @@ if __name__ == "__main__":
     # get the available list
     file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
     
-    # Only necessary to be backwards compatible
-    #for line in file_list:
-    #    number
-    try:
-        #file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' '], ignorelines=[['#',20]])     #new way of storing the data
-        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',' ', os.linesep])     #new way of storing the data
-    except:
-        file_list = convert_readfile(file_list, [str, str, str, float, float, str], delimiter='\t', replaces=['\n',' ', os.linesep]) # old way of reading the data, To stay backwards compatible, can be removed in a few versions after v0.4.1
+    # Only necessary to be backwards compatible to versions 1.5.0 and older
+    for ii in range(len(file_list)):
+        number_entries = file_list[ii].count('\t')
+        if number_entries == 5:
+            line_temp = file_list[ii].rsplit('\t',1)        # Split the old extraction
+            file_list[ii] = line_temp[0] + '\t\t' + line_temp[-1]   # Add another tab at the place
+    
+    # Back to normal        
+    file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str, str], delimiter='\t', replaces=['\n',' ', os.linesep])     # will fail for lists created before version v0.4.0
     file_list = comment_out_nonexisting_rawfiles_file_list(params, file_list)
     number_old_entries = len(file_list)
     
@@ -908,6 +933,7 @@ if __name__ == "__main__":
         file.write('###   - Type of fiber 2 (calibration fiber)'+os.linesep)
         file.write('###   - Exposure time in seconds (from the header, if the information is not in the header, then from the filename)'+os.linesep)
         file.write('###   - Mid-exposure observation time in UTC (from header)'+os.linesep)
+        file.write('###   - Object name (several can be given comma-separated)'+os.linesep)
         file.write('###   - Flags: Mark the files to be used for calibration the data (comma-separated list):'+os.linesep)
         file.write('###        "b", Bias.'+os.linesep)
         file.write('###        "d", Dark.'+os.linesep)
@@ -928,7 +954,7 @@ if __name__ == "__main__":
         file.write('### To exlude the use of some files please comment the line with a "#" or delete the line.'+os.linesep+os.linesep)
         file.write('### -> When finished with the editing, save the file and close the editor'+os.linesep+os.linesep)
         for entry in file_list_commented:
-            file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}{6}'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5], os.linesep ))
+            file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}{7}'.format(entry[0].ljust(50), entry[1], entry[2], entry[3], datetime.datetime.utcfromtimestamp(entry[4]).strftime('%Y-%m-%dT%H:%M:%S'), entry[5], entry[6], os.linesep ))
     
     # If necessary show the text file instead of the GUI
     if ('nogui' in sys.argv or '-nogui' in sys.argv or '--nogui' in sys.argv):
@@ -938,7 +964,7 @@ if __name__ == "__main__":
             print('Please check that file {0} is correct.'.format(params['raw_data_file_list']))
             raw_input('To continue please press Enter\t\t')
         file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
-        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str], delimiter='\t', replaces=['\n',os.linesep,' '], ignorelines=[['#',20]])
+        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str, str], delimiter='\t', replaces=['\n',os.linesep,' '], ignorelines=[['#',20]])
         file_list = sorted(file_list, key=operator.itemgetter(4,0))       # itemgetter(1,2,3,0)
     
     # Reset the list of parameters in case important data was deleted, e.g. all Darks
@@ -961,7 +987,7 @@ if __name__ == "__main__":
     conf_data = create_configuration_file(params, file_list)
     
     # What objects were observed:
-    object_information_full, object_information_head = get_observed_objects(params, conf_data)
+    object_information_full, object_information_head = get_observed_objects(params, conf_data, file_list)
     
     # Select the calibration parameters and Object coordinates in a GUI
     conf_data, object_information = calibration_parameters_coordinates_UI(conf_data, object_information_full, object_information_head)
@@ -993,7 +1019,7 @@ if __name__ == "__main__":
         file.write('#   For <background> the calibration needs to contain "background" but can contain more information. The key needs to be defined'+os.linesep) 
         file.write('#        (e.g. if the "background_image_filename" is used for calibration then the following entry is needed as well here or in the calibration file "background_image_filename = background.fits"'+os.linesep) 
         file.write('# '+os.linesep) 
-        for paramtype in ['rawfiles', 'calibs_create', 'master']:
+        for paramtype in ['rawfiles', 'calibs_create', 'master']:       # sort: first rawfiles, master file names at end
             file.write(os.linesep)
             for entry in sorted(conf_data.keys()):
                 if entry.find(paramtype) >= 0:

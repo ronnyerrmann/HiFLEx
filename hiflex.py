@@ -422,15 +422,19 @@ if __name__ == "__main__":
                 logger('Warn: This wavelength solution has a different number of freedoms {0} than the previous solution {1}.'.format(wavelength_solution_shift_dict['wavesol'].shape[1], last_shape), params=params)
             last_shape = wavelength_solution_shift_dict['wavesol'].shape[1]
             calimages['wave_sols_'+fib].append( [wavelength_solution_shift_dict['wavesol'], wavelength_solution_shift_dict['reflines'], jd_midexp, name])
+        
+        # Read the list of files
+        file_list = read_text_file(params['raw_data_file_list'], no_empty_lines=True)
+        file_list = convert_readfile(file_list, [str, str, str, float, ['%Y-%m-%dT%H:%M:%S', float], str, str], delimiter='\t', replaces=['\n',' ', os.linesep])
             
         params['extract_wavecal'] = False
         if len(extractions) == 0:                                               # no extractions to do
-            logger('Warn: Nothing to extract. -> Exiting', params=params)
-            header_results_to_texfile(params)           # Save the results from the header in a logfile
-            exit(0)
+            logger('Warn: Nothing to extract.', params=params)
+            #header_results_to_texfile(params)           # Save the results from the header in a logfile
+            #exit(0)
         
         def extraction_multicore(all_extractions):
-            [extraction, im_name_full, im_name, realrun] = all_extractions
+            [extraction, im_name_full, im_name, realrun, obnames] = all_extractions
             if os.path.isfile(params['path_extraction']+im_name+'.fits'):
                 logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']), params=params)
                 return ''
@@ -440,7 +444,7 @@ if __name__ == "__main__":
             else:                                       # Combine files before extraction
                 im, im_head = create_image_general(params, extraction, realrun=realrun)
             if realrun:
-                obj_name = extraction_steps(params, im, im_name, im_head, calimages['sci_trace'], calimages['cal_trace'], 
+                obj_name = extraction_steps(params, im, im_name, obnames, im_head, calimages['sci_trace'], calimages['cal_trace'], 
                                         calimages.get('wave_sol_dict_cal',calimages['wave_sol_dict_sci']), reference_lines_dict, calimages['flat_spec_norm'], im_trace1)
                 return obj_name.lower()
 
@@ -457,8 +461,15 @@ if __name__ == "__main__":
                     if os.path.isfile(params['path_extraction']+im_name+'.fits'):
                         logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(im_name, params['path_extraction']), params=params)
                     else:
-                        extraction_multicore([extraction, im_name_full, im_name, False])        # Dry run to create darks and such
-                        all_extractions.append([extraction, im_name_full, im_name, True])       # Real run
+                        # Look in the other list for the information about the object - this process will take a while
+                        obnames = ['']
+                        for ii, entry in enumerate(file_list):
+                            if entry[0] == im_name_full:
+                                if entry[5] != '':
+                                    obnames = entry[5].replace(' ','').split(',')
+                                break
+                        extraction_multicore([extraction, im_name_full, im_name, False, obnames])        # Dry run to create darks and such
+                        all_extractions.append([extraction, im_name_full, im_name, True, obnames])       # Real run
                     list_im_name.append(im_name_full)
             else:                                           # Combine the files before extraction
                 if extraction in list_im_name:
@@ -466,8 +477,9 @@ if __name__ == "__main__":
                 if os.path.isfile(params['path_extraction']+extraction+'.fits'):
                     logger('Info: File {0} was already processed. If you want to extract again, please delete {1}{0}.fits'.format(extraction, params['path_extraction']), params=params)
                 else:
-                    extraction_multicore([extraction, extraction, extraction, False])           # Dry run to create darks and such
-                    all_extractions.append([extraction, extraction, extraction, True])          # Real run
+                    
+                    extraction_multicore([extraction, extraction, extraction, False, [''] ])           # Dry run to create darks and such
+                    all_extractions.append([extraction, extraction, extraction, True, [''] ])          # Real run
                 list_im_name.append(extraction)
         if params['use_cores'] > 1 and len(all_extractions) > 1:
             logger('Info: Starting to extract spectra using multiprocessing on {0} cores, hence output will be for several files in parallel'.format(params['use_cores']), params=params)
@@ -572,8 +584,9 @@ if __name__ == "__main__":
         else:
             # Run RV analysis that can be run
             files_RV, headers = prepare_for_rv_packages(params)
-            run_terra_rvs(params)
-            run_serval_rvs(params)
+            kwargs = run_terra_rvs(params)
+            kwargs += run_serval_rvs(params)
+            run_terra_seral_rvs(params, kwargs)
             # Prepare RV analysis for CERES
             if sys.version_info[0] > 2:             # Try to load a python 2 environment
                 anaconda = sys.executable.split('bin{0}python'.format(os.sep))[0]
