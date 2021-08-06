@@ -103,6 +103,11 @@ The basic things for Python (and the configuration file) are:
 \label{Section:Changelog_new}
 Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}.
 
+\subsection*{v1.5.2}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Barycentric velocity was calculated wrong when proper motion was given due to giving epoch in years instead of JD (since version v0.4.1).
+\end{itemize}
+
 \subsection*{v1.5.1}
 \begin{itemize}\setlength\itemsep{0em}
   \item Added parameter \verb|traces_min_separation| to speed up searching of orders.
@@ -115,24 +120,6 @@ Please find the changes of older versions in Chapter~\ref{Section:Changelog_old}
   \item Bugfixing in with exposure times when assigning files.
   \item Fixed line strength for ThAr lines below 4000\AA.
 \end{itemize}
-
-\subsection*{v1.4.2}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Removed the manual IERS addresses which were introduced in May 2020, disabled ssl verification if download of IERS fails.
-  \item Fixed crash when using old matplotlib.
-\end{itemize}
-
-\subsection*{v1.4.1}
-\begin{itemize}\setlength\itemsep{0em}
-  \item When script fails between creating manual wavelength solution and sci wavelength solution the parameters don't go off anymore.
-  \item Bugfixing.
-\end{itemize}
-
-\subsection*{v1.4.0}
-\begin{itemize}\setlength\itemsep{0em}
-  \item Made use of newer SERVAL versions, which can run in a python 3 environment. TERRA and SERVAL are now run from the main scrip and only CERES is run in a python 2 environment. Needs SERVAL to be updated to a python3 version.
-\end{itemize}
-
 
 % -------------------------------------------------------------------------------------------
 %\noindent
@@ -1023,7 +1010,7 @@ Search and download the data from \url{http://archive.eso.org/eso/eso_archive_ma
 \textbf{Extract both chips together:} Please note, after identifying the order, a dummy order has to be added (for the order which fell between both HARPS detectors, use \verb|python <path_hiflex>/remove_add_modify_orders.py|, Chapter~\ref{Sec:remove_add_modify_orders}, to add an order in the area between the two chips after the orders were identified and precisely traced, only few points for `c' have to be set). You also shouldn't use background correction in this setting.
 \begin{lstlisting}[style=base]
 gunzip *.fits.Z
-cat <<EOT > extract_single_chip.py
+cat <<EOT > extract_both_chip.py
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 import os
@@ -1032,16 +1019,23 @@ import numpy as np
 
 os.system('mkdir -p both_chips')
 for entry in os.popen('ls -1 *.fits').readlines():
-    im_r = fits.getdata(entry[:-1],2)
-    im_b = fits.getdata(entry[:-1],1)
-    im_head_r = fits.getheader(entry[:-1],2)
-    im_head_b = fits.getheader(entry[:-1],1)
+    single_file = False
+    try:
+        im_r = fits.getdata(entry[:-1],2)
+        im_b = fits.getdata(entry[:-1],1)
+    except:
+        single_file = True
+    if not single_file:
+        im_head_r = fits.getheader(entry[:-1],2)
+        im_head_b = fits.getheader(entry[:-1],1)
+        im = np.hstack(( im_b, im_r ))
+    else:
+        im = fits.getdata(entry[:-1],0)
     im_head0 = fits.getheader(entry[:-1],0)
-    im = np.hstack(( im_b, im_r ))
     fits.writeto('both_chips/'+entry[:-1], im, \
                  im_head0, overwrite=True)
 EOT
-python extract_single_chip.py
+python extract_both_chip.py
 \end{lstlisting}
 
 
@@ -1591,6 +1585,23 @@ conda activate hiflex
 \section{Changelog (old)}
 \label{Section:Changelog_old}
 Please find the changes of newer versions in Chapter~\ref{Section:Changelog_new}.
+
+\subsection*{v1.4.2}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Removed the manual IERS addresses which were introduced in May 2020, disabled ssl verification if download of IERS fails.
+  \item Fixed crash when using old matplotlib.
+\end{itemize}
+
+\subsection*{v1.4.1}
+\begin{itemize}\setlength\itemsep{0em}
+  \item When script fails between creating manual wavelength solution and sci wavelength solution the parameters don't go off anymore.
+  \item Bugfixing.
+\end{itemize}
+
+\subsection*{v1.4.0}
+\begin{itemize}\setlength\itemsep{0em}
+  \item Made use of newer SERVAL versions, which can run in a python 3 environment. TERRA and SERVAL are now run from the main scrip and only CERES is run in a python 2 environment. Needs SERVAL to be updated to a python3 version.
+\end{itemize}
 
 \subsection*{v1.3.7}
 \begin{itemize}\setlength\itemsep{0em}

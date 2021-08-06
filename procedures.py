@@ -9370,7 +9370,7 @@ def get_object_site_from_header(params, im_head, obnames, obsdate):
                     source_obs = 'The site coordinates are derived from the image header.'
     return params, source_radec, source_obs, mephem, obnames
 
-def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, obsdate, leap_update=False):
+def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, obsdate, leap_update=True):
     """
     Calculates the barycentric correction.
     To do this, position of the telescope and pointing of the telescope need to be known.
@@ -9395,14 +9395,35 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
         params['ra'] = math.degrees(params['ra'])           # convert radians(float) into a float
     if type(params['dec']) == ephem.Angle:
         params['dec'] = math.degrees(params['dec'])         # convert into a float
-    ra, dec = params['ra'], params['dec']
-
+    temp = obnames[0].lower()
+    if temp.find('sun') != -1:  params['SolSystemTarget'] = 'Sun'
+    elif temp.find('moon')!=-1 or temp.find('jupiter')!=-1 or temp.find('venus')!=-1 or temp.find('mercury')!=-1 or temp.find('mars')!=-1 or temp.find('saturn')!=-1 or temp.find('uranus')!=-1 or temp.find('neptune')!=-1 or temp.find('pluto')!=-1:
+        params['SolSystemTarget'] = obnames[0]+' Barycenter'
+        params['HorizonsID_type'] = 'majorbody'
+    elif temp.find('ceres')!=-1:
+        params['SolSystemTarget'] = obnames[0]
+        params['HorizonsID_type'] = 'smallbody'
+    else:
+        params['SolSystemTarget'] = None
+        params['HorizonsID_type'] = 'smallbody'
+    # For barycorpy epoch needs to be J2000 or JD
+    if type(params['epoch']).__name__ == 'str':
+        if params['epoch'] != 'J2000':
+            logger('Warn: barycorrpy might not know how to handle an epoch of {0}.'.format(params['epoch']))
+    else:                       # Float or integer
+        if params['epoch'] < 1E4:       # It's not JD but needs to become JD
+            params['epoch'] = round(2451545.0 + (params['epoch'] - 2000) * 365.24219879, 2)      # J2000 has JD 2451545.0
     bcvel_baryc, bjd = 0.0, 0.0
     if source_radec != 'Warn: The object coordinates were made up!':
         # Using barycorrpy (https://github.com/shbhuk/barycorrpy), pip install barycorrpy
         site = ''
         if params['site'] in barycorrpy.EarthLocation.get_site_names():
             site = params['site']
+            loc = EarthLocation.of_site(site)
+            lat = loc.lat.value
+            longi = loc.lon.value
+            alt = loc.height.value
+            source_obs = 'Using the site coordinates as stored in barycorrpy.EarthLocation: {0}, {1}, {2}.'.format(lat, longi, alt)
         ephemeris2 = 'https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de405.bsp'
         ephemeris2 = 'de430'        # See https://ssd.jpl.nasa.gov/?planet_eph_export
         # Calculate the barycentric corrections for 60s intervals
@@ -9413,9 +9434,11 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
         for ii in range(10):
             if sys.version_info[0] < 3:     # Python 2
                 try:
-                    bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
+                    bcvel_baryc_range, warn, status = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=params['ra'],dec=params['dec'],obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
                                                       pmra=params['pmra'],pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],
-                                                      ephemeris=ephemeris2,leap_dir=params['logging_path'], leap_update=leap_update)
+                                                      ephemeris=ephemeris2,leap_dir=params['logging_path'], leap_update=leap_update, SolSystemTarget=params['SolSystemTarget'], HorizonsID_type=params['HorizonsID_type'])
+                    if status > 0:
+                        logger('Warn: the following messages were given calculating the BCV: {0}.'.format(warn), show=False)
                     success = True
                     break
                 except (urllib2.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
@@ -9425,9 +9448,11 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
                         logger('Warn: Problem downloading file for barycentric correction. Will try {0} more times. Error: {1}'.format(4-ii, e))
             else:
                 try:
-                    bcvel_baryc_range = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
+                    bcvel_baryc_range, warn, status = barycorrpy.get_BC_vel(JDUTC=jd_range,ra=params['ra'],dec=params['dec'],obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
                                                       pmra=params['pmra'],pmdec=params['pmdec'],px=0,rv=0.0,zmeas=0.0,epoch=params['epoch'],
-                                                      ephemeris=ephemeris2,leap_dir=params['logging_path'], leap_update=leap_update)
+                                                      ephemeris=ephemeris2,leap_dir=params['logging_path'], leap_update=leap_update, SolSystemTarget=params['SolSystemTarget'], HorizonsID_type=params['HorizonsID_type'])
+                    if status > 0:
+                        logger('Warn: the following messages were given calculating the BCV: {0}.'.format(warn), show=False)
                     success = True
                     break
                 except (urllib.error.URLError, ValueError, astropy.utils.iers.iers.IERSRangeError) as e:
@@ -9451,13 +9476,14 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
 
         if not success:
             logger('Error: Barycentric velocities could not be calculated.', params=params)
-        bcvel_baryc_range = bcvel_baryc_range[0] / 1E3       # in km/s
+            
+        bcvel_baryc_range = bcvel_baryc_range / 1E3       # in km/s
         bcvel_baryc = bcvel_baryc_range[0]
         
-        im_head['HIERARCH HiFLEx RA'] = (round(ra,6),           'RA in degrees, used to calculated BCV, BJD')
-        im_head['HIERARCH HiFLEx DEC'] = (round(dec,6),         'DEC in degrees, used to calculated BCV, BJD')
-        im_head['HIERARCH HiFLEx PMRA'] = (round(pmra,3),       'proper motion for RA in mas/yr, for BCV, BJD')
-        im_head['HIERARCH HiFLEx PMDEC'] = (round(pmdec,3),     'proper motion for DEC in mas/yr, for BCV, BJD')
+        im_head['HIERARCH HiFLEx RA'] = (round(params['ra'],6),           'RA in degrees, used to calculated BCV, BJD')
+        im_head['HIERARCH HiFLEx DEC'] = (round(params['dec'],6),         'DEC in degrees, used to calculated BCV, BJD')
+        im_head['HIERARCH HiFLEx PMRA'] = (round(params['pmra'],3),       'proper motion for RA in mas/yr, for BCV, BJD')
+        im_head['HIERARCH HiFLEx PMDEC'] = (round(params['pmdec'],3),     'proper motion for DEC in mas/yr, for BCV, BJD')
         im_head['HIERARCH HiFLEx BCV'] = (round(bcvel_baryc,4), 'Barycentric velocity in km/s')
         im_head['HIERARCH HiFLEx BCV MAX'] = (round(max(bcvel_baryc_range),4), 'Maximum BCV')
         im_head['HIERARCH HiFLEx BCV MIN'] = (round(min(bcvel_baryc_range),4), 'Minimum BCV')
@@ -9467,16 +9493,17 @@ def get_barycent_cor(params, im_head, obnames, ra2, dec2, epoch, pmra, pmdec, ob
         bjd = bjd[0]"""
         
         # Using barycorrpy (https://github.com/shbhuk/barycorrpy), pip install barycorrpy
-        bjdtdb = barycorrpy.utc_tdb.JDUTC_to_BJDTDB(JDUTC=jd,ra=ra,dec=dec,obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],pmra=params['pmra'],
-                                        pmdec=params['pmdec'],px=0,rv=0.0,epoch=params['epoch'],ephemeris=ephemeris2,leap_update=leap_update)           # only precise to 0.2s 
+        bjdtdb = barycorrpy.utc_tdb.JDUTC_to_BJDTDB(JDUTC=jd,ra=params['ra'],dec=params['dec'],obsname=site,lat=params['latitude'],longi=params['longitude'],alt=params['altitude'],
+                                        pmra=params['pmra'],pmdec=params['pmdec'],px=0,rv=0.0,epoch=params['epoch'],
+                                        ephemeris=ephemeris2,leap_update=leap_update)           # only precise to 0.2s; doesn't accept , SolSystemTarget=
         bjd = bjdtdb[0][0]
 
         im_head['HIERARCH HiFLEx BJDTDB'] = (round(bjd,6), 'Baryc. cor. JD (incl leap seconds)')     # without leap seconds: remove 32.184+N leap seconds after 1961'
 
     logger(('Info: Using the following data for object name(s) {10}, Observatory site {9}, mid exposure MJD {11}: '+\
-                    'altitude = {0}, latitude = {1}, longitude = {2}, ra = {3}, dec = {4}, epoch = {5}, pmra = {13}, pmdec = {14}. {8} {6} '+\
-                    'This leads to a barycentric velocity of {7} km/s and a mid-exposure BJD-TDB of {12}').format(params['altitude'], params['latitude'], params['longitude'], 
-                         round(ra,6), round(dec,6), params['epoch'], source_radec, round(bcvel_baryc,4), source_obs, 
+                    'latitude = {1}, longitude = {2}, altitude = {0}, ra = {3}, dec = {4}, epoch = {5}, pmra = {13}, pmdec = {14}. {8} {6} '+\
+                    'This leads to a barycentric velocity of {7} km/s and a mid-exposure BJD-TDB of {12}.').format(params['altitude'], params['latitude'], params['longitude'], 
+                         round(params['ra'],6), round(params['dec'],6), params['epoch'], source_radec, round(bcvel_baryc,4), source_obs, 
                          params['site'], obnames[0], mjd, round(bjd,5), params['pmra'], params['pmdec'] ))
        
     return params, bcvel_baryc, mephem, im_head, obnames
@@ -10279,7 +10306,7 @@ def prepare_for_rv_packages(params):
         if 'path_rv_terra' in params.keys():
             # CSV file for TERRA
             fname = params['path_rv_terra']+obj_name+os.sep+'data'+os.sep+obsdate_midexp.strftime('%Y-%m-%d%H%M%S')
-            save_spec_csv(spec[params['dataset_rv_analysis'][0]], spec[0], spec[7], fname)        # spec[1]: Flux, spec[5]: Continuum corrected     # spec, wavelengths, good_px_mask
+            save_spec_csv(spec[params['dataset_rv_analysis'][0]], spec[0], spec[7], fname)        # spec[1]: Flux, spec[5]: Continuum corrected     # spec, wavelengths (dataset 0 with BCV), good_px_mask
         if 'path_rv_serval' in params.keys():
             # Store in a text file for serval
             numbers_levels = params['path_rv_serval'].count(os.sep, 2)          # start at 2 to not count './'
@@ -10459,10 +10486,11 @@ def run_serval_rvs(params,):
             servalparams[key] = int(servalparams[key])
         except:
             del servalparams[key]
+
     servalparams['orders'] = min( servalparams.get('orders', calimages['wave_sol_dict_sci']['wavesol'].shape[0]), calimages['wave_sol_dict_sci']['wavesol'].shape[0] )    # always use the number of orders, in case in an old file all orders were used and now less
     servalparams['data_dataset'] = servalparams.get('data_dataset', params['dataset_rv_analysis'][0])
     servalparams['error_dataset'] = servalparams.get('error_dataset', params['dataset_rv_analysis'][1])
-    servalparams['wave_dataset'] = servalparams.get('wave_dataset', 9)
+    servalparams['wave_dataset'] = servalparams.get('wave_dataset', 9)          # dataset 9: no BCV correction
     servalparams['mask_dataset'] = servalparams.get('mask_dataset', 7)
     servalparams['order_snr'] = servalparams.get('order_snr', int(calimages['wave_sol_dict_sci']['wavesol'].shape[0]/2) )
     with open(hiflex_file, 'w') as file:

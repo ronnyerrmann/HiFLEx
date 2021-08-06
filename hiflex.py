@@ -353,7 +353,7 @@ if __name__ == "__main__":
     remove_orders, keep_orders = remove_orders_low_flux(params, flat_spec_norm)
     calimages['flat_spec_norm'] = copy.deepcopy( flat_spec_norm )
     if len(remove_orders) > 0:
-        calimages = remove_orders_from_calimages(params, keep_orders)            # remove the bad orders
+        remove_orders_from_calimages(params, calimages, keep_orders)            # remove the bad orders
     """calimages['flat_spec_norm'] = copy.deepcopy( flat_spec_norm )
     calimages['wave_sol_dict'] = copy.deepcopy( wave_sol_dict )
     calimages['wavelength_solution'] = copy.deepcopy( wave_sol_dict['wavesol'] )    # Needed for templates later"""
