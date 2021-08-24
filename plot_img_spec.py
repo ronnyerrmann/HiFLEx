@@ -289,7 +289,7 @@ def plot_spectra_UI(im, title=''):
         #print "param['name_data_{0}'.format(iml-1-1)]",param['name_data_{0}'.format(iml-1-1)]
         settings = dict()
         for entry in param.keys():
-            if entry.find('plot_sub_') == 0 or entry.find('exclude_') == 0 or entry in ['wavelength_bool', 'plot_format', 'reset_plot', 'draw_legend', 'draw_filenames', 'xlabel', 'ylabel']:
+            if entry.find('plot_sub_') == 0 or entry.find('exclude_') == 0 or entry in ['wavelength_bool', 'plot_format', 'reset_plotx', 'reset_ploty', 'draw_legend', 'draw_filenames', 'xlabel', 'ylabel']:
                 settings[entry] = param[entry]
         save_obj(settings, 'plot_settings')
         plot_ranges = [1E10,0,1E10,0]
@@ -380,13 +380,15 @@ def plot_spectra_UI(im, title=''):
                     plot_ranges[2] = min(plot_ranges[2], min(data))
                     plot_ranges[3] = max(plot_ranges[3], max(data))
         
-        if x_range != (0.0, 1.0) and y_range != (0.0, 1.0) and old_xlabel_text==xlabel_text and param['reset_plot']==False:
-            plt.axis([x_range[0], x_range[1], y_range[0], y_range[1]])
-        else:
-            dx = (plot_ranges[1] - plot_ranges[0])*0.01
+        if param['reset_ploty'] or y_range == (0.0, 1.0):
             dy = (plot_ranges[3] - plot_ranges[2])*0.01
-            plt.axis([plot_ranges[0]-dx,plot_ranges[1]+dx, plot_ranges[2]-dy, plot_ranges[3]+dy])
-            param['reset_plot']=True
+            y_range = (plot_ranges[2]-dy, plot_ranges[3]+dy)
+            param['reset_ploty'] = True
+        if old_xlabel_text != xlabel_text or param['reset_plotx'] or x_range == (0.0, 1.0):
+            dx = (plot_ranges[1] - plot_ranges[0])*0.01
+            x_range = (plot_ranges[0]-dx,plot_ranges[1]+dx)
+            param['reset_plotx'] = True    
+        plt.axis([x_range[0], x_range[1], y_range[0], y_range[1]])
         ylabel_text = 'flux [ADU]'
         if len(param['xlabel']) > 0:
             xlabel_text = param['xlabel']
@@ -466,9 +468,12 @@ def plot_spectra_UI(im, title=''):
                                 kind='CheckBox', start=startb)
         pkwargs['plot_sub_{0}'.format(i)] = starta
         pkwargs['exclude_{0}'.format(i)] = startb
-    pkwargs['reset_plot'] = settings.get('reset_plot', False)
-    widgets['reset_plot'] = dict(label='reset plot',
-                                kind='CheckBox', start=pkwargs['reset_plot'])
+    pkwargs['reset_plotx'] = settings.get('reset_plotx', False)
+    widgets['reset_plotx'] = dict(label='reset plot x',
+                                kind='CheckBox', start=pkwargs['reset_plotx'])
+    pkwargs['reset_ploty'] = settings.get('reset_ploty', False)
+    widgets['reset_ploty'] = dict(label='reset plot y',
+                                kind='CheckBox', start=pkwargs['reset_ploty'])
     pkwargs['draw_legend'] = settings.get('draw_legend', True)
     widgets['draw_legend'] = dict(label='draw legend',
                                 kind='CheckBox', start=pkwargs['draw_legend'])
