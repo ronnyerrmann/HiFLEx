@@ -212,7 +212,11 @@ def plot_points(data_x, data_y, labels, spaths, show=False, adjust=[0.05,0.95,0.
     plot_legend = False
     for i in range(len(data_x)):
         if len(labels) > 0:
-            label = labels[i]
+            if len(labels) > i:
+                label = labels[i]
+            else:
+                print('Warn: No label for dataset {0}'.format(i))
+                label = None
         if label == '':
             label = None
         if label is not None:

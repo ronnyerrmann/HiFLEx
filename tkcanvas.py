@@ -448,8 +448,11 @@ class TkCanvas:
         # apply function
         if self.func is not None:
             self.update_func()
-
-        self.ax.figure.canvas.draw()
+        if type(self.ax).__name__ in ['numpy.ndarray', 'ndarray']:
+            for ii in range(self.ax.shape[0]):
+                self.ax[ii].figure.canvas.draw()
+        else:
+            self.ax.figure.canvas.draw()
 
     def update_func(self):
         # set working message

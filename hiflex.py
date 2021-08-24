@@ -70,7 +70,7 @@ if __name__ == "__main__":
                 sci_tr_poly, widths = update_tr_poly_width_multiplicate(sci_tr_poly, widths, [widths_new[:,0]/widths[:,0], widths_new[:,1]/widths[:,1]], xlows, xhighs)
                 widths = widths_new
                 logger('Info: widths of the traces have been updated')
-            dummy, sci_tr_poly, widths, xlows, xhighs = remove_adjust_orders_UI( scale_image_plot(im_trace1, 'log10'), sci_tr_poly, xlows, xhighs, widths, userinput=params['GUI'], do_adj=True)
+            dummy, sci_tr_poly, widths, xlows, xhighs = proc_gui.remove_adjust_orders_UI( scale_image_plot(im_trace1, 'log10'), sci_tr_poly, xlows, xhighs, widths, userinput=params['GUI'], do_adj=True)
             printresults = True
         if printresults:
             # save parameters of the polynoms into a fitsfile (from Neil)
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         cal_tr_poly, awidths, axlows, axhighs = np.array(cal_tr_poly), copy.deepcopy(widths), copy.deepcopy(xlows), copy.deepcopy(xhighs)
         
         # check the shift between the original solution and arc using a GUI
-        dummy, cal_tr_poly, awidths, axlows, axhighs = remove_adjust_orders_UI(scale_image_plot(im_trace2, 'log10'), cal_tr_poly, axlows, axhighs, awidths, shift=0, userinput=params['GUI'], do_adj=True, do_shft=True)
+        dummy, cal_tr_poly, awidths, axlows, axhighs = proc_gui.remove_adjust_orders_UI(scale_image_plot(im_trace2, 'log10'), cal_tr_poly, axlows, axhighs, awidths, shift=0, userinput=params['GUI'], do_adj=True, do_shft=True)
         
         # save parameters of the polynoms into a fitsfile (from Neil)
         save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_trace_cal_filename'])
@@ -217,7 +217,7 @@ if __name__ == "__main__":
                 limit_search_space = False
                 if os.path.isfile(params['original_master_wavelensolution_filename']) == False:                                             # Create a new solution
                     params['px_to_wavelength_file'] = params.get('px_to_wavelength_file', 'pixel_to_wavelength.txt')                            # Backwards compatible
-                    wave_sol_dict = create_new_wavelength_UI(params, cal_l_spec, cal_s_spec, arc_lines_px, reference_lines_dict)
+                    wave_sol_dict = proc_gui.create_new_wavelength_UI(params, cal_l_spec, cal_s_spec, arc_lines_px, reference_lines_dict)
                     save_wavelength_solution_to_fits(wave_sol_dict, params['original_master_wavelensolution_filename'])               # For a new wavelength solution
                     plot_wavelength_solution_form(params['logging_wavelength_solution_form'].replace('.png','')+'_manual.png', calimages['{0}_trace'.format(calib[2])], wave_sol_dict['wavesol'])
                     plot_wavelength_solution_spectrum(params, cal_l_spec, cal_s_spec,params['logging_arc_line_identification_spectrum'].replace('.pdf','')+'_manual.pdf',
@@ -232,7 +232,7 @@ if __name__ == "__main__":
                     params['px_offset_order'] = [-0.2,0.2,0.1]
                 wave_sol_ori_dict = read_wavelength_solution_from_fits(params['original_master_wavelensolution_filename'])
                  # Find the new wavelength solution
-                wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_ori_dict['wavesol'], 
+                wave_sol_dict = adjust_wavelength_solution(params, cal_l_spec, cal_s_spec, arc_lines_px, wave_sol_ori_dict['wavesol'], 
                                                            wave_sol_ori_dict['reflines'], params['original_master_wavelensolution_filename'],
                                                            reference_lines_dict, calimages['{0}_trace'.format(calib[2])], show_res=params['GUI'], search_order_offset=True)
                 done_sci = True
@@ -240,7 +240,7 @@ if __name__ == "__main__":
                 params['order_offset'] = [0,0]
                 params['px_offset'] = [-60,60,10]
                 params['px_offset_order'] = [-0.2,0.2,0.1]
-                wave_sol_dict = adjust_wavelength_solution(params, np.array(cal_l_spec), arc_lines_px, wave_sol_dict['wavesol'], 
+                wave_sol_dict = adjust_wavelength_solution(params, cal_l_spec, cal_s_spec, arc_lines_px, wave_sol_dict['wavesol'], 
                                                            wave_sol_dict['reflines'], 'Science fiber wavelength solution',
                                                            reference_lines_dict, calimages['{0}_trace'.format(calib[2])], show_res=params['GUI'], search_order_offset=False)
             save_wavelength_solution_to_fits(wave_sol_dict, params['master_wavelensolution'+calib[0]+'_filename'])
@@ -412,7 +412,7 @@ if __name__ == "__main__":
         # Load all the wavelength solutions
         last_shape = None
         for wavesol in sorted(os.listdir(params['path_extraction'])):
-            if not wavesol.endswith(".fits"):                  continue
+            if not wavesol.endswith(".fits"):      continue
             if wavesol.find('_wavesol_') == -1:    continue
             fib = wavesol.rsplit('_',1)[-1].replace('.fits','')
             jd_midexp = float( wavesol.split('_wavesol_')[-1].replace('_{0}.fits'.format(fib),'') )

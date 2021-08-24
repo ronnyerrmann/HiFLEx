@@ -3,6 +3,13 @@
 
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'       # to avoid "OMP: Error #15: Initializing libiomp5md.dll, but found libiomp5md.dll already initialized." when curve_fit is executed in windows
+import sys
+import time
+import datetime
+import operator
+import copy
+import random
+import warnings
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
@@ -11,17 +18,12 @@ import astropy.coordinates as astcoords
 import astropy.units as astunits
 from astropy.utils.exceptions import AstropyUserWarning
 #import astropy.constants as astconst
-import matplotlib
-matplotlib.use('agg')    # Otherwise keeps hanging when using CERES; GUIs work, but plt.show() won't; matplotlib.interactive(True) doesn't show
+if sys.version_info[0] < 3:     # Python 2
+    import matplotlib
+    matplotlib.use('agg')    # Otherwise keeps hanging when using CERES; GUIs work, but plt.show() won't; matplotlib.interactive(True) doesn't show
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-import sys
-import time
-import datetime
-import operator
-import copy
-import random
-import warnings
+
 from scipy.optimize import curve_fit            # Curve-fit Gauss takes the longest: 20ms
 # import scipy.interpolate as inter             # Not used anymore
 import scipy
@@ -31,15 +33,12 @@ try:
 except:
     print('Error: tqdm could not be loaded. Did you activate the Anaconda hiflex environment?')
     exit(1)
-import tkcanvas as tkc
 import json
 # detect python version
 if sys.version_info[0] < 3:     # Python 2
-    import Tkinter as Tk
     from collections import OrderedDict as dict
     import urllib2
 else:                           # Python 3
-    import tkinter as Tk
     import urllib
     raw_input = input
 if sys.version_info[0] == 3 and sys.version_info[1] >= 5:
@@ -104,6 +103,8 @@ if not success:
 import glob
 import pickle
 import platform
+import proc_gui
+from proc_general import *
 
 """ This was thought to be a way to improve calculation speed when calculating gaussians. However, even with declearing all variables it didn't speed up calculations
 try:
@@ -502,27 +503,6 @@ def log_returncode(code, explain=''):
 #    """
 #    global calimages
 #    calimages[key] = copy.deepcopy(value)
-
-def nanminmax(data, axis=None):
-    """
-    returns the minimum and maximum of a list or array
-    """
-    return [np.nanmin(data, axis=axis), np.nanmax(data, axis=axis)]
-
-def round_sig(value, sig=5):
-    """
-    Rounds to a significant number, e.g. to have 5 digits
-    :param value: number
-    :param sig: int, number of dgits allowed
-    :return rounded: float, rounded to the number of sig digits
-    """
-    if np.isnan(value) or np.isinf(value):
-        return value
-    if value == 0.0:
-        return value
-    rounded = round(value, sig-int(np.floor(np.log10(abs(value))))-1)
-    
-    return rounded
 
 def sort_for_multiproc_map(inputlist, number_cores):
     """
@@ -2409,7 +2389,7 @@ def find_trace_orders(params, im, imageshape):
     #searchnumbers = np.sum(im >= breakvalue+bright10, axis=None)     # At most so many searches
     searchnumbers = np.sum( (im >= breakvalue), axis=None)     # At most so many searches
     searchnumbers = searchnumbers *0.12 / maxFWHM       # FWHM pixel are bright, 90% along the length of an order is brighter than seachnumbers -> less area to search; 0.1 was not enough for 20210331
-    for dummy in tqdm(range(int(searchnumbers)), desc='Searching for traces (will speed up after 2%)'):      # 2600 is necessary for the tight orders using Clark's lens and a low diffraction prism
+    for dummy in tqdm(range(int(searchnumbers)), desc='Searching for traces (will speed up after 100 steps)'):      # 2600 is necessary for the tight orders using Clark's lens and a low diffraction prism
         pos_max = np.unravel_index(im.argmax(), ims)
         if im_orig[pos_max] <= breakvalue:
             break
@@ -4659,7 +4639,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
         polyfits, xlows, xhighs, dummy = read_fits_width(params['logging_traces_binned'])
     else:
         # make flat smaller: combine px in spatial direction
-        params['bin_search_apertures'] = adjust_binning_UI(im_sflat, params['bin_search_apertures'], userinput=params['GUI'])
+        params['bin_search_apertures'], params['traces_searchlimit_brightness'], params['traces_min_separation'] = proc_gui.adjust_binning_UI(im_sflat, params['bin_search_apertures'], params['traces_searchlimit_brightness'], params['traces_min_separation'], userinput=params['GUI'])
         params['binx'], params['biny'] = params['bin_search_apertures']             # Required for find_trace_orders        
         sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_search_apertures'], method='mean' )
         save_im_fits(params, sim_sflat, im_sflat_head, params['logging_trace1_binned'])
@@ -4671,17 +4651,18 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
         plot_traces_over_image(im_sflat_log10, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
     if params['GUI']:
         logger('Step: Allowing user to remove orders')
-        fmask, polyfits, dummy, xlows, xhighs = remove_adjust_orders_UI( im_sflat_log10, polyfits, xlows, xhighs, userinput=params['GUI'], do_rm=True, do_add=True)
+        fmask, polyfits, dummy, xlows, xhighs = proc_gui.remove_adjust_orders_UI( im_sflat_log10, polyfits, xlows, xhighs, userinput=params['GUI'], do_rm=True, do_add=True)
         polyfits, xlows, xhighs = polyfits[fmask], xlows[fmask], xhighs[fmask]
+        save_fits_width(polyfits, xlows, xhighs, [], params['logging_traces_binned'])
         plot_traces_over_image(im_sflat_log10, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
     # retrace orders in the original image to finetune the orders
-    params['bin_adjust_apertures'] = adjust_binning_UI(im_sflat, params['bin_adjust_apertures'], userinput=params['GUI'])
+    params['bin_adjust_apertures'] = proc_gui.adjust_binning_UI(im_sflat, params['bin_adjust_apertures'], userinput=params['GUI'])
     params['binx'], params['biny'] = params['bin_adjust_apertures']
     sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_adjust_apertures'])        # Not saved
     polyfits, xlows, xhighs, widths = adjust_trace_orders(params, sim_sflat, im_sflat, polyfits, xlows, xhighs)
     if params['GUI']:
         logger('Step: Allowing user to remove orders and to adjust the extraction width')
-        fmask, polyfits, widths, xlows, xhighs = remove_adjust_orders_UI( im_sflat_log10, polyfits, xlows, xhighs, widths, userinput=params['GUI'], do_rm=True, do_adj=True, do_add=True)
+        fmask, polyfits, widths, xlows, xhighs = proc_gui.remove_adjust_orders_UI( im_sflat_log10, polyfits, xlows, xhighs, widths, userinput=params['GUI'], do_rm=True, do_adj=True, do_add=True)
         polyfits, xlows, xhighs, widths = polyfits[fmask], xlows[fmask], xhighs[fmask], widths[fmask]      
 
     return polyfits, xlows, xhighs, widths
@@ -6119,12 +6100,14 @@ def plot_overlapping_orders(order, x_full, y1_full, y2_full=None, labels=[]):
         if order < x_full.shape[0]-1:
             x_data.insert(0, x_full[order+1,:])
             y_data.insert(0, y1_full[order+1,:])
-            label.insert(0, 'next order')
+            if len(labels) > 0:
+                label.insert(0, 'next order')
             color.insert(0, 'lightgrey')
         if order > 0:
             x_data.insert(0, x_full[order-1,:])
             y_data.insert(0, y1_full[order-1,:])
-            label.insert(0, 'prev. order')
+            if len(labels) > 0:
+                label.insert(0, 'prev. order')
             color.insert(0, 'silver')
     return x_data, y_data, label, color
 
@@ -6382,637 +6365,6 @@ def plot_hist_residuals_wavesol(fname, data, indexes):
     plot_img_spec.plot_points(data_x, data_y, label, [fname], show=False, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01], 
                               return_frame=False, title=text, x_title='Difference [px]', y_title='Count per bin', linestyle="-", marker="")       
 
-def bck_px_UI(params, im_orig, pfits, xlows, xhighs, widths, w_mult, userinput=True):    # not used anymore
-    fig, frame = plt.subplots(1, 1)
-    def plot(frame, im_orig, pfits, xlows, xhighs, widths, w_mult):
-        frame.clear()
-        try:
-            w_mult = float(gui3.data['width_multiplier'])
-        except:
-            w_mult = w_mult
-        title = ('Determine area for the background, width_multiplier = {0})'.format(w_mult))
-        im_bck_px = find_bck_px(im_orig, pfits, xlows, xhighs, widths, w_mult)
-        plot_img_spec.plot_image(im_orig*im_bck_px, ['savepaths'], 1, True, [0.05,0.95,0.95,0.05], title, return_frame=True, frame=frame, colorbar=False)
-        #frame.set_title(title)
-    # get kwargs
-    pkwargs = dict(frame=frame, im_orig = im_orig, pfits = pfits, xlows = xlows, xhighs = xhighs, widths = widths, w_mult = w_mult)
-    # run initial update plot function
-    plot(**pkwargs)
-    
-    # define valid_function
-    # input is one variable (the string input)
-    # return is either:
-    #   True and values
-    # or
-    #   False and error message
-    def vfunc(xs):
-        try:
-            w_mult = float(xs)
-            return True, w_mult
-        except:
-            return False, ('Error, input must consist of a float')
-    # define widgets
-    widgets = dict()
-    widgets['width_multiplier'] = dict(label='Multiplier to the measured width',
-                                comment='The area of the measured width{0}of the trace times this value{0}on either side of the trace{0}will be excluded from the{0}background map'.format(os.linesep) ,
-                                kind='TextEntry', minval=0, maxval=None,
-                                fmt=str, start=str(w_mult), valid_function=vfunc,
-                                width=10)
-
-    widgets['accept'] = dict(label='Accept Map', kind='ExitButton', position=Tk.BOTTOM)
-    widgets['update'] = dict(label='Update', kind='UpdatePlot', position=Tk.BOTTOM)
-
-    wprops = dict(orientation='v', position=Tk.RIGHT)
-
-    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='HiFlEx: Determine area for the background', widgets=widgets,
-                        widgetprops=wprops)
-    
-    gui3.master.mainloop()
-    
-    params['width_multiplier'] = float(gui3.data['width_multiplier'])
-
-    im_bck_px = find_bck_px(im_orig, pfits, xlows, xhighs, widths, params['width_multiplier'])
-    #gui3.destroy 
-    plt.close()
-    return im_bck_px, params
-
-def create_new_wavelength_UI( params, cal_l_spec, cal_s_spec, arc_lines_px, reference_lines_dict, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01] ):   
-    """
-    :param arc_lines_px: numpy arry of floats: order, pixel, width, height of the line
-    """
-    reference_catalog, reference_names = reference_lines_dict['reference_catalog'][0], reference_lines_dict['reference_names'][0]
-    px_to_wave_txt = read_text_file(params['px_to_wavelength_file'], no_empty_lines=True, warn_missing_file=False)              # list of strings
-    if len(px_to_wave_txt) == 0:
-        px_to_wave_txt = read_text_file(params['logging_path']+'tmp_'+params['px_to_wavelength_file'], no_empty_lines=True, warn_missing_file=False)              # list of strings
-    px_to_wave = np.array( convert_readfile(px_to_wave_txt, [int, int, float, float], delimiter='\t', replaces=[['\n',''],[os.linesep,'']], shorten_input=True, replacewithnan=True ))     # order, real order, px, wave
-    if px_to_wave.shape[0] > 0:
-        px_to_wave = px_to_wave[~np.isnan(px_to_wave[:,0]),:]   # clear the values that don't have order number
-
-    nr_entries = len(px_to_wave)
-    if nr_entries > 0:
-        order_offset = np.nan
-        if np.prod( np.isnan(px_to_wave[:,1]) ) == 0:
-            order_offset = int(np.nanmedian(px_to_wave[:,1] - px_to_wave[:,0]))
-        px_to_wave = np.hstack(( px_to_wave, np.zeros((nr_entries,2))*np.nan, np.expand_dims(np.arange(nr_entries), axis=1), np.zeros((nr_entries,1))*np.nan  ))     # order, real order, px, wave, width, height of line, index, nan
-        order = -1E6
-        for entry in arc_lines_px:
-            if entry[0] != order:       # So this step is only done when neccessary 
-                order = entry[0]
-                px_to_wave_sub = px_to_wave[ px_to_wave[:,0] == order, : ]
-            diff = np.abs(px_to_wave_sub[:,2] - entry[1])
-            posi = np.where(diff < 2)[0]
-            if len(posi) >= 1:
-                index = int(px_to_wave_sub[posi[0], 6])      # first entry as highest signal, not min(diff)
-                px_to_wave[index,4] = entry[2]
-                px_to_wave[index,5] = entry[3]
-            else:
-                px_to_wave = np.vstack(( px_to_wave, [order, order+order_offset, entry[1], np.nan, entry[2], entry[3], len(px_to_wave), np.nan ] ))
-    else:
-        order_offset = np.nan
-        tmp = arc_lines_px[:,0]*np.nan
-        px_to_wave = np.vstack(( arc_lines_px[:,0], tmp, arc_lines_px[:,1], tmp, arc_lines_px[:,2], arc_lines_px[:,3], tmp, tmp )).T
-    
-    px_to_wave[np.isnan(px_to_wave[:,4]),4] = -1
-    px_to_wave[np.isnan(px_to_wave[:,5]),5] = -1
-    px_to_wave[:,6] = np.nan
-    order = int(len(cal_l_spec)/2)
-    
-    fig, ax = plt.subplots(3, 1, gridspec_kw={'height_ratios': [2, 5, 2]})
-    gui3 = tkc.TkCanvasGrid(figure=None, ax=None, func=None, title='HiFLEx: Test', kwargs=dict(), widgets=dict(), widgetprops=dict() )      # Only to get the display size
-    dpi=100
-    fig.set_dpi(dpi)
-    fig.set_size_inches( (int(gui3.screen_w_h[0]) - 400)/dpi, (int(gui3.screen_w_h[1])-90)/dpi, forward=True)     # Make the plot as big as possible
-    tkc.TkCanvasGrid.end(gui3)
-    plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
-    pkwargs = dict()
-    
-    def mark_line_in_GUI(px):
-        gui3.repopulate()
-        px_to_wave = pkwargs['px_to_wave']
-        px_to_wave_sub = px_to_wave[ px_to_wave[:,0] == pkwargs['order'], : ]
-        match = np.where( np.abs(px_to_wave_sub[:,2] - px) < 20)[0]
-        if len(match) == 0:
-            unmark_line_in_GUI()
-        else:
-            index = match[0]
-            for widget in gui3.ws.keys():
-                if widget.find('wave_') > -1:
-                    try:
-                        number = int(widget.replace('wave_',''))
-                    except:
-                        continue
-                    if number != index:
-                        gui3.ws[widget].config(state=Tk.DISABLED)
-        
-    def unmark_line_in_GUI():
-        gui3.repopulate()
-    
-    def onclick(event):
-        #print('clicked',event.xdata, event.ydata, event.inaxes)
-        if event.xdata is None or event.ydata is None:
-            unmark_line_in_GUI()
-        else:
-            px = event.xdata
-            mark_line_in_GUI(px)
-
-    def plot(ax, cal_l_spec, cal_s_spec, px_to_wave, order, **pkwarks):
-        for ii in range(3):
-            ax[ii].clear()
-            ordii = order+ii-1
-            if ordii < 0 or ordii >= len(cal_l_spec):         # outside of useful range
-                continue
-            y1 = adjust_data_log( cal_l_spec[ordii,:] )
-            y2 = adjust_data_log( cal_s_spec[ordii,:] )
-            x = list(range(len(y1)))
-            title   = None
-            labels  = []
-            x_title = ''
-            y_title = 'log ( Flux [ADU] )'
-            if ii == 0:
-                title = 'Plot of the spectrum for previous ({0}), actual ({1}), and next order ({2})'.format(order-1, order, order+1)
-                labels = ['long'+os.linesep+'exp', 'short'+os.linesep+'exp']
-            if ii == 2:
-                x_title = 'Dispersion direction [px]'
-            ax[ii] = plot_img_spec.plot_points([x,x], [y1,y2], labels, [], show=False, adjust=[0.05,0.99,0.97,0.05, 0.92,1.2], title='', return_frame=True, frame=ax[ii], x_title=x_title, y_title=y_title, linestyle="-", marker="")
-            
-            pctl = 2./len(y1)*100                   # Exclude the two highest and two lowest points
-            xmin, xmax = np.nanmin(x), np.nanmax(x)
-            ymin1, ymax1 = np.nanpercentile(y1, pctl), np.nanpercentile(y1, 100-pctl)
-            ymin2, ymax2 = np.nanpercentile(y2, pctl), np.nanpercentile(y2, 100-pctl)
-            ymin, ymax = min(ymin1, ymin2), max(ymax1, ymax2)
-            y_range = ymax - ymin
-            x_range = xmax - xmin
-            if np.isnan(y_range) or np.isnan(x_range):
-                continue
-            ax[ii].set_ylim([ymin-y_range*0.01, ymax+y_range*0.01])
-            ax[ii].set_xlim([xmin-x_range*0.02, xmax+x_range*0.02])
-            title = {0:'Previous', 1:'', 2:'Next'}[ii]
-            ax[ii].set_title('{0} Order: {1}'.format(title, ordii), fontsize=11)
-            
-            # Plot the wavelengths from the reference list
-            px_to_wave_sub = px_to_wave[ px_to_wave[:,0] == ordii, : ]
-            if ii == 1:
-                goodentries = 0
-            else:
-                goodentries = 1E6           # to only plot the identified lines
-            for jj, entry in enumerate(px_to_wave_sub):
-                if entry[3] is np.nan or str(entry[3]) == 'nan':
-                    if goodentries > pkwargs['max_lines_list']:
-                        continue
-                    text = '{0}'.format(round(entry[2],1))
-                    color = 'g'
-                    goodentries += 1
-                else:
-                    if ii == 1:
-                        text = '{0} - {1}'.format(round(entry[2],1), round(entry[3],4))     # px and wave
-                    else:
-                        text = '{0}'.format(round(entry[3],4))                              # wave
-                    color = 'r'
-                ax[ii].plot( [entry[2],entry[2]], [ymin,ymin+y_range*0.01], color=color )
-                ax[ii].text( entry[2], ymin+y_range*0.015, text, fontsize=8, 
-                                    horizontalalignment='center', verticalalignment='bottom', rotation=90, color=color, zorder=5 )
-
-            x_f = np.arange(xmin-x_range*0.02, xmax+x_range*0.02, 0.01)
-            w_fa, w_fl = [], []
-            if 'poly_lin_{0}'.format(ordii) in pkwargs.keys() and ii == 1:
-                    w_fl = np.polyval(pkwargs['poly_lin_{0}'.format(ordii)], x_f)           # Linear fit
-            if 'wavelength_solution' in pkwargs.keys():       # when wavelength solution is not available
-                    wavelength_solution = pkwargs['wavelength_solution']
-                    w_fa = np.polyval(wavelength_solution[ordii,2:], x_f-wavelength_solution[ordii,1])  # Fit all wavelengths
-            if len(reference_catalog) == 0:
-                    continue
-            pos_index = 0
-            ytop = ymax+y_range*0.01
-            if np.sum(~np.isnan(px_to_wave_sub[:,3])) == 0 and px_to_wave_sub.shape[0] > 0:
-                px_to_wave_sub[0,3] = -10000                    # Dummy wavelength
-            for kk, w_f in enumerate([w_fl, w_fa]):
-                if len(w_f) < 10:
-                    continue
-                inorder = (reference_catalog[:,0] >= np.min(w_f)) & (reference_catalog[:,0] <= np.max(w_f))
-                reference_catalog_sub = np.array(sorted(reference_catalog[inorder,:], key=operator.itemgetter(1), reverse=True ))
-                if len(reference_catalog_sub) == 0:
-                    continue
-                y_scale = y_range / (np.max(reference_catalog_sub[:,1])+0.0)
-                pos_index += 1
-                num_notident = 1
-                for color in {0:['b', 'r'], 1:['g', 'r']}[kk]:        # plot the green/blue lines before the red ones
-                    for jj,refline in enumerate(reference_catalog_sub):
-                        if np.nanmin(np.abs(refline[0] - px_to_wave_sub[:,3])) < 1E-2:
-                            if color != 'r':
-                                continue        # don't plot a matching line when it's not red lines to be plotted
-                        else:
-                            if color == 'r':
-                                continue        # don't plot the non matching lines when red lines to be plotted
-                            if num_notident > pkwargs['max_reflines']:
-                                break           # stop plot non-matching lines
-                            num_notident += 1   
-                        index = np.argmin(np.abs(refline[0] - w_f))
-                        x_pos = x_f[index]
-                        #if np.isnan(spec1[order, x_position]):
-                        #    continue
-                        #y_position = np.nanmax(spec1[order, max(0,x_position-2):min(len(spec1[order,:]),x_position+2)])
-                        #??? = max(y_pos, y_position+0.23*y_range)
-                        text = '{0} - {1}'.format( round(refline[0],2+2*kk), reference_names[int(refline[2])] )
-                        if kk == 0:                                         # Text below marker
-                            y1 = [ymax, ymax+y_range*0.005+y_scale*0.03*refline[1]]
-                            y2 = ymax
-                            align = 'top'
-                            ytop = max(y1[1], ytop)
-                        else:                                               # Text above marker
-                            y_pos = ymax - y_range*0.47                        # where is the second line
-                            y1 = [y_pos-y_scale*0.03*refline[1]-y_range*0.005, y_pos]
-                            y2 = y_pos+y_range*0.01
-                            align = 'bottom'
-                        ax[ii].plot( [x_pos,x_pos], y1, color=color )
-                        ax[ii].text( x_pos, y2, text, fontsize=8, horizontalalignment='center', verticalalignment=align, rotation=90, color=color, zorder=5 )
-            ax[ii].set_ylim([ymin-y_range*0.01, ytop])
-    
-    def calculate_linear_solution(pkwargs, order=None):
-        px_to_wave = pkwargs['px_to_wave']
-        if order is None:
-            orders = np.unique(px_to_wave[:,0]).astype(int)
-        else:
-            orders = [order]
-        for order in orders:
-            inorder = px_to_wave[:,0] == order
-            px_to_wave_sub = px_to_wave[ inorder, : ]
-            good_values = ~np.isnan(px_to_wave_sub[:,3])
-            if np.sum(good_values) <= 1:
-                px_to_wave[inorder,7] = np.nan
-                if 'poly_lin_{0}'.format(order) in pkwargs.keys():
-                    del pkwargs['poly_lin_{0}'.format(order)]
-                continue
-            poly = np.polyfit( px_to_wave_sub[good_values,2], px_to_wave_sub[good_values,3], 1)     # 1 for linear fit
-            px_to_wave[inorder,7] = np.polyval(poly, px_to_wave[inorder,2])
-            pkwargs['poly_lin_{0}'.format(order)] = poly
-        pkwargs['px_to_wave'] = px_to_wave
-        return pkwargs
-    
-    def calculate_wavesolution_calc(px_to_wave, cal_l_spec):
-        px_to_wave_sub = px_to_wave[ ~np.isnan(px_to_wave[:,3]), : ]
-
-        wavelength_solution, wavelength_solution_arclines = fit_basic_wavelength_solution(params, px_to_wave_sub, cal_l_spec, 'GUI')
-        # can be [], [], in case there are not enough lines
-        
-        for order in range(len(wavelength_solution)):
-            values_order = px_to_wave[:,0] == order
-            px_to_wave_sub = px_to_wave[ values_order, : ]
-            px_to_wave[ values_order, 6 ] = np.polyval(wavelength_solution[order,2:], px_to_wave[ values_order, 2 ]-wavelength_solution[order,1])
-        return px_to_wave, wavelength_solution, wavelength_solution_arclines
-    
-    def calculate_wavesolution():
-        update_order(updateplot=False)                      # To make sure the data is read again
-        px_to_wave = pkwargs['px_to_wave']
-        if np.sum(np.isnan(px_to_wave[:,1])) > 0:
-            gui3.prompt('The order offset is not yet defined.{0}{0}Please insert the correct number.'.format(os.linesep))
-            return
-        pkwargs['wavelength_solution_info'] = True
-        px_to_wave, wavelength_solution, wavelength_solution_arclines = calculate_wavesolution_calc(px_to_wave, cal_l_spec)
-        if len(wavelength_solution) == 0:
-            return
-        pkwargs['px_to_wave']                   = px_to_wave
-        pkwargs['wavelength_solution']          = wavelength_solution
-        pkwargs['wavelength_solution_arclines'] = wavelength_solution_arclines
-        # Replot
-        """gui3.funkwargs['notclose'] = True
-        tkc.TkCanvasGrid.end(gui3)          # will update also the plot"""
-        if pkwargs['wavelength_solution_info']:
-            gui3.prompt_info(calimages['wavelength_solution_result_text'], width=600)
-            pkwargs['wavelength_solution_info'] = False
-        update_order()                      # To update the wavelengths
-        
-    def remove_widgets():
-        variables = [gui3.validation, gui3.fmts, gui3.entries, gui3.funcs, gui3.onclickvalue, gui3.data]
-        for entry in pkwargs['widgets_change'].keys():
-            if entry in pkwargs.keys():
-                del pkwargs[entry]
-            gui3.ws[entry].destroy()
-            for variable in variables:
-                if entry in variable.keys():
-                    del variable[entry]
-    
-    def add_widgets(pkwargs):
-        order = pkwargs['order']
-        px_to_wave = pkwargs['px_to_wave']
-        px_to_wave_sub = px_to_wave[ px_to_wave[:,0] == order, : ]
-        if px_to_wave_sub.shape[0] > pkwargs['max_lines_list']:        # Limit to 80 lines
-            px_to_wave_sub = px_to_wave_sub[:pkwargs['max_lines_list'],:]
-        pkwargs['oldmax_lines_list'] = copy.copy(pkwargs['max_lines_list'])
-        wid_sub = dict()
-        offset = 5
-        ii = 0              # if the order doesn't contain any entries
-        for ii, entry in enumerate(px_to_wave_sub):
-            pkwargs['delete_{0}'.format(ii)]   = False
-            wid_sub['delete_{0}'.format(ii)]   = dict(label=None,  kind='CheckBox', start=pkwargs['delete_{0}'.format(ii)], row=ii+offset, column=0)
-            wid_sub['px_pos_{0}'.format(ii)] = dict(label='%6.1f'%entry[2], kind='Label', row=ii+offset, column=1, rowspan=1, columnspan=1, orientation=Tk.W)
-            wave = {True:'', False:str(round(entry[3],6))}[entry[3] is np.nan or str(entry[3]) == 'nan']
-            pkwargs['wave_{0}'.format(ii)] = wave
-            wid_sub['wave_{0}'.format(ii)] = dict(kind='TextEntry', fmt=str, start=pkwargs['wave_{0}'.format(ii)], width=10, row=ii+offset, column=2, columnspan=2)
-            text = '{0}  {1}'.format('%4.1f'%entry[4], '%5.1i'%entry[5])
-            wid_sub['lineprop_{0}'.format(ii)] = dict(label=text, kind='Label', row=ii+offset, column=4, rowspan=1, columnspan=2, orientation=Tk.W)
-            text = ''
-            if np.isnan(entry[6]) == False and entry[6] > 1000 and entry[6] < 1E6:
-                # Add button to copy the value
-                text += '%8.3f'%entry[6]
-            text += ' - '
-            if np.isnan(entry[7]) == False and entry[7] > 1000 and entry[7] < 1E6:
-                text += '%8.3f'%entry[7]
-            wid_sub['wave_sol_{0}'.format(ii)] = dict(label=text, kind='Label', row=ii+offset, column=6, rowspan=1, columnspan=2, orientation=Tk.W)
-        for jj in range(3):
-            pkwargs['px_pos_extra_{0}'.format(jj)] = ''
-            wid_sub['px_pos_extra_{0}'.format(jj)] = dict(kind='TextEntry', fmt=str, start=pkwargs['px_pos_extra_{0}'.format(jj)], width=6, row=ii+1+jj+offset, column=1, columnspan=1)
-            pkwargs['wave_extra_{0}'.format(jj)] = ''
-            wid_sub['wave_extra_{0}'.format(jj)] = dict(kind='TextEntry', fmt=str, start=pkwargs['wave_extra_{0}'.format(jj)], width=10, row=ii+1+jj+offset, column=2, columnspan=2)
-        
-        pkwargs['widgets_change'] = wid_sub
-        return pkwargs, wid_sub
-    
-    def read_data(gui3):
-        oldorder = gui3.funkwargs['oldorder']
-        px_to_wave = gui3.funkwargs['px_to_wave']
-        params['tmp_polynom_order_traces'] = [gui3.funkwargs['disporder']]
-        params['tmp_polynom_order_intertraces'] = [gui3.funkwargs['crossdisporder']]
-        keep = np.ones(( len(px_to_wave) )).astype(bool)
-        # Read the results
-        indexes = np.where(px_to_wave[:,0] == oldorder)[0]
-        if indexes.shape[0] > pkwargs['oldmax_lines_list']:        # Limit to 80 lines
-            indexes = indexes[:pkwargs['oldmax_lines_list']]
-        for ii,index in enumerate(indexes):
-            #if 'wave_{0}'.format(ii) not in gui3.data.keys():       # can be empty when adding the extra stuff
-            #    continue
-            if gui3.data['delete_{0}'.format(ii)]:                  # delete
-                keep[index] = False
-            data = gui3.data['wave_{0}'.format(ii)]
-            good_data = False
-            if len(data) > 0:
-                try:
-                    data = float(data)
-                    good_data = True
-                except:
-                    print('Warn: Can not convert entry into a number: {0}'.format(data))
-            if good_data:
-                px_to_wave[index,3] = data
-            else:
-                px_to_wave[index,3] = np.nan
-        px_to_wave = px_to_wave[keep,:]
-        for jj in range(3):
-            good_data = False
-            px = gui3.data['px_pos_extra_{0}'.format(jj)]
-            wave = gui3.data['wave_extra_{0}'.format(jj)]
-            if len(px) > 0 and len(wave) > 0:
-                try:
-                    px = float(px)
-                    good_data = True
-                except:
-                    print('Warn: Can not convert entry into a number: {0}'.format(data))
-                try:
-                    wave = float(wave)
-                except:
-                    good_data = False
-                    print('Warn: Can not convert entry into a number: {0}'.format(data))
-            if good_data:
-                px_to_wave = np.vstack(( px_to_wave, [oldorder, np.nan, px, wave, -1, -1, np.nan, np.nan ] ))
-        if type(gui3.funkwargs['order_offset']).__name__ == 'int':
-            px_to_wave[:,1] = px_to_wave[:,0] + gui3.funkwargs['order_offset']
-        save_px_to_wave(px_to_wave, params['logging_path']+'tmp_'+params['px_to_wavelength_file'])
-        gui3.funkwargs['px_to_wave'] = px_to_wave
-        gui3.funkwargs = calculate_linear_solution(gui3.funkwargs, order=oldorder)
-        
-        #print 'new', gui3.data['order'], 'old', gui3.funkwargs['oldorder'], gui3.funkwargs['px_to_wave'][:,3]
-    
-    def update_order(updateplot=False):
-        tkc.TkCanvasGrid.update(gui3, updateplot=updateplot)               # Read the values: Update order, get the new wavelengths
-        read_data(gui3)              # read the new wavelengths, necessary here, as switched off at closing the gui
-        remove_widgets()
-        gui3.funkwargs['oldorder'] = copy.copy(gui3.data['order'])
-        gui3.funkwargs, wid_sub = add_widgets(gui3.funkwargs)
-        gui3.widgets = wid_sub
-        gui3.add_widgets(parent=gui3.scrollable_frame)
-        tkc.TkCanvasGrid.update(gui3)               # Update to get the plot with the new fitted wavelengths
-    
-    def save_px_to_wave(px_to_wave, fname):
-        with open(fname,'w') as file:
-            for entry in px_to_wave:
-                if np.isnan(entry[0]):
-                    continue
-                entry = list(entry)
-                for i in [1,3]:
-                    if np.isnan(entry[i]) or str(entry[i]) == 'nan':
-                        entry[i] = ''
-                    elif i == 1:
-                        entry[i] = int(entry[i])
-                file.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}'.format( int(entry[0]), entry[1], round(entry[2],2), entry[3], round(entry[4],2), round(entry[5],2), os.linesep ))
-    # define valid_function
-    # input is one variable (the string input)
-    # return is either:
-    #   True and values
-    # or
-    #   False and error message
-    def vfunc_int(xs):
-        try:
-            value = int(xs)
-            return True, value
-        except:
-            return False, ('Error, input must be integer'+os.linesep)
-    def vfunc_float(xs):
-        try:
-            value = float(xs)
-            return True, value
-        except:
-            return False, ('Error, input must be float'+os.linesep)
-    
-    # get kwargs
-    pkwargs = dict(ax=ax, cal_l_spec=cal_l_spec, cal_s_spec=cal_s_spec, px_to_wave=px_to_wave, order=order, order_offset=order_offset, max_reflines=30, max_lines_list=80)
-    pkwargs['wavelength_solution_info'] = False
-    if np.sum(np.isnan(px_to_wave[:,1])) == 0:
-        px_to_wave, wavelength_solution, wavelength_solution_arclines = calculate_wavesolution_calc(px_to_wave, cal_l_spec)
-        if len(wavelength_solution) > 0:
-            pkwargs['wavelength_solution'] = wavelength_solution
-            pkwargs['px_to_wave']          = px_to_wave
-        pkwargs = calculate_linear_solution(pkwargs)
-    # run initial update plot function
-    plot(**pkwargs)
-    # define widgets
-    widgets = dict()
-    widgets['ordertext']  = dict(label='Order:', kind='Label', row=0, column=0, rowspan=1, columnspan=4, orientation=Tk.W)
-    pkwargs['order'] = order
-    pkwargs['oldorder'] = order
-    widgets['order'] = dict(kind='TextEntry', fmt=int, start=pkwargs['order'], valid_function=vfunc_int, minval=-1E-9, maxval=len(cal_l_spec)-1+1E-9, width=5, row=0, column=4, columnspan=1)
-    widgets['update'] = dict(label='Update', kind='CommandButton', command=update_order, row=0, column=5, columnspan=2, width=9)
-    widgets['accept'] = dict(label='Accept', kind='ExitButton', row=0, column=7, width=4)     # Replace by new fuction, as issue will occur if use changed the order but didn't updata
-    widgets['order_offsettext']  = dict(label='Order offset between arbitary{0}numbering (starting at 0){0}and real physical order:'.format(os.linesep), kind='Label', row=1, column=0, rowspan=1, columnspan=4, orientation=Tk.W)
-    pkwargs['order_offset'] = {True:pkwargs['order_offset'], False:''}[pkwargs['order_offset'] is not np.nan]
-    widgets['order_offset'] = dict(kind='TextEntry', fmt=int, start=pkwargs['order_offset'], valid_function=vfunc_int, minval=-1000, maxval=1000, width=5, row=1, column=4, columnspan=1)
-    widgets['calculate_wavesolution'] = dict(label='Calculate{0}Wavelength{0}solution'.format(os.linesep), kind='CommandButton', command=calculate_wavesolution, row=1, column=5, columnspan=2, width=9)
-    widgets['disptxt']   = dict(label='Polynom-order for{0}dispersion direction:'.format(os.linesep), kind='Label', row=2, column=0, rowspan=1, columnspan=3, orientation=Tk.W)
-    pkwargs['disporder'] = max(params.get('tmp_polynom_order_traces' ,params['polynom_order_traces']))
-    widgets['disporder'] = dict(kind='TextEntry', fmt=int, start=pkwargs['disporder'], valid_function=vfunc_int, minval=1-1E-9, maxval=100, width=4, row=2, column=3, columnspan=1)
-    widgets['crossdisptxt']   = dict(label='Polynom-order for cross-{0}dispersion direction:'.format(os.linesep), kind='Label', row=2, column=4, rowspan=1, columnspan=3, orientation=Tk.W)
-    pkwargs['crossdisporder'] = max(params.get('tmp_polynom_order_intertraces' ,params['polynom_order_intertraces']))
-    widgets['crossdisporder'] = dict(kind='TextEntry', fmt=int, start=pkwargs['crossdisporder'], valid_function=vfunc_int, minval=1-1E-9, maxval=100, width=4, row=2, column=7, columnspan=1)
-    
-    widgets['txtmax_reflines'] = dict(label='Max reflines in plot:', kind='Label', row=3, column=0, rowspan=1, columnspan=3, orientation=Tk.W)
-    widgets['max_reflines'] = dict(kind='TextEntry', fmt=int, start=pkwargs['max_reflines'], valid_function=vfunc_int, minval=0, maxval=10000, width=4, row=3, column=3, columnspan=1)
-    widgets['txtmax_lines_list'] = dict(label='Max identified lines in{0}list below/plot'.format(os.linesep), kind='Label', row=3, column=4, rowspan=1, columnspan=3, orientation=Tk.W)
-    widgets['max_lines_list'] = dict(kind='TextEntry', fmt=int, start=pkwargs['max_lines_list'], valid_function=vfunc_int, minval=0, maxval=10000, width=4, row=3, column=7, columnspan=1)
-    
-    widgets['txtdelete']   = dict(label='Del-{0}ete'.format(os.linesep), kind='Label', row=4, column=0, rowspan=1, columnspan=1, orientation=Tk.W)
-    widgets['txtpx_pos']   = dict(label='Pixel', kind='Label', row=4, column=1, rowspan=1, columnspan=1, orientation=Tk.W)
-    widgets['txtwave']     = dict(label='Wavelength', kind='Label', row=4, column=2, rowspan=1, columnspan=2, orientation=Tk.W)
-    widgets['txtlineprop'] = dict(label='Line width{0}+ height'.format(os.linesep), kind='Label', row=4, column=4, rowspan=1, columnspan=2, orientation=Tk.W)   # Can't be float, as otherwise deleting an entry wouldn't work
-    widgets['txtwave_sol'] = dict(label='Wavelength-solution{0}global - linear'.format(os.linesep), kind='Label', row=4, column=6, rowspan=1, columnspan=2, orientation=Tk.W)   # Can't be float, as otherwise deleting an entry wouldn't work
-    pkwargs, wid_sub = add_widgets(pkwargs)
-    widgets.update(wid_sub)
-    
-    wprops = dict(fullscreen=False )
-    gui3 = tkc.TkCanvasGrid(figure=fig, ax=ax, func=plot, title='HiFLEx: Create a new wavelength solution', 
-                            kwargs=pkwargs, widgets=widgets, widgetprops=wprops )
-    cid = fig.canvas.callbacks.connect('button_press_event', onclick)       # It works with GUI
-    fig.set_size_inches( (int(gui3.screen_w_h[0]) - gui3.width_GUI-50)/dpi, (int(gui3.screen_w_h[1])-90)/dpi, forward=True)     # Make the plot as big as possible
-        
-    gui3.master.mainloop()
-        
-    read_data(gui3)             # read the new wavelengths only when closing the window
-    plt.close()
-    
-    px_to_wave = gui3.funkwargs['px_to_wave']
-    if os.path.isfile(params['px_to_wavelength_file']):
-        os.system('mv {0} old_{0}'.format(params['px_to_wavelength_file']))
-    save_px_to_wave(px_to_wave, params['px_to_wavelength_file'])
-    del params['tmp_polynom_order_traces']
-    del params['tmp_polynom_order_intertraces']
-    
-    if np.sum(np.isnan(px_to_wave[:,1])) == 0:
-        px_to_wave, wavelength_solution, wavelength_solution_arclines = calculate_wavesolution_calc(px_to_wave, cal_l_spec)
-    else:
-        logger('Error: Not able to find a wavelength solution with the information provided by the user. Please rerun the program.', params=params)
-    
-    return dict(wavesol=wavelength_solution, reflines=wavelength_solution_arclines)
-
-def correlate_px_wave_result_UI(im, arc_lines_wavelength, reference_catalog, arc_lines_px, reference_names, wavelength_solution, wavelength_solution_arclines, adjust=[0.12,0.88,0.85,0.12, 1.0,1.01]):
-    ims = im.shape
-            
-    fig, frame = plt.subplots(1, 1)
-    plt.subplots_adjust(left=adjust[0], right=adjust[1], top=adjust[2], bottom=adjust[3])
-    
-    order = 10
-    high_limit = 98
-    arc_stretch = 0.5
-    
-    def plot(frame, im, order, high_limit, arc_stretch):
-        x_range, y_range = copy.copy(frame.get_xlim()), copy.copy(frame.get_ylim())
-        frame.clear()
-        """try:
-            order = gui3.data['order']
-        except:
-            order = order
-        try:
-            high_limit = gui3.data['high_limit']
-        except:
-            high_limit = high_limit
-        try:
-            arc_stretch = gui3.data['arc_stretch']
-        except:
-            arc_stretch = arc_stretch"""
-        
-        #print 'order, arc_setting', order, arc_setting
-        title = ('Order {0}: identified emission lines: blue [px],{1}'+\
-                 'catalog lines: red (0.1px precission, name and wavelength at the botom),{1}'+\
-                 'corellated lines: green (px, wavelength at top)').format(order, os.linesep)
-        
-        # Plot the extracted arc spectrum
-        xarr = np.arange(len(im[order,:]))
-        yarr = im[order,:]
-        notnans = ~np.isnan(yarr)
-        yarr = yarr[notnans]
-        xarr = xarr[notnans]
-        yarr_max = max(0,np.percentile(yarr,high_limit))
-        yarr[yarr > yarr_max] = yarr_max
-        frame = plot_img_spec.plot_points([xarr], [yarr], [], [], show=False, adjust=adjust, title=title, 
-                                      return_frame=True, frame=frame, x_title='x [px]', y_title='flux [ADU]', linestyle="-", marker="")
-        
-        # Plot the correlated lines in the extracted spectrum
-        arc_line_order = arc_lines_px[(arc_lines_px[:,0] == order),:]
-        xarr = np.vstack(( arc_line_order[:, 1], arc_line_order[:, 1])).T
-        yplot = np.repeat( [[np.min(yarr), np.max(yarr)]], len(arc_line_order), axis=0)
-        frame = plot_img_spec.plot_points(xarr, yplot, [], [], show=False, adjust=adjust, title=title, 
-                                      return_frame=True, frame=frame, x_title='x [px]', y_title='flux [ADU]', linestyle="-", marker="", color='b')
-
-        # Plot the catalog lines using the fit
-        xarr_catalog = np.arange(-100,ims[1]+100, 0.1)
-        xarr_wave = np.polyval(wavelength_solution[order,2:], xarr_catalog-wavelength_solution[order,1])
-        inorder = ( reference_catalog[:,0] >= np.min(xarr_wave) ) & ( reference_catalog[:,0] <= np.max(xarr_wave) )
-        reference_catalog_sub = reference_catalog[inorder, :]
-        reference_names_sub = np.array(reference_names)[inorder]
-        arc_stretch *= (np.max(yarr)-np.min(yarr)) / np.max(reference_catalog_sub[:,1])      # Rescale the arc lines so that arc_stretch=1 fills it just once
-        for line_index in range(reference_catalog_sub.shape[0]):
-            diff = np.abs(reference_catalog_sub[line_index,0] - xarr_wave)
-            xarc = xarr_catalog[np.argmin(diff)]
-            frame.plot( [xarc,xarc],[np.min(yarr),np.min(yarr)+reference_catalog_sub[line_index,1]*arc_stretch], color='r' )
-            frame.text(xarc, np.min(yarr)+reference_catalog_sub[line_index,1]*arc_stretch, '{0} {1}'.format(reference_names_sub[line_index],reference_catalog_sub[line_index,0]),
-                            horizontalalignment='center', verticalalignment='bottom', rotation=90, color='k', zorder=5)
-           
-        # Plot the identified catalog lines
-        arc_line_order = arc_lines_wavelength[(arc_lines_wavelength[:,0] == order),:]
-        xarr = np.vstack(( arc_line_order[:, 1], arc_line_order[:, 1])).T
-        yplot = np.repeat( [[np.min(yarr), np.max(yarr)]], len(arc_line_order), axis=0)
-        frame = plot_img_spec.plot_points(xarr, yplot, [], [], show=False, adjust=adjust, title=title, 
-                                      return_frame=True, frame=frame, x_title='x [px]', y_title='flux [ADU]', linestyle="-", marker="", color='g')
-        for arc_line in arc_line_order:
-            frame.text(arc_line[1], np.max(yarr), r'{0} $\pm$ {1}'.format(arc_line[2], round(arc_line[3],3) ), horizontalalignment='center', verticalalignment='top', rotation=90, color='k', zorder=5)
-
-    # get kwargs
-    pkwargs = dict(frame=frame, im=im, order=order, high_limit=high_limit, arc_stretch=arc_stretch)
-    # run initial update plot function
-    plot(**pkwargs)
-    
-    # define valid_function
-    # input is one variable (the string input)
-    # return is either:
-    #   True and values
-    # or
-    #   False and error message
-    def vfunc_int(xs):
-        try:
-            value = int(xs)
-            return True, value
-        except:
-            return False, ('Error, input must be integer')
-    def vfunc_float(xs):
-        try:
-            value = float(xs)
-            return True, value
-        except:
-            return False, ('Error, input must be float')
-            
-    # define widgets
-    widgets = dict()
-    widgets['order'] = dict(label='Order',
-                                comment='which order to show' ,
-                                kind='TextEntry', minval=0, maxval=ims[0]-1,
-                                fmt=int, start=order, valid_function=vfunc_int,
-                                width=10)
-    widgets['high_limit'] = dict(label='High limit [%]',
-                                comment='Reject highest pixels' ,
-                                kind='TextEntry', minval=1, maxval=105,
-                                fmt=float, start=high_limit, valid_function=vfunc_float,
-                                width=10)
-    widgets['arc_stretch'] = dict(label='Scale of{0}catalogue lines'.format(os.linesep),
-                                comment='float value' ,
-                                kind='TextEntry', minval=None, maxval=None,
-                                fmt=float, start=arc_stretch, valid_function=vfunc_float,
-                                width=10)
-    widgets['accept'] = dict(label='Close', kind='ExitButton', position=Tk.BOTTOM)
-    widgets['update'] = dict(label='Update', kind='UpdatePlot', position=Tk.BOTTOM)
-
-    wprops = dict(orientation='v', position=Tk.RIGHT)
-
-    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='HiFlEx: Check the identified and correlated emission lines', widgets=widgets,
-                        widgetprops=wprops)
-    gui3.master.mainloop()
-    plt.close()
 
 def create_pseudo_wavelength_solution(number_orders):
     """
@@ -7147,7 +6499,7 @@ def compare_wavelength_solution_to_emission_lines(kwargs):
     return [orderdiff, pxdiff, pxdifford, resdiff, len(matching_lines), np.std(matching_lines[:,2], ddof=1), np.sum(matching_lines[:,3])] + data_available
 
 
-def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, wavelength_solution_ori_name, reference_lines_dict, traces_def, show_res=False, search_order_offset=False):
+def adjust_wavelength_solution(params, cal_l_spec, cal_s_spec, arc_lines_px, wavelength_solution_ori, wavelength_solution_arclines_ori, wavelength_solution_ori_name, reference_lines_dict, traces_def, show_res=False, search_order_offset=False):
     """
     :param arc_lines_px: 2D array of floats with one line for each identified line, sorted by order and amplitude of the line. For each line the following informaiton is given:
                     order, pixel, width of the line (Gauss), and height of the line
@@ -7172,7 +6524,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
         
     [tr_poly, xlows, xhighs, widths] = traces_def
     reference_catalog_full, reference_names = reference_lines_dict['reference_catalog'][0], reference_lines_dict['reference_names'][0]
-    specs = spectrum.shape
+    specs = cal_l_spec.shape
     orders = np.arange(specs[0])
     if len(arc_lines_px) <= 10:
         logger('Warn: no arc lines available -> creating a pseudo solution (1 step per px)')
@@ -7579,7 +6931,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                     #print [len(diff_fit), np.std(diff_fit, ddof=polynom_order_trace+1),min(diff_fit),max(diff_fit)]
                 wavelength_solution = np.array(wavelength_solution)
                 wavelength_solution_arclines = np.array(wavelength_solution_arclines)
-                plot_wavelength_solution_spectrum(params, spectrum, spectrum, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names)
+                plot_wavelength_solution_spectrum(params, cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names)
                 raw_input('enter')"""
                 
                 #print arc_lines_wavelength.shape, poly2d_params
@@ -7718,11 +7070,32 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     printarray[:,1] += int(order_offset)
     logger('order\treal_o\tpixel\twavelength\tdwavel', show=False, printarrayformat=printarrayformat, printarray=printarray, logfile=params['logging_identified_arc_lines'])
     
+    # Transform the wavelength solution into the old wavelength solution
+    max_number_reflines = 0             # will be needed later in order to save the data correctly into a fits file
+    for order in range(specs[0]):
+        inorder = ( arc_lines_wavelength[:,0]==order )
+        max_number_reflines = max(max_number_reflines, np.sum(inorder) )
+    wavelength_solution = np.zeros((specs[0], 2+polynom_order_trace+1))
+    wavelength_solution_arclines = np.zeros((specs[0], max_number_reflines))
+    line_stats = np.zeros((specs[0], 2))
+    for index_u, order_use in enumerate(orders_use):
+        wavelength_solution_u, wavelength_solution_arclines_u, line_stats_u = transform_wavelength_solution_2d_to_n1d(specs[0], specs[1], 
+                                polynom_order_trace, polynom_order_intertrace, poly2d_params[index_u], order_offset, cen_px, arc_lines_wavelength)
+        wavelength_solution[order_use,:] = wavelength_solution_u[order_use,:]
+        wavelength_solution_arclines[order_use, :wavelength_solution_arclines_u.shape[1]] = wavelength_solution_arclines_u[order_use,:]
+        line_stats[order_use,:] = line_stats_u[order_use,:]
+    
+    # See the results
+    if show_res:
+        #proc_gui.correlate_px_wave_result_UI(cal_l_spec, arc_lines_wavelength, reference_catalog, arc_lines_px, reference_names, wavelength_solution, wavelength_solution_arclines, adjust=[0.07,0.93,0.94,0.06, 1.0,1.01])
+        proc_gui.correlate_px_wave_result_UI(params, cal_l_spec, cal_s_spec, wavelength_solution, wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True, adjust=[0.04,0.93,0.97,0.04, 1.0,1.01])
+    
+    
     # Create an image of the Gaussian widths of the identified lines
     plot_wavelength_solution_width_emmission_lines(params['logging_resolution_form'], specs, arc_lines_wavelength, [0,1,10], title='Resolution')   # order, wavelength, gauss width
     plot_wavelength_solution_width_emmission_lines(params['logging_em_lines_gauss_width_form'], specs, arc_lines_wavelength, [0,1,9])   # order, wavelength, gauss width
     plot_hist_residuals_wavesol(params['logging_arc_line_identification_residuals_hist'], arc_lines_wavelength, [0,1,2,3] )             # order, pixel, wavelength, residuals
-    bisector_measurements_emission_lines(params['logging_em_lines_bisector'], spectrum, arc_lines_wavelength, [0,1,9])         # order, pixel, width
+    bisector_measurements_emission_lines(params['logging_em_lines_bisector'], cal_l_spec, arc_lines_wavelength, [0,1,9])         # order, pixel, width
         
     x, w, y, l = [], [], [], []
     for order in orders:
@@ -7740,25 +7113,12 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
     plot_img_spec.plot_points(w,y,l,[fname_wave], show=False, title=text, x_title='Wavelength [Angstrom]', 
                               y_title='Residual (O-C) [Angstrom]', marker=['o','s','*','P','^','v','>','<','x'])
 
-    # Transform the wavelength solution into the old wavelength solution
-    max_number_reflines = 0             # will be needed later in order to save the data correctly into a fits file
-    for order in range(specs[0]):
-        inorder = ( arc_lines_wavelength[:,0]==order )
-        max_number_reflines = max(max_number_reflines, np.sum(inorder) )
-    wavelength_solution = np.zeros((specs[0], 2+polynom_order_trace+1))
-    wavelength_solution_arclines = np.zeros((specs[0], max_number_reflines))
-    line_stats = np.zeros((specs[0], 2))
-    for index_u, order_use in enumerate(orders_use):
-        wavelength_solution_u, wavelength_solution_arclines_u, line_stats_u = transform_wavelength_solution_2d_to_n1d(specs[0], specs[1], 
-                                polynom_order_trace, polynom_order_intertrace, poly2d_params[index_u], order_offset, cen_px, arc_lines_wavelength)
-        wavelength_solution[order_use,:] = wavelength_solution_u[order_use,:]
-        wavelength_solution_arclines[order_use, :wavelength_solution_arclines_u.shape[1]] = wavelength_solution_arclines_u[order_use,:]
-        line_stats[order_use,:] = line_stats_u[order_use,:]
+    
     
     statistics_arc_reference_lines(arc_lines_wavelength, [0,8,9,2], reference_names, wavelength_solution, xlows, xhighs)
         
     if std_diff_fit > 2*max(wavelength_solution[:,-2]) or std_diff_fit < 1E-8:        # if residuals are bigger than 1px or unreasonable small
-        plot_wavelength_solution_spectrum(params, spectrum, spectrum, params['logging_arc_line_identification_spectrum'], wavelength_solution, 
+        plot_wavelength_solution_spectrum(params, cal_l_spec, cal_s_spec, params['logging_arc_line_identification_spectrum'], wavelength_solution, 
                                           wavelength_solution_arclines, reference_catalog, reference_names, plot_log=True)
         if 'master_cal2_l_filename' in params.keys():
             text = '{0} in the current folder'.format(params['master_cal2_l_filename'])
@@ -7769,9 +7129,7 @@ def adjust_wavelength_solution(params, spectrum, arc_lines_px, wavelength_soluti
                'the folder with the previous wavelength solution (see parameter "original_master_wavelensolution_filename")' +\
                '{2}\t\tThe results of the identification can be seen in {1}.').format(text, params['logging_arc_line_identification_spectrum'], os.linesep), params=params)
     
-    # See the results
-    if show_res:
-        correlate_px_wave_result_UI(spectrum, arc_lines_wavelength, reference_catalog, arc_lines_px, reference_names, wavelength_solution, wavelength_solution_arclines, adjust=[0.07,0.93,0.94,0.06, 1.0,1.01])
+    
     
     return dict(wavesol=wavelength_solution, wavesol2d=wavelength_solution2d , reflines=wavelength_solution_arclines, linestat=line_stats)
 
@@ -7875,32 +7233,6 @@ def find_real_center_wavelength_solution(order_offset, orders, cenwave, cen_px, 
     #print np.vstack([real_cent, cenwave, cen_px, cen_px_nofit]).T[ [0,1,21,41,61,81,-2,-1], :], p_real_cent, poly
     return cen_px, poly
 
-"""def read_fit_wavelength_solution(params, filename, spec):
-    "#""
-    Reads the file with pixel - wavelength corellation and fits a 2D array against it to create a rough wavelength solution
-    :params filename: string to a textfile with the following data: order (starting at 0), real order, pixel, wavelength. If one of the information is missing, this line will be skipped.
-    "#""
-    arc_lines_wavelength = []
-    with open(filename, 'r') as file:
-        for line in file:
-            line = line[:-1].split('\t')
-            if len(line) < 4:
-                continue
-            if line[0]!='' and line[1]!='' and line[2]!='' and line[3]!='':
-                # get the order, real order, pixel, and wavelength
-                try:
-                    arc_lines_wavelength.append([ int(line[0]), int(line[1]), float(line[2]), float(line[3]),0 ])
-                except:
-                    print( 'Problems to convert to int/float:', line )
-    if len(arc_lines_wavelength) == 0:
-        logger(('Error: No useful information was found in {0}. Please make sure the entries in the file contain of the tab-separated '+\
-                '(exactly one tab between each column) values: order (starting at 0), real order, pixel, wavelength').format(filename), params=params)
-    arc_lines_wavelength = np.array(arc_lines_wavelength)
-    
-    wavelength_solution, wavelength_solution_arclines = fit_basic_wavelength_solution(params, arc_lines_wavelength, spec, filename)
-    
-    return wavelength_solution, wavelength_solution_arclines"""
-    
 def fit_basic_wavelength_solution(params, arc_lines_wavelength, spec, filename):
     if 0.0 in arc_lines_wavelength[:,1]:
         logger('Error: The second coloumn (real order) in {0} was not set correctly as it contains a zero. '+\
@@ -8019,76 +7351,7 @@ def fit_basic_wavelength_solution(params, arc_lines_wavelength, spec, filename):
         
     wavelength_solution = np.array(wavelength_solution)
     
-    return wavelength_solution, np.array(wavelength_solution_arclines)
-
-
-def adjust_binning_UI(im1, binxy, userinput=True):
-    """
-    Adjusts the binning
-    """
-    if not userinput:
-        return binxy
-    
-    #sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_search_apertures'] )
-    # set up plot
-    fig, frame = plt.subplots(1, 1)
-    fig.set_size_inches(10, 7.5, forward=True)
-
-    # get kwargs
-    binx, biny = binxy
-    pkwargs = dict(frame=frame, im1=im1, binx=binx, biny=biny)
-
-    # define update plot function
-    def plot(frame, im1, binx, biny):
-        frame.clear()
-        title = ('Adjusting the binning')
-        im_bin, dummy, dummy = bin_im(im1, [binx,biny] )
-        frame = plot_img_spec.plot_image(im_bin, 'dummy_filename', pctile=0, show=False, adjust=[0.07,0.95,0.95,0.07], title=title, return_frame=True, frame=frame, autotranspose=False, colorbar=False, axis_name=['Cross-dispersion axis [px]','Dispersion axis [px]','flux [ADU]'])
-    
-    # run initial update plot function
-    plot(**pkwargs)
-
-    # define valid_function
-    # input is one variable (the string input)
-    # return is either:
-    #   True and values
-    # or
-    #   False and error message
-    def vfunc_int(xs):
-        try:
-            value = int(xs)
-            return True, value
-        except:
-            return False, ('Error, input must be integer')
-
-    # define widgets
-    widgets = dict()
-    widgets['binx'] = dict(label='Binning in{0}Dispersion axis'.format(os.linesep),
-                           kind='TextEntry', minval=None, maxval=None,
-                           fmt=str, start=binxy[0], valid_function=vfunc_int,
-                           width=10)
-    widgets['biny'] = dict(label='Binning in{0}Cross-dispersion axis'.format(os.linesep),
-                           kind='TextEntry', minval=None, maxval=None,
-                           fmt=str, start=binxy[1], valid_function=vfunc_int,
-                           width=10)
-    widgets['accept'] = dict(label='Accept Binning',
-                             kind='ExitButton',
-                             position=Tk.BOTTOM)
-    widgets['update'] = dict(label='Update', kind='UpdatePlot',
-                             position=Tk.BOTTOM)
-                             
-    wprops = dict(orientation='v', position=Tk.RIGHT)
-
-    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='HiFlEx: Adjusting the binning', widgets=widgets,
-                        widgetprops=wprops)
-    gui3.master.mainloop()
-    
-    #binxy = pkwargs['binxy']       # This doesn't work, pkwargs are only updated within the plot function
-    binxy = [ gui3.data['binx'], gui3.data['biny'] ]
-    
-    plt.close()
-    return binxy
+    return wavelength_solution, np.array(wavelength_solution_arclines), calimages['wavelength_solution_result_text']
 
 def get_leftwidth_rightwidth_tr_poly(centre, left, right):
     w_left  = np.median(centre-left)
@@ -8137,515 +7400,6 @@ def remove_orders(pfits, rm_orders):
         if r in rm_orders:
             mask[r] = False
     return mask
-
-def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, userinput=True, do_rm=False, do_adj=False, do_shft=False, do_add=False):
-    """
-    Removes orders from the pfits array in a GUI, allows to adjust the width of th extracted area
-    :param do_adj: Adjust the width of the traces
-    return fmask: array of bool with the same length as original orders, True for the orders to keep
-    return pfits: same format as pfits, with adjusted parameters for the polynomial for the left and right border
-    return widths: same format as widths, with adjusted left and right stop of the trace
-    """
-    if not userinput or (not do_rm and not do_adj and not do_shft and not do_add):
-        return remove_orders(pfits, []), pfits, widths, xlows, xhighs         # No orders to remove, pfits stays the same, widths stays the same
-
-    # convert to numpy arrays
-    pfits = np.array(pfits)
-    xlows, xhighs = np.array(xlows), np.array(xhighs)
-    # Create a list with all data points to refit the orders
-    data_x = np.linspace(0, im1.shape[0], int(0.01*im1.shape[0]), dtype=int) # about every 100 pixel in dispersion direction
-    data_order_position = []
-    for order in range(pfits.shape[0]):
-        inorder = ( data_x > xlows[order] ) & (data_x < xhighs[order]-1)
-        xarr = np.hstack(( xlows[order], data_x[inorder], xhighs[order]-1 ))           # add the boundaries as points
-        if len(pfits.shape) == 3:
-            yarr = np.polyval(pfits[order,0,1:], xarr-pfits[order,0,0])    
-            yarrl = np.polyval(pfits[order,1,1:], xarr-pfits[order,1,0])
-            yarrr = np.polyval(pfits[order,2,1:], xarr-pfits[order,2,0])
-        else:
-            yarr = np.polyval(pfits[order,1:], xarr-pfits[order,0]) 
-            yarrl = yarr
-            yarrr = yarr
-        data_order_position.append( np.vstack((xarr, yarr, yarrl, yarrr)).T )             # contains the x and y values in one row
-
-    # set up plot
-    fig, frame = plt.subplots(1, 1)
-    gui3 = tkc.TkCanvas(figure=None, ax=None, func=None, title='HiFLEx: Test', kwargs=dict(), widgets=dict(), widgetprops=dict(orientation='v', position=Tk.RIGHT) )      # Only to get the display size
-    dpi=100
-    fig.set_dpi(dpi)
-    fig.set_size_inches( (int(gui3.screen_w_h[0]) - 400)/dpi, (int(gui3.screen_w_h[1])-90)/dpi, forward=True)     # Make the plot as big as possible
-    tkc.TkCanvas.end(gui3)
-    
-    # im_log = scale_image_plot(im1,'log10')   # Don't do it here
-    # get kwargs; add more to pkwargs, as otherwise what is changed in for example settings_modify_end() is lost
-    pkwargs = dict(frame=frame, update_frame=True, im1=im1, pfits=pfits, xlows=xlows, xhighs=xhighs, widths=widths,
-                   w_mult=1.0, rm_orders=[], shift=shift, im_scale_min=round_sig(np.percentile(im1,10),2),
-                   im_scale_max=round_sig(np.percentile(im1,90),2), order=np.nan, addpointsorder_lcr=1, 
-                   data_order_position=data_order_position, addpoints=False, removepoints=False)
-
-    # define update plot function
-    def plot(frame, update_frame, im1, pfits, xlows, xhighs, widths, w_mult, rm_orders, shift, im_scale_min, im_scale_max, order, addpointsorder_lcr, data_order_position, **kwargs):
-        #print('addpointsorder_lcr',addpointsorder_lcr)
-        x_range, y_range = copy.copy(frame.get_xlim()), copy.copy(frame.get_ylim())
-        #if update_frame:        # This will speed up plotting, but copying the old frame doesn't work, hence it always adds plots to the frame, and frame.clear() before loading creates an clear frame, more in https://stackoverflow.com/questions/57351212/matplotlib-how-to-copy-a-contour-plot-to-another-figure
-        if True:
-            frame.clear()
-            title = ''
-            if do_adj:
-                title += 'Defining the width of the traces. '
-            if do_shft:
-                title += 'Finding the shift of the traces. '
-            if do_rm:
-                title += 'Removing bad orders. '
-            if do_add:
-                title += 'Adding/modifying orders. '
-            if do_rm or do_add:
-                title += '{1}(Largest order number = {0}){1}'.format(pfits.shape[0]-1, os.linesep)
-            mask = remove_orders(pfits, rm_orders)
-            pfits_shift = copy.deepcopy(pfits)
-            if len(pfits_shift.shape) == 3:
-                pfits_shift[:,:,-1] += shift        # shift all traces
-            else:
-                pfits_shift[:,-1] += shift          # shift all traces
-            frame = plot_traces_over_image(scale_image_plot(im1,'log10'), 'dummy_filename', pfits_shift, xlows, xhighs, widths, w_mult=w_mult, mask=mask, frame=frame, return_frame=True, imscale=[im_scale_min,im_scale_max])
-            frame.set_title(title[:-1])
-        #    pkwargs['backup_frame'] = copy.deepcopy(frame)# This will speed up plotting, but copying the old frame doesn't work, hence it always adds plots to the frame, and frame.clear() before loading creates an clear frame
-        #else:# This will speed up plotting, but copying the old frame doesn't work, hence it always adds plots to the frame, and frame.clear() before loading creates an clear frame
-        #    frame = copy.deepcopy(pkwargs['backup_frame'])# This will speed up plotting, but copying the old frame doesn't work, hence it always adds plots to the frame, and frame.clear() before loading creates an clear frame
-
-        if do_add and not np.isnan(pkwargs['order']):
-            yarr = data_order_position[order][:,addpointsorder_lcr ] + shift
-            xarr = data_order_position[order][:,0]
-            frame.plot(yarr, xarr, color='c', linewidth=1, linestyle='dotted', marker="x", markersize=5)
-        if x_range != (0.0, 1.0) and y_range != (0.0, 1.0):
-            frame.axis([x_range[0], x_range[1], y_range[0], y_range[1]])
-    
-    def settings_modify_order():
-        pkwargs['backup_data_order_position_order'] = copy.copy(pkwargs['data_order_position'][pkwargs['order']])
-        gui3.ws['addpointsorder'].config(state=Tk.DISABLED)
-        if 'addpointsorder_lcr' in gui3.ws.keys():
-            gui3.ws['addpointsorder_lcr'].config(state=Tk.DISABLED)
-        gui3.ws['addpoints'].config(state=Tk.DISABLED)
-        gui3.ws['removepoints'].config(state=Tk.DISABLED)
-        gui3.ws['update'].config(state=Tk.DISABLED)
-        gui3.ws['stoppoints'].config(state="normal")
-        gui3.ws['cancelpoints'].config(state="normal")
-        tkc.TkCanvas.update(gui3)
-        pkwargs['update_frame'] = False     # When clicking only the points are redrawn
-    
-    def settings_modify_end():
-        pkwargs['order'] = np.nan
-        gui3.ws['addpointsorder'].config(state="normal")
-        if 'addpointsorder_lcr' in gui3.ws.keys():
-            gui3.ws['addpointsorder_lcr'].config(state="normal")
-        gui3.ws['addpoints'].config(state="normal")
-        gui3.ws['removepoints'].config(state="normal")
-        gui3.ws['update'].config(state="normal")
-        gui3.ws['stoppoints'].config(state=Tk.DISABLED)
-        gui3.ws['cancelpoints'].config(state=Tk.DISABLED)
-        pkwargs['addpoints'] = False
-        pkwargs['removepoints'] = False
-        pkwargs['update_frame'] = True
-        tkc.TkCanvas.update(gui3)
-    
-    def add_an_order():
-        pkwargs['xlows'] = np.hstack(( pkwargs['xlows'], im1.shape[0] ))
-        pkwargs['xhighs'] = np.hstack(( pkwargs['xhighs'], 0 ))
-        pfits = pkwargs['pfits']
-        if len(pfits.shape) == 3:
-            pfnew = np.zeros((1,pfits.shape[1],pfits.shape[2]))
-            for ii in range(pfits.shape[1]):
-                pfnew[0,ii,0] = np.median(pfits[:,ii,0])        # cen_px
-                pfnew[0,ii,-1] = im1.shape[1]/2.                # put it in the middle
-        else:
-            pfnew = np.zeros((1, pfits.shape[1]))
-            pfnew[0,0] = np.median(pfits[:,0])        # cen_px
-            pfnew[0,-1] = im1.shape[1]/2.             # put it in the middle
-        pkwargs['pfits'] = np.concatenate((pfits,pfnew), axis=0)
-        pkwargs['data_order_position'].append( np.zeros((0,4)) )
-        widths = pkwargs['widths']
-        if len(widths) > 0:
-            widthnew = np.median(widths,axis=0)
-            #print(widths, widthnew)
-            if type(widths).__name__ == 'ndarray':
-                pkwargs['widths'] = np.concatenate( ( widths, widthnew.reshape((1,widths.shape[1])) ), axis=0)
-            elif type(widths).__name__ == 'list':
-                 pkwargs['widths'].append(list(widthnew))
-        gui3.prompt_info('Added order with index {0}. Now you need to add points to it.'.format(pkwargs['pfits'].shape[0]-1), width=300)
-        #print(pfits.shape, pfnew.shape, pkwargs['pfits'].shape, len(pkwargs['widths']), pkwargs['widths']  )
-    
-    def addpoints_action():
-        tkc.TkCanvas.update(gui3, updateplot=False)
-        pkwargs['order'] = gui3.data['addpointsorder']
-        if type(pkwargs['order']).__name__ not in ['int']:
-            return
-        pkwargs['addpoints'] = True
-        settings_modify_order()
-    
-    def removepoints_action():
-        tkc.TkCanvas.update(gui3, updateplot=False)
-        pkwargs['order'] = gui3.data['addpointsorder']
-        if type(pkwargs['order']).__name__ not in ['int']:
-            return
-        pkwargs['removepoints'] = True
-        settings_modify_order()
-    
-    def cancelpoints_action():
-        # Restore the original points
-        pkwargs['data_order_position'][pkwargs['order']] = pkwargs['backup_data_order_position_order']
-        settings_modify_end()
-    
-    def stoppoints_action():
-        order = pkwargs['order']
-        data = pkwargs['data_order_position'][order]
-        addpointsorder_lcr = pkwargs['addpointsorder_lcr']
-        nonnan = ~np.isnan(data[:,addpointsorder_lcr])
-        if len(pkwargs['pfits'].shape) == 3:
-            poly_orders = pkwargs['pfits'].shape[2]-2
-            cen_px = pkwargs['pfits'][order,addpointsorder_lcr-1,0]
-        else:       # addpointsorder_lcr will be always 1
-            poly_orders = pkwargs['pfits'].shape[1]-2
-            cen_px = pkwargs['pfits'][order,0]
-        if np.sum(nonnan) < 2*poly_orders:
-            gui3.prompt_info('Warn: Needs at least {} points to fit the order. Please add more points or cancel.'.format(2*poly_orders), width=300)
-            return
-        pkwargs['xlows'][order] = int(np.min(data[:,0]))
-        pkwargs['xhighs'][order] = int(np.ceil(np.max(data[:,0])+1))
-        # Fit the center
-        pfs = np.polyfit(data[nonnan,0] - cen_px, data[nonnan,addpointsorder_lcr], poly_orders)
-        if len(pkwargs['pfits'].shape) == 3:
-            pkwargs['pfits'][order,addpointsorder_lcr-1,1:] = pfs
-        else:       # addpointsorder_lcr will be always 1
-            pkwargs['pfits'][order,1:] = pfs
-        settings_modify_end()
-    
-    def onclick(event):
-        #print('clicked',event.xdata, event.ydata, event.inaxes, im1.shape)
-        if event.xdata is None or event.ydata is None:
-            return
-        if not pkwargs['addpoints'] and not pkwargs['removepoints']:            # Not set
-            return
-        yy, xx = event.xdata-shift, event.ydata         # event.ydata: dispersion axis, xx in dispersion axis
-        uncertainty = 15
-        data = pkwargs['data_order_position'][pkwargs['order']]     # data[:,0]: dispersion axis
-        addpointsorder_lcr = pkwargs['addpointsorder_lcr']
-        if pkwargs['addpoints']:
-            if xx < 0 or xx > im1.shape[0]-1 or yy < 0 or yy > im1.shape[1]-1:    #im1.shape[0]: disersion axis
-                return                  # click was outside of the image
-            datanew = [xx, np.nan, np.nan, np.nan]
-            datanew[addpointsorder_lcr] = yy
-            data = np.vstack((data, datanew))
-            datasortindex = np.argsort(data[:,0])
-            pkwargs['data_order_position'][pkwargs['order']] = data[datasortindex,:]
-        elif pkwargs['removepoints']:
-            yarr = copy.copy(data[:,addpointsorder_lcr])
-            xarr = copy.copy(data[:,0])
-            badvalues = np.isnan(yarr)
-            xarr[badvalues] = -1E6
-            yarr[badvalues] = -1E6
-            diff = (xarr-xx)**2 + (yarr-yy)**2
-            posmin = np.argmin(diff)
-            #print('smallest distance', np.sqrt(diff[posmin]), data, posmin)
-            if np.sqrt(diff[posmin]) > uncertainty:       # Too many pixel away
-                return
-            data[posmin,addpointsorder_lcr] = np.nan
-            pkwargs['data_order_position'][pkwargs['order']] = data
-        
-        tkc.TkCanvas.update(gui3, updateplot=True)
-        # !!!!!!!!!!!! do it for pressing lrc to work on boundaries of the orders? 
-    
-    # define valid_function
-    # input is one variable (the string input)
-    # return is either:
-    #   True and values
-    # or
-    #   False and error message
-    def vfunc(xs):
-        try:
-            xwhole = xs.replace(',', ' ')
-            new_xs = xwhole.split()
-            xs = []
-            for nxs in new_xs:
-                xs.append(int(nxs))
-            return True, xs
-        except:
-            return False, ('Error, input must consist of integers'+os.linesep+\
-                           'separated by commas or white spaces')
-    def vfunc_int(xs):
-        try:
-            value = int(xs)
-            return True, value
-        except:
-            return False, ('Error, input must be integer'+os.linesep)
-    def vfunc_float(xs):
-        try:
-            value = float(xs)
-            return True, value
-        except:
-            return False, ('Error, input must be float')
-    def vfunc_lcr(xs):
-        if xs == 'c':
-            return True, 1
-        elif xs == 'l':
-            return True, 2
-        elif xs == 'r':
-            return True, 3
-        else:
-            return False, ('  Error, input must be either l, c, or r  ')
-    
-    # run initial update plot function
-    plot(**pkwargs)
-    
-    # define widgets
-    widgets = dict()
-    widgets['im_scale_min'] = dict(label='Scale the image (black)', comment='The image will be shown in log10 scale',
-                                kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start=pkwargs['im_scale_min'], valid_function=vfunc_float,
-                                width=10)
-    widgets['im_scale_max'] = dict(label='Scale the image (white)',
-                                kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start=pkwargs['im_scale_max'], valid_function=vfunc_float,
-                                width=10)
-    if do_rm:
-        widgets['rm_orders'] = dict(label='Select orders to remove',
-                                comment='Enter all order numbers to remove'+os.linesep+\
-                                        'separated by a whitespace or comma'+os.linesep+\
-                                        'to undo just delete the entered number',
-                                kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start=" ", valid_function=vfunc,
-                                width=40)
-    if do_adj:
-        widgets['w_mult'] = dict(label='Multiplier for the'+os.linesep+'width of the traces',
-                            comment='If the results are not as wished,'+os.linesep+\
-                                    'a modification of the parameter "width_percentile"'+os.linesep+\
-                                    'might help. To do this'+os.linesep+\
-                                    'Cancel the script with CTRL+C in the terminal'+os.linesep+\
-                                    'and then restart',
-                            kind='TextEntry', minval=None, maxval=None,
-                            fmt=float, start=pkwargs['w_mult'], valid_function=vfunc_float,
-                            width=10)
-    if do_shft:
-        widgets['shift'] = dict(label='Shift the traces by:',
-                            #comment='',
-                            kind='TextEntry', minval=None, maxval=None,
-                            fmt=float, start=0.0, valid_function=vfunc_float,
-                            width=10)
-    if do_add:
-        widgets['addpointsorder'] = dict(label='Add/remove points from order:',
-                            comment='It might be necessary to zoom before'+os.linesep+\
-                                    'adding/removing points will work',
-                            kind='TextEntry', minval=None, maxval=None,
-                            fmt=int, start='', valid_function=vfunc_int,
-                            width=10)
-        if len(pkwargs['pfits'].shape) == 3:
-            widgets['addpointsorder_lcr'] = dict(label='Which part of the order?',
-                            comment='c: center (brightest part),'+os.linesep+\
-                                    'l or r: left or right boundary of the order',
-                            kind='TextEntry', minval=None, maxval=None,
-                            fmt=str, start='c', valid_function=vfunc_lcr,
-                            width=10)
-        #widgets['addpoints'] = dict(label='Add or remove points from'+os.linesep+\
-        #                               'the order given below',
-        #                        kind='CheckBox', start=False)
-    #widgets['spacer1'] = dict(kind='Spacer', position=Tk.BOTTOM)
-    widgets['accept'] = dict(label='Accept', kind='ExitButton',
-                             position=Tk.BOTTOM)
-    widgets['update'] = dict(label='Update', kind='UpdatePlot',
-                             position=Tk.BOTTOM)
-    if do_add:
-        widgets['addorder'] = dict(label='Add a new Order', kind='CommandButton', command=add_an_order,
-                             position=Tk.BOTTOM, width=20)
-        widgets['stoppoints'] = dict(label='Use added/removed points', kind='CommandButton', command=stoppoints_action,
-                             position=Tk.BOTTOM, state=Tk.DISABLED, width=30)
-        widgets['cancelpoints'] = dict(label='Cancel adding/removing points', kind='CommandButton', command=cancelpoints_action,
-                             position=Tk.BOTTOM, state=Tk.DISABLED, width=30)
-        widgets['removepoints'] = dict(label='Remove points from an Order', kind='CommandButton', command=removepoints_action,
-                             position=Tk.BOTTOM, width=30)
-        widgets['addpoints'] = dict(label='Add points to an Order', kind='CommandButton', command=addpoints_action,
-                             position=Tk.BOTTOM, width=30)
-    wprops = dict(orientation='v', position=Tk.RIGHT)
-    
-    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='HiFlEx: Locating orders', widgets=widgets,
-                        widgetprops=wprops)
-    cid = fig.canvas.callbacks.connect('button_press_event', onclick)       # It works with GUI
-    
-    gui3.master.mainloop()
-
-    pfits = pkwargs['pfits']
-    xlows = pkwargs['xlows']
-    xhighs = pkwargs['xhighs']
-    widths = pkwargs['widths']
-    w_mult = pkwargs['w_mult']
-    shift = pkwargs['shift']
-    rm_orders = pkwargs['rm_orders']
-    
-    # Remove bad orders
-    good_data = (xhighs - xlows >= 5)      # enough data added to the order
-    if len(pfits.shape) == 3:
-        pfits = pfits[good_data,:,:]
-    else:
-        pfits = pfits[good_data,:]
-    xlows = xlows[good_data]
-    xhighs = xhighs[good_data]
-    if len(widths) > 0:
-        widths = widths[good_data,:]
-    
-    # Mask removed orders   
-    fmask = remove_orders(pfits, rm_orders)
-    
-    # Rescale the widths
-    if 'w_mult' != 1.0 and len(pfits.shape) == 3 and len(widths) > 0:
-        pfits, widths = update_tr_poly_width_multiplicate(pfits, widths, [w_mult, w_mult], xlows, xhighs)
-        
-    # Shift orders
-    if shift != 0.0:
-        if len(pfits.shape) == 3:
-            pfits[:,:,-1] += shift        # shift all traces
-        else:
-            pfits[:,-1] += shift          # shift all traces
-    
-    # Sort the orders
-    if len(pfits.shape) == 3:
-        sort_index = sort_traces_along_detector(pfits[:,0,:], xlows, xhighs)
-        pfits = pfits[sort_index,:,:]
-    else:
-        sort_index = sort_traces_along_detector(pfits, xlows, xhighs)
-        pfits = pfits[sort_index,:]
-    xlows = xlows[sort_index]
-    xhighs = xhighs[sort_index]
-    if len(widths) > 0:
-        widths = widths[sort_index,:]
-    fmask = fmask[sort_index]
-    
-    plt.close()
-    return fmask, pfits, widths, xlows, xhighs
-
-def remove_adjust_orders_UI_ori(im1, pfits, xlows, xhighs, widths=[], shift=0, userinput=True, do_rm=False, do_adj=False, do_shft=False):
-    """
-    Removes orders from the pfits array in a GUI, allows to adjust the width of th extracted area
-    return fmask: array of bool with the same length as original orders, True for the orders to keep
-    return pfits: same format as pfits, with adjusted parameters for the polynomial for the left and right border
-    return widths: same format as widths, with adjusted left and right stop of the trace
-    """
-    if not userinput or (not do_rm and not do_adj and not do_shft):
-        return remove_orders(pfits, []), pfits, widths         # No orders to remove, pfits stays the same, widths stays the same
-
-    # convert to numpy arrays
-    pfits = np.array(pfits)
-    xlows, xhighs = np.array(xlows), np.array(xhighs)
-
-    # set up plot
-    fig, frame = plt.subplots(1, 1)
-    fig.set_size_inches(10, 7.5, forward=True)
-    rm_orders = []
-    w_mult = 1
-    # get kwargs
-    pkwargs = dict(frame=frame, im1=im1, pfits=pfits, xlows=xlows, xhighs=xhighs, widths=widths,
-                   w_mult=w_mult, rm_orders=rm_orders, shift=shift)
-
-    # define update plot function
-    def plot(frame, im1, pfits, xlows, xhighs, widths, w_mult, rm_orders, shift):
-        frame.clear()
-        title = ''
-        if do_adj:
-            title += 'Defining the width of the traces.'+os.linesep
-        if do_shft:
-            title += 'Finding the shift of the traces.'+os.linesep
-        if do_rm:
-            title += 'Removing bad orders (Largest order number = {0}){1}'.format(len(pfits)-1, os.linesep)
-        mask = remove_orders(pfits, rm_orders)
-        pfits_shift = copy.deepcopy(pfits)
-        if len(pfits_shift.shape) == 3:
-            pfits_shift[:,:,-1] += shift        # shift all traces
-        else:
-            pfits_shift[:,-1] += shift          # shift all traces
-        frame = plot_traces_over_image(scale_image_plot(im1,'log10'), 'dummy_filename', pfits_shift, xlows, xhighs, widths, w_mult=w_mult, mask=mask, frame=frame, return_frame=True)
-        frame.set_title(title[:-1])
-
-    # run initial update plot function
-    plot(**pkwargs)
-
-    # define valid_function
-    # input is one variable (the string input)
-    # return is either:
-    #   True and values
-    # or
-    #   False and error message
-    def vfunc(xs):
-        try:
-            xwhole = xs.replace(',', ' ')
-            new_xs = xwhole.split()
-            xs = []
-            for nxs in new_xs:
-                xs.append(int(nxs))
-            return True, xs
-        except:
-            return False, ('Error, input must consist of integers'+os.linesep+\
-                           'separated by commas or white spaces')
-    def vfunc_float(xs):
-        try:
-            value = float(xs)
-            return True, value
-        except:
-            return False, ('Error, input must be float')
-    # define widgets
-    widgets = dict()
-    if do_rm:
-        widgets['rm_orders'] = dict(label='Select orders to remove',
-                                comment='Enter all order numbers to remove'+os.linesep+\
-                                        'separated by a whitespace or comma'+os.linesep+\
-                                        'to undo just delete the entered '
-                                        'number',
-                                kind='TextEntry', minval=None, maxval=None,
-                                fmt=str, start=" ", valid_function=vfunc,
-                                width=40)
-    if do_adj:
-        widgets['w_mult'] = dict(label='Multiplier for the'+os.linesep+\
-                                       'width of the traces',
-                            comment='If the results are not as wished,'+os.linesep+\
-                                    'a modification of the parameter "width_percentile"'+os.linesep+\
-                                    'might help. To do this'+os.linesep+\
-                                    'Cancel the script with CTRL+C in the terminal'+os.linesep+\
-                                    'and then restart',
-                            kind='TextEntry', minval=None, maxval=None,
-                            fmt=float, start=1.0, valid_function=vfunc_float,
-                            width=10)
-    if do_shft:
-        widgets['shift'] = dict(label='Shift the traces by:',
-                            #comment='',
-                            kind='TextEntry', minval=None, maxval=None,
-                            fmt=float, start=0.0, valid_function=vfunc_float,
-                            width=10)           
-    widgets['accept'] = dict(label='Accept', kind='ExitButton',
-                             position=Tk.BOTTOM)
-    widgets['update'] = dict(label='Update', kind='UpdatePlot',
-                             position=Tk.BOTTOM)
-                             
-    wprops = dict(orientation='v', position=Tk.RIGHT)
-
-    gui3 = tkc.TkCanvas(figure=fig, ax=frame, func=plot, kwargs=pkwargs,
-                        title='HiFlEx: Locating orders', widgets=widgets,
-                        widgetprops=wprops)
-    gui3.master.mainloop()
-
-    if 'rm_orders' in gui3.data:
-        rm_orders = gui3.data['rm_orders']
-    fmask = remove_orders(pfits, rm_orders)
-    
-    if 'w_mult' in gui3.data and len(pfits.shape) == 3:
-        w_mult = gui3.data['w_mult']
-        pfits, widths = update_tr_poly_width_multiplicate(pfits, widths, [w_mult, w_mult], xlows, xhighs)
-        
-    if 'shift' in gui3.data:
-        shift = gui3.data['shift']
-        if len(pfits.shape) == 3:
-            pfits[:,:,-1] += shift        # shift all traces
-        else:
-            pfits[:,-1] += shift          # shift all traces
-    
-    plt.close()
-    return fmask, pfits, widths
 
 def plot_gauss_data_center(datapoints_x, datapoints, label_datapoins, gauss, label_gauss, centroids, label_centroids, filename='', title='', poly=None, label_poly=None):
     """
@@ -10330,6 +9084,7 @@ def run_terra_serval_multicore(kwargs):
         newfile = 'echo "0998     synthetic         LAB                LAB                    0.0          0.0       0.0       {0}{1}" > astrocatalog{0}.example'.format(obj_name, os.sep)
         logger('For TERRA: creating a new astrocatalog.example with: '+newfile)
         os.system('rm -f astrocatalog{0}.example; '+newfile)
+        cmd = 'java -jar {1} -ASTROCATALOG astrocatalog{2}.example 998 -INSTRUMENT CSV {0} -INCLUDEALLSNR'.format(calimages['wave_sol_dict_sci']['wavesol'].shape[0],params['terra_jar_file'], obj_name )   # This doesn't solve the issue of too high SNR for dataset 1 or 3 in 202106_INT with TERRA 1.8
         cmd = 'java -jar {1} -ASTROCATALOG astrocatalog{2}.example 998 -INSTRUMENT CSV {0}'.format(calimages['wave_sol_dict_sci']['wavesol'].shape[0],params['terra_jar_file'], obj_name )
         log = 'logTERRA_{0}'.format(obj_name)
         logger('For TERRA: running TERRA: '+cmd)
@@ -10341,8 +9096,11 @@ def run_terra_serval_multicore(kwargs):
                 log_returncode(p.returncode, 'Please check the logfiles in {0}. Problem occured for object {1}'.format(os.getcwd(), obj_name))
         else:
             logger('Warn: TERRA commented out')
-        resultfile = '{2} {0}{3}results{3}synthetic.rv'.format(obj_name, params['path_rv_terra'], params['editor'], os.sep)
-        logger('For TERRA: results can be opened with: '+resultfile)
+        fname = '{0}{1}results{1}synthetic.rv'.format(obj_name, os.sep)
+        if os.path.isfile(fname):
+            logger('For TERRA: results can be opened with: {1} {0}'.format(fname, params['editor']))
+        else:
+            logger('Warn: no TERRA resultfile {0}'.format(fname))
         os.chdir(params['path_run'])        # Go back to previous folder
     elif rvpack == 'SERVAL':
         os.chdir(params['path_rv_serval'])
@@ -10361,8 +9119,11 @@ def run_terra_serval_multicore(kwargs):
                 log_returncode(p.returncode, 'Please check the logfiles in {0}. Problem occured for object {1}'.format(os.getcwd(), obj_name))
         else:
             logger('Warn: SERVAL commented out')
-        resultfile = '{2} {0}{3}{0}.rvc.dat'.format(obj_name, params['path_rv_serval'], params['editor'], os.sep)  
-        logger('For SERVAL: results can be opened with: '+resultfile)
+        fname = '{0}{1}{0}.rvc.dat'.format(obj_name, os.sep)
+        if os.path.isfile(fname):
+            logger('For SERVAL: results can be opened with: {1} {0}'.format(fname, params['editor']))
+        else:
+            logger('Warn: no SERVAL resultfile {0}'.format(fname))
         os.chdir(params['path_run'])        # Go back to previous folder
     else:
         logger('Warn: Pogramming error in run_terra_serval_multicore, I do not know rvpack {0}'.format(rvpack))

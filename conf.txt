@@ -202,6 +202,7 @@ badpx_mask_filename = /data/ronny/Reduced/NA/bad_px_mask.fits
   #             If a list of 2 files is given, the first file will be used create a rough wavelength solution and the second file with only stable lines to create the final wavelength solution
 reference_catalog = reference_lines_UNe.txt
 reference_catalog = reference_lines_ThAr.txt, reference_lines_Th.txt
+reference_catalog = reference_lines_ThAr.txt
   # The Script requires Angstrom. Give the multiplier for the wavelength to get Angstrom, e.g. catalog_file_wavelength_muliplier=10 for a reference_catalog in [nm]
 catalog_file_wavelength_muliplier = 1
   # Which lines of the catalogue should be used (duplicates are not a problem)
