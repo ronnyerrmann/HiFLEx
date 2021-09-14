@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # Remove traces in the GUI
     
     polyfits_ori, xlows, xhighs, widths = read_fits_width(params['master_trace_sci_filename'])
-    fmask, polyfits, widths, xlows, xhighs = remove_adjust_orders_UI( scale_image_plot(im_flat, 'log10'), polyfits_ori, xlows, xhighs, widths=widths, userinput=True, do_rm=True, do_add=True)
+    fmask, polyfits, widths, xlows, xhighs = proc_gui.remove_adjust_orders_UI( scale_image_plot(im_flat, 'log10'), polyfits_ori, xlows, xhighs, widths=widths, userinput=True, do_rm=True, do_add=True)
     if polyfits_ori.shape[0] < polyfits.shape[0]:
         logger('Info: Added {0} new orders'.format(polyfits.shape[0]-polyfits_ori.shape[0]))
     if polyfits_ori.shape[0] == polyfits[fmask].shape[0]:

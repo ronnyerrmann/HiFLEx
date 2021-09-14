@@ -4389,7 +4389,56 @@ def read_textfile_remove_double_entries(fname, dataformats, delimiter='\t', repl
             data = np.array(data_no_doubles)                     # Only contains the latest entries, newest entry first
     
     return data
-   
+
+def remove_double_entries_from_list(inlist, maxdiff=0.0, relative=False):
+    """
+    Mark the double entries from an array
+    :param inlist: 1d array of int or floats
+    :param maxdiff: Maximum difference between values in inlist to be counted as the same value
+    :param relative: If difference between values should be relative then set to True
+    :return replace_list: list of lists of integers: each entry gives the indexes from inlist which are the same value, e.g. to combine: inlist[replace_list[ii][0]] = np.median(inlist[replace_list[ii]])
+    :return double_list: list of intergers: same values as in  replace_list except for the first entry of each entry in replace_list, e.g. to get rid of the doubles: inlist[double_list] = 0 ; inlist = inlist[inlist > 100]
+    """
+    
+    replace_list, double_list = [], []
+    inlist_argsort = np.argsort(inlist)
+    inlist_index = np.arange(inlist.shape[0])[inlist_argsort]   # indexes of the orignal inlist, sorted
+    inlist_sort = inlist[inlist_argsort]                        # sorted inlist
+    inlist_extra = np.zeros(inlist.shape[0]+2)                  # Add values at beginning and end to avoid loosing first or last value if it's is double
+    inlist_extra[1:-1] = inlist_sort
+    if maxdiff > 0:     add = maxdiff
+    else:               add = 1
+    if relative:
+        inlist_extra[0] = inlist_sort[0] - 10*add*inlist_sort[0]
+        inlist_extra[-1] = inlist_sort[-1] + 10*add*inlist_sort[-1]
+    else:
+        inlist_extra[0] = inlist_sort[0] - 10*add
+        inlist_extra[-1] = inlist_sort[-1] + 10*add
+    diff = inlist_extra[1:] - inlist_extra[:-1]
+    if relative:
+        diff = diff / (0.5*(inlist_extra[1:] + inlist_extra[:-1]))        # relative difference between neighbouring wavelengths
+    same_wave = np.where( diff < maxdiff )[0]           # indexes of wavelengths, where diff between 2 wavelengths is smaller than "1px"
+    if same_wave.shape[0] > 0:
+        if same_wave.shape[0] == 1:
+            new_wave = np.array([0])                                    # at 0 a new block starts
+            len_block = np.array([same_wave.shape[0]-new_wave[-1]])             # to get the last block-length correct
+        else:
+            new_wave = np.where( (same_wave[1:] - same_wave[:-1]) != 1 )[0]     # indexes where a new block starts (minus 1)
+            new_wave = np.hstack(( [0], new_wave+1 ))                           # at 0 a new block starts and all others need a +1
+            len_block = new_wave[1:] - new_wave[:-1]
+            len_block = np.hstack(( len_block, [same_wave.shape[0]-new_wave[-1]] ))         # to get the last block-length correct
+        # Create results
+        for jj in range(new_wave.shape[0]):
+            index = new_wave[jj]
+            index = same_wave[index]-1
+            newlist = list(range(index,index+len_block[jj]+1))
+            newlist = list(np.sort(inlist_index[newlist]))
+            replace_list.append(newlist)
+            double_list += list(newlist[1:])
+            print(jj, index, len_block[jj], inlist[replace_list[-1]], inlist[replace_list[-1][0]-1], inlist[replace_list[-1][-1]+1] )
+    
+    return replace_list, double_list
+
 def shift_wavelength_solution_times(params, wavelength_solution, obsdate_float, jd_midexp, objname, im_head):
     """
     In case no calibration spectrum was taken at the same time as the science spectra use the stored information to aply a shift in the lines
@@ -4656,7 +4705,7 @@ def find_adjust_trace_orders(params, im_sflat, im_sflat_head):
         save_fits_width(polyfits, xlows, xhighs, [], params['logging_traces_binned'])
         plot_traces_over_image(im_sflat_log10, params['logging_traces_im_binned'], polyfits, xlows, xhighs)
     # retrace orders in the original image to finetune the orders
-    params['bin_adjust_apertures'] = proc_gui.adjust_binning_UI(im_sflat, params['bin_adjust_apertures'], userinput=params['GUI'])
+    params['bin_adjust_apertures'], dummy, dummy = proc_gui.adjust_binning_UI(im_sflat, params['bin_adjust_apertures'], userinput=params['GUI'])
     params['binx'], params['biny'] = params['bin_adjust_apertures']
     sim_sflat, dummy, dummy = bin_im(im_sflat, params['bin_adjust_apertures'])        # Not saved
     polyfits, xlows, xhighs, widths = adjust_trace_orders(params, sim_sflat, im_sflat, polyfits, xlows, xhighs)
@@ -7113,8 +7162,6 @@ def adjust_wavelength_solution(params, cal_l_spec, cal_s_spec, arc_lines_px, wav
     plot_img_spec.plot_points(w,y,l,[fname_wave], show=False, title=text, x_title='Wavelength [Angstrom]', 
                               y_title='Residual (O-C) [Angstrom]', marker=['o','s','*','P','^','v','>','<','x'])
 
-    
-    
     statistics_arc_reference_lines(arc_lines_wavelength, [0,8,9,2], reference_names, wavelength_solution, xlows, xhighs)
         
     if std_diff_fit > 2*max(wavelength_solution[:,-2]) or std_diff_fit < 1E-8:        # if residuals are bigger than 1px or unreasonable small
