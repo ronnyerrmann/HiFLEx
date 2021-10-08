@@ -1,3 +1,5 @@
+For any questions, please contact me under ronny.errmann@gmail.com
+
 # HiFLEx
 A highly flexible package to reduce echelle data (taken with a bifurcated or single fiber)
 
