@@ -1,4 +1,4 @@
-For any questions or problems, please feel free to contact me under ronny.errmann@gmail.com
+For any questions, problems, or missing functionality please feel free to contact me under ronny.errmann@gmail.com
 
 # HiFLEx
 A highly flexible package to reduce echelle data (taken with a bifurcated or single fiber)
