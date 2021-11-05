@@ -915,6 +915,13 @@ It is possible to include the information from previous nights of the same objec
 
 It is also possible to rerun SERVAL with less images (e.g. exclude bad signal to noise files). To do this change into the folder given in parameter \verb|path_rv_serval|. Remove the files you don't need from the file \textit{filelist\_ + object name + .txt}. Run SERVAL using the command given in the logfile. Afterwards move back to the folder in which HiFLEx was run and run \verb|python <path to scripts>/measurements_to_output.py|.
 
+Before running SERVAL manually, it might be necessary to the path to PYTHONPATH. The example below shows the commands for \verb|bash| and \verb|csh| to do this:
+
+\begin{lstlisting}[style=base]
+export PYTHONPATH=<path/to/mzechmeister>/python:$PYTHONPATH
+setenv PYTHONPATH <path/to/mzechmeister>/python:$PYTHONPATH
+\end{lstlisting}
+
 \subsubsection{CERES}
 The results are stored in the folder given in parameter path\_rv\_ceres (standard: ceres\_rv).
 This step is only done, if the CERES pipeline is installed and \verb|path_ceres| is set correctly to the base folder of CERES and the sub-folders \textit{utils/Correlation}, \textit{utils/GLOBALutils}, \textit{utils/OptExtract}, and \textit{utils/CCF} exist within.
