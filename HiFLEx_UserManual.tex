@@ -1437,7 +1437,12 @@ ln -s <full/path/to/hiflex>/inst_HIFLEX*.py <path/to/mzechmeister>/serval/src/
 
 Set \verb|path_serval| in \textit{conf.txt} to the correct path.
 
-If the SERVAL RV analysis fails, try to run it with a subset of orders for the \verb|oset| parameter. The logfile and cmdhistory.txt in the folder given in \verb|path_rv_serval| give the commands that were run automatically by the pipeline.
+If the SERVAL RV analysis fails, try to run it with a subset of orders for the \verb|oset| parameter. The logfile and cmdhistory.txt in the folder given in \verb|path_rv_serval| give the commands that were run automatically by the pipeline. Before running SERVAL manually, it might be necessary to the path to PYTHONPATH. The example below shows the commands for \verb|bash| and \verb|csh| to do this:
+
+\begin{lstlisting}[style=base]
+export PYTHONPATH=<path/to/mzechmeister>/python:$PYTHONPATH
+setenv PYTHONPATH <path/to/mzechmeister>/python:$PYTHONPATH
+\end{lstlisting}
 
 \subsubsection{CERES Pipeline}
 \label{Section:Explanation_CERES_pipeline}
