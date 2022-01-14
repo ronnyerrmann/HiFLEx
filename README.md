@@ -1,9 +1,9 @@
-For any questions, problems, or missing functionality please feel free to contact me under ronny.errmann@gmail.com
+For any questions, problems, or missing functionality please feel free to contact me under ronny.errmann@gmail.com . Thanks, Ronny
 
 # HiFLEx
 A highly flexible package to reduce echelle data (taken with a bifurcated or single fiber)
 
-The Package is described in [Errmann et al.](https://ui.adsabs.harvard.edu/abs/2020PASP..132f4504E) (https://ui.adsabs.harvard.edu/abs/2020PASP..132f4504E).
+The Package is described in [Errmann, Ronny et al.](https://ui.adsabs.harvard.edu/abs/2020PASP..132f4504E) (https://ui.adsabs.harvard.edu/abs/2020PASP..132f4504E).
 
 For information on how to use the software please check the Manual: [HiFLEx_UserManual.pdf](https://github.com/ronnyerrmann/HiFLEx/blob/master/HiFLEx_UserManual.pdf).
 
