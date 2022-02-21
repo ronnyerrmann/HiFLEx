@@ -488,11 +488,7 @@ def adjust_binning_UI(im1, binxy, searchlimit_brightness=None, min_separation=No
         min_separation = gui3.data['min_separation']
     
     plt.close()
-    if searchlimit_brightness is not None and min_separation is not None:
-        return binxy, searchlimit_brightness, min_separation
-    else:
-        return binxy
-
+    return binxy, searchlimit_brightness, min_separation
 
 def remove_adjust_orders_UI(im1, pfits, xlows, xhighs, widths=[], shift=0, userinput=True, do_rm=False, do_adj=False, do_shft=False, do_add=False):
     """
