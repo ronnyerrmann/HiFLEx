@@ -7093,7 +7093,7 @@ def adjust_wavelength_solution(params, cal_l_spec, cal_s_spec, arc_lines_px, wav
     R_2px     = arc_lines_wavelength[:,2]/(2.*arc_lines_wavelength[:,7])    # lambda/d_lambda
     avg_R_2px = np.mean(R_2px)
     std_R_2px = np.std(R_2px, ddof=1) 
-    text = 'Info: used {0} lines. The standard deviation (using {8} degrees of freedom) of the residuals between the lines and the fit is {1} Angstroms. '+\
+    text = 'Info: used {0} lines. The standard deviation (using {8} degrees of freedom) of the residuals between the measured centre of the lines and the fit is {1} Angstroms. '+\
                   'The FWHM of the emission lines results in an R = {3} +- {4}. The 2-pixel resolution (around the identified lines) is R = {5} +- {6}. '+\
                   'The deviation to the line fit converts into a resolution R = {2}. The average of the abs of the residuals is {7} Angstroms. '
     logger(text.format(arc_lines_wavelength.shape[0], round_sig(std_diff_fit,3), int(round_sig(std_R_fit,4)), int(avg_R_fwhm), int(std_R_fwhm),
