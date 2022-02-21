@@ -110,7 +110,8 @@ if __name__ == "__main__":
         cal_tr_poly, awidths, axlows, axhighs = np.array(cal_tr_poly), copy.deepcopy(widths), copy.deepcopy(xlows), copy.deepcopy(xhighs)
         
         # check the shift between the original solution and arc using a GUI
-        dummy, cal_tr_poly, awidths, axlows, axhighs = proc_gui.remove_adjust_orders_UI(scale_image_plot(im_trace2, 'log10'), cal_tr_poly, axlows, axhighs, awidths, shift=0, userinput=params['GUI'], do_adj=True, do_shft=True)
+        if params['arcshift_side'] != 0:
+            dummy, cal_tr_poly, awidths, axlows, axhighs = proc_gui.remove_adjust_orders_UI(scale_image_plot(im_trace2, 'log10'), cal_tr_poly, axlows, axhighs, awidths, shift=0, userinput=params['GUI'], do_adj=True, do_shft=True)
         
         # save parameters of the polynoms into a fitsfile (from Neil)
         save_fits_width(cal_tr_poly, axlows, axhighs, awidths, params['master_trace_cal_filename'])
