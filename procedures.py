@@ -2407,7 +2407,7 @@ def find_trace_orders(params, im, imageshape):
         diff_ord = np.array(trace_pos)[1:,pos_max[0]]-pos_max[1]     # Take care for nans
         #print trace_pos
         #print 'diff_ord, pos_max, np.array(trace_pos)[1:,pos_max[0]]', diff_ord, pos_max, np.array(trace_pos)[1:,pos_max[0]]
-        diff_ord[np.isnan(diff_ord)] = -1E10    # small weight
+        diff_ord[np.isnan(diff_ord)] = 1E-10    # small weight, question on 20220524 about change from -1E10 to 1E-10
         for px in range(ims[0]):
             data_px = np.array(trace_pos)[1:,px]
             notnan = ~np.isnan(data_px)

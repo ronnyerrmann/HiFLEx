@@ -14,7 +14,7 @@
 #   - lists need to be given with comma between the values. The brakets [] are optional
 #   - any line containing a '#' at any position will be handled as comment and not be used by the script
 #   - if the same parameter is defined several times in the file, the latest verion will be used
-
+# ! Under windows: Make sure to replace all / with \ for the folders
 
   ## General parameters:
   #---------------------
@@ -313,7 +313,8 @@ max_good_value  = 63000
 
   ## extracted data:
   #-----------------
-  # path for the extracted data (CERES format / single files (including 1d spectrum) / HARPS format for extracted spectrum and wavelength). All paths will be relative to the result_path.
+  # path for the extracted data (CERES format / single files (including 1d spectrum) / HARPS format for extracted spectrum and wavelength).
+  # All paths will be relative to the result_path. On Windows replace / with \.
 path_extraction             = extracted
 path_extraction_single      = extracted/single
 path_harpsformat            = extracted/HARPS_format
