@@ -185,7 +185,7 @@ def logger(message, show=True, printarrayformat=[], printarray=[], logfile='logf
         if multiprocessing.current_process().name == 'MainProcess': pid = os.getpid()
         else:                                                       pid = '{0}-{1}'.format(os.getppid(), os.getpid())
         file.write('{1} - {2} - {3}{0}'.format( os.linesep, time.strftime("%Y%m%d%H%M%S", time.localtime()), pid, message ))
-        if printarrayformat != [] and printarray != []:
+        if len(printarrayformat) >0 and len(printarray) > 0:
             for line in printarray:
                 text = ''
                 for i,printformat in enumerate(printarrayformat):
@@ -2440,7 +2440,7 @@ def find_trace_orders(params, im, imageshape):
                 positions = np.vstack([positions, [i, center, 0]])
                 widths.append([center-leftmin,rightmin-center, width])
                 oldcenter, lastadd, last_trustworth_position, no_center  = center, i, len(positions)-1, 0
-            else:#if expected_positions != []:
+            else:#if len(expected_positions > 0):
                 #if width !=0:
                 #    print i, abs(center-oldcenter), maxshift   # Test !
                 no_center += 1
@@ -2451,11 +2451,11 @@ def find_trace_orders(params, im, imageshape):
                 center1, cen_poly, width, leftmin,rightmin = find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.0, bugfix=False)
                 if width != 0 and abs(center1-oldcenter) < maxshift:
                     positions = np.vstack([positions, [i, center1, 1]])
-                if lastadd-i == 5 and expected_positions != []:        #add entries every 10 empty line in order to avoid the fit of the trace going off
+                if lastadd-i == 5 and len(expected_positions) > 0:        #add entries every 10 empty line in order to avoid the fit of the trace going off
                     positions = np.vstack([positions, [i, oldcenter, 1]])
                     lastadd = i
                 if positions.shape[0] > 0:
-                    if expected_positions != []:                        # use the solution of the other traces to keep following this trace
+                    if len(expected_positions) > 0:                        # use the solution of the other traces to keep following this trace
                         oldcenter = positions[last_trustworth_position][1] - expected_positions[int(positions[last_trustworth_position,0])] + expected_positions[max(0,i-1)]
                     else:                                               # use the last values of this trace to keep following it
                         good_values = np.where( (positions[:,0] <= i+30) & (positions[:,2] == 0) )[0]
@@ -2485,7 +2485,7 @@ def find_trace_orders(params, im, imageshape):
                 positions = np.vstack([positions, [i, center, 0]])
                 widths.append([center-leftmin,rightmin-center, width])
                 oldcenter, lastadd, last_trustworth_position, no_center  = center, i, len(positions)-1, 0
-            else:#if expected_positions != []:
+            else:#if len(expected_positions) > 0:
                 #if width !=0:
                 #    print i, abs(center-oldcenter), maxshift   # Test !
                 no_center += 1
@@ -2496,11 +2496,11 @@ def find_trace_orders(params, im, imageshape):
                 center1, cen_poly, width, leftmin,rightmin = find_center(im_orig[i,:], int(round(oldcenter)), i, maxFWHM, significance=3.0, bugfix=False)
                 if width != 0 and abs(center1-oldcenter) < maxshift:
                     positions = np.vstack([positions, [i, center1, 1]])
-                if i-lastadd == 5 and expected_positions != []:
+                if i-lastadd == 5 and len(expected_positions) > 0:
                     positions = np.vstack([positions, [i, oldcenter, 1]])
                     lastadd = i
                 if positions.shape[0] > 0:
-                    if expected_positions != []:
+                    if len(expected_positions) > 0:
                         oldcenter = positions[last_trustworth_position,1] - expected_positions[int(positions[last_trustworth_position,0])] + expected_positions[min(ims[0]-1,i+1)]
                     else:
                         good_values = np.where( (positions[:,0] >= i-30) & (positions[:,2] == 0) )[0]
@@ -2649,7 +2649,7 @@ def adjust_trace_order(kwargs):
             #else:
             #    print center, oldcenter, maxshift, maxFWHM
                 
-        if widths_o == [] or len(shifts) < ims[0]/4.:                # Not enough data for that order
+        if len(widths_o) == 0 or len(shifts) < ims[0]/4.:                # Not enough data for that order
             #print 'len(positions),len(shifts)', len(positions),len(shifts)
             return [], [], [], [], [], [], []
         positions = np.array(positions)
@@ -5465,9 +5465,9 @@ def plot_traces_over_image(im, fname, pfits, xlows, xhighs, widths=[], w_mult=1,
         leftfit = pfits[:,1,:]
         rightfit = pfits[:,2,:]
         pfits = pfits[:,0,:]
-    if widths == []:
+    if len(widths) == 0:
         widths = np.repeat([[0,0,0]], len(pfits), axis=0)
-    if mask == []:
+    if len(mask) == 0:
         mask = np.repeat([True], len(pfits), axis=0)
     ims = im.shape
     #im = scale_image_plot(im,'log10')  # Don't do it here
@@ -7201,7 +7201,7 @@ def statistics_arc_reference_lines(data, positions, reference_names, wavelength_
             for i,entry in enumerate(data_o[:,positions[1]].astype(int)):
                 if reference_names[entry] == refname:
                     index_r.append(i)               # only indexes for the current name of the emission line
-            if index_r != []:
+            if len(index_r) > 0:
                 order = int(order)
                 cenwave = wavelength_solution[order,-1]     # is the same as cenwave = np.polyval(wavelength_solution[order,2:], 0)
                 minwave = np.polyval(wavelength_solution[order,2:], xlows[order]-wavelength_solution[order,1])
@@ -7221,7 +7221,7 @@ def statistics_arc_reference_lines(data, positions, reference_names, wavelength_
         for i,entry in enumerate(data[:,positions[1]].astype(int)):
             if reference_names[entry] == refname:
                 index_r.append(i)
-        if index_r != []:
+        if len(index_r) > 0:
             min_refline = np.min(data[index_r,positions[3]])
             max_refline = np.max(data[index_r,positions[3]])
             result.append([ -1, -1, -1, -1, -1, -1, refname, len(data[index_r,positions[2]]), 

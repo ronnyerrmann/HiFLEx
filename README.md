@@ -11,6 +11,7 @@ If you publish data using the barycentric correction, please cite (https://githu
 
 
 ## Recent changes
+* (in progress): Make it work for newer python versions
 * Extra logging information for wavelength solution and drift of the wavelength solution
 * Improved measurement of the offset between emission line spectra and the wavelength solution
 * Bugfixing and improvement of parallelisation; optional excludition of steps to speed up
@@ -21,7 +22,7 @@ If you publish data using the barycentric correction, please cite (https://githu
 
 Requirements:
 - python 3.8 (and 2.7) + numpy, scipy, matplotlib, astropy, pycurl, ephem, rpy2, tqdm, psutil, statsmodels, gatspy, barycorrpy, (deepCR), (PyAstronomy)
-- (only tested under linux)
+- (only tested under linux under 3.7.7, 3.8, and 3.10)
 
 The easiest way is to download and install [Anaconda](https://www.anaconda.com/distribution/#linux). Afterwards log out and log in again and create two environments (python >= 3.5 required for deepCR and SERVAL; python 2.7 required for CERES (not under windows)):
 ```
@@ -37,6 +38,14 @@ conda create --name hiflex python=3 numpy scipy matplotlib astropy pycurl ephem 
 conda activate hiflex
 pip install gatspy barycorrpy deepCR PyAstronomy
 ```
+
+(For a specific python version, use:
+```
+conda create --name hiflex_py3.8 python=3.8 R
+conda activate hiflex_py3.8
+pip install gatspy barycorrpy deepCR PyAstronomy numpy scipy matplotlib astropy pycurl ephem rpy2 tqdm psutil statsmodels
+```
+)
 
 Download and extract the [latest relase](https://github.com/ronnyerrmann/HiFLEx/releases) or clone the repository:
 ```
