@@ -11,6 +11,8 @@ import copy
 import random
 import warnings
 import numpy as np
+import numpy.typing as npt
+from typing import Union
 from astropy.io import fits
 from astropy.table import Table
 import astropy.time as asttime
@@ -1611,7 +1613,7 @@ def polyfit_adjust_order(xarr, yarr, p_orders, w=None):
                     poly = poly
     return poly
 
-def polynomial_value_2d(xx, yy, xord, yord, poly2d_params):
+def polynomial_value_2d(xx: npt.NDArray, yy: Union[npt.NDArray, float], xord: int, yord: int, poly2d_params: Union[npt.NDArray, list]) -> npt.NDArray:
     """
     Calculates the Dot product between the 2D-coordinates and the parameters of the polynomial fit, e.g. gives the result of fit
     :param xx: array of floats, flattened results of a meshgrid of the x-coordinates
@@ -1621,15 +1623,15 @@ def polynomial_value_2d(xx, yy, xord, yord, poly2d_params):
     :return: 
     """
     a = polynomial_array_2d(xx, yy, xord, yord)
-    return np.dot(a,poly2d_params)
+    return np.dot(a, poly2d_params)
 
-def polynomial_array_2d(xx, yy, xord, yord):
+def polynomial_array_2d(xx: npt.NDArray, yy: Union[npt.NDArray, float], xord: int, yord: int) -> npt.NDArray:
     """
     Calculates an array with the possible combination for xx**i times yy**i
     :param xx: array of floats, flattened results of a meshgrid of the x-coordinates (or just a 1D array, if not data points in an 2D-array)
     :param yy: array of floats, same dimension of xx, flattened results of a meshgrid of the y-coordinates
     :params xord, yord: number of orders for the polynomial to be used in each direction, order = 0 means constant value, same conversion as np.polyfit
-    :return: Arry with the dimension of xx or yy in one axis and number possible combinations in the other direction (i.e. 16 for xord=3 and yord=3, or 25 for 4,4)
+    :return: Array with the dimension of xx or yy in one axis and number possible combinations in the other direction (i.e. 16 for xord=3 and yord=3, or 25 for 4,4)
     """
     
     ims = np.insert(xx.shape, 0, (xord+1)*(yord+1)).astype(int)
@@ -6815,7 +6817,7 @@ def adjust_wavelength_solution(params, cal_l_spec, cal_s_spec, arc_lines_px, wav
                     else:                       weightio = weight[inorder]
                     poly2d_params = polynomial_fit_2d_norm(x[inorder], y[inorder], arc_lines_wavelength[inorder,2], polynom_order_trace_u, polynom_order_intertrace_u, w=weightio, w_range=1E5)    # Fit against the available/identified lines
                     # Convert the pixel positions of the found lines into wavelengths
-                
+
                     arc_line_wave_io = polynomial_value_2d(x2[inorder2], y2[inorder2], polynom_order_trace_u, polynom_order_intertrace_u, poly2d_params)
                     #print(len(x2),len(x), px_range, pxdiff, np.sum(arc_lines_px_step[:,0]==26))
                     #print(np.vstack([y2,x2,arc_line_wave_io]).T[arc_lines_px_step[:,0] == 26,:])
@@ -6948,7 +6950,7 @@ def adjust_wavelength_solution(params, cal_l_spec, cal_s_spec, arc_lines_px, wav
                             'Decreasing the number of orders in the polynomial fit (parameters polynom_order_traces and polynom_order_intertraces) might also help to fix the issue.', params=params)
                 goodvalues, p = sigmaclip(arc_lines_wavelength[:,3], nc=0, ll=sigma, lu=sigma, repeats=20)    # poly_order=0 to sigma clip around the average
                 arc_lines_wavelength = arc_lines_wavelength[goodvalues,:]
-                cen_px, p_cen_px = find_real_center_wavelength_solution(order_offset, orders, [], cen_px, polynom_order_trace, polynom_order_intertrace, poly2d_params)
+                cen_px, p_cen_px = find_real_center_wavelength_solution(order_offset, orders, [], cen_px, polynom_order_trace_u, polynom_order_intertrace_u, poly2d_params)
                 
                 #print max_diff_px, arc_lines_wavelength.shape[0],old_arc_lines_wavelength.shape[0],arc_lines_wavelength.shape[0] == old_arc_lines_wavelength.shape[0],np.mean(arc_lines_wavelength[:,3]), np.mean(old_arc_lines_wavelength[:]),np.mean(arc_lines_wavelength[:,3]) == np.mean(old_arc_lines_wavelength[:]), np.min(arc_lines_wavelength[:,3]), np.max(arc_lines_wavelength[:,3])
                 if arc_lines_wavelength.shape[0] == old_arc_lines_wavelength.shape[0]:
@@ -7250,7 +7252,15 @@ def find_order_offset(orders, cenwave):
     #print slope_real_order[ np.argmin(slope_real_order[:,0]), :]
     return order_offset
     
-def find_real_center_wavelength_solution(order_offset, orders, cenwave, cen_px, polynom_order_trace, polynom_order_intertrace, poly2d_params):
+def find_real_center_wavelength_solution(
+        order_offset: int,
+        orders: list,
+        cenwave: Union[list, npt.NDArray],
+        cen_px: npt.NDArray,
+        polynom_order_trace: int,
+        polynom_order_intertrace: int,
+        poly2d_params: npt.NDArray
+):
     """
     Find the real central pixel of each order using the wavelength solution
     :param order_offset: integer, offset so that orders fulfil the grating equation best
